@@ -92,7 +92,11 @@ async def dispatch(session, target, payload):
             session.server.advance_auctions()
             with auction_transaction(session.server, (key,)) as auction:
                 replies = auction.handle(key, payload)
-        elif payload[:7].upper() == b"GTM0G70" or session.server.prize.is_active(key):
+        elif (
+            payload[:7].upper() == b"GTM0G70"
+            or session.server.prize.is_active(key)
+            or session.server.prize.can_replay_quit(key, payload)
+        ):
             with prize_transaction(session.server, key) as prize:
                 replies = prize.handle(key, payload)
         if replies is not None:

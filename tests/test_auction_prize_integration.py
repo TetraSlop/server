@@ -42,9 +42,9 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.game.stop()
         self.temp.cleanup()
 
-    async def send(self, side, payload, *, source=None):
+    async def send(self, side, payload, *, source=None, target=None):
         client = self.clients[side]
-        target = service_nick(ROOM_RAW)
+        target = target or service_nick(ROOM_RAW)
         await client.send(b"NOTICE " + target + b" :" + payload)
         await client.send(b"PING :exchange-barrier")
         out = []
@@ -207,7 +207,16 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         updated = (await self.enter_prize())[1]
         self.assertEqual(parse_named(updated[1])[3]["ExcInit"]["PP"], f"{5150-cost}|0|0|0")
         quit_ = named(0xB2, 0x17, number, f"@Quit=/No={number}")
-        self.assertEqual(len(await self.send(0, quit_, source=service_nick(SHOP_RAW))), 1)
+        completed = await self.send(0, quit_, source=service_nick(SHOP_RAW))
+        self.assertEqual(len(completed), 1)
+        saved = self.path.read_bytes()
+        snapshot = self.game.snapshot()
+        for target in (service_nick(SHOP_RAW), service_nick(ROOM_RAW)):
+            self.assertEqual(
+                await self.send(0, quit_, source=service_nick(SHOP_RAW), target=target), completed
+            )
+            self.assertEqual(self.game.snapshot(), snapshot)
+            self.assertEqual(self.path.read_bytes(), saved)
         restored = Server(state_path=self.path)
         try:
             self.assertEqual(restored.economy.snapshot(), self.game.economy.snapshot())
@@ -215,6 +224,60 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(restored.prize.grant_award(key, "integration.award", top30=5000))
         finally:
             await restored.stop()
+
+    async def test_closed_prize_receipt_cannot_intercept_an_active_shop_session(self):
+        key = self.keys[0]
+        number, _ = await self.enter_prize()
+        shop = service_nick(SHOP_RAW)
+        quit_ = named(0xB2, 0x17, number, f"@Quit=/No={number}")
+        await self.send(0, quit_, source=shop, target=shop)
+        view = self.game.economy.account_view(key)
+        entry = named(
+            0xB0, 0, 0, f"@ShReq=/NN={view.nn:016X}/HID=0/Dm=0/Vol=0/CN={view.name.hex()}"
+        )
+        replies = await self.send(0, entry, target=shop)
+        self.assertEqual(int(parse_named(replies[1])[3]["Init"]["N"]), number)
+        self.assertTrue(self.game.economy.is_busy(key))
+        self.assertFalse(self.game.prize.can_replay_quit(key, quit_))
+        before = self.game.snapshot()
+        self.assertEqual(len(await self.send(0, quit_, target=shop)), 1)
+        self.assertFalse(self.game.economy.is_busy(key))  # Ordinary Quit actually ran.
+        self.assertEqual(self.game.snapshot(), before)
+
+    async def test_closed_prize_receipt_cannot_intercept_an_active_auction_collection(self):
+        key = self.keys[0]
+        number, _ = await self.enter_prize()
+        shop = service_nick(SHOP_RAW)
+        quit_ = named(0xB2, 0x17, number, f"@Quit=/No={number}")
+        await self.send(0, quit_, source=shop, target=shop)
+        collection, _ = await self.enter_collection(0)
+        self.assertEqual(collection, number)
+        self.assertFalse(self.game.prize.can_replay_quit(key, quit_))
+        before = self.path.read_bytes()
+        await self.clients[0].send(b"NOTICE " + shop + b" :" + quit_)
+        # Auction collection cannot end before its two Get stages. A prize
+        # receipt must not turn this invalid auction request into success.
+        self.assertEqual(await self.clients[0].read(), b"")
+        self.assertEqual(self.path.read_bytes(), before)
+
+    async def test_closed_prize_receipt_is_not_reused_after_reconnect(self):
+        key = self.keys[0]
+        client = self.clients[0]
+        number, _ = await self.enter_prize()
+        shop = service_nick(SHOP_RAW)
+        quit_ = named(0xB2, 0x17, number, f"@Quit=/No={number}")
+        await self.send(0, quit_, source=shop, target=shop)
+        saved = self.path.read_bytes()
+        peer = self.game.nicks[client.nick]
+        await client.close()
+        await peer.close()
+        self.assertFalse(self.game.prize.can_replay_quit(key, quit_))
+        self.clients[0] = replacement = Client()
+        await replacement.open(self.port, account=client.nick)
+        self.assertIn(b" 422 ", await replacement.read())
+        await replacement.send(b"NOTICE " + shop + b" :" + quit_)
+        self.assertEqual(await replacement.read(), b"")
+        self.assertEqual(self.path.read_bytes(), saved)
 
     async def test_failed_auction_save_sends_no_acceptance_and_retains_last_joint_state(self):
         before = self.path.read_bytes()

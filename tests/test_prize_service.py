@@ -297,6 +297,44 @@ class PrizeTests(unittest.TestCase):
             self.entry()
         self.e.release_match(token)
 
+    def test_closed_receipt_matches_only_its_quit_and_requires_an_idle_account(self):
+        self.entry()
+        reply = self.quit()
+        number = self.session["one"]
+        quit_ = named(0xB2, 0x17, number, f"@Quit=/No={number}")
+        before = self.state()
+        self.assertTrue(self.p.can_replay_quit("one", quit_))
+        self.assertEqual(self.p.handle("one", quit_), reply)
+        for payload in (
+            named(0xB2, 0x17, number + 1, f"@Quit=/No={number + 1}"),
+            named(0xB2, 0x17, number, "@Quit=/No=0"),
+            named(0xB2, 0x17, number, f"@Quit=/No={number}/Extra=1"),
+            named(0xB2, 0x15, number, f"@Get=/No={number}"),
+            named(0xB2, 0x22, number, "@Decks=/C=0"),
+            named(0xA2, 0x17, number, f"@Quit=/No={number}"),
+        ):
+            with self.subTest(payload=payload):
+                self.assertFalse(self.p.can_replay_quit("one", payload))
+        self.assertFalse(self.p.can_replay_quit("two", quit_))
+        token = self.e.reserve_auction("one")
+        self.assertFalse(self.p.can_replay_quit("one", quit_))
+        self.assertIsNone(self.p.handle("one", quit_))
+        self.e.release_auction(token)
+        self.assertEqual(self.state(), before)
+
+    def test_disconnect_clears_a_closed_receipt_without_changing_durable_state(self):
+        self.entry()
+        self.quit()
+        number = self.session["one"]
+        quit_ = named(0xB2, 0x17, number, f"@Quit=/No={number}")
+        before = self.state()
+        self.assertTrue(self.p.can_replay_quit("one", quit_))
+        self.assertFalse(self.p.disconnect("one"))  # No active visit remains to release.
+        self.assertFalse(self.p.can_replay_quit("one", quit_))
+        self.assertIsNone(self.p.handle("one", quit_))
+        self.assertEqual(self.state(), before)
+        self.assertFalse(self.p.disconnect("one"))
+
     def test_public_prize_boundary_validates_points_inventory_and_capabilities(self):
         t = self.e.reserve_prize("one")
         before = self.e.snapshot()

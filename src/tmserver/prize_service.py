@@ -117,6 +117,25 @@ class PrizeService:
     def is_active(self, key):
         return key in self._active
 
+    def can_replay_quit(self, key, payload):
+        """Only the last completed visit's exact Quit may use an idle receipt.
+
+        B2 is shared with shops and auction collections. Their active sessions
+        take precedence even when their independently allocated byte matches.
+        """
+        if (
+            key not in self._closed
+            or self.economy.is_busy(key)
+            or not payload.startswith((b"GTM0GB2", b"GTM0Gb2"))
+        ):
+            return False
+        _, subtype, number, sections = parse_named(payload)
+        return (
+            subtype == 0x17
+            and number == self._closed[key]
+            and sections == {"Quit": {"No": str(number)}}
+        )
+
     def status(self, key):
         session = self._active.get(key)
         return (
@@ -224,11 +243,7 @@ class PrizeService:
             return self._entry(key, subtype, number, sections)
         session = self._active.get(key)
         if session is None:
-            if (
-                self._closed.get(key) == number
-                and subtype == 0x17
-                and sections == {"Quit": {"No": str(number)}}
-            ):
+            if self.can_replay_quit(key, payload):
                 return [named(0xB2, 0x17, number, f"@Quit=/N={number}/D=0/B=0")]
             return None
         if number != session.number:
@@ -360,11 +375,11 @@ class PrizeService:
             p.cards, p.names = cards, names
 
     def disconnect(self, key):
+        self._closed.pop(key, None)
         session = self._active.pop(key, None)
         if session is None:
             return False
         self.economy.release_prize(session.token)
-        self._closed.pop(key, None)
         return True
 
     def snapshot(self):
