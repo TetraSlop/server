@@ -19,6 +19,24 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Room presence information now reserves its native string terminator
+  (`df49fc7`). Original-code research `f268eff` proves that 32 nonzero bytes
+  cause a receiver diagnostic and can overread adjacent sender data; the
+  production CPU builder emitted that unsafe length. Incoming information
+  is limited to 31 bytes and single/paired CPU publication preserves its
+  existing status fields with a terminated record. Two new regressions fail
+  before; 43 room/service/CPU/authentication tests pass after. All 41 original
+  instruction cases pass, with zero unsafe production publications. This does
+  not change the separate canonical-name policy or establish native rendering.
+- Ordinary admission now respects existing event observer ownership, and an
+  observer's explicit ExitCh removes exact-table chat membership (`4282205`).
+  Two new regressions reproduce three failing subcases; the final 15-test
+  selection passes, preserving participant state, unrelated room chat and
+  same-connection reentry. Both changes reuse existing lifecycle operations.
+  Collection finds 1,146 tests; Ruff/whitespace and rebuilt-wheel installation,
+  entry points, recovery and temporary listeners pass. All 80 runtime files
+  byte-match source. These are focused checks, not a repeated whole-suite or
+  native UI run; commands and logs are recorded in VALIDATION.md.
 - Full portable suite at unchanged `995875e`: 1,141 tests in 769.854 seconds,
   1,081 passed, 59 optional PostgreSQL skips and one stale fixture error. All
   254 tracked source/test/tool hashes stayed fixed during the run. The fixture

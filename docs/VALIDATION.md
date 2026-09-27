@@ -1,5 +1,60 @@
 # Packaging and transaction validation
 
+## Room information and observer service boundaries, 2026-09-27
+
+Commit `df49fc7` reserves the terminator in the native 32-byte room information
+field: incoming DE/PD accepts at most 31 non-NUL bytes, and generated CPU
+information is padded to 31 bytes. The existing status/substatus offsets,
+other information bytes and full canonical-name authentication stay intact.
+Two new regressions fail before the correction, covering DE/PD mutation/replay
+atomicity and single/paired CPU output: `results/room-info-boundary-before.log`.
+All **43 tests pass in 13.782 seconds** in this final selection:
+
+```powershell
+.venv/Scripts/python.exe -B -m unittest tests.test_room_service tests.test_event_rooms tests.test_services_integration tests.test_room_presence_names tests.test_three_player_room tests.test_shared_room.SharedRoomUnits tests.test_computer_room_adapter -v
+```
+
+Log: `results/room-info-boundary-after.log`. Three older shared presence fixtures
+now use the original safe length instead of 32 nonzero bytes.
+
+Research `f268eff` executes **41 original/production cases**, establishing both
+the original receiver's -8404 diagnostic and a canary-backed sender overread.
+The discovery run flags three unsafe production publications. Running
+`research/probe_room_info_boundary.py` with `--require-safe-production` against
+the correction passes all 41 cases with zero unsafe publications. Transcript:
+`results/room-info-safe-production-original.log`; detailed output:
+`results/room-info-safe-production-original.json`. See
+[ROOM_INFO_BOUNDARY.md](research/ROOM_INFO_BOUNDARY.md) for exact entry points,
+image hash and reproduction. The inspected player projection preserves its
+name/status/substatus through both PTL and deltas; no visible crash, native UI
+improvement or historical denial code is claimed. Independent review found no
+material issue with the correction.
+
+Commit `4282205` closes two observer lifecycle gaps. Event observers previously
+could enter an ordinary table through direct GameEN/Req while retaining their
+event admission. Ordinary observer ExitCh also left stale table chat membership.
+The four added runtime lines reuse room ownership validation and exact-table
+chat cleanup. Baseline evidence: `results/room-cross-service-observer-repro.log`
+and `results/room-service-boundaries-before.log`. The new tests inspect rejected
+dispatch before socket-error cleanup could conceal partial mutation, then use
+encrypted traffic to verify explicit event exit permits ordinary admission.
+
+The final **15-test selection passes in 20.437 seconds**:
+`results/room-service-boundaries-joint.log`. It includes the new boundary module,
+spectator reentry and table admission rules modules, plus existing explicit
+spectator exit, cross-table admission and event-selection room-transition
+controls. Participant state, reservations, unrelated room chat, retired senders
+and same-connection observer reentry remain covered. No commerce policy changed.
+
+Collection finds 1,146 tests without import errors; Ruff and whitespace checks
+pass. The rebuilt 85-entry wheel passes a clean dependency-free installation,
+both entry points, JSON administration/recovery and temporary listeners. All 80
+runtime files byte-match source. Logs:
+`results/room-boundaries-wheel-{build,check}.log`.
+SHA256: `4f87779302606b4beb5c4b9519eeb085918089836e8d68d56ed32e360667e1c5`.
+These checks do not repeat the entire suite, live PostgreSQL or rendered native
+UI validation. No native application, original asset or live save was touched.
+
 ## Whole-suite checkpoint and native ranking dates, 2026-09-27
 
 The full portable suite ran against clean `995875e`, finishing 1,141 tests in
