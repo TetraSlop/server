@@ -1,0 +1,218 @@
+[
+  {
+    "messages": [
+      "43000A11@X=/A=1"
+    ],
+    "token": "@X",
+    "setter": null,
+    "manual_trailer": null,
+    "evidence": "original dequeue/constructor/section parser/getter; only heap/locks replaced; receive queue seeded; pump disabled with connection=0",
+    "dequeue_return": 1,
+    "remaining_queue": 0,
+    "raw": "43000A11@X=/A=1",
+    "body": "43000A11@X=/A=1",
+    "metadata": [
+      67,
+      10,
+      17,
+      4294954960
+    ],
+    "token_found": 1,
+    "token_body": "/A=1"
+  },
+  {
+    "messages": [
+      "43FF0A11@X=/A=1"
+    ],
+    "token": "@X",
+    "setter": null,
+    "manual_trailer": null,
+    "evidence": "original dequeue/constructor/section parser/getter; only heap/locks replaced; receive queue seeded; pump disabled with connection=0",
+    "dequeue_return": 1,
+    "remaining_queue": 0,
+    "raw": "43FF0A11@X=/A=1",
+    "body": "43FF0A11@X=/A=1",
+    "metadata": [
+      67,
+      10,
+      17,
+      4294954960
+    ],
+    "token_found": 1,
+    "token_body": "/A=1"
+  },
+  {
+    "messages": [
+      "43000A11@X=/A=1",
+      "43000A11/B=2"
+    ],
+    "token": "@X",
+    "setter": null,
+    "manual_trailer": null,
+    "evidence": "original dequeue/constructor/section parser/getter; only heap/locks replaced; receive queue seeded; pump disabled with connection=0",
+    "dequeue_return": 1,
+    "remaining_queue": 1,
+    "raw": "43000A11@X=/A=1",
+    "body": "43000A11@X=/A=1",
+    "metadata": [
+      67,
+      10,
+      17,
+      4294954960
+    ],
+    "token_found": 1,
+    "token_body": "/A=1"
+  },
+  {
+    "messages": [
+      "43000A11@X=/A=1"
+    ],
+    "token": "@X",
+    "setter": "43FF0A11@X=/B=2",
+    "manual_trailer": null,
+    "evidence": "original dequeue/constructor/section parser/getter; only heap/locks replaced; receive queue seeded; pump disabled with connection=0",
+    "dequeue_return": 1,
+    "remaining_queue": 0,
+    "raw": "43000A11@X=/A=1",
+    "body": "43000A11@X=/A=1",
+    "metadata": [
+      67,
+      10,
+      17,
+      4294954960
+    ],
+    "setter_return": 538968544,
+    "body_after_setter": "43FF0A11@X=/B=2",
+    "token_found": 1,
+    "token_body": "/B=2"
+  },
+  {
+    "messages": [
+      "43000A11@X=/A=1"
+    ],
+    "token": "@X",
+    "setter": "43FF0B11@X=/B=2",
+    "manual_trailer": null,
+    "evidence": "original dequeue/constructor/section parser/getter; only heap/locks replaced; receive queue seeded; pump disabled with connection=0",
+    "dequeue_return": 1,
+    "remaining_queue": 0,
+    "raw": "43000A11@X=/A=1",
+    "body": "43000A11@X=/A=1",
+    "metadata": [
+      67,
+      10,
+      17,
+      4294954960
+    ],
+    "setter_return": 538968544,
+    "body_after_setter": "43000A11@X=/A=1",
+    "token_found": 1,
+    "token_body": "/A=1"
+  },
+  {
+    "messages": [
+      "43000A11@X=/A=1"
+    ],
+    "token": "@X",
+    "setter": null,
+    "manual_trailer": "1234",
+    "evidence": "original dequeue/constructor/section parser/getter; only heap/locks replaced; receive queue seeded; pump disabled with connection=0",
+    "dequeue_return": 1,
+    "remaining_queue": 0,
+    "raw": "43000A11@X=/A=1",
+    "body": "43000A11@X=/A=1",
+    "metadata": [
+      67,
+      10,
+      17,
+      4294954960
+    ],
+    "manual_trailer_decoded": 4660,
+    "token_found": 1,
+    "token_body": "/A=1"
+  },
+  {
+    "messages": [
+      "43000A11@X=/A=1@Y=/B=2"
+    ],
+    "token": "@Y",
+    "setter": null,
+    "manual_trailer": null,
+    "evidence": "original dequeue/constructor/section parser/getter; only heap/locks replaced; receive queue seeded; pump disabled with connection=0",
+    "dequeue_return": 1,
+    "remaining_queue": 0,
+    "raw": "43000A11@X=/A=1@Y=/B=2",
+    "body": "43000A11@X=/A=1@Y=/B=2",
+    "metadata": [
+      67,
+      10,
+      17,
+      4294954960
+    ],
+    "token_found": 1,
+    "token_body": "/B=2"
+  },
+  {
+    "messages": [
+      "42000700@Chat=/Dt=#CHAT#hello @X=/A=1"
+    ],
+    "token": "@Chat",
+    "setter": null,
+    "manual_trailer": null,
+    "evidence": "original dequeue/constructor/section parser/getter; only heap/locks replaced; receive queue seeded; pump disabled with connection=0",
+    "dequeue_return": 1,
+    "remaining_queue": 0,
+    "raw": "42000700@Chat=/Dt=#CHAT#hello @X=/A=1",
+    "body": "42000700@Chat=/Dt=#CHAT#hello @X=/A=1",
+    "metadata": [
+      66,
+      7,
+      0,
+      4294954960
+    ],
+    "token_found": 1,
+    "token_body": "/Dt=#CHAT#hello @X=/A=1"
+  },
+  {
+    "messages": [
+      "43000A11@X=/A=ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ1234"
+    ],
+    "token": "@X",
+    "setter": null,
+    "manual_trailer": null,
+    "evidence": "original dequeue/constructor/section parser/getter; only heap/locks replaced; receive queue seeded; pump disabled with connection=0",
+    "dequeue_return": 1,
+    "remaining_queue": 0,
+    "raw": "43000A11@X=/A=ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ1234",
+    "body": "43000A11@X=/A=ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ1234",
+    "metadata": [
+      67,
+      10,
+      17,
+      4660
+    ],
+    "token_found": 1,
+    "token_body": "/A=ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ1234"
+  },
+  {
+    "messages": [
+      "43000A11@X=/A=1@X=/B=2"
+    ],
+    "token": "@X",
+    "setter": null,
+    "manual_trailer": null,
+    "evidence": "original dequeue/constructor/section parser/getter; only heap/locks replaced; receive queue seeded; pump disabled with connection=0",
+    "dequeue_return": 1,
+    "remaining_queue": 0,
+    "raw": "43000A11@X=/A=1@X=/B=2",
+    "body": "43000A11@X=/A=1@X=/B=2",
+    "metadata": [
+      67,
+      10,
+      17,
+      4294954960
+    ],
+    "token_found": 0,
+    "token_body": ""
+  }
+]

@@ -68,8 +68,12 @@ fixtures match `tm_protocol.py`. Token names alone do not establish semantics.
 
 TM's service envelope begins GTM0G + two hex opcode digits + two reserved digits
 + two arg2 digits + two arg3 digits. The native send layer limits its inner payload
-to 469 bytes; the service fragmentation boundary is 447. Fragment assembly is not
-implemented. The Python command parser deliberately enforces strict envelopes.
+to 469 bytes; ordinary named bodies are bounded to447 bytes. The original sender
+can slice a larger body, but the inspected ordinary receive path does not join
+those slices. This is not an unimplemented generic fragmentation protocol; use
+the recovered application-specific pages. See [the original evidence and its
+limits](NAMED_PACKET_LIMITS.md). The Python command parser deliberately enforces
+strict envelopes.
 
 ## Startup service messages
 
