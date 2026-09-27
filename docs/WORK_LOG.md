@@ -19,6 +19,18 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Memorable Win source research (`addf270`) passes 458 original-instruction
+  cases with a write watch over RN: all 430 ordinary offline score/seat
+  combinations and ten online result controls preserve it; three profile
+  imports and 15 rotated ResultData controls identify its actual writers.
+  Missing local RN preserves, empty clears and supplied text replaces; another
+  seat's text cannot overwrite the local value. No offline selection formula
+  or runtime defect was found; historical hosted selection remains unknown.
+  See research/MEMORABLE_WIN_SOURCES.md for exact execution scope and code hash.
+  Separately, 22 weekly period/policy/projection tests pass in 0.502 seconds
+  with no progression defect found. Updated deferred native review instructions
+  to the packaged launcher and example paths; Play remains explicitly JSON.
+  Runtime is unchanged, so the previously checked wheel remains current.
 - Event configuration now rejects boards with insufficient placement space
   before publishing tables or reserving players. Previously JSON accepted such
   boards and matchmaking disconnected the selected players when the engine

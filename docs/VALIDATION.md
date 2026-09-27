@@ -1,5 +1,24 @@
 # Packaging and transaction validation
 
+## Memorable Win sources and progression follow-up, 2026-09-27
+
+Original probe `addf270` passes 458 cases, watching every byte of the RN buffer
+during the tested result, profile import and ResultData receiver paths. Its
+430 ordinary offline score/seat combinations and ten online controls preserve
+RN; classification, rating and sequence checks confirm execution. Three profile
+imports and 15 rotated receiver cases identify the writers and local-seat
+selection, including omitted/empty/supplied RN. This establishes no automatic
+Memorable Win selection rule. See [the scoped evidence](research/MEMORABLE_WIN_SOURCES.md)
+and `results/memorable-win-sources-original.json` for reproduction and code hash.
+
+The existing ranking-period, weekly policy and projection batch passes all
+22 tests in 0.502 seconds: `results/progression-followup-audit.log`. Inspection
+found no additional progression defect, and no duplicate tests were added.
+Deferred review now points to the packaged entry points and actual example
+paths; both CLI help commands and its three documentation links were checked.
+No runtime changes, full-suite rerun or native application launch were made;
+the wheel checked for the previous event-board fix remains current.
+
 ## Event board startup validation, 2026-09-27
 
 Over-blocked event boards previously passed JSON parsing and room publication,

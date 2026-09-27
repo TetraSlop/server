@@ -73,6 +73,11 @@ VS. Rating, and Prize Points Acquired as the Prize Center balance. Historical
 rating components and award selection remain unknown. See RESULT_STAT_LABELS.md
 in protocol_map and validation_manifest_vs_player_statistics.json.
 
+A later [Memorable Win source audit](MEMORABLE_WIN_SOURCES.md) watches RN writes
+in 458 original-instruction cases. The tested ordinary offline result calculator
+preserves RN; profile import and the hosted ResultData receiver supply it.
+This adds no historical selection formula and does not change runtime policy.
+
 Automatic human tables now freeze two/three seats at the owner's Start action,
 with matching board size, rewards and persistence. This option passed225
 focused test executions before the subsequent invitation correction. Start

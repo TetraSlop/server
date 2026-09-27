@@ -4,6 +4,11 @@ The user asked for autonomous progress toward full emulation on September 26,
 2026. Questions are recorded here rather than interrupting that work. No desktop
 control or game launches are authorized by this note.
 
+Use [local play](../LOCAL_PLAY.md) and the current
+[native checklist](../NATIVE_TEST_CHECKLIST.md) for the packaged projects.
+The examples below are relative to the `tmserver` checkout. Research-era
+scratch launchers are not the packaged entry points.
+
 ## Native checks requiring the user
 
 - Custom fixed CPU rooms: the hosted Computer menu always sends departure
@@ -14,11 +19,13 @@ control or game launches are authorized by this note.
   The supplied CPU room remains custom, and supplied fixed rooms are human-only.
   See COMPUTER_ROOM_RULES.md for original instruction evidence.
 - After importing a copy of the save into PostgreSQL, run
-  `python -B server/run_local_game.py --database` with TM_DATABASE_URL set in the
-  dependency environment. Check shop Buy/Get, sale, deck rename, a two-account
-  trade, and inventory/balance after relaunch. The launcher flag is covered by
-  mocked-process tests; encrypted PostgreSQL protocol tests pass. No graphical
-  test or native launch was performed during this change.
+  `.venv/Scripts/tmserver` with `TM_DATABASE_URL` set, following
+  [persistence setup](../PERSISTENCE_DESIGN.md). This starts only the services;
+  the native client must be connected separately for these checks. `Play.cmd`
+  selects JSON explicitly and does not use that PostgreSQL environment variable.
+  Check shop Buy/Get, sale, deck rename, a two-account trade, and inventory/balance
+  after relaunch. Encrypted PostgreSQL protocol tests pass; graphical behavior
+  remains untested.
 - Check Play Data after two human matches: VS. Player Games should advance
   once per completed round and survive login; CPU matches should preserve it.
   Original receiver/importer/display checks and encrypted two/three-player
@@ -38,7 +45,7 @@ control or game launches are authorized by this note.
 - Check explicit special-board CPU/versus rounds, including shuffle and spinners.
   Menu toggles now use the recovered original board generator for2/3players.
 - Check configured event room entry, matchmaking, borrowed hands, event result
-  and return to the room. `events.example.json` is a runnable local fixture;
+  and return to the room. `--events examples/events.example.json` selects a local fixture;
   encrypted2/3-player tests pass, but the actual presentation remains unobserved.
 - Check the original Computer menu:30 asset-backed opponents, reconfiguration,
   rematches and leaving. Also check a three-account human table and its25-cell board.
@@ -73,10 +80,10 @@ control or game launches are authorized by this note.
   recovery. Encrypted rounds and original export routines pass headlessly.
 - Check opt-in practice Quit/Break, CPU replacement, invalid/loss rules and
   return-to-room presentation. Economic/rated departures still abort/refund.
-- Check additional ordinary rooms through --rooms rooms.example.json: enter
+- Check additional ordinary rooms through `--rooms examples/rooms.example.json`: enter
   each room, select its table, return to the directory and change rooms.
   Simultaneous encrypted rounds and original directory/PTL consumers pass.
-- Check two tables in one room with --rooms shared_rooms.example.json:
+- Check two tables in one room with `--rooms examples/shared_rooms.example.json`:
   table numbers, shared roster, returning from one table and entering another.
 - Check the result screen's ranking privacy choice and its value after login.
   The original choice/send/import and ranking-name projection pass headlessly.
@@ -142,6 +149,6 @@ desktop; their full native admission fields are now accepted and authenticated.
 ## Compatibility scope
 
 Target: original PC Tetra Master 1.6.11.0 and its POL game/profile services.
-The browser port remains paused. Existing repositories and installed game
-files are unchanged; the separately authorized tmloader repository is local
-only and has not been pushed.
+The browser port remains paused. Original installed game files remain unchanged;
+authorized server and loader development lives in the `tmserver` and `tmloader`
+GitHub checkouts. Changes are local and have not been pushed.
