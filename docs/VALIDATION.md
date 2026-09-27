@@ -1,5 +1,31 @@
 # Packaging and transaction validation
 
+## Integrated local launch, 2026-09-27
+
+The packaged server now owns the native clients' lifetime through `Play.cmd` /
+`tmserver-play`. A shared async service context is used by both standalone server
+startup and local play. Free endpoint ports and distinct account IDs are passed
+to the sibling `tmloader`; JSON remains explicit. Each run has separate logs.
+
+Six new launcher tests cover three real headless subprocess peers, encrypted
+game/profile requests and durable settings, read-only check mode, failed loader
+checks, partial startup cleanup, failed second-child creation, exclusive session
+ownership and environment isolation. These peers do not load original DLLs.
+The combined launcher, configuration and ordinary-room regression passed all
+21 cases. The updated 79-entry wheel passed a clean dependency-free installation,
+including `tmserver-play --help` and bounded startup of both services.
+
+The actual prepared configuration also passed the real loader's `--check` for
+all three generated account/endpoint command lines. A temporary copy of the
+imported save passed a real encrypted game/profile exchange through both
+packaged listeners. All 133 copied runtime files matched their sources. No game
+window was opened by these checks and the real imported save was unchanged.
+
+Native title, room, CPU/rematch, shop/trade and reward validation remains awaiting
+user observation in [NATIVE_TEST_CHECKLIST.md](NATIVE_TEST_CHECKLIST.md).
+
+## Packaging checkpoint
+
 Verified on Windows with Python 3.13.15. The portable suite collects 855 cases;
 56 require PostgreSQL and are skipped when `TM_TEST_DATABASE_URL` is absent.
 

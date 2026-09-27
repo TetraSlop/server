@@ -49,6 +49,8 @@ def main():
         run(str(python), "-m", "pip", "install", "--no-index", "--no-deps", str(wheel))
         cli = scripts / ("tmserver.exe" if os.name == "nt" else "tmserver")
         run(str(cli), "--help")
+        play_cli = scripts / ("tmserver-play.exe" if os.name == "nt" else "tmserver-play")
+        run(str(play_cli), "--help")
         accounts = run(str(cli), "--list-accounts")
         assert len(accounts.strip().splitlines()) == 2, accounts
         ready = run(

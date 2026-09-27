@@ -4,6 +4,11 @@ Python implementation of the original PC Tetra Master game and profile services.
 The native client, loader and original executable research environment are separate.
 The server currently accepts synthetic local accounts and binds to loopback.
 
+For the integrated native setup in the sibling `tmloader` checkout, use
+**`Play.cmd`**. [Local play](docs/LOCAL_PLAY.md) covers one/two/three windows and
+the [native test checklist](docs/NATIVE_TEST_CHECKLIST.md). `Check Setup.cmd`
+validates the setup without opening the game.
+
 ## Development
 
 Python 3.13 or newer:
@@ -27,7 +32,8 @@ optional; a JSON installation has no third-party runtime dependencies.
 
 This starts only the server. It does not launch the game or control the desktop.
 State and logs default to `var/` in the working directory, outside the installed
-package. The old launcher and save are untouched; adopting this server is explicit.
+package. `Play.cmd` uses this package and its own `var/local_state.json`; the old
+scratch launcher still uses its earlier save.
 Use `--help` for rooms, event configuration, human tables, prizes and ratings.
 
 For PostgreSQL, set `TM_DATABASE_URL`, run `tmserver-db upgrade`, then `tmserver`.

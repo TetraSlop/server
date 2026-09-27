@@ -4,7 +4,8 @@ import argparse
 import asyncio
 import math
 import os
-from contextlib import ExitStack
+from contextlib import ExitStack, asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 from tmserver.event_configuration import load_event_setup
@@ -149,6 +150,29 @@ async def run(args):
         for nickname, (login, _, character) in account_specs(args.accounts).items():
             print(f"{character:3}  {login.decode('ascii')}  {nickname}")
         return
+    async with running_services(args) as services:
+        print(
+            f"Tetra Master services ready: game 127.0.0.1:{services.game_port}, "
+            f"profile 127.0.0.1:{services.profile_port}",
+            flush=True,
+        )
+        if args.seconds:
+            await asyncio.sleep(args.seconds)
+        else:
+            await asyncio.Event().wait()
+
+
+@dataclass(frozen=True)
+class RunningServices:
+    game: Server
+    profile: ProfileServer
+    game_port: int
+    profile_port: int
+
+
+@asynccontextmanager
+async def running_services(args):
+    """Own both listeners and their store until the caller has finished."""
     args.log_dir.mkdir(parents=True, exist_ok=True)
     events, tables, progress = load_event_setup(args.events) if args.events else ((), (), "none")
     with ExitStack() as resources:
@@ -157,10 +181,12 @@ async def run(args):
             from tmserver.postgres_store import PostgresStateStore
 
             store = resources.enter_context(PostgresStateStore(args.database_url))
-        await serve(args, events, tables, progress, store)
+        async with serving(args, events, tables, progress, store) as services:
+            yield services
 
 
-async def serve(args, events, tables, progress, store):
+@asynccontextmanager
+async def serving(args, events, tables, progress, store):
     game = Server(
         args.log_dir / "local_traffic.jsonl",
         args.state,
@@ -186,14 +212,7 @@ async def serve(args, events, tables, progress, store):
     try:
         game_port = await game.start(args.game_port)
         profile_port = await profile.start(args.profile_port)
-        print(
-            f"Tetra Master services ready: game 127.0.0.1:{game_port}, profile 127.0.0.1:{profile_port}",
-            flush=True,
-        )
-        if args.seconds:
-            await asyncio.sleep(args.seconds)
-        else:
-            await asyncio.Event().wait()
+        yield RunningServices(game, profile, game_port, profile_port)
     finally:
         await profile.stop()
         await game.stop()

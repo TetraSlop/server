@@ -1,5 +1,8 @@
 # Developer notes
 
+[Local play](LOCAL_PLAY.md) connects the two GitHub projects. The
+[native checklist](NATIVE_TEST_CHECKLIST.md) tracks the remaining user-run checks.
+
 Start with [architecture](ARCHITECTURE.md) for code ownership and transaction
 ordering, [database setup](DATABASE.md) for persistence, and
 [load testing](LOAD_TESTING.md) for repeatable measurements.
