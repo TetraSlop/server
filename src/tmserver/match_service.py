@@ -863,6 +863,12 @@ class MatchService:
         owner = self.owner_peer if self.owner_peer is not None else self.players[0].peer
         if peer != owner:
             raise MatchError("only the admitted table owner may change current rules")
+        if self.start_pending:
+            # GameReady may already be queued for a guest, and Req returns the
+            # rules that GameOK accepts. Neither can be revised by a later Apply.
+            if self.settings_applied and (game, table) == (self.game_rules, self.table_rules):
+                return []
+            raise MatchError("current rules cannot change during the start handshake")
         # Saving default preferences does not activate them in this practice
         # table. Current settings require features the match engine implements.
         if not self.allow_wagers and any(game[key] for key in ("bm", "du")):
