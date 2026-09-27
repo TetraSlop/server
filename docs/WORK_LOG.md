@@ -131,12 +131,23 @@ checks pass. No native visual validation is claimed by these tests.
 
 ## In progress
 
-- All assigned implementation and validation work is complete; agents are idle.
-  No active exec sessions remain from the full suite, wheel or editable install.
-  The latest full run is952 cases; post-checkpoint follow-ups passed their scoped
-  tests and final package check, not a new complete981-case run.
-- Before further substantial work check current allowance. Last observed93%
-  used; reset remains1791063720. Continue only concrete, bounded improvements
+- A final encrypted gameplay audit reproduced a rematch failure when Continue
+  changes ranking privacy: a legitimate later Decks packet loses its accepted
+  result context and disconnects both players. `browser_port_options` owns the
+  bounded fix and first/final-voter regression coverage.
+- `texture_load_trace` is validating offline administration against a fresh,
+  private PostgreSQL 16 instance using cached WSL binaries and an image. Only
+  newly created temporary daemon/container/database state is authorized; all
+  owned runtime resources must be stopped and cleaned up after validation.
+- The transport/profile audit found no new actionable defect. Isolated encrypted
+  probes rejected truncated bodies, incorrect extents and bad checksums without
+  publishing state; valid follow-up requests succeeded. No protocol policy was
+  changed based on speculative request ordering.
+- No root exec sessions remain from the full suite, wheel or editable install.
+  The latest full run is 952 cases; post-checkpoint follow-ups passed their scoped
+  tests and final package check, not a new complete 981-case run.
+- Before further substantial work check current allowance. Last observed 96%
+  used; reset remains 1791063720. Continue only concrete, bounded improvements
   that can be completed and validated within remaining allowance. No reset
   credits, purchases or continuation into a replenished allowance are authorized.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
@@ -171,7 +182,9 @@ immediately preceding week; backward-period writes must not rewrite history.
 Test v1/v2 restore/import, disabled preservation, boundaries/skipped weeks,
 replay after rollover/restart, invalid final participants, failures before save,
 refunds/wrap, CPU/human results, caps/ties and immutable files. Implementation
-and the40-test combined focused check are complete. Broader validation remains.
+and the 40-test combined focused check are complete. The subsequent complete
+952-case portable run passed; real PostgreSQL administration is being checked
+separately as described above.
 
 Continue by reviewing active fixes, running their relevant checks, updating this
 log and committing locally. The thread heartbeat may resume this work; it is
