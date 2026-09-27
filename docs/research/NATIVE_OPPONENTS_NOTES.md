@@ -1,8 +1,9 @@
 # Original computer opponents and hosted menu
 
 `native_opponents.py` ports the installed client's built-in NPC records and local
-normal-menu pool/hand construction. `MatchService(computer_menu=True)` now uses
-these records in an explicit hosted computer-menu route. The default
+normal-menu pool/hand construction. `MatchService(computer_menu=True)` uses
+these records in a hosted computer-menu route with one human and one or two
+distinct NPCs. The default
 `mode='computer'` without this flag retains the existing versus-table practice
 facade. No native window, native process, or historical server was run for this
 pass. The original instructions are exercised in an emulator with seeded state.
@@ -27,8 +28,10 @@ The encoded and decoded SHA256 values are embedded and checked by the tests.
 NPC setup10110970 and update10110A70 copy the AI values/pack/name and use
 record0's hidden name when local points fall below WORD+2. The30 names,
 personalities, ratings and packs are exposed as immutable `OPPONENTS`.
-`opponent(id)` accepts1..30. `known_name(points)` describes name visibility;
-it does not claim that the threshold is a server-side admission rule.
+`opponent(id)` accepts1..30. `known_name(points)` describes name visibility.
+The native selector also checks the same threshold at100EC74F..100EC76E before
+accepting a click; the hosted server currently retains its existing1..30 ID
+validation and does not add a separate collection-point admission policy.
 
 `prepare_opponent(id,catalog,raw_rng,guild=0)` runs the local normal-menu policy:
 100EC17C..100EC1A2 generates ten cards from the NPC's pack;100D9DE0's local
@@ -38,7 +41,10 @@ The opening/demo constructor uses a different selection route, so this is not
 labeled a universal NPC hand algorithm. Network mode skips the local chooser;
 using its exact port as the hosted deck policy is an explicit local choice.
 Guild/filter0 and regenerating the ten-card pool on each rematch are likewise
-hosted choices, not recovered historical server distribution.
+hosted choices, not recovered historical server distribution. For two NPCs the
+service calls this helper in seat order, finishing pool generation and selection
+for one NPC before the next. The original local menu generates both pools before
+its later hand-selection controller; no identical hosted RNG schedule is claimed.
 
 Six module tests verify all asset records,90 original setup executions,
 120 complete original ten-card-loop plus five-card-selection executions, and
@@ -72,20 +78,59 @@ The entry chain is code-addressed, not a graphics-driven native replay:
    Subtype02 can contain Init and List together; subtype04 requires the
    remembered sender. The service publishes all30 original default ratings.
 6. Client43/06 header0 sends seven Rule values to save menu choices.
-   Header2 sends eight Rule values (the eighth is gs/P.E9) and one `/Com=id`.
+   Header2 sends eight Rule values (the eighth is gs/P.E9) and one `/Com=id`;
+   header3 sends the same rules and `/Com=first|second` for two NPCs.
    Original serializer10106F3A..101072E2 and UI100EE95B/100EBBE9 establish
-   both forms. Three-player header3 is deliberately rejected in this version.
+   these forms. The service accepts header2/3 with exactly one/two distinct IDs.
 7. After choosing opponents the menu posts04000051. Parent100BD15C enters
    selection and100BD1DA..100BD225 flushes queued08,09,0A,0C,0D,1A,0F.
    Therefore06 has **no invented reply** and the service waits for the
    subsequent human07 CardSelect before sending status, StartData and TurnData.
 
-The rest of the two-seat placement/battle/result contract is the existing exact
+The remaining placement/battle/result contract uses the existing two/three-seat
 engine. Conf0/Ans1 returns ordinary Continue and fresh selection. Conf1/Ans1
 instead sends only ComList04 and returns to the menu: the original1010D375
 sender and1010D5D9 receiver establish that distinct gate. Old final snapshots
 remain available until the next completed selection. Human collection ownership,
 growth, CBC reward commits and reservations remain adapter/economy responsibilities.
+
+## Three-player menu evidence and implementation
+
+This is a concrete native menu path, not merely an unused count-based serializer:
+
+- Parent event0400002E dispatches through the table at100EBE64/100EBE4C to
+  100EBA49. Its100EBA96 sets selector child+11A to2 opponents. The alternative
+  event0400002D reaches100EB9D7 and sets that count to1 at100EBA24.
+- Selecting the first opponent again clears the first slot at100EC77B..100EC7A4;
+  it cannot fill both slots with the same ID. IDs remain the original1..30 roster.
+- Confirmation100EC110..100EC1C0 initializes one human and the selected number
+  of NPC records.100EC1C2..100EC1E4 writes P+E5=count+1 and P+E6=count-1:
+  two opponents therefore mean3 players and board mode1 (25 cells).
+- It posts04000037 at100EC1FD; the parent's event table selects100EBB1D,
+  which reaches100EBBD0..100EBBE9 and sends43/06 with header=P+E5 when online.
+- Serializer10107248..101072C0 visits P+1CA with stride30hex for P+E5-1
+  NPC IDs. ComGameInit/ComList have no additional three-player fields: the
+  native menu itself selects the count before CardSelect/StartData.
+
+`tests/fixtures/three_player_computer_sender.json` freezes original sender
+execution for header2 with NPC1 and header3 with NPC1/3 and30/1. It records the
+decoded-image SHA256, exact entry, seeded rules and event addresses. The same
+Unicorn sender fixture supplied the original instructions; only transport/string
+runtime boundaries were replaced. This is instruction evidence, not a rendered
+menu replay.
+
+Each server NPC now retains its own ID, original personality, name, rating and
+fresh five-card hand. Header3 uses25 cells and15 placements; header2 uses16 and10.
+Conf0 regenerates every selected NPC hand. Conf1 retains the completed result
+until the next CardSelect and allows2→3 or3→2 reconfiguration. Explicit board
+layouts must match the requested count, and invalid counts/IDs/rules are rejected
+before stake authorization, RNG draws or configuration changes.
+
+The original single-NPC `npc_id`, `ai_cards` and `ai_personality` attributes remain
+views of the first NPC. Observer snapshots carry each seat's actual NPC ID.
+Card-prize processing resumes automatic NPC choices after a human GetSelect;
+the final human/NPC confirmations remain behind the existing durable settlement
+barrier. CPU choices made before a human is ready are queued after TCList.
 
 ## Adapter API and limitations
 
@@ -95,21 +140,35 @@ Req is required; Req returns PLAYACK plus ComGameInit/ComList and changes phase
 to `computer_menu`, without a GameOK gate. The adapter must treat that phase as
 an admitted configuration phase for timeout/disconnect/reservation handling.
 The public `npc_id` is None until06 selects a named opponent. All previously
-supported board/economy guards still apply. Wager/double-up stay disabled.
-Explicit board flags must match the configured board; no random layout policy
-is invented from the original rule menu.
+supported board/economy guards still apply. Wager/double-up and card prizes are
+opt-in and retain the documented local economic policies. Without an explicit
+layout, enabling special-rule flags invokes the recovered board generator;
+flags0 retain the hosted empty-board default. Explicit board flags and size
+must match the configured board.
+
+`npc_nickname_id` identifies the first NPC; optional `second_npc_nickname_id`
+identifies the second. The default derives the next distinct nonzero uint64.
+The room adapter supplies separate stable identities for both seats.
+`_authorize_round(stake, player_count=target)` forwards that keyword to the
+durable authorizer only when a menu choice changes the count. The hook runs
+before resizing, so reservation/account state can be saved for the intended
+geometry while a failed save leaves the existing menu intact. Rematches and
+unchanged counts retain the original three-argument authorizer call.
 
 Several original NPC names are19 bytes. Versus initialization1010264E..10102656
 copies CN into fixed16-byte slots without bounding the copy. **Do not serialize
 these full names through VsGameInit or ordinary spectator CN fields.** The
 computer menu resolves PlPrm name pointers instead. MatchService never emits
-VsGameInit in this mode; observer support for this route remains disabled until
-the NPC-specific WatchInfo contract is connected. Metadata/room advertisement
-and encrypted transport integration are separate adapter work.
+VsGameInit in this mode. The opt-in spectator route uses the NPC-specific
+WatchInfo contract and bounded lobby labels; see [SPECTATOR_NOTES.md](SPECTATOR_NOTES.md).
 
-Four focused MatchService tests execute the original06 serializer against the
-new consumer and the original02 parser against the new producer. They also
-cover invalid-choice atomicity, proper admission, nine complete rounds across
-NPC1/3/30, regenerated rematches, Conf1 reconfiguration, and final-snapshot
-lifetime. These establish module behavior and original numeric/parser parity,
-not native menu compatibility or a supported offline release mode.
+The original MatchService instruction fixtures compare the06 serializer with
+the consumer and the02 parser with the producer. Portable tests in
+`tests/test_match_service.py` retain the one-NPC admission/rematch/reconfiguration
+coverage. `tests/test_three_player_computer.py` adds frozen sender messages,
+per-seat personalities and observer IDs, complete15-placement games, generated
+and explicit25-cell boards,2↔3 transitions, failed-save atomicity and mixed
+human/NPC prize choices. The encrypted adapter flows are covered in
+`tests/test_three_player_computer_integration.py`. These establish module and
+wire behavior, not native rendered-menu compatibility or a supported offline
+release mode.

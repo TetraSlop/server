@@ -129,6 +129,8 @@ class Player:
     collection_size: int = 0
     departed: bool = False
     substitute: int = 0
+    npc_id: int = 0
+    ai_personality: Personality | None = None
 
 
 @dataclass
@@ -268,6 +270,7 @@ class MatchService:
         allow_departures=False,
         npc_nickname_id=0x200,
         flexible_seats=False,
+        second_npc_nickname_id=None,
     ):
         if mode not in ("computer", "versus"):
             raise ValueError("mode must be computer or versus")
@@ -275,6 +278,15 @@ class MatchService:
         if type(npc_nickname_id) is not int or not 0 < npc_nickname_id < 1 << 64:
             raise ValueError("NPC nickname identity must be a nonzero uint64")
         self.npc_nickname_id = npc_nickname_id
+        if second_npc_nickname_id is None:
+            second_npc_nickname_id = npc_nickname_id % 0xFFFFFFFFFFFFFFFF + 1
+        if (
+            type(second_npc_nickname_id) is not int
+            or not 0 < second_npc_nickname_id < 1 << 64
+            or second_npc_nickname_id == npc_nickname_id
+        ):
+            raise ValueError("second NPC nickname identity must be a distinct nonzero uint64")
+        self.second_npc_nickname_id = second_npc_nickname_id
         if type(card_prizes) is not bool:
             raise ValueError("card_prizes must be boolean")
         self.card_prizes = card_prizes
@@ -299,9 +311,9 @@ class MatchService:
         if (
             type(player_count) is not int
             or player_count not in (2, 3)
-            or (player_count == 3 and mode != "versus")
+            or (player_count == 3 and mode != "versus" and not computer_menu)
         ):
-            raise ValueError("three-player mode currently requires three humans")
+            raise ValueError("three-player mode requires humans or the original computer menu")
         if (
             type(flexible_seats) is not bool
             or flexible_seats
@@ -539,6 +551,10 @@ class MatchService:
         self._prizes = PrizeLedger(self._scores(), hands)
         self._prizes_confirmed = False
         self._held_prize_deliveries = []
+        self._computer_prize_packets = self._advance_computer_prizes()
+
+    def _advance_computer_prizes(self):
+        """Resolve consecutive CPU choices until a human or settlement is reached."""
         computer_packets = []
         while self._prizes.pending is not None:
             choice = self._prizes.pending
@@ -549,9 +565,9 @@ class MatchService:
             computer_packets.append(
                 packet(0x43, 0x0F, choice.winner, f"@GetSelect=/E=0/H={selected}")
             )
-        self._computer_prize_packets = tuple(computer_packets)
         if self._prizes.complete:
             self._final_prizes = FinalPrizes(self.completed_matches, self._prizes.settlement())
+        return tuple(computer_packets)
 
     def _get_select(self, peer, msg):
         if not self.card_prizes:
@@ -570,8 +586,8 @@ class MatchService:
         except PrizeError as exc:
             raise MatchError(str(exc)) from exc
         out = self._emit(packet(0x43, 0x0F, seat, f"@GetSelect=/E=0/H={hand}"))
-        if self._prizes.complete:
-            self._final_prizes = FinalPrizes(self.completed_matches, self._prizes.settlement())
+        for payload in self._advance_computer_prizes():
+            out += self._emit(payload)
         return self._prize_gate(out)
 
     def observer_snapshot(self):
@@ -593,14 +609,7 @@ class MatchService:
                 p.selected,
                 p.departed,
                 p.substitute,
-                (
-                    self.npc_id
-                    if self.computer_menu
-                    and p.peer is None
-                    and not p.departed
-                    and self.npc_id is not None
-                    else 0
-                ),
+                (p.npc_id if self.computer_menu and p.peer is None and not p.departed else 0),
             )
             for p in self.players
         )
@@ -1134,7 +1143,7 @@ class MatchService:
     def playack(self, peer):
         return packet(2, body="@PLAYACK=/EN=1" + self.rules_body() + self.member_list(peer))
 
-    def _authorize_round(self, stake):
+    def _authorize_round(self, stake, *, player_count=None):
         """Persist escrow before changing round state or emitting acceptance.
 
         round_authorizer(self,next_round_id,stake) returns every human seat's
@@ -1142,6 +1151,8 @@ class MatchService:
         atomically before returning; exceptions emit no successful transition.
         Computer menu updates and unsuccessful/partial Continue votes do not call
         this hook. The original computer menu sends its final rule choice in06.
+        A changed computer-menu seat count is passed as player_count before the
+        engine resizes, so the durable reservation uses the intended geometry.
         """
         if type(stake) is not int or not 0 <= stake <= 2000 or (stake and not self.allow_wagers):
             raise MatchError("round wager is not enabled or outside0..2000")
@@ -1153,11 +1164,12 @@ class MatchService:
         humans = {seat: p for seat, p in enumerate(self.players) if p.peer is not None}
         if any(p.balance < stake for p in humans.values()):
             raise MatchError("a participant cannot afford the next wager")
-        balances = (
-            {seat: p.balance for seat, p in humans.items()}
-            if self.round_authorizer is None
-            else self.round_authorizer(self, round_id, stake)
-        )
+        if self.round_authorizer is None:
+            balances = {seat: p.balance for seat, p in humans.items()}
+        elif player_count is not None and player_count != self.player_count:
+            balances = self.round_authorizer(self, round_id, stake, player_count=player_count)
+        else:
+            balances = self.round_authorizer(self, round_id, stake)
         if (
             not isinstance(balances, dict)
             or set(balances) != set(humans)
@@ -1231,33 +1243,45 @@ class MatchService:
         body = f"@ComGameInit=/RA={p.rating}/M={p.balance}/CP={p.points}/S={p.collection_size}/R={self._r_text(rules)}"
         return packet(0x43, 2, body=body + self._com_list())
 
-    def _prepare_npc(self, npc_id):
-        prepared = prepare_opponent(npc_id, self.catalog, self.draw)
-        self.npc_id = npc_id
-        self.ai_personality = prepared.opponent.personality
-        self.ai_cards = tuple(
-            Card(*(getattr(c, n) for n in Card.__dataclass_fields__)) for c in prepared.hand
-        )
-        cid = 2 if self.players[0].character_id != 2 else 3
-        # NPC names stay in PlPrm on the original client. Never serialize these
-        # potentially19-byte strings in the versus CN16-byte destination slots.
-        p = Player(
-            None,
-            cid,
-            prepared.opponent.name,
-            self.npc_nickname_id,
-            rating=prepared.opponent.rating,
-            result_stats=PracticeStats(rating=prepared.opponent.rating),
-        )
-        self._choose_cards(p, self.ai_cards)
-        self.players[1:] = [p]
+    def _prepare_npcs(self, npc_ids):
+        players = []
+        cid = 2
+        for npc_id, nickname in zip(
+            npc_ids, (self.npc_nickname_id, self.second_npc_nickname_id), strict=False
+        ):
+            prepared = prepare_opponent(npc_id, self.catalog, self.draw)
+            cards = tuple(
+                Card(*(getattr(c, n) for n in Card.__dataclass_fields__)) for c in prepared.hand
+            )
+            if cid == self.players[0].character_id:
+                cid += 1
+            # NPC names stay in PlPrm on the original client. Never serialize
+            # potentially19-byte strings in the versus CN16-byte destinations.
+            p = Player(
+                None,
+                cid,
+                prepared.opponent.name,
+                nickname,
+                rating=prepared.opponent.rating,
+                result_stats=PracticeStats(rating=prepared.opponent.rating),
+                npc_id=npc_id,
+                ai_personality=prepared.opponent.personality,
+            )
+            self._choose_cards(p, cards)
+            players.append(p)
+            cid += 1
+        self.players[1:] = players
+        # Keep the original one-NPC API as a view of the first computer seat.
+        self.npc_id = players[0].npc_id
+        self.ai_personality = players[0].ai_personality
+        self.ai_cards = players[0].selected
 
     def _com_game(self, peer, msg):
         if not self.computer_menu or self.phase != "computer_menu" or self._seat(peer) != 0:
             raise MatchError("computer configuration is outside its admitted menu")
         fields = msg.sections["ComGame"]
-        if msg.argument not in (0, 2) or set(msg.sections) != {"ComGame"}:
-            raise MatchError("only one human and one selected NPC are supported")
+        if msg.argument not in (0, 2, 3) or set(msg.sections) != {"ComGame"}:
+            raise MatchError("computer selection requires one human and one or two NPCs")
         if set(fields) != ({"Rule"} if msg.argument == 0 else {"Rule", "Com"}):
             raise MatchError("invalid computer configuration fields")
         rules = numbers(fields["Rule"], 7 if msg.argument == 0 else 8)
@@ -1277,14 +1301,19 @@ class MatchService:
             raise MatchError("computer rule flags must match the explicitly configured board")
         if msg.argument and rules[7] not in (0, 1, 2):
             raise MatchError("invalid computer departure rule")
-        npc_id = None
+        npc_ids = ()
         if msg.argument:
-            npc_id = numbers(fields["Com"], 1)[0]
+            npc_ids = tuple(numbers(fields["Com"], msg.argument - 1))
             try:
-                opponent(npc_id)
+                for npc_id in npc_ids:
+                    opponent(npc_id)
             except OpponentError as e:
                 raise MatchError(str(e)) from e
-            self._authorize_round(rules[0])
+            if len(set(npc_ids)) != len(npc_ids):
+                raise MatchError("computer opponents must be distinct")
+            if self.explicit_start_fields and msg.argument != self.player_count:
+                raise MatchError("computer player count must match the explicitly configured board")
+            self._authorize_round(rules[0], player_count=msg.argument)
         # Validate all wire fields before changing configuration or drawing.
         self.game_rules.update(zip(("bm", "st", "cb", "ca", "tl", "du"), rules[:6]))
         if not self.explicit_start_fields:
@@ -1293,7 +1322,9 @@ class MatchService:
         self.table_rules["in"] = self.computer_view
         if msg.argument:
             self.game_rules["gs"] = rules[7]
-            self._prepare_npc(npc_id)
+            if msg.argument != self.player_count:
+                self._resize_lobby(msg.argument)
+            self._prepare_npcs(npc_ids)
             self._choose_cards(self.players[0], ())
             self.phase = "selection"
         # 100BD1DA..225 clears08/09/0A/0C/0D/1A/0F after the menu closes.
@@ -1423,7 +1454,7 @@ class MatchService:
             personality = (
                 opponent(player.substitute).personality
                 if player.substitute
-                else self.ai_personality
+                else player.ai_personality or self.ai_personality
             )
             if any(self.start_board.fields) or self.player_count == 3:
                 move = special.choose_special_move(
@@ -1839,7 +1870,7 @@ class MatchService:
                 p, self.ai_cards if p.peer is None and not self.computer_menu else ()
             )
         if self.computer_menu and not conf:
-            self._prepare_npc(self.npc_id)
+            self._prepare_npcs(tuple(p.npc_id for p in self.players[1:]))
         # Req/GameOK acceptance describes continued table membership. Only the
         # round's card choices are reset; the original returns to selection.
         return out

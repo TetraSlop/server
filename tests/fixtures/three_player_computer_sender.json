@@ -1,0 +1,87 @@
+{
+  "evidence": "Original10106E30 sender executed in Unicorn; unchanged instructions, substituted transport and string runtime, seeded player count and NPC record IDs. No native process or GUI.",
+  "image_sha256": "422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879",
+  "entry": "0x10106E30",
+  "menu_event_evidence": {
+    "two_opponents": "0400002E ->100EBA49..100EBAB0 sets child+11A=2",
+    "confirm": "100EC1C2..100EC1E4 sets P+E5=3/P+E6=1 and posts04000037",
+    "parent_send": "04000037 ->100EBB1D..100EBBE9 sends argument P+E5",
+    "selected_ids": "10107248..101072C0 iterates P+1CA plus0x30 for P+E5-1 IDs"
+  },
+  "vectors": [
+    {
+      "player_count": 2,
+      "npc_ids": [
+        1
+      ],
+      "opcode": "0x06",
+      "args": [
+        2,
+        0
+      ],
+      "classification": "emulated original sender with runtime/transport hooks",
+      "builder_args": [
+        "@ComGame=",
+        67,
+        6,
+        2,
+        0
+      ],
+      "body": "@ComGame=/Rule=0|0|0|0|2|0|0|1/Com=1"
+    },
+    {
+      "player_count": 3,
+      "npc_ids": [
+        1,
+        3
+      ],
+      "opcode": "0x06",
+      "args": [
+        3,
+        0
+      ],
+      "classification": "emulated original sender with runtime/transport hooks",
+      "builder_args": [
+        "@ComGame=",
+        67,
+        6,
+        3,
+        0
+      ],
+      "body": "@ComGame=/Rule=0|0|0|0|2|0|0|1/Com=1|3"
+    },
+    {
+      "player_count": 3,
+      "npc_ids": [
+        30,
+        1
+      ],
+      "opcode": "0x06",
+      "args": [
+        3,
+        0
+      ],
+      "classification": "emulated original sender with runtime/transport hooks",
+      "builder_args": [
+        "@ComGame=",
+        67,
+        6,
+        3,
+        0
+      ],
+      "body": "@ComGame=/Rule=0|0|0|0|2|0|0|1/Com=30|1"
+    }
+  ],
+  "seeded_rules": {
+    "P+DC": 0,
+    "P+D9": 0,
+    "P+E0..E4": [
+      0,
+      0,
+      0,
+      2,
+      0
+    ],
+    "P+E9": 1
+  }
+}
