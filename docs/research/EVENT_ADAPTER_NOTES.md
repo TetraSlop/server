@@ -40,6 +40,13 @@ only the previous complete file. Temporary reservations do not survive restart.
 Active disconnect/timeouts abort and release the affected event, while completed
 outcomes remain durable. This is a documented local recovery policy.
 
+The trusted result-recording API materializes account iterables once and uses
+those validated facts for membership checks and progress. Every participant is
+checked before any progress is applied. This also supports generators without
+silently saving a receipt that omitted progress. The current network adapter
+already passes tuples; this corrects the service API, not a demonstrated client
+exploit.
+
 Configuration uses raw41-bit service IDs and explicit table channels. Event
 table IDs cannot collide with accounts or existing event/standard routes.
 Three-human event tables require `--accounts 3`; ordinary table mode can remain
@@ -51,5 +58,6 @@ Validation: `test_event_matches_integration.py` exercises real RSA/Blowfish
 connections, source/order/private hands, complete2/3-human rounds, duplicate
 Ready, joint restart state, active disconnection and a failed final save.
 `test_event_results.py` covers draw/tied winners, explicit progression and CPU
-facts, replay and corrupt-state rejection. Original packet/scene evidence is
-in EVENT_MATCH_NOTES.md and EVENT_MATCHMAKING_NOTES.md.
+facts, iterator inputs, restart replay, rejection of invalid final participants
+without partial progress, and corrupt-state rejection. Original packet/scene
+evidence is in EVENT_MATCH_NOTES.md and EVENT_MATCHMAKING_NOTES.md.

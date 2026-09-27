@@ -1,6 +1,7 @@
 """Authenticated event receipts, explicit progression, and durable replay."""
 
 import copy
+import json
 import unittest
 from dataclasses import replace
 
@@ -72,6 +73,53 @@ class EventResultTests(unittest.TestCase):
             self.journal.record(self.host, "festival", "excluded", outcome, ("0", "1"), "rounds")
         self.assertEqual(self.host.snapshot(), before)
         self.assertEqual(self.journal.snapshot()["rounds"], [])
+
+    def test_account_iterator_progress_and_restart_replay_are_exactly_once(self):
+        outcome = EventRoundOutcome((1, 2, 3), (6, 5, 4), (0, 2, 4), False)
+        keys = ("0", "1", "2")
+        before = self.economy.snapshot()
+        self.assertTrue(
+            self.journal.record(
+                self.host, "festival", "iterator", outcome, (key for key in keys), "rounds"
+            )
+        )
+        self.assertEqual(tuple(self.host.member(key, "festival").steps for key in keys), (1, 1, 1))
+        progress = self.host.snapshot()
+        receipts = self.journal.snapshot()
+        self.assertEqual(receipts["rounds"][0]["keys"], list(keys))
+        self.assertFalse(
+            self.journal.record(self.host, "festival", "iterator", outcome, iter(keys), "rounds")
+        )
+        self.host = EventHost.restore(
+            self.economy, (self.cfg,), json.loads(json.dumps(progress)), clock=lambda: 200
+        )
+        self.journal = EventResults.restore(json.loads(json.dumps(receipts)))
+        self.assertFalse(
+            self.journal.record(self.host, "festival", "iterator", outcome, iter(keys), "rounds")
+        )
+        self.assertEqual(self.host.snapshot(), progress)
+        self.assertEqual(self.journal.snapshot(), receipts)
+        self.assertEqual(self.economy.snapshot(), before)
+
+    def test_account_iterator_validates_every_participant_before_progress(self):
+        self.economy.provision("3", nn=game_id(4), player_id=4, name=b"Nonmember")
+        outcome = EventRoundOutcome((1, 2), (7, 3), (1, 3), False)
+        before = self.host.snapshot()
+        accounts = self.economy.snapshot()
+        for item, keys in (
+            (outcome, ("missing", "1")),
+            (outcome, ("0", "missing")),
+            (outcome, ("0", "2")),
+            (replace(outcome, character_ids=(1, 4)), ("0", "3")),
+        ):
+            with self.subTest(keys=keys):
+                with self.assertRaises(ValueError):
+                    self.journal.record(
+                        self.host, "festival", "invalid-iterator", item, iter(keys), "rounds"
+                    )
+                self.assertEqual(self.host.snapshot(), before)
+                self.assertEqual(self.journal.snapshot()["rounds"], [])
+                self.assertEqual(self.economy.snapshot(), accounts)
 
     def test_mismatched_replay_and_corrupt_snapshot_fail(self):
         outcome = EventRoundOutcome((1, 2), (7, 3), (1, 3), False)

@@ -5,7 +5,6 @@ from copy import copy
 
 
 class EventResults:
-
     def __init__(self):
         self._rows = {}
 
@@ -69,27 +68,29 @@ class EventResults:
             policy=policy,
         )
         self._validate(row)
-        old = self._rows.get(round_id)
+        old = self._rows.get(row["id"])
         if old is not None:
             if old != row:
                 raise ValueError("event result replay differs")
             return False
         updates = []
-        for seat, key in enumerate(keys):
+        for seat, key in enumerate(row["keys"]):
             if key is None:
                 continue
             view = host.economy.account_view(key)
-            member = host.member(key, event_id)
-            if view.player_id != outcome.character_ids[seat] or member is None:
+            member = host.member(key, row["event"])
+            if view.player_id != row["characters"][seat] or member is None:
                 raise ValueError("event result differs from authenticated membership")
-            delta = int(policy == "rounds" or policy == "wins" and outcome.classes[seat] < 2)
+            delta = int(
+                row["policy"] == "rounds" or row["policy"] == "wins" and row["classes"][seat] < 2
+            )
             if delta and (member.eligibility < 0 or member.steps + delta > 0x7FFFFFFF):
                 raise ValueError("event progress is outside the supported member state")
             if delta:
                 updates.append((key, delta))
         for key, delta in updates:
-            host.update_progress(key, event_id, round_id, steps_delta=delta)
-        self._rows[round_id] = row
+            host.update_progress(key, row["event"], row["id"], steps_delta=delta)
+        self._rows[row["id"]] = row
         return True
 
     def snapshot(self):
