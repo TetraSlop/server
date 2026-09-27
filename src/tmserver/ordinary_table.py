@@ -573,7 +573,7 @@ class OrdinaryTable:
                         if state.result_rewards.has_pending(key):
                             token = state.result_rewards.commit(key)
                         if responses is not None and "PR" in msg.sections["Continue"]:
-                            state.economy.save_ranking_privacy(
+                            state.result_rewards.save_continue_privacy(
                                 key, int(msg.sections["Continue"]["PR"])
                             )
                     self.match_reservations[session] = token

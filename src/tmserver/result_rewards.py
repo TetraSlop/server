@@ -58,7 +58,6 @@ class _Pending:
 
 
 class ResultRewardService:
-
     def __init__(self, economy, auction):
         self.economy, self.auction = economy, auction
         self._known = {}
@@ -198,6 +197,19 @@ class ResultRewardService:
         del self._pending[key]
         self._accepted[key] = (pending.seat, token, token.account, self._profile_basis(key))
         return token
+
+    def save_continue_privacy(self, key, value):
+        """Save validated Continue/PR without invalidating its own deck editor.
+
+        Only rebase a still-current profile fingerprint. An unrelated earlier
+        profile change must continue to invalidate a later money-only refresh.
+        The caller stages this with result acceptance in one transaction.
+        """
+        accepted = self._accepted.get(key)
+        current = accepted is not None and accepted[3] == self._profile_basis(key)
+        self.economy.save_ranking_privacy(key, value)
+        if current:
+            self._accepted[key] = (*accepted[:3], self._profile_basis(key))
 
     def release_context(self, key):
         """After table-token release, keep only a bounded delayed-Decks context.
