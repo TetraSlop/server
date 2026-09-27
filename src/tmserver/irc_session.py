@@ -273,8 +273,22 @@ class Session:
         ordinary = self.server.table_for_channel(channel)
         if ordinary is not None:
             await ordinary.release_table(self)
-        if channel.upper() in self.server.event_matches.channels:
-            await self.server.event_matches.disconnect(self)
+        events = self.server.event_matches
+        event_table = next(
+            (
+                (nick, table_id)
+                for nick, (_, table_id, table_channel) in events.routes.items()
+                if table_channel.upper() == channel.upper()
+            ),
+            None,
+        )
+        if event_table is not None:
+            table_id = event_table[1]
+            watching = events.spectators.admissions.get(self)
+            if events.coordinator.participant_table(self) == table_id or (
+                watching is not None and watching[0] == table_id
+            ):
+                await events.disconnect(self)
         group = (
             service_nick(ordinary.table_raw)
             if ordinary is not None
@@ -287,15 +301,8 @@ class Session:
                 None,
             )
         )
-        if group is None:
-            group = next(
-                (
-                    nick
-                    for nick, (_, _, table_channel) in self.server.event_matches.routes.items()
-                    if table_channel.upper() == channel.upper()
-                ),
-                None,
-            )
+        if group is None and event_table is not None:
+            group = event_table[0]
         binding = self.server.event_rooms.room_for_channel(channel)
         if binding is not None and binding.room_channel.upper() == channel.upper():
             await self.leave_event_room(binding)

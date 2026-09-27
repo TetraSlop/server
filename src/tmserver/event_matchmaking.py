@@ -838,3 +838,11 @@ class EventMatchmaking:
     def participant_room(self, peer):
         entry = self._entries.get(peer)
         return None if entry is None else self.host.config(entry.event_id).room_id
+
+    def participant_table(self, peer):
+        """The assigned proposal/match table; unpaired selection has no table."""
+        entry = self._entries.get(peer)
+        if entry is None or entry.epoch is None:
+            return None
+        current = self._round(entry.event_id, entry.epoch)
+        return None if current is None else current.config.table_id
