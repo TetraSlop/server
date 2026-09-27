@@ -217,13 +217,21 @@ class RoomService:
             b[start : start + 0x68] = record
         return bytes(b)
 
-    def set_table(self, state, count, owner, game_rules=None, table_rules=None):
-        return self._set_table(self, state, count, owner, game_rules, table_rules)
+    def set_table(
+        self, state, count, owner, game_rules=None, table_rules=None, *, computer_menu=False
+    ):
+        return self._set_table(
+            self, state, count, owner, game_rules, table_rules, computer_menu=computer_menu
+        )
 
-    def _set_table(self, slot, state, count, owner, game_rules=None, table_rules=None):
+    def _set_table(
+        self, slot, state, count, owner, game_rules=None, table_rules=None, *, computer_menu=False
+    ):
         if slot.table_id is None:
             raise ValueError("this room has no ordinary playable table")
-        if not 0 <= state <= 6 or not 0 <= count <= slot.player_count or not 0 <= owner < 1 << 64:
+        # The native Computer menu chooses two or three seats after admission.
+        capacity = 3 if computer_menu else slot.player_count
+        if not 0 <= state <= 6 or not 0 <= count <= capacity or not 0 <= owner < 1 << 64:
             raise ValueError("invalid table state")
         metadata = table_info(
             number=slot.table_number,
@@ -259,10 +267,13 @@ class RoomService:
         identity, record = player_record(payload)
         if identity in self.npcs and self.npc_tables[identity] != table_id:
             raise ValueError("practice opponent identity overlaps another table")
-        if self.npcs.get(identity) == (identity, record):
-            return []
         if identity not in self.npcs and table_id in self.npc_tables.values():
             raise ValueError("only one practice opponent is supported")
+        return self._publish_npc(payload, identity, record, table_id)
+
+    def _publish_npc(self, payload, identity, record, table_id):
+        if self.npcs.get(identity) == (identity, record):
+            return []
         self.npcs[identity] = identity, record
         self.npc_tables[identity] = table_id
         update = self.delta(Command(b"PD", payload))
@@ -271,6 +282,39 @@ class RoomService:
     def practice_opponent(self, peer, opponent, *, table_id=None):
         if peer not in self.members:
             return []
+        return self.set_npc(self._opponent_payload(peer, opponent), table_id=table_id)
+
+    def practice_opponents(self, peer, opponents, *, table_id=None):
+        """Synchronize a Computer menu's one or two NPCs in the shared roster."""
+        if peer not in self.members:
+            return []
+        if table_id is None:
+            table_id = self.table_id
+        opponents = tuple(opponents)
+        if len(opponents) > 2:
+            raise ValueError("Computer menu supports at most two opponents")
+        records = {}
+        members = {identity for identity, _ in self.members.values()}
+        for opponent in opponents:
+            payload = self._opponent_payload(peer, opponent)
+            identity, record = player_record(payload)
+            if (
+                identity in records
+                or identity in members
+                or identity in self.npcs and self.npc_tables[identity] != table_id
+            ):
+                raise ValueError("practice opponent identity is already present")
+            records[identity] = payload, record
+        # Validate the complete replacement before removing an old second NPC.
+        deliveries = []
+        for identity in list(self.npcs):
+            if self.npc_tables[identity] == table_id and identity not in records:
+                deliveries.extend(self._remove_npc(identity))
+        for identity, (payload, record) in records.items():
+            deliveries.extend(self._publish_npc(payload, identity, record, table_id))
+        return deliveries
+
+    def _opponent_payload(self, peer, opponent):
         # Original10066950 projects info[23:25] to status/substatus. The
         # table Start gate requires every roster member to exist here as3/1.
         info = bytearray(self.members[peer][1][0x38:0x58].rstrip(b"\0").ljust(32, b"A"))
@@ -291,7 +335,13 @@ class RoomService:
             f"0x{self.room_id:016X}".encode(),
             bytes(info),
         )
-        return self.set_npc(b"\x06".join(fields), table_id=table_id)
+        return b"\x06".join(fields)
+
+    def _remove_npc(self, identity):
+        del self.npcs[identity]
+        del self.npc_tables[identity]
+        update = self.delta(Command(b"PC", f"0x{identity:016X}".encode()))
+        return [(peer, update) for peer in self.members]
 
     def clear_npcs(self, *, table_id=None):
         if table_id is None:
@@ -300,10 +350,7 @@ class RoomService:
         for identity in list(self.npcs):
             if self.npc_tables[identity] != table_id:
                 continue
-            del self.npcs[identity]
-            del self.npc_tables[identity]
-            update = self.delta(Command(b"PC", f"0x{identity:016X}".encode()))
-            deliveries.extend((peer, update) for peer in self.members)
+            deliveries.extend(self._remove_npc(identity))
         return deliveries
 
     def delta(self, command):
@@ -435,11 +482,24 @@ class RoomTableView:
             return getattr(self.room_root, name)
         raise AttributeError(name)
 
-    def set_table(self, state, count, owner, game_rules=None, table_rules=None):
-        return self.room_root._set_table(self._state, state, count, owner, game_rules, table_rules)
+    def set_table(
+        self, state, count, owner, game_rules=None, table_rules=None, *, computer_menu=False
+    ):
+        return self.room_root._set_table(
+            self._state,
+            state,
+            count,
+            owner,
+            game_rules,
+            table_rules,
+            computer_menu=computer_menu,
+        )
 
     def practice_opponent(self, peer, opponent):
         return self.room_root.practice_opponent(peer, opponent, table_id=self.table_id)
+
+    def practice_opponents(self, peer, opponents):
+        return self.room_root.practice_opponents(peer, opponents, table_id=self.table_id)
 
     def clear_npcs(self):
         return self.room_root.clear_npcs(table_id=self.table_id)

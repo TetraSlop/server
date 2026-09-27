@@ -88,6 +88,7 @@ class OrdinaryTable:
             allow_wagers=self.allow_wagers,
             allow_departures=self.departures.enabled,
             npc_nickname_id=0x1FF + self.room.table_number,
+            second_npc_nickname_id=0x3FF + self.room.table_number,
             round_authorizer=(
                 self.authorize_match_round if self.card_prizes or self.allow_wagers else None
             ),
@@ -178,7 +179,7 @@ class OrdinaryTable:
                 # editor obsolete. Never keep its old account capability.
                 rewards.forget(key)
 
-    def authorize_match_round(self, match, number, stake):
+    def authorize_match_round(self, match, number, stake, *, player_count=None):
         round_id = f"{self.match_instance_id}:{number}"
         tokens = self.match_tokens(match)
         with match_transaction(self.host, (t.account.key for t in tokens.values())) as state:
@@ -193,7 +194,7 @@ class OrdinaryTable:
                 tokens,
                 stake,
                 mode=match.mode,
-                player_count=match.player_count,
+                player_count=match.player_count if player_count is None else player_count,
                 money_enabled=self.allow_wagers,
             )
             self.refresh_result_contexts(match, tokens, state.result_rewards)
@@ -335,14 +336,26 @@ class OrdinaryTable:
             opponent = next((p for p in match.players if p.peer is None), None)
             human = next((p.peer for p in match.players if p.peer is not None), None)
             if opponent is not None and human is not None:
-                await self.publish_room(self.room.practice_opponent(human, opponent))
+                updates = (
+                    self.room.practice_opponents(
+                        human, tuple(p for p in match.players if p.peer is None)
+                    )
+                    if match.computer_menu
+                    else self.room.practice_opponent(human, opponent)
+                )
+                await self.publish_room(updates)
         if match.phase == "finished":
             updates = self.room.set_table(0, 0, 0)
             self.release_match_accounts()
             match.cancel_pending()
         elif match.phase != "lobby":
             updates = self.room.set_table(
-                2, len(match.players), match.owner_id, match.game_rules, match.table_rules
+                2,
+                len(match.players),
+                match.owner_id,
+                match.game_rules,
+                match.table_rules,
+                computer_menu=match.computer_menu,
             )
         elif match.settings_applied:
             updates = self.room.set_table(
