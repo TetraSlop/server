@@ -292,16 +292,18 @@ class TradeService:
                     raise TradeError("invalid reduced card")
                 values.append(value)
             upload = trade.uploads[side]
-            if start == 0:
-                assembled = tuple(values)
-            elif upload is not None and upload[0] == total and start == len(upload[1]):
-                assembled = upload[1] + tuple(values)
-            elif (
+            if (
                 upload is not None
                 and upload[0] == total
                 and upload[1][start : start + count] == tuple(values)
             ):
                 return []  # Exact earlier page retry while still assembling.
+            if start == 0:
+                assembled = tuple(values)
+            elif upload is not None and upload[0] == total and start <= len(upload[1]):
+                # Local retry policy: a changed buffered page replaces its
+                # suffix, including restarts which share the same first page.
+                assembled = upload[1][:start] + tuple(values)
             else:
                 raise TradeError("noncontiguous offer page")
             indices = match_owned(trade.base[side], assembled)
