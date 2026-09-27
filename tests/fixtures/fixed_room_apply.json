@@ -1,0 +1,268 @@
+{
+  "version": 1,
+  "code_image_sha256": "422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879",
+  "directory_sha256": "2e0e7e95e8c5fe5476c4d3a81372fc877c440e879b1c0688a367aa92d5844483",
+  "original": {
+    "room_projection": "1008E08E..1008E46E",
+    "selected_room_copy": "1003074A..10030761",
+    "table_projection": [
+      "101A0C90",
+      "10086010",
+      "10066D10"
+    ],
+    "admission": "1008F95E..1008FEBA",
+    "editor_event": "10090114..100901C1",
+    "editor_dispatch": "1004CA54, jump table1004DC20",
+    "game_initialization": "1004F07E..1004F0E3 -> 1004ECA0",
+    "game_commit": "100504DF..1005053F",
+    "table_initialization": "100518DC..10051906 -> 100515C0",
+    "table_commit_and_sender": "100533A0..10053496 -> 10087410"
+  },
+  "boundaries": [
+    "In-memory Server with example rooms; no live state file, listener or native process.",
+    "Complete original RL/PTL projections, queued GameEA consumer and state copies.",
+    "Admission-complete event branch runs after the non-rendered scene transition boundary.",
+    "UI event posting is captured; widget construction/rendering is not executed.",
+    "Generic widget base construction is stubbed; actual editor call arguments and initializers execute unchanged.",
+    "Numeric text fields are seeded from initialized values, representing no user edits.",
+    "Original settings serialization executes; final send is captured by the established harness."
+  ],
+  "cases": [
+    {
+      "room": "Open Tables",
+      "fixed": false,
+      "saved_game": {
+        "bm": 0,
+        "du": 0,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 2,
+        "tl": 5
+      },
+      "after_admission": {
+        "bm": 0,
+        "du": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "gs": 0,
+        "tl": 0
+      },
+      "admitted_context": 1,
+      "posted_event": "03000E79",
+      "constructors": [
+        {
+          "event": "03000E79",
+          "target": "0x1004d4fb",
+          "constructor": "1004EE20",
+          "arguments": [
+            0
+          ]
+        },
+        {
+          "event": "03000E7A",
+          "target": "0x1004d5b0",
+          "constructor": "100516F0",
+          "arguments": [
+            1,
+            0
+          ]
+        }
+      ],
+      "game_editor_values": {
+        "bm": 0,
+        "du": 0,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 2,
+        "tl": 5
+      },
+      "table_editor_values": {
+        "co": 8,
+        "pa": 0,
+        "in_": 0,
+        "ll": 0,
+        "lu": 99999
+      },
+      "original_payload": "14000000@Tet=/bm=0/du=0/st=0/cb=1/ca=0/gs=2/tl=5@Tab=/in=0/lu=99999/ll=0/au=300/al=100/co=8/pa=0",
+      "apply": "GTM0G14000000@Tet=/bm=0/du=0/st=0/cb=1/ca=0/gs=2/tl=5@Tab=/in=0/lu=99999/ll=0/au=300/al=100/co=8/pa=0",
+      "saved_game_unchanged": true,
+      "server_accepts_apply": true,
+      "ptl_sha256": "b0f3943c139c7715aac3eea3e042c70ef0e92e271fcc907f0ee5075a6f631322"
+    },
+    {
+      "room": "Classic Rules",
+      "fixed": true,
+      "saved_game": {
+        "bm": 0,
+        "du": 0,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 2,
+        "tl": 5
+      },
+      "after_admission": {
+        "bm": 0,
+        "du": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "gs": 1,
+        "tl": 2
+      },
+      "admitted_context": 0,
+      "posted_event": "03000E7A",
+      "constructors": [
+        {
+          "event": "03000E7A",
+          "target": "0x1004d5b0",
+          "constructor": "100516F0",
+          "arguments": [
+            0,
+            0
+          ]
+        }
+      ],
+      "game_editor_values": null,
+      "table_editor_values": {
+        "co": 8,
+        "pa": 0,
+        "in_": 0,
+        "ll": 0,
+        "lu": 99999
+      },
+      "original_payload": "14000000@Tet=/bm=0/du=0/st=0/cb=0/ca=0/gs=1/tl=2@Tab=/in=0/lu=99999/ll=0/au=300/al=100/co=8/pa=0",
+      "apply": "GTM0G14000000@Tet=/bm=0/du=0/st=0/cb=0/ca=0/gs=1/tl=2@Tab=/in=0/lu=99999/ll=0/au=300/al=100/co=8/pa=0",
+      "saved_game_unchanged": true,
+      "server_accepts_apply": true,
+      "ptl_sha256": "53941570ce0f2705a7b9a34f5e91d0304cc55b211c9a1c07e20b93524beac484"
+    },
+    {
+      "room": "Special Rules",
+      "fixed": true,
+      "saved_game": {
+        "bm": 0,
+        "du": 0,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 2,
+        "tl": 5
+      },
+      "after_admission": {
+        "bm": 0,
+        "du": 0,
+        "st": 1,
+        "cb": 1,
+        "ca": 1,
+        "gs": 1,
+        "tl": 2
+      },
+      "admitted_context": 0,
+      "posted_event": "03000E7A",
+      "constructors": [
+        {
+          "event": "03000E7A",
+          "target": "0x1004d5b0",
+          "constructor": "100516F0",
+          "arguments": [
+            0,
+            0
+          ]
+        }
+      ],
+      "game_editor_values": null,
+      "table_editor_values": {
+        "co": 8,
+        "pa": 0,
+        "in_": 0,
+        "ll": 0,
+        "lu": 99999
+      },
+      "original_payload": "14000000@Tet=/bm=0/du=0/st=1/cb=1/ca=1/gs=1/tl=2@Tab=/in=0/lu=99999/ll=0/au=300/al=100/co=8/pa=0",
+      "apply": "GTM0G14000000@Tet=/bm=0/du=0/st=1/cb=1/ca=1/gs=1/tl=2@Tab=/in=0/lu=99999/ll=0/au=300/al=100/co=8/pa=0",
+      "saved_game_unchanged": true,
+      "server_accepts_apply": true,
+      "ptl_sha256": "61bd47bff0c2a4330eddff0575d05a740deb61028021806061930b994da93d27"
+    },
+    {
+      "room": "Quick Play",
+      "fixed": true,
+      "saved_game": {
+        "bm": 0,
+        "du": 0,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 2,
+        "tl": 5
+      },
+      "after_admission": {
+        "bm": 0,
+        "du": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "gs": 1,
+        "tl": 1
+      },
+      "admitted_context": 0,
+      "posted_event": "03000E7A",
+      "constructors": [
+        {
+          "event": "03000E7A",
+          "target": "0x1004d5b0",
+          "constructor": "100516F0",
+          "arguments": [
+            0,
+            0
+          ]
+        }
+      ],
+      "game_editor_values": null,
+      "table_editor_values": {
+        "co": 8,
+        "pa": 0,
+        "in_": 0,
+        "ll": 0,
+        "lu": 99999
+      },
+      "original_payload": "14000000@Tet=/bm=0/du=0/st=0/cb=0/ca=0/gs=1/tl=1@Tab=/in=0/lu=99999/ll=0/au=300/al=100/co=8/pa=0",
+      "apply": "GTM0G14000000@Tet=/bm=0/du=0/st=0/cb=0/ca=0/gs=1/tl=1@Tab=/in=0/lu=99999/ll=0/au=300/al=100/co=8/pa=0",
+      "saved_game_unchanged": true,
+      "server_accepts_apply": true,
+      "ptl_sha256": "d078d49cbab403e5ad91198daa017fc62d1f2e5d692dbd0a81abf34dd8ef0deb"
+    }
+  ],
+  "rule13_control": {
+    "reply": "GTM0G13000000@Tet=/bm=123/du=1/st=0/cb=0/ca=1/gs=0/tl=4@Tab=/in=0/lu=99999/ll=0/au=300/al=100/co=3/pa=0",
+    "saved_game": {
+      "bm": 0,
+      "du": 0,
+      "st": 0,
+      "cb": 1,
+      "ca": 0,
+      "gs": 2,
+      "tl": 5
+    },
+    "editor_mode": 1,
+    "editor_values": {
+      "bm": 123,
+      "du": 1,
+      "st": 0,
+      "cb": 0,
+      "ca": 1,
+      "gs": 0,
+      "tl": 4
+    },
+    "saved_game_unchanged": true,
+    "original": [
+      "10086E90",
+      "100873A0",
+      "1004ECA0"
+    ]
+  }
+}
