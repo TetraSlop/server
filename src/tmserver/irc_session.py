@@ -164,6 +164,24 @@ class Session:
     def prefix(self):
         return b":" + self.nick + b"!p@local "
 
+    def channel_name(self, channel):
+        """Resolve ASCII case aliases while retaining native advertised spelling."""
+        key = channel.upper()
+        rooms = [table.room for table in self.server.ordinary_room_routes.values()]
+        rooms.extend(binding.room for binding in self.server.event_rooms.rooms)
+        for room in rooms:
+            names = (
+                room.room_channel,
+                *(table.table_channel for table in room.tables if table.table_id is not None),
+                *(record[0x18:0x28].split(b"\0", 1)[0] for record in room.service_records),
+            )
+            for name in names:
+                if name.upper() == key:
+                    return name
+        # Generic channels keep their first spelling. This local compatibility
+        # rule folds ASCII letters only, not IRC punctuation aliases.
+        return next((name for name in self.server.channels if name.upper() == key), channel)
+
     async def command(self, verb, args):
         if self.server.storage_failed is not None:
             raise OSError("state storage failed; refusing further commands")
@@ -177,6 +195,7 @@ class Session:
             channel = args[0]
             if not channel.startswith(b"#") or len(channel) > 64:
                 raise ValueError("invalid or excessive channel joins")
+            channel = self.channel_name(channel)
             if channel in self.channels:
                 await self.send(self.prefix + b"JOIN :" + channel)
                 return
@@ -207,6 +226,7 @@ class Session:
                 )
             peer_control = False
             if target.startswith(b"#"):
+                target = self.channel_name(target)
                 if target not in self.channels:
                     await self.send(b":srv 442 " + self.nick + b" " + target + b" :Join first")
                     return
@@ -269,6 +289,7 @@ class Session:
             )
 
     async def part(self, channel):
+        channel = self.channel_name(channel)
         members = self.server.channels.get(channel)
         if members is None or self not in members:
             await self.send(b":srv 442 " + self.nick + b" " + channel + b" :Not on channel")
