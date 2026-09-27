@@ -33,6 +33,20 @@ def split_message(message):
     return parts[0].upper(), parts[1:]
 
 
+def names_replies(nick, channel, members):
+    """Snapshot the roster and split whole names within the legacy frame limit."""
+    prefix = b":srv 353 " + nick + b" = " + channel + b" :"
+    line = prefix
+    for name in sorted(member.nick for member in members):
+        entry = (b" " if line != prefix else b"") + name
+        if len(line) + len(entry) + 6 > MAX_LINE:
+            yield line
+            line = prefix + name
+        else:
+            line += entry
+    yield line
+
+
 class Session:
     def __init__(self, server, reader, writer, session_id):
         self.server, self.reader, self.writer, self.id = server, reader, writer, session_id
@@ -161,24 +175,20 @@ class Session:
             await self.close()
         elif verb == b"JOIN" and args:
             channel = args[0]
-            if not channel.startswith(b"#") or len(channel) > 64 or len(self.channels) >= 8:
+            if not channel.startswith(b"#") or len(channel) > 64:
                 raise ValueError("invalid or excessive channel joins")
             if channel in self.channels:
                 await self.send(self.prefix + b"JOIN :" + channel)
                 return
+            if len(self.channels) >= 8:
+                raise ValueError("invalid or excessive channel joins")
             members = self.server.channels.setdefault(channel, set())
             members.add(self)
             self.channels.add(channel)
             for member in list(members):
                 await self.server.deliver(member, self.prefix + b"JOIN :" + channel)
-            await self.send(
-                b":srv 353 "
-                + self.nick
-                + b" = "
-                + channel
-                + b" :"
-                + b" ".join(sorted(x.nick for x in members))
-            )
+            for reply in names_replies(self.nick, channel, members):
+                await self.send(reply)
             await self.send(b":srv 366 " + self.nick + b" " + channel + b" :End of NAMES list")
         elif verb == b"PART" and args:
             await self.part(args[0])
