@@ -29,6 +29,7 @@ from tmserver.native_departure_rules import next_turn, result_ranking, result_sl
 from tmserver.native_opponents import OPPONENTS, OpponentError, opponent, prepare_opponents
 from tmserver.native_rules import CRTLCG, GrowthBaseline, calculate_battle, grow_card
 from tmserver.result_stats import PracticeStats
+from tmserver.room_rules import RoomRules
 from tmserver.table_metadata import TableMetadataError, table_info
 
 
@@ -271,6 +272,7 @@ class MatchService:
         npc_nickname_id=0x200,
         flexible_seats=False,
         second_npc_nickname_id=None,
+        room_rules=None,
     ):
         if mode not in ("computer", "versus"):
             raise ValueError("mode must be computer or versus")
@@ -300,6 +302,11 @@ class MatchService:
         if allow_wagers and (round_authorizer is None or payout_provider is None):
             raise ValueError("wagers require durable round authorization and a payout provider")
         self.allow_wagers = allow_wagers
+        if room_rules is not None and not isinstance(room_rules, RoomRules):
+            raise ValueError("room_rules must be RoomRules or None")
+        if room_rules is not None and not allow_wagers and (room_rules.bm or room_rules.du):
+            raise ValueError("room wagers/double-up require economic hooks")
+        self.room_rules = room_rules
         self.round_authorizer = round_authorizer
         self.payout_provider = payout_provider
         self.rating_provider = rating_provider
@@ -365,6 +372,13 @@ class MatchService:
             cb=int(any(f in (6, 7, 8, 17, 18) for f in self.start_board.fields)),
             ca=int(any(9 <= f <= 16 for f in self.start_board.fields)),
         )
+        if room_rules is not None:
+            configured = room_rules.as_dict()
+            if self.explicit_start_fields and any(
+                configured[key] != value for key, value in self.special_flags.items()
+            ):
+                raise ValueError("room rules must match the explicitly configured board")
+            self.special_flags = {key: configured[key] for key in self.special_flags}
         self.selected_card_validator = selected_card_validator
         if ai_cards is None:
             ai_cards = [
@@ -390,7 +404,7 @@ class MatchService:
         self.continues = {}
         self.completed_matches = 0
         self.owner_peer = None
-        self.game_rules = dict(DEFAULT_GAME_RULES)
+        self.game_rules = dict(DEFAULT_GAME_RULES) if room_rules is None else room_rules.as_dict()
         self.game_rules.update(self.special_flags)
         self.table_rules = dict(DEFAULT_TABLE_RULES)
         self.settings_applied = False
@@ -851,6 +865,16 @@ class MatchService:
             raise MatchError("table lower bound exceeds upper bound")
         return game, table
 
+    def _check_room_rules(self, game):
+        if self.room_rules is None:
+            return
+        expected = self.room_rules.as_dict()
+        # Directory rules describe the starting stake. A server-authorized
+        # Continue may double it; configuration cannot choose another amount.
+        expected["bm"] = self.game_rules["bm"]
+        if game != expected:
+            raise MatchError("game settings conflict with configured room rules")
+
     def _settings(self, peer, msg):
         if self.phase != "lobby" or msg.subtype != 0 or msg.argument != 0:
             raise MatchError("table settings are only accepted before a match")
@@ -872,6 +896,7 @@ class MatchService:
         owner = self.owner_peer if self.owner_peer is not None else self.players[0].peer
         if peer != owner:
             raise MatchError("only the admitted table owner may change current rules")
+        self._check_room_rules(game)
         if self.start_pending:
             # GameReady may already be queued for a guest, and Req returns the
             # rules that GameOK accepts. Neither can be revised by a later Apply.
@@ -1301,6 +1326,11 @@ class MatchService:
             raise MatchError("computer rule flags must match the explicitly configured board")
         if msg.argument and rules[7] not in (0, 1, 2):
             raise MatchError("invalid computer departure rule")
+        game = dict(self.game_rules)
+        game.update(zip(("bm", "st", "cb", "ca", "tl", "du"), rules[:6]))
+        if msg.argument:
+            game["gs"] = rules[7]
+        self._check_room_rules(game)
         npc_ids = ()
         if msg.argument:
             npc_ids = tuple(numbers(fields["Com"], msg.argument - 1))
