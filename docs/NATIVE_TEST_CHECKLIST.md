@@ -4,6 +4,23 @@ Status: **awaiting user testing**. The loader has not been launched by the agent
 Headless checks validate startup plumbing and encrypted requests; the following
 checks need the actual game screens. Use the new `Play.cmd`, not the old shortcut.
 
+## Updated loader controls
+
+The user's integrated run reported no sound, no resizing and no window close.
+The updated loader enables the native sound engine and replaces the game's
+fullscreen-only handling of desktop window commands. Verify after relaunch:
+
+- Title/menu music and selection effects are audible (check game Options levels).
+- Drag the edges and maximize/restore; the game keeps 4:3 proportions and the
+  pointer stays aligned, including at the corners. Black bars do not activate UI.
+- F10 opens the Dear ImGui panel. Try size presets, the aspect toggle and
+  borderless fullscreen. Alt+Enter toggles fullscreen without opening settings.
+- Panel clicks do not operate the game. Return to game and Escape close the panel.
+- X, Alt+F4 and Quit game each close the client on separate runs, and the launcher
+  stops its services after the last client exits. Window preferences survive relaunch.
+
+These fixes have headless regression coverage; the native checks remain pending.
+
 ## Pass 1: one window
 
 1. **Startup:** double-click `Play.cmd`. Confirm the title is visible, mouse

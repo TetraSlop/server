@@ -12,6 +12,14 @@ window. Use the Computer menu for CPU play; the default Local Room table also
 uses a CPU opponent. Keep the launcher console open while playing. Close the
 game window normally to stop the session and both services.
 
+The loader now provides **F10** for its Dear ImGui settings panel and
+**Alt+Enter** for borderless fullscreen. The window edges and maximize button
+resize the display; 4:3 proportions are preserved by default. The panel offers
+size presets and a stretch toggle. Close with the title-bar X, Alt+F4 or the
+panel's Quit game button. Window preferences are stored per account under
+`tmloader/runtime/settings/`. Music/effect levels remain in the game's Options.
+These controls and the restored audio need a native check with the updated build.
+
 `Check Setup.cmd` performs only the read-only setup check. It opens no game
 window, starts no service and does not update the save.
 
