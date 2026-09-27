@@ -114,9 +114,15 @@ RankingHistory(weekly_prize=None, last_week_rating=None,
     previous_ranks=(0, 0, 0, 0, 0))  # RR order0..4
 ```
 
-No last-week aggregate, automatic calendar rollover, award, rank movement or
-rookie eligibility is fabricated from a current profile. With no history,
-RR1/3/4 return valid RF+LN0 and an empty file. Prize Center is a separate
+With `--ratings local-history --weekly-rankings`, newly committed ordinary
+results populate weekly prizes and previous-week ratings. Weeks begin Monday
+at00:00 UTC under explicit local policy; these values share the existing atomic
+result/rating save. Rollover persists before new queries or metadata expose it.
+See [weekly rankings](../WEEKLY_RANKINGS.md) for enablement, failure behavior and
+the ratings v2 save extension. Disabling this option preserves recorded data.
+No historical weeks, awards, rank movement or rookie eligibility are fabricated
+from a current profile. Without recorded or explicitly supplied history,
+RR1/3/4 return valid RF+LN0 and an empty file. Prize Center remains a separate
 service/UI and is not assigned a fake rank category.
 
 Shared `b/g/TM0RkData` is28 bytes, seven little-endian DWORDs. Offsets0/10hex
@@ -125,9 +131,9 @@ and Grand Total (all provisioned accounts); offset8 counts accounts with weekly
 history; offset14hex counts those with last-week rating; offset18hex counts
 the explicit rookie subset. These are eligible population denominators before
 row caps, not advertised file lengths. OffsetC is `update_time`, default0,
-which causes the original UI to omit date text. A configured value is passed
-through unchanged; the module does not infer historical timestamps/timezones
-or the original weekly tally schedule.
+which causes the original UI to omit date text. Weekly mode supplies its current
+UTC week start; otherwise a configured value is passed through unchanged.
+Neither case establishes the original weekly tally schedule.
 
 The complete original file and display evidence is in
 `protocol_map/AUCTION_RANK_CONTRACT.md`, `FILE_COVERAGE.md` and
@@ -156,7 +162,8 @@ qualification, deterministic ties and100/30 result limits. The original
 reader harness emits an existing ResourceWarning from its read-only binary
 loader; all emulator assertions execute and pass.
 
-These checks establish wire/file and consumer compatibility under seeded
-state. Native ranking navigation and request routing remain untested. No
-historical server aggregation/prize policy or persistence of optional history
-is claimed. Root integration owns dispatch and profile-file plumbing.
+These original checks establish wire/file and consumer compatibility under
+seeded state. Later encrypted integration tests exercise server dispatch and
+profile-file plumbing, including recorded weekly history and restart. Native
+ranking navigation still needs user validation. Historical server aggregation
+and prize policies remain unknown.

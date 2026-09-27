@@ -27,9 +27,19 @@ def arguments(argv=None):
         "--rewards", action="store_true", help="enable local card prizes, CBC and wagers"
     )
     parser.add_argument(
+        "--ratings", choices=("preserve", "local-history"), default="preserve",
+        help="preserve saved ratings by default; opt in to the local rating policy",
+    )
+    parser.add_argument(
+        "--weekly-rankings", action="store_true",
+        help="track future local results in UTC weeks; requires --ratings local-history",
+    )
+    parser.add_argument(
         "--check", action="store_true", help="read-only setup check; no listeners or game"
     )
     args = parser.parse_args(argv)
+    if args.weekly_rankings and args.ratings != "local-history":
+        parser.error("weekly rankings require --ratings local-history")
     args.project_dir = args.project_dir.resolve()
     args.loader_dir = (args.loader_dir or args.project_dir.parent / "tmloader").resolve()
     args.state = (args.state or args.project_dir / "var/local_state.json").resolve()
@@ -116,7 +126,11 @@ def service_settings(args, log_dir):
         "3",
         "--rooms",
         str(args.project_dir / "examples/auto_rooms.example.json"),
+        "--ratings",
+        args.ratings,
     ]
+    if args.weekly_rankings:
+        command.append("--weekly-rankings")
     if args.rewards:
         command += ["--card-prizes", "--allow-cbc", "--wagers"]
     return server_arguments(command)
@@ -188,6 +202,8 @@ async def run(args):
                 "state": str(args.state),
                 "loader": str(args.loader),
                 "rewards": args.rewards,
+                "ratings": args.ratings,
+                "weekly_rankings": args.weekly_rankings,
                 "native_checks": "Awaiting user observation; process exit is not a UI pass.",
             }
             (log_dir / "session.json").write_text(

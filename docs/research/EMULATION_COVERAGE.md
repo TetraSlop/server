@@ -16,7 +16,7 @@ are in DEFERRED_REVIEW.md. Historical hosted policies remain explicitly separate
 | Trade | Consent/entry, offers/confirmation, atomic paired commit, rollback/resync | Native paired UI exercise |
 | Options | All12 recovered settings saved before85 acknowledgement; result Continue/PR saves ranking privacy; selective Tet/Tab defaults persist on24; current representable8-byte table passwords | Native reread of options/defaults/password/result dialogs; editor12-byte password cannot round-trip in8-byte metadata |
 | Chat |42 entry, bounded roster pages, authenticated names, raw public/private text | Native rendering/timing and wider locale coverage |
-| Rankings | All5 query categories, metadata, saved hide-name preference, isolated immutable files, delete, original consumers | Historical categories require actual historical data |
+| Rankings | All5 query categories, metadata, saved hide-name preference, isolated immutable files, delete, original consumers; optional durable UTC-week prize totals and previous-week local ratings from future play | Native menu checks; historical calendar, rookie and award policies remain unknown |
 | Auctions | Durable ledger, query/file service, bids/refunds/expiry and original two-stage card collection | Native transaction UI checks; historical fee/quote policy |
 | Prize Center | Award IDs, point credits, all30 catalogue exchanges, atomic Get and restart | Native UI checks; historical automatic award policy |
 | Character profiles | Authenticated CR/PG/GR, all71 PO fields, partial/privacy updates and persistence | Unknown historical score/title mapping; native menu checks |

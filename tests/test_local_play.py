@@ -1,12 +1,14 @@
 """Launcher lifecycle checks use headless protocol peers, never the native game."""
 
 import asyncio
+import io
 import json
 import os
 import shutil
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -55,6 +57,7 @@ class LocalPlayTests(unittest.IsolatedAsyncioTestCase):
         metadata = json.loads((session / "session.json").read_text())
         self.assertEqual(json.loads((session / "exits.json").read_text()), [0, 0, 0])
         self.assertEqual(len(set(metadata["accounts"])), 3)
+        self.assertEqual((metadata["ratings"], metadata["weekly_rankings"]), ("preserve", False))
         for port in (metadata["game_port"], metadata["profile_port"]):
             with self.assertRaises(OSError):
                 await asyncio.open_connection("127.0.0.1", port)
@@ -146,3 +149,53 @@ class LocalPlayTests(unittest.IsolatedAsyncioTestCase):
         self.args.rewards = True
         settings = local_play.service_settings(self.args, self.root / "logs")
         self.assertTrue(settings.card_prizes and settings.allow_cbc and settings.wagers)
+
+    def test_rating_flags_validate_and_reach_service_arguments(self):
+        for flags, expected in (
+            ([], ("preserve", False)),
+            (["--ratings", "preserve"], ("preserve", False)),
+            (["--ratings", "local-history"], ("local-history", False)),
+            (["--ratings", "local-history", "--weekly-rankings"], ("local-history", True)),
+        ):
+            with self.subTest(flags=flags):
+                args = local_play.arguments(["--project-dir", str(self.root), *flags])
+                settings = local_play.service_settings(args, self.root / "logs")
+                self.assertEqual((settings.ratings, settings.weekly_rankings), expected)
+        for flags in (
+            ["--weekly-rankings"],
+            ["--ratings", "preserve", "--weekly-rankings"],
+            ["--ratings", "unknown"],
+        ):
+            with self.subTest(flags=flags), redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as rejected:
+                    local_play.arguments(["--project-dir", str(self.root), *flags])
+                self.assertEqual(rejected.exception.code, 2)
+        self.assertFalse((self.root / "var").exists())
+
+    async def test_weekly_policy_reaches_runtime_and_session_then_can_be_paused(self):
+        async def clients(args, services, session, log_dir):
+            self.assertTrue(services.game.ratings.enabled)
+            self.assertEqual(services.game.ratings.weekly, args.weekly_rankings)
+            return [0]
+
+        saved = None
+        for weekly in (True, False):
+            args = local_play.arguments([
+                "--project-dir", str(self.root), "--ratings", "local-history",
+                *(["--weekly-rankings"] if weekly else []),
+            ])
+            with (
+                patch.object(local_play, "preflight", AsyncMock()),
+                patch.object(local_play, "play_clients", AsyncMock(side_effect=clients)),
+            ):
+                self.assertEqual(await local_play.run(args), 0)
+            current = json.loads(args.state.read_text())["ratings"]
+            self.assertEqual(current["version"], 2)
+            if saved is not None:
+                self.assertEqual(current, saved)
+            saved = current
+        sessions = [json.loads(path.read_text())
+                    for path in (self.root / "var/sessions").glob("*/session.json")]
+        self.assertEqual(len(sessions), 2)
+        self.assertEqual({(s["ratings"], s["weekly_rankings"]) for s in sessions},
+                         {("local-history", True), ("local-history", False)})

@@ -90,6 +90,11 @@ def arguments(argv=None):
         help="optional original offline32-result rating as explicit local policy",
     )
     parser.add_argument(
+        "--weekly-rankings",
+        action="store_true",
+        help="track future local results in UTC weeks; requires --ratings local-history",
+    )
+    parser.add_argument(
         "--departures",
         action="store_true",
         help="opt-in recovered practice departure rules; economic/rated rounds still abort safely",
@@ -123,6 +128,8 @@ def arguments(argv=None):
     if not args.database_url and args.state is None:
         args.state = DIRECTORY / "local_state.json"
     args.flexible_seats = args.players == "auto"
+    if args.weekly_rankings and args.ratings != "local-history":
+        parser.error("weekly rankings require --ratings local-history")
     args.players = 3 if args.flexible_seats else int(args.players)
     if not 2 <= args.accounts <= MAX_ACCOUNTS:
         parser.error(f"accounts must be between2 and{MAX_ACCOUNTS}")
@@ -200,6 +207,7 @@ async def serving(args, events, tables, progress, store):
         card_prizes=args.card_prizes,
         allow_wagers=args.wagers,
         rating_mode=args.ratings,
+        weekly_rankings=args.weekly_rankings,
         allow_departures=args.departures,
         ordinary_rooms=load_ordinary_rooms(args.rooms) if args.rooms else (),
         event_configs=events,

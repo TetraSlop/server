@@ -74,26 +74,40 @@ for later review and continue independent work.
 - Protocol documentation: preserved15 archived original envelope cases and
   clarified why arbitrary447-byte slicing cannot substitute for application
   paging. No new native execution is claimed for these archived fixtures.
+- Optional weekly rankings: `--ratings local-history --weekly-rankings` on both
+  server and Play records future ordinary result rewards and previous-week
+  ratings with Monday UTC rollover. No backfill, rookie inference or awards.
+  Periods share the existing durable rating/result transaction; disabled runs
+  preserve v2 data. All40 combined state/policy/projection/encrypted/startup/Play
+  tests pass in29.6 seconds. New v2 snapshots also pass the database import
+  validator in memory. Real PostgreSQL execution has not been repeated here.
 
-These are focused regression batches, not a newly completed full-suite count.
-Repository-wide Ruff and whitespace checks pass. No native visual validation
-is claimed by these tests.
+Whole portable regression checkpoint completed:903 tests in798.6 seconds,
+846 passed,56 optional PostgreSQL tests skipped, and one login timeout in the
+test client's three-second hang guard. The same test passed alone. The guard is
+now ten seconds;34 affected event/server/prize tests pass after that test-only
+change. Production deadlines are unchanged. Repository-wide Ruff and whitespace
+checks pass. No native visual validation is claimed by these tests.
 
 ## In progress
 
-- Whole portable suite running against the completed changes. Output is in
-  ignored results/overnight-suite.log; parent exec session35860. Database URL
-  variables are cleared only in this test process, so optional external database
-  tests will skip. One event proposal-retry error appeared during a3.1-second
-  event-loop callback; the same test passed alone, but the full trace/result must
-  be reviewed before accepting the checkpoint. No source edits during the run.
-- Read-only design for optional weekly ranking history: use only future recorded
-  local results, no invented backfill or retail schedule/rookie policy. Agent
-  browser_port_options is assessing small durable integration and tests.
+- Weekly implementation/review/combined focused checks are complete. Full
+  portable suite and fresh wheel build/check remain after the next fix settles.
+  Focused output:results/weekly-ranking-checkpoint.log. No native game launched;
+  the launcher tests substitute headless peers or mocks for every child.
+- Agent browser_port_options reproduced unsupported active Quit stranding a
+  connected human counterpart after the match is finished/reservations released.
+  It owns ordinary_table.py and test_departure_integration.py for minimal cleanup
+  and encrypted regressions. Supported practice departures must remain intact.
+- Agent texture_upscaling is auditing login/rebind/shutdown read-only. Agent
+  texture_load_trace is auditing durable claim/replay routing read-only.
+- Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
+  results/overnight-timeout-recheck.log. Both runs completed. No active test
+  sessions from that checkpoint remain.
 
-## Next after the regression checkpoint
+## Weekly ranking design record
 
-Implement optional weekly rankings as explicit local policy, requiring
+Optional weekly rankings use explicit local policy, requiring
 local-history ratings. Use Monday00:00 UTC weeks and future recorded play only.
 RR1 sums committed `(new reward_sum - old reward_sum) & 0xffffffff`; this excludes
 stake refunds and unrelated shop/auction money. RR3 freezes the preceding
@@ -118,8 +132,8 @@ within result commits. No timer is needed. Skipped weeks produce an empty
 immediately preceding week; backward-period writes must not rewrite history.
 Test v1/v2 restore/import, disabled preservation, boundaries/skipped weeks,
 replay after rollover/restart, invalid final participants, failures before save,
-refunds/wrap, CPU/human results, caps/ties and immutable files. This design is
-not implemented yet; avoid starting edits until the active full suite finishes.
+refunds/wrap, CPU/human results, caps/ties and immutable files. Implementation
+and the40-test combined focused check are complete. Broader validation remains.
 
 Continue by reviewing active fixes, running their relevant checks, updating this
 log and committing locally. The thread heartbeat may resume this work; it is

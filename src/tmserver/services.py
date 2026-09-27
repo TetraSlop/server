@@ -126,6 +126,7 @@ async def dispatch(session, target, payload):
             return True
     if payload.startswith(b"GTM0R"):
         key = session.server.ensure_account(session.nick)
+        session.server.advance_rankings()
         replies = session.server.ranking.handle(key, payload)
         if replies is not None:
             for answer in replies:

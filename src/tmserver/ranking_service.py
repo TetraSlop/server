@@ -7,8 +7,9 @@ Sources: ../protocol_map/{AUCTION_RANK_CONTRACT,FILE_COVERAGE,RESULT_REWARD_SEQU
 Local policy: committed synthetic accounts; score descending unless the
 optional local-history rating policy is enabled (lower rating wins). Stable
 identity/key ties. Current rating and total prize money come from canonical
-profile fields30/50. Historical categories stay empty until explicit history
-is supplied. No historical aggregation, eligibility, reset or award is invented.
+profile fields30/50. Historical categories require recorded weekly play or
+explicit history. Weekly tracking is opt-in local policy; retail aggregation,
+eligibility, reset and award rules remain unknown.
 """
 
 import re
@@ -141,12 +142,23 @@ class RankingService:
 
     def _entries(self):
         entries = []
+        periods = (
+            self.rating_policy.weekly_history()[0]
+            if self.rating_policy is not None and self.rating_policy.weekly
+            else None
+        )
         # snapshot is public and contains only committed accounts. profile_bytes
         # also excludes a staged shop purchase; this module never changes either.
         for key in sorted(self.economy.snapshot()["accounts"]):
             account = self.economy.account_view(key)
             profile = self.economy.profile_bytes(key)
             history = self.history.get(key, RankingHistory())
+            if periods is not None:
+                recorded = periods.get(key, RankingHistory())
+                history = replace(
+                    history, weekly_prize=recorded.weekly_prize,
+                    last_week_rating=recorded.last_week_rating,
+                )
             history = replace(history, anonymous=history.anonymous or bool(profile[0xB6]))
             if self.rating_policy is not None and not self.rating_policy.is_ranked(key):
                 history = replace(history, qualified=False)
@@ -194,6 +206,11 @@ class RankingService:
 
     def metadata(self):
         entries = self._entries()
+        update_time = (
+            self.rating_policy.weekly_history()[1]
+            if self.rating_policy is not None and self.rating_policy.weekly
+            else self.update_time
+        )
         # Offsets4,8,14,18 are display denominators, not record counts. Offset4
         # is shared by Rating and Grand Total, so report all provisioned accounts.
         counts = [
@@ -203,7 +220,7 @@ class RankingService:
             len(self._eligible(entries, 4)),
         ]
         return struct.pack(
-            "<7I", 0, counts[0], counts[1], self.update_time, 0, counts[2], counts[3]
+            "<7I", 0, counts[0], counts[1], update_time, 0, counts[2], counts[3]
         )
 
     @staticmethod

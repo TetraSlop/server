@@ -49,6 +49,33 @@ uses the existing no-stakes/no-card-transfer practice defaults; normal card
 growth and profile progress still persist. Local online rating policy stays off.
 An inherited `TM_DATABASE_URL` does not switch this launcher away from JSON.
 
+To enable the local rating policy and weekly rankings:
+
+```powershell
+.\Play.cmd --ratings local-history --weekly-rankings
+.\Play.cmd --clients 2 --rewards --ratings local-history --weekly-rankings
+```
+
+Weekly rankings count only results committed while the option is enabled.
+Weeks begin Monday at 00:00 UTC: Weekly Prize Money shows this week's earned
+result rewards, and Top30 shows the previous week's last committed ratings.
+Best Rookies remains empty. This is an explicit local policy; existing progress
+is not assigned to earlier weeks.
+
+To pause weekly tracking while keeping the local rating history consistent,
+omit only `--weekly-rankings`:
+
+```powershell
+.\Play.cmd --ratings local-history
+```
+
+Saved weekly history is retained while its weekly lists are hidden. Ordinary
+launch still defaults to `--ratings preserve`, which keeps saved ratings and
+does not record local rating results. After enabling local-history, keep passing
+`--ratings local-history` for continued play; playing in preserve mode can leave
+the saved rating history inconsistent with subsequent profile progress.
+Each session's `session.json` records both selected options.
+
 ## Where everything lives
 
 - `tmloader/runtime/`: ignored, user-owned copies of the DLLs, `data/` and `pub/`.

@@ -43,7 +43,7 @@ from tmserver.ordinary_rooms import configure_rooms
 from tmserver.ordinary_rooms import directory_files as ordinary_directory_files
 from tmserver.ordinary_table import OrdinaryTable
 from tmserver.prize_service import PrizeService
-from tmserver.ranking_service import RankingService
+from tmserver.ranking_service import METADATA_PATH, RankingService
 from tmserver.rating_policy import RatingPolicy
 from tmserver.result_rewards import ResultRewardService
 from tmserver.room_service import RoomService
@@ -79,6 +79,8 @@ class Server(OrdinaryTable):
         event_progress_policy="none",
         shop_offers=None,
         rating_mode="preserve",
+        weekly_rankings=False,
+        ranking_clock=time.time,
         allow_departures=False,
         ordinary_rooms=(),
         flexible_seats=False,
@@ -148,6 +150,8 @@ class Server(OrdinaryTable):
         self.ratings = RatingPolicy(
             self.economy,
             mode=rating_mode,
+            weekly=weekly_rankings,
+            clock=ranking_clock,
             snapshot=None if saved is None else saved.get("ratings"),
         )
         self.character_profiles = CharacterProfiles.restore(
@@ -321,6 +325,8 @@ class Server(OrdinaryTable):
 
     def profile_file(self, account_key, name, *, owner=None):
         self.ensure_account(account_key.encode("ascii"))
+        if name == METADATA_PATH:
+            self.advance_rankings()
         data = self.ranking.file(account_key, name)
         if data is None:
             data = self.auction.file(account_key, name)
@@ -349,6 +355,17 @@ class Server(OrdinaryTable):
     def delete_profile_file(self, account_key, name):
         self.ensure_account(account_key.encode("ascii"))
         return self.ranking.delete(account_key, name) or self.auction.delete(account_key, name)
+
+    def advance_rankings(self):
+        """Persist a weekly rollover before exposing its new ranking projection."""
+        if not self.ratings.weekly:
+            return False
+        staged = self.ratings.stage_state(self.economy)
+        if not staged.advance_week():
+            return False
+        self.persist_changes({}, {"ratings": staged.snapshot()})
+        self.ratings.publish_state(staged)
+        return True
 
     def snapshot(self):
         snapshot = self.economy.snapshot()
@@ -461,6 +478,7 @@ class Server(OrdinaryTable):
     async def start(self, port=51241):
         if self.storage_failed is not None:
             raise OSError("restart the server after correcting state storage")
+        self.advance_rankings()
         self.listener = await asyncio.start_server(self.accept, "127.0.0.1", port, limit=MAX_LINE)
         for table in self.ordinary_tables:
             table.start_table_tasks()

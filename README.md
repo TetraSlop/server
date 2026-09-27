@@ -35,6 +35,8 @@ State and logs default to `var/` in the working directory, outside the installed
 package. `Play.cmd` uses this package and its own `var/local_state.json`; the old
 scratch launcher still uses its earlier save.
 Use `--help` for rooms, event configuration, human tables, prizes and ratings.
+Optional [weekly rankings](docs/WEEKLY_RANKINGS.md) record future local play with
+`--ratings local-history --weekly-rankings`.
 
 For PostgreSQL, set `TM_DATABASE_URL`, run `tmserver-db upgrade`, then `tmserver`.
 An explicit `--state` chooses JSON instead. Database tests require a disposable
