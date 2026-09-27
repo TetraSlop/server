@@ -1,9 +1,12 @@
 # Native protocol milestone — 2026-09-26
 
-This preserves the early transport/startup milestone. Later gameplay, shop,
-trade, event and persistence work is tracked in
+This preserves the early transport/startup milestone and its original fixture
+values, commands and verification limits. Those limits are historical, not the
+current implementation status. Later gameplay, shop, trade, event and persistence
+work is tracked in
 [INTEGRATION_STATUS.md](INTEGRATION_STATUS.md) and
-[EMULATION_COVERAGE.md](EMULATION_COVERAGE.md).
+[EMULATION_COVERAGE.md](EMULATION_COVERAGE.md); current checks are in
+[VALIDATION.md](../VALIDATION.md). The peer-relay audit below is a later addition.
 
 Addresses refer to TM 1.6.11.0 or the local PC polcore research image at preferred
 base 0x10000000. The harness relocates them relative to each loaded module.
@@ -21,8 +24,8 @@ Selecting this zone also loads and renders **Local Room** in the room list.
 
 Actual captures: `handle_confirmation.bmp`, `online_title.bmp`, `zone_list.bmp`,
 `room_list.bmp`.
-The last native probe's zone read check returned **1**. Room entry, card inventory
-and a multiplayer match have not been verified or implemented. The zone's displayed
+That milestone's native zone read check returned **1**. Room entry, card inventory
+and a multiplayer match had not yet been verified or implemented. The zone's displayed
 one player / one room values are synthetic metadata.
 
 The separate browser experiment visibly renders the original title and animated
@@ -57,6 +60,40 @@ not this protocol startup. Its Wine 11/WebGL runtime and WASM JIT are described 
 `native_irc.log` and `native_traffic.jsonl` record the separate original-polcore
 transport probe. `startup_traffic.jsonl` records actual TM startup traffic.
 Append-only logs preserve earlier failed attempts too.
+
+### Peer-relay boundary audit — 2026-09-27
+
+The original client does not authenticate every server reply itself. Header-only
+`2B` at `1008B190` accepts any sender and can open the maintenance dialog leading
+to exit; `2C` at `1008CC40` accepts any sender and changes the status override.
+The trade `A1/TrEntAns` receiver at `1008A950` adopts the reply sender, and
+`A2/18 Init` at `101064CA` replaces the trade service/session and resets offers.
+Forwarding these from another player can therefore disrupt a recipient even
+when the server's durable accounts are unchanged.
+
+The original ingress checks the literal first four bytes `GTM0` at `101A2B90`,
+but the reader at `1019E540` skips the fifth selector without checking it. Fresh
+isolated x86 probes through ingress, pump `10081A00` and the two control receivers
+accepted `GTM0G`, `GTM0g`, `GTM0Z` and `GTM0L`; changing case within `GTM0` was
+ignored. Separate receiver probes accepted lower-case hex and arbitrary bodies
+and header arguments. This requires guarding the entire `GTM0` relay namespace,
+not just the canonical `GTM0G2B`/`GTM0G2C` strings.
+
+The recovered 71 named-constructor sites identify peer traffic only for trade
+`21/22/23/25/2A/A0 TrID`; the raw-constructor audit additionally identifies chat
+`42`. After ordinary service dispatch, the relay now permits canonical direct
+trade controls validated by the existing consent router and normalized public
+or private chat. It rejects other `GTM0` peer/channel traffic, including channel
+trade controls that bypass pair validation, and preserves opaque non-`GTM0`
+traffic. Rejection logs and closes the sender; it emits no operator control.
+Encrypted regressions check both IRC verbs, selector aliases, forged initializers,
+recipient isolation, unchanged saves, and valid chat/trade.
+
+Original evidence: `protocol_map/HEADER_ONLY_CONTROLS.md`,
+`TRANSPORT_INGESTION.md`, `TRADE_CONTROL_SEQUENCE.md`,
+`IMPLEMENTATION_COVERAGE.md` and `NAMED_SEND_COVERAGE.md` in the read-only source
+location recorded by [research/migration.json](../../research/migration.json).
+These are original-code and headless transport checks, not native screen checks.
 
 ## Native command codec
 
@@ -145,7 +182,7 @@ sizes, connection count and timeout are bounded.
 | 3/3 | empty file list, observed for O/m/ |
 
 Missing files return error 0x7e; unsupported operations return error 1 and are
-logged. Other families and persistence remain incomplete.
+logged. At this milestone, other families and persistence were incomplete.
 
 ### Viewer profile context lifetime
 
@@ -189,10 +226,10 @@ accepts the encrypted file (native read check 1) and renders Local Room, zero
 players and zero open tables. The zero capacity/rule fields are incomplete.
 It then opens another Game IRC connection using the selected zone's host. The
 latest probe verifies host 127.0.0.1, native OpenCheck 1, and zone-connection task
-states 7 -> 8 -> 10. Room entry, rule loading, channel join and gameplay have not
-yet been verified.
+states 7 -> 8 -> 10. Room entry, rule loading, channel join and gameplay had not
+yet been verified at this milestone.
 
-## Reproduce and remaining work
+## Archived reproduction and next steps
 
 Run `python -B -m unittest discover -s server -p "test_*.py" -v` from the parent.
 Latest result: **24 tests passed**. Run `python -B server/run_startup_probe.py --advance`
@@ -202,7 +239,9 @@ omits these test actions and keeps both services alive until the client closes.
 `--enter-zone` additionally selects the displayed zone via its original button
 event (0x0300006a, dispatched to 0x03000329) and extends the probe to 60 seconds.
 
-Next: room-list layout and joining, then collection data, matchmaking and rules.
-Shops, auctions, rankings, durable saves, main Viewer session support and a hosted
-browser bridge remain unimplemented. The current browser and server milestones
-are separate, and do not establish playable multiplayer.
+At this checkpoint, the next work was room-list layout and joining, then collection
+data, matchmaking and rules. Shops, auctions, rankings and durable saves were not
+yet implemented. Main Viewer session support and a hosted browser bridge were
+also absent. These early browser and server milestones were separate and did not
+establish playable multiplayer; use the current worklist linked above for later
+implementation and remaining native validation.

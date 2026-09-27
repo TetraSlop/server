@@ -205,6 +205,7 @@ class Session:
                     self.server.economy.account_view(key).name,
                     private=not target.startswith(b"#"),
                 )
+            peer_control = False
             if target.startswith(b"#"):
                 if target not in self.channels:
                     await self.send(b":srv 442 " + self.nick + b" " + target + b" :Join first")
@@ -214,7 +215,7 @@ class Session:
                 peer = self.server.nicks.get(target)
                 recipients = {peer} if peer else set()
                 if peer is not None:
-                    self.server.trade_router.observe(self, peer, payload)
+                    peer_control = self.server.trade_router.observe(self, peer, payload)
                 if peer is None:
                     self.server.log(
                         "unhandled_service_target",
@@ -222,6 +223,16 @@ class Session:
                         target=target.decode("latin1"),
                         payload_hex=payload.hex(),
                     )
+            # Native initializers can adopt any sender; maintenance/status
+            # controls do not check one. Ingress also ignores the fifth prefix
+            # byte, so reserve every GTM0 selector for validated peer traffic.
+            if (
+                payload.startswith(b"GTM0")
+                and (target.startswith(b"#") or recipients)
+                and not payload.startswith(b"GTM0G42")
+                and not peer_control
+            ):
+                raise ValueError("game service messages cannot be relayed between players")
             service = tm_protocol.inspect_service(payload)
             if service:
                 self.server.log(
