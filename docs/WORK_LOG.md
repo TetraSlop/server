@@ -19,6 +19,22 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Full portable suite at unchanged `995875e`: 1,141 tests in 769.854 seconds,
+  1,081 passed, 59 optional PostgreSQL skips and one stale fixture error. All
+  254 tracked source/test/tool hashes stayed fixed during the run. The fixture
+  assigned a 25-cell event board while declaring two players; `6485f68` supplies
+  three seats at construction, and all three custom-board tests pass afterward.
+- Automatic weekly ranking metadata now hides incompatible native date labels
+  (`a65f413`), preserving saved periods, all scores, row counts and manually
+  supplied historical dates. The new regression fails before; 52 related tests
+  pass after. Source research `aab622e` passes 58 original cases, including
+  actual production zero-date metadata, complete projected-row preservation
+  and old-label comparisons. The separate original signed large-score renderer
+  limitation is recorded for wrapper review; scores are not altered. Four
+  supplemental ranking ownership/cache/reservation audits also pass. Collection
+  finds 1,142 tests; lint and rebuilt-wheel checks pass, with all 80 runtime
+  files byte-matching source. No second whole-suite or live PostgreSQL run is
+  claimed after these narrow corrections; details are in VALIDATION.md.
 - Incomplete trade-offer retries preserve already received later pages
   (`dda421f`). Previously retrying page zero truncated a 28-card prefix and
   the subsequent final page aborted the trade. Changed pages replace the

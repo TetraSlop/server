@@ -36,6 +36,13 @@ several weeks leaves the immediately preceding week empty. A clock moving into
 an earlier week is rejected rather than rewriting already recorded periods.
 An issued ranking file remains an immutable snapshot until the client deletes it.
 
+The original ranking screen's date labels are hidden in this mode. It uses one
+timestamp for both an older closed-week tally and the next update, which cannot
+truthfully describe our live current-week prizes and previous-week ratings.
+Only that display field is zeroed; the saved period dates and rollover still
+use Monday UTC. Explicit historical timestamps outside automatic weekly mode
+remain supported. See [original display evidence](research/RANKING_DISPLAY_REVIEW.md).
+
 Period state shares the existing rating/result transaction. A failed save cannot
 publish a new week or a credited result. Turning tracking off preserves its
 saved data, stops recording and suppresses weekly projections. Turning it back

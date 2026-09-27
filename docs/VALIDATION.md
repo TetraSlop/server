@@ -1,5 +1,59 @@
 # Packaging and transaction validation
 
+## Whole-suite checkpoint and native ranking dates, 2026-09-27
+
+The full portable suite ran against clean `995875e`, finishing 1,141 tests in
+769.854 seconds: **1,081 passed, 59 optional PostgreSQL tests skipped, one error**.
+Log: `results/full-suite-995875e.log`. The manifest
+`results/full-suite-995875e-manifest.json` records all 254 tracked source/test/tool
+files; their hashes were unchanged throughout the run. The error was a stale
+custom-event fixture that assigned a 25-cell board before changing its declared
+two-player shape. The newer immutable configuration validator correctly rejects
+that construction. Commit `6485f68` declares three players in the same replace
+call. All three custom-board tests pass afterward in 33.179 seconds:
+`results/custom-event-board-after.log`. Runtime validation was not weakened.
+
+Original ranking display checks exposed a separate presentation mismatch:
+the client interprets metadata+C as a shared date anchor for an older weekly
+tally and the next update. Our automatic policy records live current-week
+prizes and previous-week ratings, so its current-Monday timestamp displays
+incorrect dates. Commit `a65f413` emits zero only for automatic weekly metadata,
+using the client's existing hide-date branch. Saved period dates, rollover,
+scores, denominators, immutable result files and manual historical timestamps
+remain intact. The new restored-state regression fails before:
+`results/weekly-date-regression-before.log`.
+
+All 52 tests in ranking service/integration, period accounting, weekly rating
+policy/projection/integration and local-rating ordering pass in 19.705 seconds:
+`results/weekly-date-policy-after.log`. These include encrypted metadata reads,
+restart and save-failure rollover controls. Independent review found no issue.
+The full suite was not repeated after the fixture and metadata corrections;
+the checks above cover their affected paths.
+
+Research `aab622e` passes **58 original-instruction cases**: 40 score boundaries,
+nine explicitly reconstructed old date labels and nine actual production date
+omissions across RR1/3/4 and all three locale selectors. Full projected rows,
+source files and snapshots stay unchanged. Logs:
+`results/ranking-display-original.log` and
+`results/ranking-display-zero-date-original.json`. See
+`research/RANKING_DISPLAY_REVIEW.md` for addresses, image hashes and the explicit
+UTC calendar fixture/original literal-PST limitation. Large unsigned scores
+expose a separate signed renderer limitation; no saved value or order was
+changed to hide it. No native application was launched.
+
+A read-only ranking audit passes four supplemental boundaries: final filename
+allocation/exhaustion, owner/selector rejection with a full cache, zero versus
+absent historical scores, and reads/deletion while exchange reservations remain
+active. Log: `results/ranking-boundary-audit-matrix.log`. No duplicate tests or
+extra runtime change were needed for those paths.
+
+Collection finds 1,142 tests without import errors; Ruff/whitespace pass.
+The 85-entry wheel passes clean dependency-free installation, both entry
+points, JSON administration/recovery and temporary listeners. All 80 runtime
+files byte-match source. Logs: `results/weekly-display-wheel-{build,check}.log`.
+SHA256: `983b8995e104ad61945f17fe0d899c50036db1937411bf916cf90cddeec2977b`.
+This checkpoint does not include a live PostgreSQL or rendered native UI run.
+
 ## Pending trade-offer retries, 2026-09-27
 
 Commit `dda421f` preserves exact buffered offer pages when page zero is retried

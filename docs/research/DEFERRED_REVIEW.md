@@ -11,6 +11,14 @@ scratch launchers are not the packaged entry points.
 
 ## Native checks requiring the user
 
+- Large ranking scores need a wrapper/native formatting review. Original
+  projection preserves unsigned DWORD values, but rendering uses signed
+  comparisons and formatting: 0xFFFFFFFF displays as -1 for prize money and
+  0.-1 for ratings. Preserve saved scores and ordering; do not clamp the server
+  values to conceal this. Automatic weekly rankings now suppress incompatible
+  date labels through the original zero-timestamp gate. Original instruction
+  checks preserve all rows and counts, but screen layout remains a native check.
+  See [ranking display evidence](RANKING_DISPLAY_REVIEW.md).
 - Full 16-byte character names need a loader/native bounds review. Original
   DE/PD serialization scans beyond that fixed name field into following
   metadata, and the room receiver copies 16 bytes without a terminator while
@@ -126,6 +134,13 @@ scratch launchers are not the packaged entry points.
   and encrypted NPC spectator round cover this without native rendering.
 
 ## Policy that the original client cannot establish alone
+
+An optional closed-week ranking view could align the original tally dates with
+the next update. It would need to retain both previous-week prizes and ratings
+and version the period journal. Existing journals retain previous ratings only;
+missing older prizes cannot be backfilled from undated result receipts. The
+current documented live-week policy remains intact, with its incompatible date
+labels omitted. No calendar, prize grant or historical eligibility rule is inferred.
 
 An optional policy choice remains whether to expose the original offline
 VS. Rating generator. It uses random deltas and can treat tied seats differently;
