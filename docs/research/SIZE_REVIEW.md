@@ -1,5 +1,18 @@
 # Server size and structure review
 
+## Remaining packet duplication review, 2026-09-27
+
+The earlier suggestion to share named packet parsing was reviewed against
+`d9b9646`. The two parser/builder pairs total only 75 lines. Match parsing accepts
+empty bodies, ignores the secondary header byte and permits broader names and
+ASCII characters; economy parsing requires a body, zero secondary byte,
+restricted names and printable characters. Their rejection behavior differs too.
+Small in-memory probes confirm these distinctions. The identical header-format
+expression alone does not justify another helper; a common parser would need
+multiple policy switches. Keep these implementations and the unrelated BEL
+protocol separate. This review makes no source-size reduction claim and does
+not rule out future simplification of the larger service dispatchers.
+
 ## Catalogue ownership checkpoint, 2026-09-27
 
 Card generation, sale arithmetic and collection points now live in `card_catalog`

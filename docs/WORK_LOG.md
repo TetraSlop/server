@@ -20,6 +20,13 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Read-only post-consolidation audit found no defect: 38 synthetic saved-setting
+  checks and three encrypted room/startup/late-exit controls pass. Native captured
+  traffic requires ordinary room presence to survive room-channel PART, so the
+  proposed PC/PART equivalence was rejected. The remaining named packet helpers
+  total 75 lines and have distinct validation contracts; merging them would add
+  policy switches without a worthwhile reduction. No runtime/test changes were
+  justified. See VALIDATION.md and research/SIZE_REVIEW.md.
 - Separated decoded card catalogue/generation, sale arithmetic and collection
   points from account/shop handling into `card_catalog`. Match construction and
   admission no longer import the account service for those operations. Shared

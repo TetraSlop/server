@@ -1,5 +1,26 @@
 # Packaging and transaction validation
 
+## Post-consolidation behavior audit, 2026-09-27
+
+Read-only review on `d9b9646` found no defect in saved table preferences during
+reserved operations. All 38 isolated synthetic checks pass, covering reservation
+identity, pending shop purchases, later trade/event/claim settlement, malformed
+saves and persistence failure cleanup. Event/trade/shop checks use the account
+API; they do not claim those wire routes accept table-setting commands. Evidence:
+`results/preferences_reservation_audit.py` and
+`results/preferences-reservation-audit.json`.
+
+An apparent ordinary-room departure discrepancy was rejected as a defect:
+the captured native sequence sends room `PART`, joins its table, then sends room
+`PD` updates. Retaining room presence is required; `PART` is not equivalent to
+explicit `PC` departure. Three existing encrypted replay, startup and late-exit
+controls pass in 3.199 seconds. Evidence:
+`results/room-part-presence-conclusion.json` and
+`results/room-part-native-boundary-controls.log`.
+
+No runtime or tests changed. These bounded checks do not replace the preceding
+full-suite checkpoint or establish native UI acceptance.
+
 ## Card catalogue ownership, 2026-09-27
 
 Card catalogue loading/generation, sale arithmetic and collection points now
