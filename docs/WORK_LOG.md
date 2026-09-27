@@ -151,13 +151,17 @@ checks pass. No native visual validation is claimed by these tests.
 
 ## In progress
 
-- All assigned work, final checks and temporary PostgreSQL cleanup are complete.
-  Agents are idle and no root exec sessions remain active. Latest production
-  commit is 77cf376; subsequent changes add tests and validation records.
+- All assigned implementation and temporary PostgreSQL cleanup are complete.
+  Agents are idle. Root is running the complete current portable suite with
+  TM_TEST_DATABASE_URL absent; output is results/overnight-final-complete-suite.log.
+  Latest production commit is 77cf376; subsequent changes add tests and records.
 - The transport/profile audit found no new actionable defect. Isolated encrypted
   probes rejected truncated bodies, incorrect extents and bad checksums without
   publishing state; valid follow-up requests succeeded. No protocol policy was
   changed based on speculative request ordering.
+- Final admin and shop/trade audits found no new concrete defect in owner
+  selection, journal preservation, cancellation, re-entry, shared B2 routing or
+  delayed edits. No speculative retry policy was added.
 - The latest full run is 952 cases; post-checkpoint follow-ups passed their scoped
   tests and package checks, not a new complete 988-case run. Collection now finds
   988 tests with no import errors (including 59 optional PostgreSQL cases).
@@ -165,6 +169,9 @@ checks pass. No native visual validation is claimed by these tests.
   used; reset remains 1791063720. Continue only concrete, bounded improvements
   that can be completed and validated within remaining allowance. No reset
   credits, purchases or continuation into a replenished allowance are authorized.
+- The recurring heartbeat is paused to avoid starting more work after this
+  allowance expires. The current active turn is finishing the final suite and
+  checkpoint; no reset credit or purchase has been used.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
   results/overnight-timeout-recheck.log. Both runs completed. No active test
   sessions from that checkpoint remain.
