@@ -1,6 +1,8 @@
 """Saved personal rules remain separate while an encrypted client changes rooms."""
 
 import asyncio
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,7 +13,7 @@ from tests.test_room_rules import settings
 from tests.test_server import Client
 from tmserver.identities import GAME_KEY, service_nick
 from tmserver.match_service import DEFAULT_GAME_RULES, decode, packet
-from tmserver.ordinary_rooms import load_ordinary_rooms
+from tmserver.ordinary_rooms import directory_files, load_ordinary_rooms
 from tmserver.room_rules import RoomRules
 from tmserver.server import Server
 from tmserver.table_preferences import read_preferences
@@ -56,6 +58,52 @@ class RoomRuleTransitions(unittest.IsolatedAsyncioTestCase):
             for sender, payload in reversed(self.inbox[0])
             if sender == source and payload.startswith(b"GTM0G13")
         )
+
+    async def test_original_editor_apply_packets_work_in_their_advertised_rooms(self):
+        evidence = json.loads(
+            (Path(__file__).parent / "fixtures/fixed_room_apply.json").read_text()
+        )
+        self.assertEqual(
+            hashlib.sha256(directory_files(self.server)["b/g/RL000"]).hexdigest(),
+            evidence["directory_sha256"],
+        )
+        bindings = {c.name.decode(): t for c, t in self.server.ordinary_room_bindings}
+        for case in evidence["cases"]:
+            with self.subTest(room=case["room"]):
+                table = bindings[case["room"]]
+                self.assertEqual(
+                    hashlib.sha256(table.room.snapshot()).hexdigest(), case["ptl_sha256"]
+                )
+                await self.enter(0, table.room)
+                await self.clients[0].join(table.table_channel)
+                view = self.server.economy.account_view(self.keys[0])
+                await self.send(
+                    0, table.room.table_id, packet(0x41, 1, body=native_identity(view, "GameEN"))
+                )
+                await self.send(
+                    0,
+                    table.room.table_id,
+                    packet(
+                        0x24,
+                        body="@Save=/Tbl=0/Game=1" + settings(RoomRules(**case["saved_game"])),
+                    ),
+                )
+                original = case["apply"].encode("ascii")
+                await self.send(0, table.room.table_id, original)
+                expected = decode(original).sections
+                self.assertEqual(await self.query(table), expected["Tet"])
+                self.assertEqual(
+                    table.match.table_rules, {k: int(v) for k, v in expected["Tab"].items()}
+                )
+                self.assertEqual(
+                    read_preferences(self.server.economy.profile_bytes(self.keys[0]))["Tet"],
+                    case["saved_game"],
+                )
+                self.assertTrue(table.match.settings_applied)
+                self.assertFalse(self.peers[0].closed)
+                await self.send(0, table.room.table_id, packet(0x41, 5, body="@GameQT="))
+                await self.clients[0].send(b"PART " + table.table_channel)
+                await self.drain()
 
     async def test_saved_defaults_survive_fixed_rooms_and_remain_usable_in_open_tables(self):
         personal = RoomRules(st=1, ca=1, tl=5, gs=2)

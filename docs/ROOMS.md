@@ -69,6 +69,15 @@ password and observation remain editable. Fixed-rule enforcement is explicit
 replacement-server policy; the original client's display alone does not prove
 the historical server's enforcement behavior.
 
+The original initial-admission path also distinguishes these room types. Fixed
+rooms copy game rules from the selected table's PTL metadata and open only the
+table-options editor. Open Tables opens the game-rule editor with saved personal
+defaults first. Both can use personal table options. The
+[original editor trace](research/FIXED_ROOM_EDITOR.md) follows admission,
+editor selection, initialization and the actual Apply sender. Its four captured
+Apply messages pass encrypted replay against the corresponding supplied rooms.
+Changing between rooms and restarting preserves saved personal game defaults.
+
 ## Computer availability
 
 The native room directory has separate flags for fixed-rule display and Computer

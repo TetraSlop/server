@@ -1,5 +1,39 @@
 # Packaging and transaction validation
 
+## Fixed-room editor and lifecycle follow-up, 2026-09-27
+
+No new runtime defect was found after `ef6db73`. Original instructions now trace
+the initial GameEA consumer, table-rule/context copies, editor event/constructor
+selection, saved preference initialization and Apply sender for Open Tables,
+Classic, Special and Quick Play. Fixed rooms skip the game-rule editor and
+retain the advertised preset; Open Tables uses saved game defaults. Personal
+table options remain usable in both. The four actual original Apply payloads
+are frozen in `tests/fixtures/fixed_room_apply.json`; the scope and reproducible
+procedure are in [the editor evidence](research/FIXED_ROOM_EDITOR.md).
+The original trace and independent Rule13/current-editor control are committed
+as `65b64cf`; execution output is `results/fixed-room-apply-original.log`.
+
+All six focused integration/lifecycle cases pass in 12.667 seconds
+(`results/fixed-room-lifecycle-followup-tests.log`):
+
+- Replay all four original Apply messages through encrypted connections,
+  matching complete directory/PTL fixture hashes and preserving saved defaults.
+- Move one account through Open, Classic, Special, Quick and back to Open with
+  other accounts still present, then restart from its temporary save. Custom
+  defaults remain usable and room presets reset independently.
+- Complete fixed CPU rounds through capped double-up (1250 to 2000), rematches,
+  two/three-seat reconfiguration and leave/reset. Reject conflicting settings
+  without changing match, economy, room or RNG state.
+- Complete a human round/rematch and exercise each configured departure rule.
+- Retain the two preceding encrypted fixed-room startup/conflicting-Apply cases.
+
+The two new lifecycle cases plus 15 existing wager/departure checks also pass
+separately (`a18b933`). This is additional focused coverage, not a full-suite or
+PostgreSQL rerun. Collection finds 1,101 tests without import errors; Ruff and
+whitespace checks pass. There are no runtime changes or new dependencies; the checked
+wheel and its hash below remain current. Original instruction probes use
+synthetic memory and widget/send boundaries, not native rendering or input.
+
 ## Room discovery, Computer availability and presets, 2026-09-27
 
 The original client requires ASCII `A` at RL room-record `+0x29` before it

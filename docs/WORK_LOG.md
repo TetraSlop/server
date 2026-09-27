@@ -19,6 +19,20 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Room follow-up found no new production defect. Original admission/editor/
+  sender execution confirms that fixed rooms skip the game-rule editor and
+  copy the advertised PTL game rules, while Open Tables uses saved game defaults.
+  All four captured Apply packets pass encrypted replay against the exact
+  production directory/table fixture hashes. Another encrypted test moves an
+  account through every human room and back, then reloads its temporary save:
+  personal defaults and presets remain independent. The new lifecycle checks
+  (`a18b933`) cover capped double-up, three completed CPU rounds, rematches,
+  opponent-count reconfiguration, atomic rejection of conflicting settings and
+  every departure rule after a human rematch. All six focused integration/
+  lifecycle tests pass in 12.667 seconds; 17 wager/departure/lifecycle checks
+  also pass separately. No runtime change or wheel rebuild was needed. Initial
+  editor proof and remaining scope are in research/FIXED_ROOM_EDITOR.md
+  (`65b64cf`). Collection finds 1,101 tests without import errors; Ruff passes.
 - Latest user-reported room fix: Computer was greyed out because RL record
   `+0x29` was zero. Original instruction execution confirms this flag is
   independent of fixed-rule display at `+0x28` and Chat at `+0x70`. Corrected
