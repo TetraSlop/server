@@ -5,12 +5,14 @@ The writer substitutes only transport I/O; real services own all state changes.
 """
 
 import asyncio
+import hashlib
 import unittest
 from unittest.mock import patch
 
+from tmserver import pol_wire as wire
 from tmserver.economy_service import named
 from tmserver.event_matchmaking import EventDelivery
-from tmserver.identities import ROOM_RAW, TABLE_RAW, game_id, service_nick
+from tmserver.identities import ROOM_RAW, SHOP_RAW, TABLE_RAW, game_id, service_nick
 from tmserver.match_service import packet
 from tmserver.server import ACCOUNTS, Server, Session
 
@@ -38,6 +40,16 @@ class Writer:
         pass
 
 
+class ReadingReader(asyncio.StreamReader):
+    def __init__(self):
+        super().__init__()
+        self.reading = asyncio.Event()
+
+    async def readline(self):
+        self.reading.set()
+        return await super().readline()
+
+
 class SessionRecoveryTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.server = Server()
@@ -56,6 +68,55 @@ class SessionRecoveryTests(unittest.IsolatedAsyncioTestCase):
 
     async def admit(self, peer):
         await self.server.default_table.dispatch_table(peer, packet(0x41, 1, body="@GameEN="))
+
+    async def close_with_buffered_frame(self, peer, message):
+        peer.reader = ReadingReader()
+        peer.cipher = await asyncio.to_thread(wire.SqBlowfish, bytes(range(8)))
+        peer.iv = 42
+        running = asyncio.create_task(peer.run())
+        try:
+            await asyncio.wait_for(peer.reader.reading.wait(), 1)
+            peer.reader.feed_data(wire.frame_line(message, peer.cipher, peer.iv))
+            # Another task can close the peer before the ready read resumes.
+            await peer.close()
+            await asyncio.wait_for(running, 1)
+        finally:
+            if not running.done():
+                running.cancel()
+                await asyncio.gather(running, return_exceptions=True)
+        self.assertTrue(peer.closed)
+        self.assertNotIn(peer, self.server.sessions)
+        self.assertFalse(any(closed for closed, _ in peer.writer.writes))
+
+    async def test_buffered_shop_request_cannot_reopen_closed_account_session(self):
+        old = self.peer()
+        key = old.nick.decode()
+        view = self.server.economy.account_view(key)
+        request = named(
+            0xB0, 0, 0, f"@ShReq=/NN={view.nn:016X}/HID=0/Dm=0/Vol=0/CN={view.name.hex()}"
+        )
+        await self.close_with_buffered_frame(
+            old, b"NOTICE " + service_nick(SHOP_RAW) + b" :" + request
+        )
+        self.assertFalse(self.server.economy.is_busy(key))
+        self.assertNotIn(old.nick, self.server.nicks)
+        replacement = self.peer()
+        self.assertIs(self.server.nicks[replacement.nick], replacement)
+        self.assertIsNotNone(self.server.economy.handle(key, request))
+        self.assertTrue(self.server.economy.is_busy(key))
+
+    async def test_buffered_login_cannot_bind_closed_connection(self):
+        old = Session(self.server, None, Writer(), 1)
+        self.server.sessions.add(old)
+        nick = next(iter(ACCOUNTS))
+        digest = hashlib.md5(old.challenge + ACCOUNTS[nick]).hexdigest().encode()
+        accounts = set(self.server.account_keys)
+        await self.close_with_buffered_frame(old, b"NICK " + nick + b":" + digest + b":test")
+        self.assertIsNone(old.nick)
+        self.assertNotIn(nick, self.server.nicks)
+        self.assertEqual(self.server.account_keys, accounts)
+        replacement = self.peer()
+        self.assertIs(self.server.nicks[nick], replacement)
 
     async def test_failed_room_recipient_preserves_requester_and_other_delivery(self):
         healthy = self.peer()

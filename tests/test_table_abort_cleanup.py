@@ -8,6 +8,7 @@ from unittest.mock import patch
 from tests.test_event_rooms import presence
 from tests.test_match_watchdog_integration import SETTINGS
 from tests.test_session_recovery import Writer
+from tmserver.economy_service import named
 from tmserver.match_service import Card, packet
 from tmserver.match_watchdog import MatchWatchdog
 from tmserver.ordinary_rooms import OrdinaryRoomConfig, OrdinaryTableConfig
@@ -145,6 +146,129 @@ class TableAbortCleanupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((sibling.match.snapshot(), sibling.match_reservations), before)
         self.assertEqual(set(self.room.npcs), {512})
         self.assertFalse(self.server.economy.is_reserved(self.peers[1].nick.decode("ascii")))
+
+
+class BlockingWriter(Writer):
+    def __init__(self):
+        super().__init__()
+        self.block = False
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def drain(self):
+        if self.block:
+            self.entered.set()
+            await self.release.wait()
+        await super().drain()
+
+
+class WorkerFailureReentryTests(unittest.IsolatedAsyncioTestCase):
+    async def check_cleanup(self, worker, destination):
+        room = OrdinaryRoomConfig(b"Other Room", 0x101, 0x201, b"#ROOM2", b"#TABLE2")
+        server = Server(
+            account_count=3, match_mode="versus", allow_departures=True, ordinary_rooms=(room,)
+        )
+        peers, blocked, task, entering = [], BlockingWriter(), None, None
+        table = server.default_table
+        try:
+            for index, nick in enumerate(server.accounts):
+                peer = Session(server, None, blocked if index == 2 else Writer(), index + 1)
+                peer.nick = nick
+                key = server.ensure_account(nick)
+                server.trade.bind(peer, key)
+                server.nicks[nick] = peer
+                server.sessions.add(peer)
+                peers.append(peer)
+                view = server.economy.account_view(key)
+                await table.publish_room(server.room.handle(
+                    peer, presence(server.room.room_id, view.nn, view.player_id, view.name),
+                    authenticated_identity=(view.nn, view.player_id),
+                ))
+            for peer in peers[:2]:
+                await table.dispatch_table(peer, packet(65, 1, body="@GameEN="))
+            await table.dispatch_table(peers[0], packet(20, body=SETTINGS))
+            for peer in peers[:2]:
+                await table.dispatch_table(peer, packet(1, body="@Req="))
+                await table.dispatch_table(peer, packet(65, 8, body="@GameOK="))
+            for seat, peer in enumerate(peers[:2]):
+                cards = server.economy.inventory(peer.nick.decode())[:5]
+                body = "@CardSelect=/C=5" + "".join(
+                    f"@N{i}=/D=" + "|".join(map(str, card.full()))
+                    for i, card in enumerate(cards)
+                )
+                await table.dispatch_table(peer, packet(67, 7, seat, body))
+            old, before = table.match, server.snapshot()
+            self.assertEqual(old.phase, "turn")
+            survivor, key = peers[1], peers[1].nick.decode()
+            blocked.block = True
+            method = "advance" if worker == "continuation" else "depart"
+            with patch.object(old, method, side_effect=ValueError("injected worker failure")):
+                if worker == "continuation":
+                    # Replace only the continuation's outcome with a fault.
+                    old.phase, old._pending_battle = "battle", 0
+                    task = asyncio.create_task(table.run_match_work(old))
+                else:
+                    self.assertTrue(table.departures.request(peers[0]))
+                    task = table.departures.task
+                await asyncio.wait_for(blocked.entered.wait(), 2)
+                self.assertTrue(peers[0].closed)
+                self.assertFalse(survivor.closed)
+                self.assertIsNot(table.match, old)
+                self.assertFalse(server.economy.is_reserved(key))
+                self.assertEqual(server.snapshot(), before)
+
+                owner, token, current = None, None, None
+                if destination in ("same-table", "other-table"):
+                    owner = table if destination == "same-table" else server.ordinary_tables[1]
+                    # Admission changes state before waiting on room delivery.
+                    entering = asyncio.create_task(owner.dispatch_table(
+                        survivor, packet(65, 1, body="@GameEN=")
+                    ))
+                    await asyncio.sleep(0)
+                    self.assertIs(server.table_for_peer(survivor), owner)
+                    token, current = owner.match_reservations[survivor], owner.match
+                elif destination == "shop":
+                    view = server.economy.account_view(key)
+                    request = named(
+                        0xB0, 0, 0,
+                        f"@ShReq=/NN={view.nn:016X}/HID=0/Dm=0/Vol=0/CN={view.name.hex()}",
+                    )
+                    replies = server.commerce.shop(key, request)
+                    self.assertTrue(server.economy.is_busy(key))
+                after_entry = server.snapshot()
+                blocked.release.set()
+                await asyncio.wait_for(asyncio.shield(task), 2)
+                if owner is not None:
+                    await asyncio.wait_for(entering, 2)
+            self.assertEqual(survivor.closed, destination == "none")
+            self.assertEqual(server.snapshot(), after_entry)
+            self.assertFalse(peers[2].closed)
+            self.assertFalse(server.economy.is_reserved(peers[0].nick.decode()))
+            if owner is not None:
+                self.assertIs(server.table_for_peer(survivor), owner)
+                self.assertIs(owner.match, current)
+                self.assertIs(owner.match_reservations[survivor], token)
+            elif destination == "shop":
+                self.assertEqual(server.commerce.shop(key, request), replies)
+            else:
+                self.assertFalse(server.economy.is_busy(key))
+        finally:
+            blocked.release.set()
+            if task is not None:
+                await asyncio.gather(task, return_exceptions=True)
+            if entering is not None:
+                await asyncio.gather(entering, return_exceptions=True)
+            await server.stop()
+
+    async def test_continuation_failure_preserves_new_service_and_closes_unclaimed_peers(self):
+        for destination in ("none", "same-table", "other-table", "shop"):
+            with self.subTest(destination=destination):
+                await self.check_cleanup("continuation", destination)
+
+    async def test_departure_failure_preserves_new_service_and_closes_unclaimed_peers(self):
+        for destination in ("none", "same-table", "other-table", "shop"):
+            with self.subTest(destination=destination):
+                await self.check_cleanup("departure", destination)
 
 
 if __name__ == "__main__":

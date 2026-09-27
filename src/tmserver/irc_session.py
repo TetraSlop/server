@@ -96,7 +96,8 @@ class Session:
                 await self.send(b"PING :tm")
                 missed_ping = True
                 continue
-            if not raw:
+            # Another writer can close this peer while its buffered read is ready.
+            if self.closed or not raw:
                 break
             if len(raw) > MAX_LINE or not raw.endswith(b"\r\n"):
                 raise ValueError("oversized or unterminated frame")

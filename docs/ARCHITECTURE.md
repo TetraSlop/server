@@ -52,6 +52,10 @@ Tables in the same room share only the intended room membership and listing
 state. Match callbacks remain bound to their table. Tests and diagnostic callers
 use `server.default_table.match` (and the corresponding table methods) explicitly.
 
+Connection reads recheck closure before processing buffered input. Worker failure
+cleanup rechecks each peer's current owner before closing it, since an earlier
+close can release the old table and wait on delivery while a survivor reenters.
+
 The server's auction worker advances due listings once per second independently
 of table timeout checks. Shutdown cancels and awaits it before table/connection
 cleanup; a persistence failure retains the existing fail-closed behavior.

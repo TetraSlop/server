@@ -1,5 +1,38 @@
 # Packaging and transaction validation
 
+## Closed sessions and retired worker cleanup, 2026-09-27
+
+Two buffered-input regressions fail on the preceding runtime: a valid encrypted
+shop request can reopen an account after disconnect cleanup, and a valid login
+can bind a closed connection. The read loop now checks closure again after its
+awaited read, before authentication or dispatch. Tests use an actual suspended
+`StreamReader` and encrypted frames, replacing only transport output.
+Baseline evidence: `results/session-buffered-frame-before.log`.
+
+Continuation and departure worker failures could also close a surviving peer
+after that peer entered another service while old room notifications waited.
+Both workers now use the existing ownership-aware close operation. Two new
+tests reproduce six failing reentry cases: same table/new match, another table
+and shop for each worker. Two no-reentry controls preserve the required abort.
+The tests pause transport drain while real room and admission code runs; they
+check replacement reservation identity and unchanged durable state after entry.
+Evidence: `results/worker-failure-reentry-regressions-{before,after}.log`.
+
+All **55 focused tests pass in 55.225 seconds**, including encrypted departures,
+reconnects, deadline handling, storage failures and event fault isolation:
+`results/session-worker-lifecycle-controls.log`. Independent diff review found
+no material issue. A separate 16-case spectator/commerce lifecycle probe also
+passes without requiring changes; its synthetic-transport scope and source
+hashes are in `results/spectator-commerce-audit.json`.
+
+Collection finds 1,158 tests with no import errors. Ruff and whitespace checks
+pass. The rebuilt wheel passes clean installation, entry points, JSON
+administration/recovery and temporary service listeners; all 84 runtime files
+byte-match source. Logs and source hashes: `results/session-worker-lifecycle-*`.
+Wheel SHA256: `048e270bee7275fa38a3a5e19ffd9e32243085833b79746485ae4ead7ce1f52e`.
+Runtime is 20,690 physical Python lines. No save format or gameplay policy
+changed; this was not a full-suite, PostgreSQL or native UI run.
+
 ## Post-consolidation behavior audit, 2026-09-27
 
 Read-only review on `d9b9646` found no defect in saved table preferences during

@@ -92,9 +92,7 @@ class MatchDepartures:
             # close retains its established fail-closed recovery for unsupported
             # or failed transitions; invoke it after leaving the match lock.
             peers = [p.peer for p in match.players if p.peer is not None]
-            for peer in peers:
-                if not peer.closed:
-                    await peer.close()
+            await table.close_released_peers(match, peers)
             async with table.match_lock:
                 await table.publish_room(table.reset_table_updates(match))
         finally:

@@ -829,9 +829,8 @@ class OrdinaryTable:
         except (ValueError, OSError, asyncio.TimeoutError) as exc:
             self.host.log("match_work_error", reason=str(exc))
             self.departures.abort(match)
-            for player in list(match.players):
-                if player.peer is not None:
-                    await player.peer.close()
+            peers = [player.peer for player in match.players if player.peer is not None]
+            await self.close_released_peers(match, peers)
             async with self.match_lock:
                 await self.publish_room(self.reset_table_updates(match))
         finally:

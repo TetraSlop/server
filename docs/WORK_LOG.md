@@ -20,6 +20,16 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Closed connections now discard buffered frames before login or service
+  dispatch; two regressions previously reopened a shop or rebound a closed
+  connection. Failed continuation/departure workers reuse the existing guarded
+  peer cleanup, preserving a survivor admitted to a replacement match, another
+  table or shop while old notifications wait. Six reentry subcases fail before
+  and pass after; two unclaimed-peer controls retain abort behavior. All 55
+  scoped tests and independent review pass. Collection is 1,158; lint, whitespace
+  and clean wheel checks pass, with all 84 runtime files matching source.
+  Runtime is 20,690 lines. A separate 16-case observer/commerce audit found no
+  defect. No historical policy or save schema changed. See VALIDATION.md.
 - Read-only post-consolidation audit found no defect: 38 synthetic saved-setting
   checks and three encrypted room/startup/late-exit controls pass. Native captured
   traffic requires ordinary room presence to survive room-channel PART, so the
