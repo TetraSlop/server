@@ -3,6 +3,10 @@
 ## Current scope
 
 Continue the approved server polish and missing-feature work in this repository.
+The user's latest instruction is to keep working without checking credits.
+Do not query usage limits or use a displayed percentage as a stopping condition.
+Do not redeem reset credits or purchase credits. This supersedes the earlier
+allowance-based stopping notes in this log.
 Prioritize concrete protocol, gameplay, progression and persistence gaps, with
 readable Python and regression evidence. Historical hosted reward formulas,
 mission rules and schedules remain unknown unless supported by original-client
@@ -169,12 +173,31 @@ now ten seconds;34 affected event/server/prize tests pass after that test-only
 change. Production deadlines are unchanged. Repository-wide Ruff and whitespace
 checks pass. No native visual validation is claimed by these tests.
 
+## Resumed server work — 2026-09-27
+
+- Ordinary table rules freeze when the start handshake begins. Exact current
+  settings retries remain no-ops; saved defaults and lobby edits before Start
+  still work. This prevents peers accepting different rules during one startup.
+  Commit 36734cf passes 141 scoped tests including captured startup replay.
+- Event ready messages now enforce event end and the shared admission deadline
+  before starting a match. Existing games and post-event reward claims continue.
+  Commit 4de3c34 passes 62 scoped tests, including both expiry boundaries.
+- Added read-only `tmserver-admin recovery`: restored copies run the actual
+  startup recovery rules and report affected balances and Returned Cards.
+  Six new tests compare forecasts with headless startup, prove repeated previews
+  preserve saved bytes, and distinguish settled rewards and auction refunds.
+  The 93-test recovery/admin/economy batch passes in 2.717 seconds.
+- Collection finds 1,010 cases without import errors. The rebuilt 83-entry wheel
+  passes clean stdlib-only installation, real JSON award/account/recovery
+  commands and both service listeners. Preview leaves the disposable save
+  byte-identical. Logs: results/recovery-preview-wheel-{build,check}.log.
+  The complete suite has not been repeated after these scoped changes.
+
 ## Current checkpoint
 
-- All assigned implementation and temporary PostgreSQL cleanup are complete.
-  Agents are idle and no exec sessions remain active. The latest complete
-  portable suite covered 988 cases; the later admin follow-ups passed their
-  scoped tests and package checks. Latest production commit is d618485.
+- Temporary PostgreSQL cleanup is complete. The latest complete portable suite
+  covered 988 cases; later admin and admission changes pass scoped tests and
+  package checks as recorded above. Current work uses temporary headless peers.
 - The transport/profile audit found no new actionable defect. Isolated encrypted
   probes rejected truncated bodies, incorrect extents and bad checksums without
   publishing state; valid follow-up requests succeeded. No protocol policy was
@@ -185,15 +208,17 @@ checks pass. No native visual validation is claimed by these tests.
 - A final synthetic ranking audit confirms fresh hide-name settings after weekly
   rollover, immutable issued files, account-isolated reads/deletes and no files
   retained after restart. Existing file privacy policy remains unchanged.
-- The latest complete run contains 988 cases and current collection contains
-  992, including 59 optional PostgreSQL cases. No known test failures remain.
-- Before further substantial work check current allowance. Last observed 100%
-  used; reset remains 1791063720. Continue only concrete, bounded improvements
-  that can be completed and validated within remaining allowance. No reset
-  credits, purchases or continuation into a replenished allowance are authorized.
-- The recurring heartbeat is paused to avoid starting more work after this
-  allowance expires. The final suite and checkpoint are complete; no reset
-  credit or purchase has been used.
+- The latest complete run contains 988 cases and the latest collection contains
+  1,010, including 59 optional PostgreSQL cases. No known test failures remain.
+- The user explicitly resumed work, requested no further credit checks and
+  reported resetting access themselves. Continue the approved work without
+  querying usage or stopping at a displayed percentage. Do not purchase credits
+  or redeem a reset through tools.
+- Recurring continuation is active with the updated instruction. Root completed
+  the read-only startup-recovery preview and package checks.
+  `browser_port_options` is auditing ordinary cleanup after a dependent rebinds;
+  `texture_upscaling` is checking late event Decks/CardSelect before expiry polls.
+  Changes require concrete failures and must preserve existing protocol policy.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
   results/overnight-timeout-recheck.log. Both runs completed. No active test
   sessions from that checkpoint remain.
@@ -230,9 +255,8 @@ and the 40-test combined focused check are complete. Subsequent complete
 portable runs and the real PostgreSQL administration checks passed, as above.
 
 Continue by reviewing active fixes, running their relevant checks, updating this
-log and committing locally. The thread heartbeat may resume this work; it is
-limited to the current allowance ending at reset timestamp1791063720, with no
-reset-credit redemption or automatic continuation into a replenished allowance.
+log and committing locally. The thread heartbeat may resume this work under the
+latest user instruction: keep working without checking credits.
 
 ## Review later
 

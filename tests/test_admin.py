@@ -474,6 +474,7 @@ class AdminTests(unittest.TestCase):
         for args in (
             ["--help"],
             self.argv("account", "--account-key", "alice"),
+            self.argv("recovery"),
             self.argv(*self.prize()),
         ):
             result = subprocess.run(

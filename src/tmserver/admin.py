@@ -12,6 +12,7 @@ from tmserver.event_configuration import load_event_setup
 from tmserver.event_results import EventResults
 from tmserver.event_service import EventHost
 from tmserver.prize_service import PrizeService
+from tmserver.recovery_preview import preview_recovery
 from tmserver.snapshot_validation import validate_snapshot
 from tmserver.state_store import JsonStateStore, writer_lease
 
@@ -37,6 +38,7 @@ def arguments(argv=None):
     parser.add_argument("--events", type=Path, help="same event configuration used by the server")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("accounts", help="list exact saved account keys")
+    commands.add_parser("recovery", help="preview startup refunds and returned cards without saving")
     account = commands.add_parser("account", help="inspect saved balances, progress and rewards")
     account.add_argument("--account-key", required=True)
     prize = commands.add_parser("prize-award", help="queue a Prize Center award")
@@ -80,6 +82,7 @@ class AdminState:
     def __init__(self, store, snapshot, configs):
         self.store = store
         self.economy = validate_snapshot(snapshot, event_configs=configs)
+        self.saved_snapshot = snapshot
         saved_events = {row["id"] for row in (snapshot.get("events") or {}).get("events", ())}
         if {config.id for config in configs} != saved_events:
             raise ValueError("--events must contain exactly the saved event IDs")
@@ -101,6 +104,8 @@ class AdminState:
         self.store.save_changes(accounts, changed)
 
     def apply(self, args):
+        if args.command == "recovery":
+            return preview_recovery(self.saved_snapshot)
         if args.command == "accounts":
             return [
                 dict(

@@ -79,6 +79,9 @@ def main():
         assert summary["prize_points"] == 0
         assert summary["card_count"] == 10
         assert admin_state.read_bytes() == before_summary
+        recovery = json.loads(run(str(admin_cli), "--state", str(admin_state), "recovery"))
+        assert recovery == dict(interrupted_rounds=0, unaccepted_results=0, accounts=[])
+        assert admin_state.read_bytes() == before_summary
         accounts = run(str(cli), "--list-accounts")
         assert len(accounts.strip().splitlines()) == 2, accounts
         ready = run(
@@ -106,6 +109,7 @@ def main():
                     "module_entrypoint": True,
                     "json_admin_award": True,
                     "json_admin_account": True,
+                    "json_recovery_preview": True,
                     "services_started_on_ephemeral_ports": True,
                 }
             )

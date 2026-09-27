@@ -58,6 +58,26 @@ not collect rewards, enroll members, recover interrupted matches, advance
 rankings, or write the save. Pending rewards stay separate from owned cards,
 money and Prize Center points.
 
+## Preview interrupted-match recovery
+
+```powershell
+tmserver-admin --state .\var\local_state.json recovery
+```
+
+This runs the server's existing startup recovery rules on independent in-memory
+copies. It reports `interrupted_rounds` and `unaccepted_results`, plus accounts
+whose money or Returned Cards queue would change. For each such account, it
+shows the old/new balance, refunded money, newly returned cards and the total
+Returned Cards count after recovery. A result with no extra cards still counts
+as an unaccepted result, even when it produces no account entry.
+
+Unfinished stakes are refunded; completed results keep their recorded payouts.
+Earned, unaccepted cards go through the existing Returned Cards collection flow.
+Already accepted rewards are not returned again. This command neither writes
+the save nor advances auction expiry, ranking weeks, or event progress. It
+requires the same event configuration and writer ownership as other commands.
+Normal server startup remains responsible for actually committing recovery.
+
 ## Queue a Prize Center award
 
 ```powershell

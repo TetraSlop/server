@@ -30,6 +30,28 @@ The updated 82-entry wheel passes a clean install without optional dependencies,
 actual JSON reward and account-inspection commands, entry points and both service
 listeners. Logs: `results/event-progress-wheel-{build,check}.log`.
 
+## Recovery preview and admission timing
+
+The read-only `tmserver-admin recovery` command passes 93 recovery/admin/economy
+checks. Six new cases compare its forecast with actual headless server startup,
+including interrupted wagers, earned cards, accepted rewards and unrelated
+auction refunds. Repeated previews preserve the input and saved bytes. Output:
+`results/recovery-preview-tests.log`.
+
+Ordinary settings freeze at the start handshake (`36734cf`), with identical
+retries and saved defaults still supported. All 141 scoped checks pass, including
+captured startup traffic and delayed invitations. Event admission checks expiry
+before processing ready messages (`4de3c34`); all 62 scoped checks pass, including
+event-end and oldest-admission boundaries, continuing active games and later
+reward claims.
+
+Collection finds 1,010 cases without import errors. The complete suite and real
+PostgreSQL checks have not been repeated after these changes. The 83-entry wheel
+passes a clean stdlib-only installation, actual JSON award/account/recovery
+commands, and both service listeners. The recovery command leaves the temporary
+save byte-identical. Logs: `results/recovery-preview-wheel-{build,check}.log`.
+Repository-wide Ruff and whitespace checks pass.
+
 ## Earlier overnight checkpoints
 
 The complete portable suite at source commit `db62eeb` passes: **952 tests in
