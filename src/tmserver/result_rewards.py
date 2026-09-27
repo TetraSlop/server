@@ -423,9 +423,13 @@ class ResultRewardService:
         if snapshot is None:
             return result
         try:
+            if not isinstance(snapshot, dict) or set(snapshot) != {"version", "known", "pending"}:
+                raise ResultRewardError("unsupported result reward snapshot fields")
             if snapshot["version"] != 1:
                 raise ResultRewardError("unsupported result reward snapshot")
             for row in snapshot["known"]:
+                if not isinstance(row, dict) or set(row) != {"key", "id", "digest"}:
+                    raise ResultRewardError("unsupported known result reward fields")
                 economy.account_view(row["key"])
                 rid = _id(row["id"])
                 identity = (row["key"], rid)
@@ -433,6 +437,8 @@ class ResultRewardService:
                     raise ResultRewardError("invalid known result reward")
                 result._known[identity] = row["digest"]
             for row in snapshot["pending"]:
+                if not isinstance(row, dict) or set(row) != {"key", "id", "seat", "extras"}:
+                    raise ResultRewardError("unsupported pending result reward fields")
                 key = row["key"]
                 economy.account_view(key)
                 rid = _id(row["id"])

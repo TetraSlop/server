@@ -104,7 +104,6 @@ class _Collection:
 
 
 class AuctionEconomy:
-
     def __init__(self, economy):
         self.economy = economy
         self._listings = {}
@@ -497,6 +496,15 @@ class AuctionEconomy:
         if snapshot is None:
             return result
         try:
+            if not isinstance(snapshot, dict) or set(snapshot) - {"external_returns"} != {
+                "version",
+                "next_id",
+                "next_pending",
+                "listings",
+                "history",
+                "pending",
+            }:
+                raise AuctionError("unsupported auction snapshot fields")
             if snapshot["version"] != 1:
                 raise AuctionError("unsupported auction snapshot")
             result._next_id = _uint(snapshot["next_id"], 0x100000000, 1)
@@ -636,6 +644,8 @@ class AuctionEconomy:
                 if result.active_exhibits(key) > MAX_EXHIBITS:
                     raise AuctionError("stored exhibit count exceeds capacity")
             for row in snapshot.get("external_returns", []):
+                if not isinstance(row, dict) or set(row) != {"id", "key", "cards"}:
+                    raise AuctionError("unsupported external return fields")
                 source_id, key = row["id"], row["key"]
                 economy.account_view(key)
                 if (

@@ -71,7 +71,6 @@ class _Session:
 
 
 class PrizeService:
-
     def __init__(self, economy, *, seed=None, raw_rng=None):
         self.economy = economy
         self._rng = random.Random(seed)
@@ -406,9 +405,17 @@ class PrizeService:
         if snapshot is None:
             return result
         try:
+            if not isinstance(snapshot, dict) or set(snapshot) != {"version", "accounts"}:
+                raise PrizeError("unsupported Prize Center snapshot fields")
             if snapshot["version"] != 1 or not isinstance(snapshot["accounts"], dict):
                 raise PrizeError("unsupported Prize Center snapshot")
             for key, data in snapshot["accounts"].items():
+                if not isinstance(data, dict) or set(data) != {
+                    "last_session",
+                    "known_awards",
+                    "pending",
+                }:
+                    raise PrizeError("unsupported Prize Center account fields")
                 economy.account_view(key)
                 last = data["last_session"]
                 if type(last) is not int or not 0 <= last <= 255:
@@ -422,6 +429,14 @@ class PrizeService:
                 result._last[key] = last
                 if data["pending"] is not None:
                     a = data["pending"]
+                    if not isinstance(a, dict) or set(a) != {
+                        "id",
+                        "top30",
+                        "lucky",
+                        "rookies",
+                        "lucky_cards",
+                    }:
+                        raise PrizeError("unsupported pending prize award fields")
                     award = result._award(
                         a["id"], a["top30"], a["lucky"], a["rookies"], a["lucky_cards"]
                     )

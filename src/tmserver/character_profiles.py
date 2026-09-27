@@ -167,6 +167,8 @@ class CharacterProfiles:
         result = cls(economy)
         if snapshot is None:
             return result
+        if not isinstance(snapshot, dict) or set(snapshot) != {"version", "records"}:
+            raise ValueError("unsupported character profile snapshot fields")
         if snapshot.get("version") != 1 or not isinstance(snapshot.get("records"), dict):
             raise ValueError("unsupported character profile snapshot")
         for key, values in snapshot["records"].items():
