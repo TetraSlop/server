@@ -37,6 +37,8 @@ def arguments(argv=None):
     parser.add_argument("--events", type=Path, help="same event configuration used by the server")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("accounts", help="list exact saved account keys")
+    account = commands.add_parser("account", help="inspect saved balances, progress and rewards")
+    account.add_argument("--account-key", required=True)
     prize = commands.add_parser("prize-award", help="queue a Prize Center award")
     prize.add_argument("--account-key", required=True)
     prize.add_argument("--id", required=True, help="stable award ID for retries")
@@ -103,6 +105,8 @@ class AdminState:
             ]
         key = args.account_key
         self.economy.account_view(key)  # Exact saved key; never provision an account.
+        if args.command == "account":
+            return self.account_summary(key)
         result = {"account_key": key}
         if args.command == "prize-award":
             with prize_transaction(self, key) as prize:
@@ -129,6 +133,35 @@ class AdminState:
                     status="unchanged" if member.eligibility == args.value else "updated",
                 )
         return result
+
+    def account_summary(self, key):
+        """Describe saved claims without admitting, collecting or recovering them."""
+        account = self.economy.account_view(key)
+        events = []
+        for event_id in sorted(self.events.configs):
+            member = self.events.member(key, event_id)
+            if member is not None:
+                events.append(
+                    dict(
+                        event_id=event_id,
+                        eligibility=member.eligibility,
+                        steps=member.steps,
+                        completed_missions=member.completed_missions,
+                        pending=self.event_cards.pending(key, event_id),
+                    )
+                )
+        prize = self.prize.snapshot()["accounts"].get(key, {})
+        return dict(
+            account_key=key,
+            player_id=account.player_id,
+            name=account.name.decode("latin1"),
+            guild=account.guild,
+            balance=account.balance,
+            card_count=len(account.cards),
+            prize_points=self.economy.prize_points(key),
+            pending_prize=prize.get("pending"),
+            events=events,
+        )
 
     def card(self, values):
         model, attack, kind, physical, magical, arrows = values

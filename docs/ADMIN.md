@@ -38,6 +38,26 @@ The configured event IDs must exactly match the saved IDs, and each saved event
 fingerprint must match. This tool does not add, remove, or reconfigure events.
 Place storage and `--events` options before the command name.
 
+## Inspect an account and its pending rewards
+
+```powershell
+tmserver-admin --state .\var\local_state.json account --account-key KEY
+```
+
+The summary shows the saved identity, money balance, card count, Prize Center
+points, any pending Prize Center award, and existing event memberships. Event
+entries include eligibility, steps, the completed-mission bitmask, and remaining
+unclaimed card and money totals. After partial collection, these totals exclude
+what was already accepted or credited. A missing Prize Center award is `null`;
+an account with no event memberships has an empty event list.
+
+Supply the matching `--events` configuration when the save contains events.
+The same command accepts `--database-url`. Like other offline commands, it needs
+exclusive writer ownership, so stop the server first. Reading the summary does
+not collect rewards, enroll members, recover interrupted matches, advance
+rankings, or write the save. Pending rewards stay separate from owned cards,
+money and Prize Center points.
+
 ## Queue a Prize Center award
 
 ```powershell

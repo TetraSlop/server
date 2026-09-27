@@ -71,6 +71,14 @@ def main():
         awarded = json.loads(admin_state.read_text())
         assert awarded["accounts"] == original_accounts
         assert awarded["prize"]["accounts"]["wheel"]["pending"]["top30"] == 3
+        before_summary = admin_state.read_bytes()
+        summary = json.loads(run(
+            str(admin_cli), "--state", str(admin_state), "account", "--account-key", "wheel"
+        ))
+        assert summary["pending_prize"]["id"] == "wheel-check"
+        assert summary["prize_points"] == 0
+        assert summary["card_count"] == 10
+        assert admin_state.read_bytes() == before_summary
         accounts = run(str(cli), "--list-accounts")
         assert len(accounts.strip().splitlines()) == 2, accounts
         ready = run(
@@ -97,6 +105,7 @@ def main():
                     "console_entrypoint": True,
                     "module_entrypoint": True,
                     "json_admin_award": True,
+                    "json_admin_account": True,
                     "services_started_on_ephemeral_ports": True,
                 }
             )

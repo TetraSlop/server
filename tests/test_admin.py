@@ -15,7 +15,8 @@ from unittest.mock import patch
 from tests.test_event_configuration import DOCUMENT
 from tmserver import admin
 from tmserver.auction_economy import AuctionEconomy
-from tmserver.economy_service import EconomyService, named
+from tmserver.economy_service import MAX_MONEY, EconomyService, named, parse_named
+from tmserver.event_cards import EventCardService
 from tmserver.event_configuration import parse_event_setup
 from tmserver.event_service import EventHost
 from tmserver.prize_service import PrizeService
@@ -152,6 +153,76 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), before)
         self.assertEqual(validate_snapshot(self.load()).prize_points("alice"), 500)
 
+    def test_account_summary_is_exact_read_only_and_preserves_null_journals(self):
+        snapshot = self.load()
+        snapshot.update({name: None for name in SERVICE_NAMES})
+        self.seed(snapshot)
+        before = self.path.read_bytes()
+        with patch.object(JsonStateStore, "save_changes", side_effect=AssertionError("read wrote")):
+            result = self.execute("account", "--account-key", "alice")
+            self.assertEqual(result["account_key"], "alice")
+            self.assertEqual(result["balance"], self.economy.balance("alice"))
+            self.assertEqual(result["card_count"], 10)
+            self.assertEqual(result["prize_points"], 0)
+            self.assertIsNone(result["pending_prize"])
+            self.assertEqual(result["events"], [])
+            for key in ("Same Name", "ALICE", "missing"):
+                with self.assertRaises(ValueError):
+                    self.execute("account", "--account-key", key)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_account_summary_reports_remaining_claims_after_partial_collection(self):
+        configs = self.enable_events()
+        snapshot = self.load()
+        snapshot["accounts"]["alice"]["balance"] = MAX_MONEY - 25
+        economy = EconomyService.restore(snapshot)
+        host = EventHost.restore(economy, configs, snapshot["events"], clock=lambda: 200)
+        cards = EventCardService(economy, host)
+        cards.grant(
+            "alice", "festival", "batch", cards=economy.inventory("alice")[:1] * 20, money=75
+        )
+        view = economy.account_view("alice")
+        replies = cards.handle(
+            "alice",
+            named(0x90, 0, 0, f"@CardReq=/NN={view.nn:016X}/HID=0/Dm=1/Vol=1/CN={view.name.hex()}"),
+            event_id="festival",
+        )
+        number = int(parse_named(replies[1])[3]["EcmInit"]["N"])
+        cards.handle("alice", named(0xB2, 0x15, number, f"@Get=/No={number}"))
+        cards.disconnect("alice")
+        pending = cards.pending("alice", "festival")
+        self.assertEqual(pending["money"], 50)
+        self.assertTrue(0 < pending["cards"] < 20)
+        host.update_progress("alice", "festival", "round", steps_delta=2)
+        host.set_eligibility("alice", "festival", -1)
+        snapshot.update(economy.snapshot(), events=host.snapshot(), event_cards=cards.snapshot())
+        self.seed(snapshot)
+        self.execute(*self.prize())
+        before = self.path.read_bytes()
+        with patch.object(JsonStateStore, "save_changes", side_effect=AssertionError("read wrote")):
+            result = self.execute("account", "--account-key", "alice")
+            self.assertEqual(result["balance"], MAX_MONEY)
+            self.assertEqual(result["card_count"], 30 - pending["cards"])
+            self.assertEqual(result["pending_prize"]["id"], "award-1")
+            self.assertEqual(result["pending_prize"]["top30"], 500)
+            self.assertEqual(result["prize_points"], 0)
+            self.assertEqual(
+                result["events"],
+                [
+                    dict(
+                        event_id="festival",
+                        eligibility=-1,
+                        steps=2,
+                        completed_missions=0,
+                        pending=pending,
+                    )
+                ],
+            )
+            other = self.execute("account", "--account-key", "bob")
+            self.assertIsNone(other["pending_prize"])
+            self.assertEqual(other["events"], [])
+        self.assertEqual(self.path.read_bytes(), before)
+
     def test_prize_bounds_use_domain_validation_before_any_save(self):
         before = self.path.read_bytes()
         for flags in (
@@ -274,6 +345,8 @@ class AdminTests(unittest.TestCase):
             auction=auction.snapshot(), result_rewards=rewards.snapshot(), ratings=policy.snapshot()
         )
         self.seed(snapshot)
+        self.execute("account", "--account-key", "bob")
+        self.assertEqual(self.load(), snapshot)
         self.execute(*self.prize())
         after = self.load()
         self.assertEqual({k: v for k, v in after.items() if k != "prize"}, snapshot)
@@ -332,7 +405,11 @@ class AdminTests(unittest.TestCase):
     def test_json_command_and_help_run_without_site_packages_or_server_import(self):
         environment = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1] / "src"))
         code = "from tmserver.admin import cli; cli(); import sys; assert not any(k in sys.modules for k in ('sqlalchemy', 'alembic', 'psycopg', 'tmserver.server'))"
-        for args in (["--help"], self.argv(*self.prize())):
+        for args in (
+            ["--help"],
+            self.argv("account", "--account-key", "alice"),
+            self.argv(*self.prize()),
+        ):
             result = subprocess.run(
                 [sys.executable, "-S", "-B", "-c", code, *args],
                 env=environment,
