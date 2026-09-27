@@ -19,6 +19,22 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Event table completion, cancellation and explicit observer ExitCh now detach
+  exact table chat membership before reuse (`26e162c`). The coordinator emits
+  a transient release fact consumed under the adapter lock; roster notices use
+  the existing ordered queue. Room/destination chat and healthy quitting peers
+  remain intact. Finished observer previews stay until explicit exit. Three
+  encrypted regressions fail before and pass after; 11 existing controls and
+  four release-source scenarios pass. Root review found no additional issue.
+- Original event-entry denial research (`8111a26`) passes eight instruction
+  cases and proves automatic selected-room PC before the rejection notice.
+  Three encrypted expired/excluded/post-end cases preserve durable state and
+  clean on PC; transient room presence awaiting that cleanup is compatible, so
+  no denial-path fix was made. Thirteen admission/selection boundary controls
+  pass. See research/EVENT_ENTRY_DENIAL.md and VALIDATION.md. Collection finds
+  1,130 tests without import errors; Ruff/whitespace pass. The rebuilt wheel
+  passes clean installation, entry points, administration/recovery and temporary
+  listeners, with all 80 runtime files byte-matching source.
 - Native room departures now detach chat membership as well as the room roster
   (`0a2ec6a`), including ordinary/event room changes and PC exits. Delayed exits
   for an old room preserve destination chat. A separate table fix (`a34cece`)

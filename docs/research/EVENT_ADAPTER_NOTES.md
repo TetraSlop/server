@@ -1,6 +1,6 @@
 # Configured original event games
 
-`run_server.py --events events.example.json` publishes a local event room,
+`.venv/Scripts/tmserver --events examples/events.example.json` publishes a local event room,
 its original E/F service records, and a separate playable table. This runs
 the two protocol listeners without launching or controlling the client.
 The example is an explicit replacement-server fixture, not a historical event.
@@ -39,6 +39,21 @@ Failed state writes withhold acceptance and close connections; restart imports
 only the previous complete file. Temporary reservations do not survive restart.
 Active disconnect/timeouts abort and release the affected event, while completed
 outcomes remain durable. This is a documented local recovery policy.
+
+Participant release also detaches the exact table chat group, including a
+completed round or a Quit that retains the departing player's connection.
+Release facts are consumed before delivery under the event adapter lock;
+roster updates follow the event packets in the existing ordered queue.
+Explicit observer ExitCh similarly clears its exact table chat. Other groups,
+remaining reservations and the finished observer preview are preserved until
+their respective exits. This prevents stale chat members when a table is reused.
+
+EventEn denial is separate from physical room admission. The original client
+sends room PC automatically before showing its -32870 rejection notice; the
+server cleans transient presence on that packet or disconnection. See
+[the executed denial flow](EVENT_ENTRY_DENIAL.md). A denied event entry does not grant
+event membership, reservations or rewards, and historical denial policy remains
+unknown beyond the client-visible response.
 
 The trusted result-recording API materializes account iterables once and uses
 those validated facts for membership checks and progress. Every participant is

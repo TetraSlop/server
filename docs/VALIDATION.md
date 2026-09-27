@@ -1,5 +1,48 @@
 # Packaging and transaction validation
 
+## Event table chat and native entry-denial cleanup, 2026-09-27
+
+Commit `26e162c` clears exact table chat memberships on participant release and
+explicit observer ExitCh. Previously a completed round, active quitter whose
+socket remained usable, or exiting observer could leave stale roster entries.
+The coordinator emits a transient release fact once per participant from its
+shared completion/cancellation path. The adapter detaches chat synchronously
+under its lock and sends roster changes through its existing ordered queue.
+Room and destination groups remain intact. Finished observer previews are
+intentionally retained until their own exit; sender ownership is unchanged.
+
+- Three encrypted regressions fail before (8.614 seconds) and pass after
+  (9.239 seconds): `results/event-chat-cleanup-{before,focused}.log`.
+- Eleven existing controls pass in 47.438 seconds, covering observer reentry
+  and retired writers, neighboring tables, table reuse, full observer rounds,
+  proposal retries and delayed old-table PART:
+  `results/event-chat-cleanup-controls.log`.
+- Four in-memory source scenarios confirm exact once-only release facts and
+  reservation cleanup for dispatch Quit, background proposal expiry,
+  disconnect and completion: `results/event-chat-release-sources.log`.
+- Independent runtime review found no further issue with the release signal,
+  exact-group selection or delivery/lock boundary.
+
+Research `8111a26` executes eight original-instruction cases for EventEn:
+positive, pending, negative-boundary and cleanup-mode controls. The specific
+denial -32870 automatically sends selected-room PC before the rejection notice.
+Physical room presence while awaiting that packet does not establish an event
+participant or indicate a server defect. See `research/EVENT_ENTRY_DENIAL.md`
+and `results/event-entry-denial-original.json` for addresses and execution limits.
+Three encrypted audit cases (expired new member, excluded member, existing
+post-end member) preserve durable state, remove old chat, then fully clean with
+PC while retaining a usable connection: `results/event-entry-denials-audit.json`.
+No runtime edit or duplicate regression was needed for this path. Thirteen
+admission/selection boundary controls pass in 0.068 seconds:
+`results/event-entry-boundary-controls.log`.
+
+Collection finds 1,130 tests without import errors; Ruff/whitespace pass.
+The 85-entry wheel passes clean dependency-free installation, both entry points,
+JSON administration/recovery and temporary listeners; all 80 runtime files
+byte-match source. Logs: `results/event-chat-wheel-{build,check}.log`.
+SHA256: `ff680a8c5799767d25881b42f154a2e270c114512758a7ac7c03365b66e1c5d6`.
+These are focused checks, not a new whole-suite, PostgreSQL or native UI run.
+
 ## Room/table chat departures and full account names, 2026-09-27
 
 Room DE transitions and native PC departures previously left a departed player
