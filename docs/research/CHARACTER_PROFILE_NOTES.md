@@ -5,6 +5,15 @@ PO positions are retained. Purpose and four visibility fields are partial
 updates; the two NO selectors6/14 remain distinct. AN and CI update the generic
 name/summary. They do not rewrite the separate TM0DataFile or ranking record.
 
+The recovered PO layout identifies field 2 as a terminated `string[16]`, while
+the native account name in TM0DataFile can occupy all 16 bytes. A default generic
+profile therefore presents the first 15 bytes without changing the account name,
+identity, or saved native profile. Explicit AN edits still require at most 15
+bytes and are rejected rather than silently shortened. Existing generic records
+are read directly; their saved name and opaque fields never depend on constructing
+a fresh default. This also keeps PG, CR and GR usable for restored accounts whose
+native name occupies the full 16-byte field.
+
 Local ownership accepts each authenticated account's provisioned character ID
 or its game nickname identity with its single supported character key. Another
 account can read the generic public record, but cannot register or update it.
@@ -17,6 +26,10 @@ accounts/auctions; acknowledgement follows persistence. Repeated registration
 preserves previously saved settings. Tests cover independent NO values, rejected
 partial updates, authorization, cold restore, original71-field PO decoding and
 GR completion, plus encrypted write/read/restart.
+The full-name regression covers default/public reads, registration, partial
+updates, saved-name overrides and cold restore. A real encrypted connection
+exercises PG/CR/GR before and after restart and verifies the entire native
+account record remains unchanged. Tests use temporary saves only.
 
 Sources: PROFILE_CONTRACT.md and PROFILE_FIELD_SEMANTICS.md. Native editing and
 the choice of locator aliases need user observation; no desktop was controlled.

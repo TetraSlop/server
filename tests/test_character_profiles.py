@@ -5,11 +5,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from tests.test_server import Client
 from tmserver.character_profiles import CharacterProfiles
 from tmserver.economy_service import EconomyService
+from tmserver.identities import player_id
 from tmserver.server import ACCOUNTS, Server
+from tmserver.state_store import JsonStateStore
 from tmserver.tm_protocol import Command, encode, parse
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +38,44 @@ class CharacterProfileTests(unittest.TestCase):
         self.economy.provision("alice", nn=0x101, player_id=1, name=b"Alice")
         self.economy.provision("bob", nn=0x102, player_id=2, name=b"Bob")
         self.service = CharacterProfiles(self.economy)
+
+    def test_full_native_name_has_a_bounded_default_without_renaming_account(self):
+        name = b"ABCDEFGHIJKLMNOP"
+        self.economy.provision("long", nn=0x103, player_id=3, name=name)
+        before = self.economy.snapshot()
+        native = self.economy.profile_bytes("long")
+        for reader in ("long", "alice"):
+            reply = self.service.handle(reader, request(b"PG", 0x103))[0]
+            fields = parse(reply[5:])[0].payload.split(b"\x06")
+            self.assertEqual(fields[2], name[:15])
+        self.assertNotIn("long", self.service.records)
+        for token, expected in ((b"CR", b"CS"), (b"GR", b"GK")):
+            reply = self.service.handle("long", request(token, 0x103))[0]
+            self.assertEqual(parse(reply[5:])[0].token, expected)
+            self.assertEqual(self.service.records["long"][2], name[:15].decode())
+        self.assertEqual(self.economy.snapshot(), before)
+        self.assertEqual(self.economy.profile_bytes("long"), native)
+        self.assertEqual(native[0x10:0x20], name)
+
+    def test_restored_override_never_evaluates_default_profile(self):
+        self.economy.provision("long", nn=0x103, player_id=3, name=b"ABCDEFGHIJKLMNOP")
+        self.service.handle("long", request(b"CR", 0x103, extras=(Command(b"AN", b"Saved name"),)))
+        record = list(self.service.records["long"])
+        record[17] = "1234"
+        self.service.records["long"] = tuple(record)
+        restored = CharacterProfiles.restore(self.economy, self.service.snapshot())
+        native = self.economy.snapshot()
+        with patch.object(restored, "_default", side_effect=AssertionError("unused default")):
+            for token in (b"PG", b"CR", b"GR"):
+                reply = restored.handle("long", request(token, 0x103))[0]
+                if token == b"PG":
+                    self.assertEqual(parse(reply[5:])[0].payload.split(b"\x06")[2], b"Saved name")
+                self.assertEqual(restored.records["long"], tuple(record))
+            restored.handle("long", request(b"GR", 0x103, extras=(Command(b"FO", b"1"),)))
+        self.assertEqual(restored.records["long"][8], "1")
+        self.assertEqual(restored.records["long"][2], "Saved name")
+        self.assertEqual(restored.records["long"][17], "1234")
+        self.assertEqual(self.economy.snapshot(), native)
 
     def test_registration_partial_updates_and_opaque_preservation(self):
         self.assertEqual(self.service.handle("alice", request(b"CR")), [b"GTM0P<CS>\x07\x07"])
@@ -87,6 +128,57 @@ class CharacterProfileTests(unittest.TestCase):
 
 
 class CharacterProfileIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_full_native_name_registers_reads_and_restarts_over_encrypted_service(self):
+        asyncio.get_running_loop().slow_callback_duration = 1
+        nick = next(iter(ACCOUNTS))
+        key = nick.decode("ascii")
+        name = b"ABCDEFGHIJKLMNOP"
+        economy = EconomyService(seed=1)
+        economy.provision(key, nn=player_id(nick), player_id=1, name=name)
+        native = economy.profile_bytes(key)
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
+            state = Path(folder) / "state.json"
+            JsonStateStore(state).save(economy.snapshot())
+            for restarted in (False, True):
+                with self.subTest(restarted=restarted):
+                    server = Server(state_path=state)
+                    client = Client()
+                    try:
+                        await client.open(await server.start(0), account=nick)
+                        self.assertIn(b" 422 ", await client.read())
+
+                        async def exchange(token, extras=()):
+                            await client.send(b"NOTICE UUIRT71SR :" + request(token, extras=extras))
+                            reply = await client.read()
+                            self.assertTrue(reply.startswith(b":UUIRT71SR!p@local NOTICE "))
+                            return parse(reply.split(b" :", 1)[1][5:])[0]
+
+                        first = await exchange(b"PG")
+                        self.assertEqual(first.token, b"PO")
+                        self.assertEqual(
+                            first.payload.split(b"\x06")[2],
+                            b"Saved name" if restarted else name[:15],
+                        )
+                        extra = () if restarted else (Command(b"AN", b"Saved name"),)
+                        self.assertEqual((await exchange(b"CR", extra)).token, b"CS")
+                        self.assertEqual(
+                            (await exchange(b"GR", (Command(b"FO", b"1"),))).token, b"GK"
+                        )
+                        fields = (await exchange(b"PG")).payload.split(b"\x06")
+                        self.assertEqual((fields[2], fields[8]), (b"Saved name", b"1"))
+                        self.assertEqual(server.economy.profile_bytes(key), native)
+                        saved = JsonStateStore(state).load()
+                        self.assertEqual(
+                            saved["accounts"][key], economy.snapshot()["accounts"][key]
+                        )
+                        self.assertEqual(
+                            saved["character_profiles"]["records"][key][2], "Saved name"
+                        )
+                    finally:
+                        if hasattr(client, "writer"):
+                            await client.close()
+                        await server.stop()
+
     async def test_edit_read_and_restart_preserve_both_visibility_tags(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:

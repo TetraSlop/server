@@ -36,7 +36,6 @@ def bounded(value, size):
 
 
 class CharacterProfiles:
-
     def __init__(self, economy):
         self.economy = economy
         self.records = {}
@@ -60,11 +59,17 @@ class CharacterProfiles:
                 fields[field["index"]] = ""
         fields[0] = f"0x{account.player_id:016X}"
         fields[1] = "1"
-        fields[2] = bounded(account.name, 15)
+        # PO uses a terminated string[16]; TM0DataFile allows all 16 bytes.
+        # Shorten only this default presentation, never the account identity.
+        fields[2] = bounded(account.name[:15], 15)
         for index in (8, 40, 47, 55):
             fields[index] = "3"
         # Card-level/title/history have no asserted cross-format mapping here.
         return fields
+
+    def _fields(self, key):
+        record = self.records.get(key)
+        return self._default(key) if record is None else list(record)
 
     def _owned(self, key, address):
         account = self.economy.account_view(key)
@@ -95,7 +100,7 @@ class CharacterProfiles:
             owner = self._find(address)
             if owner is None:
                 return [self._response(b"PM", b"-8706")]
-            fields = list(self.records.get(owner, self._default(owner)))
+            fields = self._fields(owner)
             fields[0] = f"0x{address[0]:016X}"
             fields[1] = str(address[1])
             return [self._response(b"PO", b"\x06".join(value.encode("latin1") for value in fields))]
@@ -105,7 +110,7 @@ class CharacterProfiles:
                 if first.token == b"GR"
                 else [self._response(b"NS", b"-8706")]
             )
-        fields = list(self.records.get(key, self._default(key)))
+        fields = self._fields(key)
         fields[0] = f"0x{address[0]:016X}"
         fields[1] = str(address[1])
         seen = set()
