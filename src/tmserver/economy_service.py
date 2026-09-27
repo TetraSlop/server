@@ -44,6 +44,8 @@ from dataclasses import field as dataclass_field
 from fractions import Fraction
 from pathlib import Path
 
+from tmserver.cards import Card
+from tmserver.inventory_edits import apply_card_edits, parse_edit_records
 from tmserver.resources import read_json
 from tmserver.result_stats import PracticeStats
 from tmserver.shop_offers import ShopOffers
@@ -127,36 +129,6 @@ def named(family, subtype, session, body):
     if any(not 0 <= x <= 255 for x in (family, subtype, session)):
         raise EconomyError("invalid response header")
     return f"GTM0G{family:02X}00{subtype:02X}{session:02X}".encode() + encoded
-
-
-@dataclass(frozen=True)
-class Card:
-    model: int
-    attack: int
-    kind: int
-    physical: int
-    magical: int
-    points: int
-    arrows: int
-    deck: int = 255
-
-    def full(self):
-        return (
-            self.model,
-            self.attack,
-            self.kind,
-            self.physical,
-            self.magical,
-            self.points,
-            self.arrows,
-            self.deck,
-        )
-
-    def reduced(self):
-        return (self.model, self.attack, self.kind, self.physical, self.magical, self.arrows)
-
-    def compact(self):
-        return struct.pack("<H7B3x", *self.full())
 
 
 class Catalog:
@@ -743,7 +715,7 @@ class EconomyService:
         keys = set()
         for seat, (reservation, hand) in participants.items():
             hand = tuple(
-                self.catalog.validate(Card(*(getattr(c, n) for n in Card.__dataclass_fields__)))
+                self.catalog.validate(Card.from_card(c))
                 for c in hand
             )
             if len(hand) != 5:
@@ -772,8 +744,8 @@ class EconomyService:
                 or (loser, slot) in seen
             ):
                 raise EconomyError("invalid or repeated prize source identity")
-            source = Card(*(getattr(transfer.source_card, n) for n in Card.__dataclass_fields__))
-            card = Card(*(getattr(transfer.card, n) for n in Card.__dataclass_fields__))
+            source = Card.from_card(transfer.source_card)
+            card = Card.from_card(transfer.card)
             if source != hands[loser][slot] or card != replace(source, deck=255):
                 raise EconomyError("prize source or received copy was altered")
             seen.add((loser, slot))
@@ -821,9 +793,7 @@ class EconomyService:
         available = set(range(len(view.cards)))
         indices = []
         for card in cards:
-            card = self.catalog.validate(
-                Card(*(getattr(card, n) for n in Card.__dataclass_fields__))
-            )
+            card = self.catalog.validate(Card.from_card(card))
             index = next((i for i in sorted(available) if view.cards[i] == card), None)
             if index is None:
                 raise EconomyError("selected card is not owned or multiplicity exceeded")
@@ -912,9 +882,7 @@ class EconomyService:
             cards = list(view.cards)
             for index, new in zip(indices, updated):
                 old = cards[index]
-                new = self.catalog.validate(
-                    Card(*(getattr(new, n) for n in Card.__dataclass_fields__))
-                )
+                new = self.catalog.validate(Card.from_card(new))
                 if (new.model, new.arrows, new.deck) != (old.model, old.arrows, old.deck):
                     raise EconomyError("match growth cannot change model, arrows or deck")
                 allowed = {old.kind, 2, 3} if old.kind < 2 else {old.kind, 3}
@@ -1219,7 +1187,7 @@ class EconomyService:
         try:
             if self.is_reserved(key):
                 return False
-            supplied = [Card(*(getattr(c, n) for n in Card.__dataclass_fields__)) for c in cards]
+            supplied = [Card.from_card(c) for c in cards]
             for c in supplied:
                 self.catalog.validate(c)
             wanted = Counter(c.full() for c in supplied)
@@ -1358,60 +1326,18 @@ class EconomyService:
             _keys(head, ("Mode", "C"))
         else:
             _keys(head, ("C",))
-        count = _int(head["C"], maximum=13 if subtype == 0x22 else 15)
-        expected = {token} | {str(i) for i in range(count)}
-        rename_keys = set(sections) - expected if subtype == 0x22 else set()
-        if (
-            rename_keys - {"DN1", "DN2"}
-            or len(rename_keys) > 1
-            or set(sections) != expected | rename_keys
-        ):
-            raise EconomyError("unexpected or missing card sections")
-        names = {}
-        for section in rename_keys:
-            _keys(sections[section], ("S",))
-            names[int(section[2:])] = _hex(sections[section]["S"], 17)
-        requested = []
-        for i in range(count):
-            fields = sections[str(i)]
-            _keys(fields, ("D",))
-            values = fields["D"].split("|")
-            if len(values) != (7 if subtype == 0x22 else 6):
-                raise EconomyError("incorrect card tuple length")
-            values = tuple(_int(v, maximum=65535 if j == 0 else 255) for j, v in enumerate(values))
-            if subtype == 0x22 and values[6] not in range(50) and values[6] != 255:
-                raise EconomyError("unknown deck slot")
-            requested.append(values)
+        values, renamed = parse_edit_records(sections, token, number=_int, error=EconomyError)
         current = account.pending.state if account.pending else account.committed
-        # Wire has no unique instance ID; consume matching copies in stable order.
-        remaining = set(range(len(current.cards)))
-        matched = []
-        for values in requested:
-            index = next(
-                (i for i in sorted(remaining) if current.cards[i].reduced() == values[:6]), None
+        cards, indices = apply_card_edits(
+            current.cards, values, discard=subtype != 0x22, error=EconomyError
+        )
+        balance = current.balance
+        if subtype == 0x16:
+            balance = min(
+                MAX_MONEY,
+                balance + sum(self.catalog.sale_value(current.cards[i]) for i in indices),
             )
-            if index is None:
-                raise EconomyError("card tuple is not owned, or multiplicity exceeded")
-            remaining.remove(index)
-            matched.append(index)
-        updated = _State(current.balance, list(current.cards), dict(current.names))
-        if subtype in (0x10, 0x16):
-            if subtype == 0x16:
-                updated.balance = min(
-                    MAX_MONEY,
-                    current.balance
-                    + sum(self.catalog.sale_value(current.cards[i]) for i in matched),
-                )
-            updated.cards = [c for i, c in enumerate(current.cards) if i not in matched]
-        else:
-            slots = [v[6] for v in requested if v[6] != 255]
-            if len(slots) != len(set(slots)):
-                raise EconomyError("multiple assignments to one slot")
-            # Explicit assignments replace previous associations; final state is unique.
-            updated.cards = [replace(c, deck=255) if c.deck in slots else c for c in updated.cards]
-            for index, values in zip(matched, requested):
-                updated.cards[index] = replace(updated.cards[index], deck=values[6])
-            updated.names.update(names)
+        updated = _State(balance, cards, current.names | renamed)
         if account.pending:
             account.pending.state = updated
         else:

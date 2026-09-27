@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Callable
 
+from tmserver.cards import Card as CardValue
+
 
 class RulesError(ValueError):
     """Input is outside the supported native card/rule domain."""
@@ -43,29 +45,12 @@ class CRTLCG:
 
 
 @dataclass(frozen=True)
-class Card:
-    model: int
-    attack: int
-    kind: int
-    physical: int
-    magical: int
-    points: int
-    arrows: int
-    deck: int = 255
-
+class Card(CardValue):
     def __post_init__(self):
         _integer(self.model, "model", 0, 65534)
         _integer(self.kind, "kind", 0, 3)
         for name in ("attack", "physical", "magical", "points", "arrows", "deck"):
             _integer(getattr(self, name), name, 0, 255)
-
-    @classmethod
-    def from_card(cls, card):
-        """Adapt the existing match/economy dataclasses without importing them."""
-        return cls(*(getattr(card, name) for name in cls.__dataclass_fields__))
-
-    def full(self):
-        return tuple(getattr(self, name) for name in self.__dataclass_fields__)
 
 
 @dataclass(frozen=True)

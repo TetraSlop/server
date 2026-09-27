@@ -13,6 +13,7 @@ from copy import copy
 from dataclasses import dataclass, replace
 
 from tmserver.economy_service import AccountView, Card, EconomyError, MatchReservation, parse_named
+from tmserver.inventory_edits import apply_card_edits, parse_edit_records
 
 
 class ResultRewardError(EconomyError):
@@ -96,7 +97,7 @@ class ResultRewardService:
 
     def _cards(self, cards):
         values = tuple(
-            self.economy.catalog.validate(Card(*(getattr(c, n) for n in Card.__dataclass_fields__)))
+            self.economy.catalog.validate(Card.from_card(c))
             for c in cards
         )
         if len(values) > 30 or any(c.deck != 255 for c in values):
@@ -298,49 +299,13 @@ class ResultRewardService:
             _fields(f, ("P", "Mode", "C"))
         else:
             _fields(f, ("P", "C"))
-        count = _int(f["C"], 15 if subtype == 0x10 else 13)
-        expected = {token} | {str(i) for i in range(count)}
-        renames = set(sections) - expected if subtype == 0x22 else set()
-        if renames - {"DN1", "DN2"} or len(renames) > 1 or set(sections) != expected | renames:
-            raise ResultRewardError("invalid result edit sections")
-        values = []
-        indices = []
-        available = set(range(len(cards)))
-        for i in range(count):
-            record = sections[str(i)]
-            _fields(record, ("D",))
-            parts = record["D"].split("|")
-            if len(parts) != (6 if subtype == 0x10 else 7):
-                raise ResultRewardError("wrong result card tuple length")
-            v = tuple(_int(part, 65535 if j == 0 else 255) for j, part in enumerate(parts))
-            if subtype == 0x22 and v[-1] not in range(50) and v[-1] != 255:
-                raise ResultRewardError("invalid result deck slot")
-            index = next((i for i in sorted(available) if cards[i].reduced() == v[:6]), None)
-            if index is None:
-                raise ResultRewardError("result edit card not owned or multiplicity exceeded")
-            available.remove(index)
-            indices.append(index)
-            values.append(v)
-        renamed = {}
-        for rename in renames:
-            _fields(sections[rename], ("S",))
-            value = sections[rename]["S"]
-            if len(value) % 2 or len(value) > 34 or not re.fullmatch(r"[0-9A-Fa-f]*", value):
-                raise ResultRewardError("invalid result deck name")
-            data = bytes.fromhex(value)
-            if b"\0" in data:
-                raise ResultRewardError("embedded deck name terminator")
-            names[int(rename[2:])] = data
-            renamed[int(rename[2:])] = data
-        if subtype == 0x10:
-            cards = [c for i, c in enumerate(cards) if i not in indices]
-        else:
-            slots = [v[-1] for v in values if v[-1] != 255]
-            if len(slots) != len(set(slots)):
-                raise ResultRewardError("duplicate result deck slots")
-            cards = [replace(c, deck=255) if c.deck in slots else c for c in cards]
-            for i, value in zip(indices, values):
-                cards[i] = replace(cards[i], deck=value[-1])
+        values, renamed = parse_edit_records(
+            sections, token, number=_int, error=ResultRewardError
+        )
+        cards, indices = apply_card_edits(
+            cards, values, discard=subtype == 0x10, error=ResultRewardError
+        )
+        names.update(renamed)
         if pending is not None:
             pending.cards, pending.names = cards, names
         else:

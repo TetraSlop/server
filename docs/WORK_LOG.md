@@ -2,13 +2,14 @@
 
 ## Current scope
 
-Continue the approved server polish and missing-feature work in this repository.
-The user's latest instruction is to keep working without checking credits.
+Prioritize the user's approved runtime consolidation pass before adding feature
+breadth: readable Python, fewer repeated implementations and measured changes.
+Continue the standing instruction to work without checking credits.
 Do not query usage limits or use a displayed percentage as a stopping condition.
 Do not redeem reset credits or purchase credits. This supersedes the earlier
 allowance-based stopping notes in this log.
-Prioritize concrete protocol, gameplay, progression and persistence gaps, with
-readable Python and regression evidence. Historical hosted reward formulas,
+Preserve protocol, gameplay, progression and persistence behavior with regression
+evidence. Historical hosted reward formulas,
 mission rules and schedules remain unknown unless supported by original-client
 evidence; local policy must be labeled explicitly.
 
@@ -19,6 +20,20 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Consolidated six inventory editors into shared pure parsing, stable owned-copy
+  matching and immutable card edits. Each service retains its authorization,
+  numeric/name dialect, pending state and commit boundary. Card fields now have
+  one definition with thin native-rule/match validation and encoding adapters.
+  Runtime Python falls from 20,847 to 20,672 physical lines: 175 removed, with
+  no claim that this resolves the larger structural debt. Table ownership and
+  lifecycle handling remain the next substantial target.
+- All 381 distinct tests across the scoped runs pass, including encrypted CPU,
+  event and multiplayer rounds, transaction boundaries and recovery. Five new
+  tests pass 55 cases on both archived baseline `844b6cf` and the refactor; 542
+  old/new card comparisons also pass. Collection finds 1,152 tests. Ruff,
+  whitespace and clean wheel checks pass; all 82 packaged runtime files match
+  source. See VALIDATION.md and `results/inventory-consolidation-result.json`.
+  No full-suite, PostgreSQL or native UI run is claimed for this refactor.
 - Reverse service ownership is now enforced before event watch/selection
   admission (`a42f147`). Both paths previously admitted an ordinary observer
   that retained event-room presence, leaving simultaneous table ownership.

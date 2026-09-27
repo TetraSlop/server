@@ -1,5 +1,50 @@
 # Packaging and transaction validation
 
+## Shared inventory edits and card values, 2026-09-27
+
+Six inventory editors now share pure record parsing and card application, and
+the eight stored card fields have one definition. Services retain their existing
+authorization, parser dialects, offered-card exclusions and commit boundaries.
+The runtime count falls from 20,847 to 20,672 physical Python lines. This is a
+consolidation pass with no intended protocol or economic-policy changes.
+
+All **381 distinct tests pass** across the focused runs below (the runs overlap):
+
+| Evidence log under `results/` | Cases | Seconds |
+|---|---:|---:|
+| `inventory-consolidation-domain.log` | 126 | 0.877 |
+| `inventory-consolidation-transactions.log` | 69 | 68.043 |
+| `inventory-consolidation-final-values.log` | 67 | 0.836 |
+| `card-value-integration.log` | 255 | 322.682 |
+| `inventory-edit-compatibility-refactor.log` | 5 | 0.094 |
+
+These cover inventory edits, commerce/claims, trade and match settlement,
+restart recovery, native rules/AI, capture replay, and encrypted CPU, event and
+two-/three-player rounds. The five added tests exercise 55 compatibility cases
+and also pass against archived baseline `844b6cf`:
+`results/inventory-edit-compatibility-baseline.log`. They preserve numeric
+aliases, authenticated sides, name restrictions, stable duplicate-card selection
+and global deck-slot clearing around trade offers.
+
+An independent comparison of the former and current card classes passes all
+**542 cases**, including validation exceptions, ranges, encodings, conversion,
+equality, immutability and replacement:
+`results/card-value-contract-result.json`. Read-only review found no material
+runtime issue; 18 additional invalid-edit probes rejected without partial state
+changes, and four existing delayed result/trade edit controls passed.
+
+Current collection finds **1,152 tests** without import errors. Ruff and
+whitespace checks pass. The rebuilt wheel passes clean dependency-free
+installation, entry points, JSON administration/recovery and temporary service
+listeners. All **82 packaged runtime files** byte-match source (87 total wheel
+entries). Evidence: `results/inventory-consolidation-wheel-{build,check}.log`
+and `results/inventory-consolidation-result.json`.
+Wheel SHA256: `e80e283c9806d38e33e52cd6d98987c76f26eb8da2ee16e5da0041c2f173f223`.
+
+The whole suite and PostgreSQL suite were not repeated for this refactor; their
+older checkpoint results below are not current-source results. Native rendering
+and UI acceptance were not exercised.
+
 ## Event admission ownership and repeated validation, 2026-09-27
 
 Commit `a42f147` closes the reverse service-boundary gap: an ordinary observer

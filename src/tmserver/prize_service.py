@@ -12,6 +12,7 @@ from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, replace
 
 from tmserver.economy_service import EconomyError, named, parse_named
+from tmserver.inventory_edits import apply_card_edits, parse_edit_records
 
 
 class PrizeError(EconomyError):
@@ -316,62 +317,30 @@ class PrizeService:
         token = "Erase" if subtype == 0x10 else "Decks"
         if token not in sections:
             raise PrizeError("missing edit section")
-        f = sections[token]
+        fields = sections[token]
         if subtype == 0x10:
-            mode = _integer(f.get("Mode"), 2)
+            mode = _integer(fields.get("Mode"), 2)
             if mode == 2:
                 if sections != {"Erase": {"Mode": "2"}}:
                     raise PrizeError("Mode2 carries no card list")
                 return
             if mode != 1:
                 raise PrizeError("unsupported Erase mode")
-            _fields(f, ("Mode", "C"))
+            _fields(fields, ("Mode", "C"))
         else:
-            _fields(f, ("C",))
-        count = _integer(f["C"], 13 if subtype == 0x22 else 15)
-        expected = {token} | {str(i) for i in range(count)}
-        renames = set(sections) - expected if subtype == 0x22 else set()
-        if renames - {"DN1", "DN2"} or len(renames) > 1 or set(sections) != expected | renames:
-            raise PrizeError("invalid edit records")
-        p = session.pending
-        cards = list(session.token.account.cards if p is None else p.cards)
-        names = dict(session.token.account.deck_names) if p is None else dict(p.names)
-        selected = []
-        available = set(range(len(cards)))
-        values = []
-        for i in range(count):
-            f = sections[str(i)]
-            _fields(f, ("D",))
-            parts = f["D"].split("|")
-            if len(parts) != (7 if subtype == 0x22 else 6):
-                raise PrizeError("incorrect edit card tuple length")
-            value = tuple(_integer(v, 65535 if j == 0 else 255) for j, v in enumerate(parts))
-            if subtype == 0x22 and value[-1] not in range(50) and value[-1] != 255:
-                raise PrizeError("invalid deck slot")
-            index = next((i for i in sorted(available) if cards[i].reduced() == value[:6]), None)
-            if index is None:
-                raise PrizeError("edit card is not owned or multiplicity exceeded")
-            available.remove(index)
-            selected.append(index)
-            values.append(value)
-        for rename in renames:
-            _fields(sections[rename], ("S",))
-            names[int(rename[2:])] = _hex(sections[rename]["S"], 17)
-        if subtype == 0x10:
-            cards = [c for i, c in enumerate(cards) if i not in selected]
-        else:
-            slots = [v[-1] for v in values if v[-1] != 255]
-            if len(slots) != len(set(slots)):
-                raise PrizeError("duplicate assigned deck slots")
-            cards = [replace(c, deck=255) if c.deck in slots else c for c in cards]
-            for i, value in zip(selected, values):
-                cards[i] = replace(cards[i], deck=value[-1])
-        if p is None:
+            _fields(fields, ("C",))
+        values, renamed = parse_edit_records(sections, token, number=_integer, error=PrizeError)
+        pending = session.pending
+        current = session.token.account.cards if pending is None else pending.cards
+        names = session.token.account.deck_names if pending is None else pending.names
+        cards, _ = apply_card_edits(current, values, discard=subtype == 0x10, error=PrizeError)
+        names = dict(names) | renamed
+        if pending is None:
             session.token = self.economy.commit_prize(
                 session.token, cards=cards, deck_names=names, allow_discard=True
             )
         else:
-            p.cards, p.names = cards, names
+            pending.cards, pending.names = cards, names
 
     def disconnect(self, key):
         self._closed.pop(key, None)

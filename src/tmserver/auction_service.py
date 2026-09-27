@@ -13,6 +13,7 @@ from dataclasses import dataclass, replace
 
 from tmserver.auction_economy import AuctionError, Listing
 from tmserver.economy_service import Card, EconomyError, collection_points, named, parse_named
+from tmserver.inventory_edits import apply_card_edits, parse_edit_records
 from tmserver.tm_protocol import Command, encode, parse
 
 EXHIBIT_PATH = "U/g/TM0_EXHIBITLIST"
@@ -512,54 +513,17 @@ class AuctionService:
             raise EconomyError("invalid collection edit header")
         if subtype == 0x10 and head["Mode"] != "1":
             raise EconomyError("invalid collection erase mode")
-        count = _number(head["C"], 8)
-        if count > (15 if subtype == 0x10 else 13):
-            raise EconomyError("collection edit exceeds original batch")
-        expected = {token} | {str(i) for i in range(count)}
-        renames = set(sections) - expected
-        if (
-            (subtype == 0x10 and renames)
-            or renames - {"DN1", "DN2"}
-            or len(renames) > 1
-            or not expected <= set(sections)
-        ):
-            raise EconomyError("invalid collection edit sections")
-        names = dict(state.names)
-        for section in renames:
-            if set(sections[section]) != {"S"}:
-                raise EconomyError("invalid deck name")
-            names[int(section[2:])] = _hex_name(sections[section]["S"], 17)
-        remaining = set(range(len(state.cards)))
-        matched = []
-        values = []
-        for i in range(count):
-            fields = sections[str(i)]
-            if set(fields) != {"D"}:
-                raise EconomyError("invalid collection card tuple")
-            parts = fields["D"].split("|")
-            if len(parts) != (6 if subtype == 0x10 else 7):
-                raise EconomyError("incorrect collection card tuple length")
-            value = tuple(_number(x, 16 if j == 0 else 8) for j, x in enumerate(parts))
-            if subtype == 0x22 and value[6] not in (*range(50), 255):
-                raise EconomyError("invalid collection deck slot")
-            match = next(
-                (j for j in sorted(remaining) if state.cards[j].reduced() == value[:6]), None
-            )
-            if match is None:
-                raise EconomyError("collection edit exceeds owned multiplicity")
-            remaining.remove(match)
-            matched.append(match)
-            values.append(value)
-        if subtype == 0x10:
-            updated = [c for i, c in enumerate(state.cards) if i not in matched]
-        else:
-            slots = [v[6] for v in values if v[6] != 255]
-            if len(slots) != len(set(slots)):
-                raise EconomyError("duplicate collection deck slots")
-            updated = [replace(c, deck=255) if c.deck in slots else c for c in state.cards]
-            for i, value in zip(matched, values):
-                updated[i] = replace(updated[i], deck=value[6])
-        state.cards, state.names = updated, names
+        values, renamed = parse_edit_records(
+            sections,
+            token,
+            number=_number,
+            name=lambda value: _hex_name(value, 17),
+            error=EconomyError,
+        )
+        cards, _ = apply_card_edits(
+            state.cards, values, discard=subtype == 0x10, error=EconomyError
+        )
+        state.cards, state.names = cards, state.names | renamed
 
     def file(self, key, path):
         self.economy.account_view(key)

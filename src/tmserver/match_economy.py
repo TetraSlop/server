@@ -11,7 +11,8 @@ import re
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
 
-from tmserver.economy_service import MAX_MONEY, Card, EconomyError
+from tmserver.cards import Card, card_values
+from tmserver.economy_service import MAX_MONEY, EconomyError
 
 
 class MatchEconomyError(EconomyError):
@@ -140,10 +141,7 @@ class MatchEconomy:
         return views
 
     def _cards(self, cards):
-        cards = tuple(
-            self.economy.catalog.validate(Card(*(getattr(c, n) for n in Card.__dataclass_fields__)))
-            for c in cards
-        )
+        cards = tuple(self.economy.catalog.validate(Card.from_card(c)) for c in cards)
         if len(cards) > 30 or any(c.deck != 255 for c in cards):
             raise MatchEconomyError("invalid match reward batch")
         return cards
@@ -264,11 +262,16 @@ class MatchEconomy:
 
     @staticmethod
     def _transfer_digest(participants, transfers):
-        values = lambda c: [getattr(c, k) for k in Card.__dataclass_fields__]
         body = {
             "hands": [[list(c.full()) for c in participants[s][1]] for s in sorted(participants)],
             "transfers": [
-                [a.winner, a.loser, a.original_slot, values(a.source_card), values(a.card)]
+                [
+                    a.winner,
+                    a.loser,
+                    a.original_slot,
+                    card_values(a.source_card),
+                    card_values(a.card),
+                ]
                 for a in transfers
             ],
         }
@@ -292,7 +295,7 @@ class MatchEconomy:
         participants = {
             s: (
                 p[0],
-                tuple(Card(*(getattr(c, k) for k in Card.__dataclass_fields__)) for c in p[1]),
+                tuple(Card.from_card(c) for c in p[1]),
             )
             for s, p in participants.items()
         }

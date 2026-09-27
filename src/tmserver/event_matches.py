@@ -8,9 +8,10 @@ Authenticated selections or explicit policy supply borrowed hands; no owned inve
 ratings, card prizes, durable rewards, or automatic second round are modified.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from tmserver import native_special_rules as special
+from tmserver.cards import card_values
 from tmserver.match_service import Card, Delivery, MatchError, MatchService, decode, numbers, packet
 
 
@@ -178,7 +179,7 @@ class EventMatchRound:
         out = []
         for c in cards:
             try:
-                values = tuple(getattr(c, n) for n in Card.__dataclass_fields__)
+                values = card_values(c)
                 if any(type(value) is not int for value in values):
                     raise MatchError("event card fields must be integers")
                 c = Card(*values)
@@ -191,9 +192,7 @@ class EventMatchRound:
                 if denominator
                 else 0
             ) & 255
-            out.append(
-                Card(c.model, c.attack, c.kind, c.physical, c.magical, points, c.arrows, 255)
-            )
+            out.append(replace(c, points=points, deck=255))
         return tuple(out)
 
     @property

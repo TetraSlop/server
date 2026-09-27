@@ -1,5 +1,34 @@
 # Server size and structure review
 
+## Current consolidation checkpoint, 2026-09-27
+
+The runtime package at `844b6cf` contained **20,847 physical Python lines in
+77 files**. The first consolidation pass reduces this to **20,672 lines in
+79 files**, a net removal of **175 lines**. The two added modules replace
+repeated behavior: `inventory_edits.py` shares record parsing, owned-copy
+matching and immutable edits across six services; `cards.py` defines card fields
+once while retaining native-rule and match validation/encoding adapters.
+
+This is a modest reduction, not a resolution of the server's overall size.
+Service authorization, transaction timing and protocol dialect differences
+remain explicit. Five compatibility tests cover 55 cases against both old and
+new code; 542 card comparisons preserve the former constructors and encodings.
+There are 381 distinct passing tests across the focused validation runs. See
+`../VALIDATION.md` for logs and packaging checks.
+
+Tests are separate from the runtime count: the preceding checkpoint had 33,195
+test lines in 153 files, and this pass adds one 186-line compatibility module.
+Research, documentation and dependencies are also excluded. Line counts include
+blank lines and comments; reducing those would not simplify the implementation.
+
+The next substantial structural target is table ownership and lifecycle handling,
+followed by the large match/economy dispatchers. No projected line saving is
+claimed before implementing and measuring those changes. The older review below
+is retained as a historical checkpoint; its paths and counts predate packaging
+and subsequent feature work.
+
+## Earlier 13,747-line review
+
 The size is mostly explained by the breadth of the replacement service, with
 real duplication and organizational debt from building it feature by feature.
 This is a static source review, not a claim that every implemented branch is

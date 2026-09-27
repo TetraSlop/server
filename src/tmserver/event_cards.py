@@ -19,6 +19,7 @@ from tmserver.economy_service import (
     named,
     parse_named,
 )
+from tmserver.inventory_edits import apply_card_edits, parse_edit_records
 
 
 class EventCardError(EconomyError):
@@ -37,7 +38,7 @@ def _integer(value, maximum):
     return value
 
 
-def _number(value, maximum):
+def _number(value, maximum=0xFFFFFFFF):
     if (
         not isinstance(value, str)
         or not re.fullmatch(r"[0-9]{1,10}", value)
@@ -118,7 +119,7 @@ class EventCardService:
         if self.host.member(key, event_id) is None:
             raise EventCardError("grant requires a registered event member")
         cards = tuple(
-            self.economy.catalog.validate(Card(*(getattr(c, k) for k in Card.__dataclass_fields__)))
+            self.economy.catalog.validate(Card.from_card(c))
             for c in cards
         )
         if len(cards) > 30 or any(c.deck != 255 for c in cards):
@@ -306,59 +307,18 @@ class EventCardService:
 
     @staticmethod
     def _edit(state, subtype, sections):
-        cards = list(state.cards)
-        names = dict(state.names)
         token = "Erase" if subtype == 0x10 else "Decks"
         if subtype == 0x10 and sections == {"Erase": {"Mode": "2"}}:
-            return cards, names
-        f = sections.get(token, {})
-        _keys(f, ("Mode", "C") if subtype == 0x10 else ("C",))
-        if subtype == 0x10 and f["Mode"] != "1":
+            return list(state.cards), dict(state.names)
+        fields = sections.get(token, {})
+        _keys(fields, ("Mode", "C") if subtype == 0x10 else ("C",))
+        if subtype == 0x10 and fields["Mode"] != "1":
             raise EventCardError("invalid event Erase mode")
-        count = _number(f["C"], 15 if subtype == 0x10 else 13)
-        expected = {token} | {str(i) for i in range(count)}
-        renames = set(sections) - expected if subtype == 0x22 else set()
-        if set(sections) != expected | renames or renames - {"DN1", "DN2"} or len(renames) > 1:
-            raise EventCardError("invalid event card/deck sections")
-        available = set(range(len(cards)))
-        indices = []
-        values = []
-        for i in range(count):
-            f = sections[str(i)]
-            _keys(f, ("D",))
-            parts = f["D"].split("|")
-            if len(parts) != (6 if subtype == 0x10 else 7):
-                raise EventCardError("wrong event card tuple extent")
-            value = tuple(_number(v, 65535 if j == 0 else 255) for j, v in enumerate(parts))
-            if subtype == 0x22 and value[-1] not in (*range(50), 255):
-                raise EventCardError("invalid event deck slot")
-            index = next((j for j in sorted(available) if cards[j].reduced() == value[:6]), None)
-            if index is None:
-                raise EventCardError("event edit card is not owned or repeated too often")
-            available.remove(index)
-            indices.append(index)
-            values.append(value)
-        for rename in renames:
-            f = sections[rename]
-            _keys(f, ("S",))
-            raw = f["S"]
-            if (
-                not re.fullmatch(r"[0-9A-Fa-f]{0,34}", raw)
-                or len(raw) % 2
-                or b"\0" in bytes.fromhex(raw)
-            ):
-                raise EventCardError("invalid event deck name")
-            names[int(rename[2:])] = bytes.fromhex(raw)
-        if subtype == 0x10:
-            cards = [c for i, c in enumerate(cards) if i not in indices]
-        else:
-            slots = [v[-1] for v in values if v[-1] != 255]
-            if len(slots) != len(set(slots)):
-                raise EventCardError("duplicate event deck slots")
-            cards = [replace(c, deck=255) if c.deck in slots else c for c in cards]
-            for i, value in zip(indices, values):
-                cards[i] = replace(cards[i], deck=value[-1])
-        return cards, names
+        values, renamed = parse_edit_records(sections, token, number=_number, error=EventCardError)
+        cards, _ = apply_card_edits(
+            state.cards, values, discard=subtype == 0x10, error=EventCardError
+        )
+        return cards, state.names | renamed
 
     def disconnect(self, key):
         state = self._active.pop(key, None)

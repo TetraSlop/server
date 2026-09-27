@@ -17,6 +17,18 @@ The model stays ordinary Python dataclasses. SQLAlchemy Core and Alembic are
 optional persistence dependencies. There is no second ORM or Pydantic domain
 model to keep synchronized with the protocol's native representations.
 
+`cards.Card` defines the eight stored card fields once. Native rules and matches
+keep thin adapters for their different validation domains and wire encodings;
+`Card.from_card` converts through the receiving constructor. Economy imports
+continue to expose the shared value for compatibility.
+
+`inventory_edits` parses numbered card records, matches owned copies in stable
+order and produces edited inventories without mutating its input. Shop, prize,
+event, auction, trade and result services retain header/seat validation, numeric
+and name dialects, pending state and commit timing. Offered trade copies cannot
+be selected for editing, but assigning their deck slot still clears that slot
+throughout the inventory. These differences are explicit at the call sites.
+
 ## A durable operation
 
 1. A handler opens the appropriate concrete transaction context.

@@ -16,6 +16,8 @@ from typing import Callable, Hashable
 
 from tmserver import native_special_rules as special
 from tmserver.admission_identity import validate_admission
+from tmserver.cards import Card as CardValue
+from tmserver.cards import card_values
 from tmserver.match_prizes import (
     PrizeCard,
     PrizeError,
@@ -38,16 +40,7 @@ class MatchError(ValueError):
 
 
 @dataclass(frozen=True)
-class Card:
-    model: int
-    attack: int
-    kind: int
-    physical: int
-    magical: int
-    points: int
-    arrows: int
-    deck: int = 255
-
+class Card(CardValue):
     def __post_init__(self):
         if not 0 <= self.model < 250 or not 0 <= self.kind < 4:
             raise MatchError("card model/type outside local catalogue domain")
@@ -58,26 +51,10 @@ class Card:
             raise MatchError("card field outside byte range")
 
     def full(self):
-        return "|".join(
-            map(
-                str,
-                (
-                    self.model,
-                    self.attack,
-                    self.kind,
-                    self.physical,
-                    self.magical,
-                    self.points,
-                    self.arrows,
-                    self.deck,
-                ),
-            )
-        )
+        return "|".join(map(str, card_values(self)))
 
     def reduced(self):
-        return "|".join(
-            map(str, (self.model, self.attack, self.kind, self.physical, self.magical, self.arrows))
-        )
+        return "|".join(map(str, super().reduced()))
 
     @classmethod
     def parse(cls, text):
@@ -385,9 +362,7 @@ class MatchService:
                 Card(i, 40 + i * 3, 0, 35, 30, 1, a) for i, a in enumerate((1, 4, 16, 64, 85))
             ]
         # Economy Card has the same attributes but tuple-valued full()/reduced().
-        self.ai_cards = tuple(
-            Card(*(getattr(c, n) for n in Card.__dataclass_fields__)) for c in ai_cards
-        )
+        self.ai_cards = tuple(Card.from_card(c) for c in ai_cards)
         if len(self.ai_cards) != 5:
             raise ValueError("five AI cards required")
         self.players = []
@@ -1275,9 +1250,7 @@ class MatchService:
         for prepared, nickname in zip(
             prepared_opponents, (self.npc_nickname_id, self.second_npc_nickname_id), strict=False
         ):
-            cards = tuple(
-                Card(*(getattr(c, n) for n in Card.__dataclass_fields__)) for c in prepared.hand
-            )
+            cards = tuple(Card.from_card(c) for c in prepared.hand)
             if cid == self.players[0].character_id:
                 cid += 1
             # NPC names stay in PlPrm on the original client. Never serialize
@@ -1587,7 +1560,7 @@ class MatchService:
         result = grow_card(
             board_card.card, self.baselines[board_card.card.model], mode, random_value
         )
-        board_card.card = Card(*result.card.full())
+        board_card.card = Card.from_card(result.card)
         if board_card.original_slot is not None:
             self.players[board_card.original_owner].updated[
                 board_card.original_slot
@@ -1627,7 +1600,7 @@ class MatchService:
             # Recovered local materialization uses pack75/no guild filter.
             # Hosted draw placement after shared R is explicit server policy.
             model = self.catalog.select(75, 0, self.draw)
-            replacement = Card(*self.catalog.generate(model, self.draw).full())
+            replacement = Card.from_card(self.catalog.generate(model, self.draw))
             body += "/CBC=" + replacement.full()
         out = self._emit(packet(0x43, 0x0C, self.sequence, body))
         if d.owner == 4:
@@ -1775,7 +1748,7 @@ class MatchService:
                     1 if eligible else 0,
                     shared[(hand_slot - 3 * seat + 2) & 7] if eligible else 255,
                 )
-                p.updated[original_slot] = Card(*result.card.full())
+                p.updated[original_slot] = Card.from_card(result.card)
             if p.peer is not None:
                 extras = tuple(
                     c.card

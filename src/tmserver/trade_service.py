@@ -10,6 +10,8 @@ import re
 from dataclasses import dataclass, field, replace
 
 from tmserver.economy_service import EconomyError, collection_points, named, parse_named
+from tmserver.inventory_edits import apply_card_edits, parse_edit_records
+from tmserver.inventory_edits import match_owned as owned_indices
 
 
 class TradeError(ValueError):
@@ -46,16 +48,7 @@ def numbers(value, count, maximum=255):
 
 
 def match_owned(cards, requested, excluded=()):
-    """Reduced wire tuples have no instance ID; consume stable matching copies."""
-    available = set(range(len(cards))) - set(excluded)
-    result = []
-    for value in requested:
-        index = next((i for i in sorted(available) if cards[i].reduced() == value), None)
-        if index is None:
-            raise TradeError("card not owned or multiplicity exceeded")
-        available.remove(index)
-        result.append(index)
-    return result
+    return owned_indices(cards, requested, excluded, error=TradeError)
 
 
 @dataclass
@@ -416,70 +409,41 @@ class TradeService:
 
     def _edit_values(self, subtype, side, sections):
         token = "Erase" if subtype == 0x10 else "Decks"
-        f = sections[token]
-        if integer(f.get("P"), 1) != side:
+        head = sections[token]
+        if integer(head.get("P"), 1) != side:
             raise TradeError("edit side mismatch")
         if subtype == 0x10:
-            mode = integer(f.get("Mode"), 2)
+            mode = integer(head.get("Mode"), 2)
             if mode == 2:
-                fields(f, ("P", "Mode"))
+                fields(head, ("P", "Mode"))
                 fields(sections, ("Erase",))
                 return [], {}
             if mode != 1:
                 raise TradeError("unknown Erase mode")
-            fields(f, ("P", "Mode", "C"))
+            fields(head, ("P", "Mode", "C"))
         else:
-            fields(f, ("P", "C"))
-        count = integer(f["C"], 15 if subtype == 0x10 else 13)
-        expected = {token} | {str(i) for i in range(count)}
-        rename = set(sections) - expected if subtype == 0x22 else set()
-        if rename - {"DN1", "DN2"} or len(rename) > 1 or set(sections) != expected | rename:
-            raise TradeError("invalid edit sections")
-        names = {}
-        for key in rename:
-            fields(sections[key], ("S",))
-            text = sections[key]["S"]
-            if len(text) > 34 or len(text) % 2 or not re.fullmatch("[0-9a-fA-F]*", text):
-                raise TradeError("invalid deck name encoding")
-            value = bytes.fromhex(text)
-            if b"\0" in value:
-                raise TradeError("embedded deck name terminator")
-            names[int(key[2:])] = value
-        values = []
-        for i in range(count):
-            fields(sections[str(i)], ("D",))
-            value = numbers(sections[str(i)]["D"], 6 if subtype == 0x10 else 7, 65535)
-            if value[0] >= 250 or value[2] > 3 or any(x > 255 for x in value[1:]):
-                raise TradeError("invalid edit card")
-            if subtype == 0x22 and value[6] >= 50 and value[6] != 255:
-                raise TradeError("unknown deck slot")
-            values.append(value)
-        return values, names
+            fields(head, ("P", "C"))
+        values, renamed = parse_edit_records(sections, token, number=integer, error=TradeError)
+        if any(value[0] >= 250 or value[2] > 3 for value in values):
+            raise TradeError("invalid edit card")
+        return values, renamed
 
     def _edit(self, trade, side, subtype, sections):
-        values, names = self._edit_values(subtype, side, sections)
+        values, renamed = self._edit_values(subtype, side, sections)
         current = trade.final[side] if trade.phase == "settling" else trade.base[side]
         excluded = (
             ()
             if trade.phase == "settling"
-            else match_owned(current, [c.reduced() for c in trade.offers[side]])
+            else match_owned(current, [card.reduced() for card in trade.offers[side]])
         )
-        indices = match_owned(current, [v[:6] for v in values], excluded)
-        updated = list(current)
-        if subtype == 0x10:
-            updated = [c for i, c in enumerate(current) if i not in indices]
-        else:
-            slots = [v[6] for v in values if v[6] != 255]
-            if len(slots) != len(set(slots)):
-                raise TradeError("duplicate deck assignment")
-            updated = [replace(c, deck=255) if c.deck in slots else c for c in current]
-            for i, value in zip(indices, values):
-                updated[i] = replace(updated[i], deck=value[6])
+        cards, _ = apply_card_edits(
+            current, values, discard=subtype == 0x10, excluded=excluded, error=TradeError
+        )
         if trade.phase == "settling":
-            trade.final[side] = updated
+            trade.final[side] = cards
         else:
-            trade.base[side] = updated
-        trade.names[side].update(names)
+            trade.base[side] = cards
+        trade.names[side].update(renamed)
 
     def _late(self, peer, subtype, session, sections):
         self._key(peer)
