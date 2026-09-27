@@ -60,6 +60,20 @@ for later review and continue independent work.
 - Packaging: built the wheel in an isolated build environment and verified a
   dependency-free clean installation, both entry points, runtime resources and
   both listeners on temporary ports. No native game was launched.
+- Ordinary spectator re-entry: sender ownership now protects replacement
+  admissions from delayed bootstrap acknowledgements and late write errors.
+  Five new tests reproduce and cover the issue; all58 relevant tests pass.
+- Chat: full16-byte canonical names now enter and relay successfully. Only the
+  authenticated display is shortened to15; full native accounts, snapshots and
+  save bytes remain unchanged. Encrypted fresh/restored/reconnect routes and a
+  maximum128-account roster pass in a36-test batch.
+- Event results: a trusted API iterator was consumed before participant checks,
+  recording a receipt without progress. One materialized row now drives all
+  validation and changes. Generator/restart/replay and invalid-final-participant
+  regressions pass in a46-test batch. Current network callers already use tuples.
+- Protocol documentation: preserved15 archived original envelope cases and
+  clarified why arbitrary447-byte slicing cannot substitute for application
+  paging. No new native execution is claimed for these archived fixtures.
 
 These are focused regression batches, not a newly completed full-suite count.
 Repository-wide Ruff and whitespace checks pass. No native visual validation
@@ -67,14 +81,15 @@ is claimed by these tests.
 
 ## In progress
 
-- Chat presentation: legal16-byte canonical names disconnect entry/public/private
-  chat. Original sender copies all16 while the display accepts at most15.
-  Normalize only authoritative display names, keep original saves/identities,
-  verify encrypted routes and maximum128-account roster. Agent owns chat_service.py,
-  test_chat_service.py and CHAT_NOTES.md.
-- Ordinary spectators: audit the analogous late completion/error across detach
-  and re-entry. Agent owns ordinary_table.py and new spectator re-entry tests/docs.
-- Event claim persistence/recovery: independent read-only audit in progress.
+- Whole portable suite running against the completed changes. Output is in
+  ignored results/overnight-suite.log; parent exec session35860. Database URL
+  variables are cleared only in this test process, so optional external database
+  tests will skip. One event proposal-retry error appeared during a3.1-second
+  event-loop callback; the same test passed alone, but the full trace/result must
+  be reviewed before accepting the checkpoint. No source edits during the run.
+- Read-only design for optional weekly ranking history: use only future recorded
+  local results, no invented backfill or retail schedule/rookie policy. Agent
+  browser_port_options is assessing small durable integration and tests.
 
 Continue by reviewing active fixes, running their relevant checks, updating this
 log and committing locally. The thread heartbeat may resume this work; it is
