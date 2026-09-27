@@ -392,7 +392,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
             b"0",
             b"0",
             f"0x{ROOM_ID:016X}".encode(),
-            b"A" * 32,
+            b"A" * 31,
         ]
         out = await self.request(
             ROOM_RAW, b"GTM0L" + encode([Command(b"DE", b"\x06".join(fields))])

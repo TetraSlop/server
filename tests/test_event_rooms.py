@@ -42,7 +42,7 @@ def presence(room_id, nickname, character, name=b"Alice", token=b"DE"):
         b"0",
         b"0",
         f"0x{room_id:016X}".encode(),
-        b"A" * 32,
+        b"A" * 31,
     )
     return b"GTM0L" + encode([Command(token, b"\x06".join(fields))])
 

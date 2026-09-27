@@ -83,8 +83,10 @@ def player_record(payload):
             struct.pack_into("<" + fmt, b, offset, int(fields[index], base))
         except (ValueError, struct.error) as exc:
             raise ValueError("invalid player field") from exc
-    for index, offset, size in [(4, 0x28, 16), (10, 0x38, 32)]:
-        if len(fields[index]) > size or b"\0" in fields[index]:
+    # Info needs a terminator in its 32-byte native buffer; preserve the
+    # separate full-width canonical name contract. See ROOM_INFO_BOUNDARY.md.
+    for index, offset, limit in [(4, 0x28, 16), (10, 0x38, 31)]:
+        if len(fields[index]) > limit or b"\0" in fields[index]:
             raise ValueError("player string exceeds record")
         b[offset : offset + len(fields[index])] = fields[index]
     return struct.unpack_from("<Q", b)[0], bytes(b)
@@ -332,7 +334,7 @@ class RoomService:
     def _opponent_payload(self, peer, opponent):
         # Original10066950 projects info[23:25] to status/substatus. The
         # table Start gate requires every roster member to exist here as3/1.
-        info = bytearray(self.members[peer][1][0x38:0x58].rstrip(b"\0").ljust(32, b"A"))
+        info = bytearray(self.members[peer][1][0x38:0x58].rstrip(b"\0").ljust(31, b"A"))
         name = opponent.name[:15]  # Native CPU menu names may exceed the room name field.
         info[:15] = name.ljust(15, b" ")
         info[15] = ord("A") + len(name)

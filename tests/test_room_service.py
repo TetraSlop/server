@@ -16,7 +16,7 @@ from tmserver.room_service import (
 from tmserver.tm_protocol import Command, encode, parse
 
 
-def presence(token=b"DE", identity=123):
+def presence(token=b"DE", identity=123, *, info=b"A" * 31):
     fields = [
         f"0x{identity:016X}".encode(),
         b"1",
@@ -28,12 +28,55 @@ def presence(token=b"DE", identity=123):
         b"0",
         b"0",
         f"0x{ROOM_ID:016X}".encode(),
-        b"A" * 32,
+        info,
     ]
     return b"GTM0L" + encode([Command(token, b"\x06".join(fields))])
 
 
 class RoomTests(unittest.TestCase):
+    def test_info_bounds_reject_before_presence_or_replay_changes(self):
+        for token in (b"DE", b"PD"):
+            with self.subTest(token=token):
+                room = RoomService()
+                if token == b"PD":
+                    room.handle("one", presence())
+                before = room.snapshot(), dict(room.history)
+                for info in (b"A" * 32, b"A" * 33, b"A\0B"):
+                    with self.subTest(info=info), self.assertRaises(ValueError):
+                        room.handle("one", presence(token, info=info))
+                    self.assertTrue(
+                        (room.snapshot(), dict(room.history)) == before,
+                        "rejected info changed the room or replay history",
+                    )
+                for info in (b"", b"A" * 30, b"A" * 31):
+                    output = room.handle("one", presence(token, info=info))
+                    self.assertEqual(parse(output[-1][1][5:])[-1].payload.split(b"\x06")[-1], info)
+                    self.assertEqual(room.members["one"][1][0x38:0x58], info.ljust(32, b"\0"))
+
+    def test_single_and_paired_cpu_info_preserve_status_and_termination(self):
+        for count in (1, 2):
+            with self.subTest(count=count):
+                room = RoomService(player_count=count + 1)
+                info = b"A" * 25 + b"BCDEFG"
+                room.handle("one", presence(info=info))
+                opponents = [
+                    SimpleNamespace(name=b"Local Computer", nickname_id=512 + i, character_id=2 + i)
+                    for i in range(count)
+                ]
+                if count == 1:
+                    output = room.practice_opponent("one", opponents[0])
+                else:
+                    output = room.practice_opponents("one", opponents)
+                self.assertEqual(len(output), count)
+                for index, (_, packet) in enumerate(output):
+                    published = parse(packet[5:])[-1].payload.split(b"\x06")[-1]
+                    self.assertEqual(len(published), 31)
+                    self.assertEqual(published[23:], b"DBBCDEFG")
+                    record = room.npcs[512 + index][1]
+                    self.assertEqual(record[0x38:], published + b"\0")
+                    offset = 0x50 + (index + 1) * 0x58
+                    self.assertEqual(room.snapshot()[offset : offset + 0x58], record)
+
     def test_rule_changes_publish_even_without_occupancy_change(self):
         room = RoomService()
         room.handle("one", presence())
@@ -97,7 +140,7 @@ class RoomTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from("<III", snap, 0x40), (101, 1, 2))
         self.assertEqual(struct.unpack_from("<Q", snap, 0x50)[0], 123)
         self.assertEqual(struct.unpack_from("<Q", snap, 0x5850)[0], TABLE_ID)
-        self.assertEqual(snap[0x50 + 0x38 : 0x50 + 0x58], b"A" * 32)
+        self.assertEqual(snap[0x50 + 0x38 : 0x50 + 0x58], b"A" * 31 + b"\0")
 
     def test_replay_and_disconnect(self):
         r = RoomService()
