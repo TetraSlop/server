@@ -14,6 +14,7 @@ from tmserver.match_transactions import match_transaction
 from tmserver.match_watchdog import MatchWatchdog
 from tmserver.result_rewards import ResultRewardError
 from tmserver.result_stats import PracticeStats
+from tmserver.room_routing import validate_room_entry
 from tmserver.spectator_service import SpectatorService
 from tmserver.table_admission import eligibility_failure
 from tmserver.table_admission import rejected as reject_admission
@@ -439,6 +440,8 @@ class OrdinaryTable:
                 await self.deliver_table_packet(session, reject_admission("GameENC", full=False))
                 return True
             registered = any(p.peer is session for p in self.match.players)
+            if admitting and not registered:
+                validate_room_entry(host, session, self.room)
             viewing = viewer_state(msg)
             exiting_channel = channel_exit(msg)
             if not registered and session in self.spectator_admissions:
@@ -450,6 +453,7 @@ class OrdinaryTable:
                     return True
                 if exiting_channel:
                     self.detach_spectator(session)
+                    await host.chat_updates(host.chat.leave(session, service_nick(self.table_raw)))
                     return True
             if not registered and (viewing is not None or exiting_channel):
                 return True
