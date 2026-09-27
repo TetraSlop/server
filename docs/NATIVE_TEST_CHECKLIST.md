@@ -65,3 +65,16 @@ screens. A native UI pass is still needed even though the headless game logic pa
 Auction, Prize Center, event and spectator UI checks follow these core passes;
 they remain on the broader deferred-review list. Do not mark this checklist
 passed merely because the process started or exited successfully.
+
+## Optional weekly rankings
+
+Launch with `.\Play.cmd --rewards --ratings local-history --weekly-rankings`.
+After completing ordinary matches, check the ranking menu's Weekly Prize Money
+and VS. Rating lists, including the hide-name option. Top30 is populated from
+the preceding UTC week after Monday rollover; old saves are not backfilled and
+Best Rookies remains empty. This is a local policy, not a recovered retail rule.
+
+Continue using `--ratings local-history` on later launches of this save, even
+when omitting `--weekly-rankings` to pause weekly tracking. See
+[weekly rankings](WEEKLY_RANKINGS.md) for the save-format and pause behavior.
+Encrypted file/result tests pass; native navigation and presentation are pending.
