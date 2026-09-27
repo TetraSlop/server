@@ -1,0 +1,629 @@
+{
+  "schema_version": 1,
+  "code_image_sha256": "422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879",
+  "original": {
+    "room_projection": "1008E08E..1008E46E",
+    "selected_room_copy": "1003074A..10030761",
+    "table_projection": [
+      "101A0C90",
+      "10086010",
+      "10066D10"
+    ],
+    "table_mode": "10045ABC..10045BBE",
+    "computer_constructor": "10045D56..10045DC9",
+    "update_guard": "100475D3..1004768A",
+    "human_join": "100477BC..100479A6"
+  },
+  "boundaries": [
+    "Original synthetic RL/PTL consumers, selection copy and action branches execute in Unicorn.",
+    "Inventory count is supplied at 100B8B30; widget enable calls are captured at 1018CEA0.",
+    "No widget construction, scene rendering, native process, network or live account data.",
+    "No claim that directory flags alone enforce hosted authorization or historical room policy."
+  ],
+  "cases": [
+    {
+      "name": "missing_room_flag",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041004c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAA********AAAAAAAAAAAAAAAAAAAAPDCBAAAAGEAAAAA",
+      "cards": 25,
+      "balance": 0,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 0,
+        "mode": 0,
+        "constructor_disabled": true,
+        "constructor_hint": 25,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 25,
+        "join_disabled": false,
+        "join_hint": 0
+      }
+    },
+    {
+      "name": "computer_room",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAA********AAAAAAAAAAAAAAAAAAAAPDCBAAAAGEAAAAA",
+      "cards": 25,
+      "balance": 0,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 0,
+        "constructor_disabled": false,
+        "constructor_hint": 22,
+        "update_disabled": false,
+        "disabled": false,
+        "final_hint": 22,
+        "join_disabled": false,
+        "join_hint": 0
+      }
+    },
+    {
+      "name": "computer_room_with_money",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAA********AAAAAAAAAAAAAAAAAAAAPDCBAAAAGEAAAAA",
+      "cards": 25,
+      "balance": 1000,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 0,
+        "constructor_disabled": false,
+        "constructor_hint": 22,
+        "update_disabled": false,
+        "disabled": false,
+        "final_hint": 22,
+        "join_disabled": false,
+        "join_hint": 0
+      }
+    },
+    {
+      "name": "computer_does_not_require_room_wager",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAA********AAAAAAAAAAAAAAAAABPEPDCBAAAAGEAAAAA",
+      "cards": 25,
+      "balance": 0,
+      "wager": 500,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 0,
+        "constructor_disabled": false,
+        "constructor_hint": 22,
+        "update_disabled": false,
+        "disabled": false,
+        "final_hint": 22,
+        "join_disabled": true,
+        "join_hint": 20
+      }
+    },
+    {
+      "name": "noncomputer_room",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041424c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAA********AAAAAAAAAAAAAAAAAAAAPDCBAAAAGEAAAAA",
+      "cards": 25,
+      "balance": 0,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 66,
+        "mode": 0,
+        "constructor_disabled": true,
+        "constructor_hint": 25,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 25,
+        "join_disabled": false,
+        "join_hint": 0
+      }
+    },
+    {
+      "name": "human_only_table",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "BAAAAA********AAAAAAAAAAAAAAAAAAAAPDCBAAAAGEAAAAA",
+      "cards": 25,
+      "balance": 0,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 66
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 0,
+        "constructor_disabled": true,
+        "constructor_hint": 25,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 25,
+        "join_disabled": false,
+        "join_hint": 0
+      }
+    },
+    {
+      "name": "unspecified_rules_computer_room",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000042414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAA********AAAAAAAAAAAAAAAAAAAAPDCBAAAAGEAAAAA",
+      "cards": 25,
+      "balance": 0,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 0,
+        "constructor_disabled": false,
+        "constructor_hint": 22,
+        "update_disabled": false,
+        "disabled": false,
+        "final_hint": 22,
+        "join_disabled": false,
+        "join_hint": 0
+      }
+    },
+    {
+      "name": "four_cards",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAA********AAAAAAAAAAAAAAAAAAAAPDCBAAAAGEAAAAA",
+      "cards": 4,
+      "balance": 0,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 0,
+        "constructor_disabled": true,
+        "constructor_hint": 23,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 23,
+        "join_disabled": true,
+        "join_hint": 13
+      }
+    },
+    {
+      "name": "five_cards",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAA********AAAAAAAAAAAAAAAAAAAAPDCBAAAAGEAAAAA",
+      "cards": 5,
+      "balance": 0,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 0,
+        "constructor_disabled": false,
+        "constructor_hint": 22,
+        "update_disabled": false,
+        "disabled": false,
+        "final_hint": 22,
+        "join_disabled": false,
+        "join_hint": 0
+      }
+    },
+    {
+      "name": "inconsistent_empty_table_count",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAB********AAAAAAAAAAAAAAHLAAAAPDCBAAAAGEAAAAA",
+      "cards": 25,
+      "balance": 0,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "000000000000007B",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 1,
+        "flags": 2,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 0,
+        "constructor_disabled": false,
+        "constructor_hint": 22,
+        "update_disabled": true,
+        "disabled": true,
+        "final_hint": 19,
+        "join_disabled": false,
+        "join_hint": 0
+      }
+    },
+    {
+      "name": "occupied_human_table",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "BAAAAB********AAAAAAAAAAAAAAHLAAAAPDCBAAAAGEAAAAA",
+      "cards": 25,
+      "balance": 0,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "000000000000007B",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 1,
+        "count": 1,
+        "flags": 17,
+        "type": 66
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 2,
+        "constructor_disabled": true,
+        "constructor_hint": 19,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 19,
+        "join_disabled": false,
+        "join_hint": 0
+      }
+    },
+    {
+      "name": "playing_table",
+      "room_record_hex": "a897867564534231000000000000000000000000000000000000000000000000000000000000000041414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414144410000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAC********AAAAAAAAAAAAAAHLAAAAPDCBAAAAGEAAAAA",
+      "cards": 25,
+      "balance": 0,
+      "wager": 0,
+      "table": {
+        "service": "1122334455667788",
+        "owner": "000000000000007B",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 2,
+        "count": 2,
+        "flags": 35,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 4,
+        "constructor_disabled": true,
+        "constructor_hint": 19,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 19,
+        "join_disabled": true,
+        "join_hint": 1
+      }
+    }
+  ],
+  "table_prefix_parity": [
+    {
+      "state": 0,
+      "count": 0,
+      "a": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 65
+      },
+      "b": {
+        "service": "1122334455667788",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 66
+      },
+      "rules_hex": "00000000010101010203000000000000000000000000000000000000000000000000002a2a2a2a2a2a2a2a000000000000000000",
+      "differing_offsets": [
+        "0x870",
+        "0x8a8"
+      ],
+      "human_join": {
+        "room_flag": 65,
+        "mode": 0,
+        "constructor_disabled": true,
+        "constructor_hint": 25,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 25,
+        "join_disabled": false,
+        "join_hint": 0
+      },
+      "equal_except_type": true
+    },
+    {
+      "state": 1,
+      "count": 1,
+      "a": {
+        "service": "1122334455667788",
+        "owner": "000000000000007B",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 1,
+        "count": 1,
+        "flags": 17,
+        "type": 65
+      },
+      "b": {
+        "service": "1122334455667788",
+        "owner": "000000000000007B",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 1,
+        "count": 1,
+        "flags": 17,
+        "type": 66
+      },
+      "rules_hex": "0000000001010101020300000100000064000000000000002c010000640000000000002a2a2a2a2a2a2a2a000000000000000000",
+      "differing_offsets": [
+        "0x870",
+        "0x8a8"
+      ],
+      "human_join": {
+        "room_flag": 65,
+        "mode": 2,
+        "constructor_disabled": true,
+        "constructor_hint": 19,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 19,
+        "join_disabled": false,
+        "join_hint": 0
+      },
+      "equal_except_type": true
+    }
+  ],
+  "production_directory_sha256": "2e0e7e95e8c5fe5476c4d3a81372fc877c440e879b1c0688a367aa92d5844483",
+  "production_rooms": [
+    {
+      "name": "Local Room",
+      "room_record_hex": "90babce4d0c82db6000000000000000000000000000000000000000000000000000000000100000142414c6f63616c20526f6f6d2a0000000000000000000000000000000000000000414141414143420000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234c4f43414c524f4f4d303100000000",
+      "table_metadata": "AAAAAA********AAAAAAAAAAAAAAAAAAAAACBBEBIGJPAAAAA",
+      "ptl_sha256": "3b71a4e6ff013a708aae3164f10636d70abc94effa0ba337f93e1619e2582f25",
+      "table": {
+        "service": "B62DC8D0E4BCB990",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 65
+      },
+      "result": {
+        "room_flag": 65,
+        "mode": 0,
+        "constructor_disabled": false,
+        "constructor_hint": 22,
+        "update_disabled": false,
+        "disabled": false,
+        "final_hint": 22,
+        "join_disabled": false,
+        "join_hint": 0
+      },
+      "fixed_rules": false,
+      "projected_rules": null
+    },
+    {
+      "name": "Open Tables",
+      "room_record_hex": "91babce4d0c82db6000000000000000000000000000000000000000000000000000000000100000142004f70656e205461626c65732a00000000000000000000000000000000000000414141414143420000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234f50454e524f4f4d00000000000000",
+      "table_metadata": "BAAAAA********AAAAAAAAAAAAAAAAAAAAACBBEBIGJPAAAAA",
+      "ptl_sha256": "b0f3943c139c7715aac3eea3e042c70ef0e92e271fcc907f0ee5075a6f631322",
+      "table": {
+        "service": "B62DC8D0E4BCB991",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 66
+      },
+      "result": {
+        "room_flag": 0,
+        "mode": 0,
+        "constructor_disabled": true,
+        "constructor_hint": 25,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 25,
+        "join_disabled": false,
+        "join_hint": 0
+      },
+      "fixed_rules": false,
+      "projected_rules": null
+    },
+    {
+      "name": "Classic Rules",
+      "room_record_hex": "92babce4d0c82db600000000000000000000000000000000000000000000000000000000010000014100436c61737369632052756c65732a000000000000000000000000000000000041414141414342000000000000000000000000000000000000000000000000000041414241424141000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000023434c41535349430000000000000000",
+      "table_metadata": "BAAAAA********AAAAAAAAAAAAAAAAAAAAACBBEBIGJPAAAAA",
+      "ptl_sha256": "53941570ce0f2705a7b9a34f5e91d0304cc55b211c9a1c07e20b93524beac484",
+      "table": {
+        "service": "B62DC8D0E4BCB992",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 66
+      },
+      "result": {
+        "room_flag": 0,
+        "mode": 0,
+        "constructor_disabled": true,
+        "constructor_hint": 25,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 25,
+        "join_disabled": false,
+        "join_hint": 0
+      },
+      "fixed_rules": true,
+      "projected_rules": {
+        "bm": 0,
+        "du": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "gs": 1,
+        "tl": 2
+      }
+    },
+    {
+      "name": "Special Rules",
+      "room_record_hex": "93babce4d0c82db6000000000000000000000000000000000000000000000000000000000100000141005370656369616c2052756c65732a0000000000000000000000000000000000414141414f43420000000000000000000000000000000000000000000000000000414142414241410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000235350454349414c0000000000000000",
+      "table_metadata": "BAAAAA********AAAAAAAAAAAAAAAAAAAAOCBBEBIGJPAAAAA",
+      "ptl_sha256": "61bd47bff0c2a4330eddff0575d05a740deb61028021806061930b994da93d27",
+      "table": {
+        "service": "B62DC8D0E4BCB993",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 66
+      },
+      "result": {
+        "room_flag": 0,
+        "mode": 0,
+        "constructor_disabled": true,
+        "constructor_hint": 25,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 25,
+        "join_disabled": false,
+        "join_hint": 0
+      },
+      "fixed_rules": true,
+      "projected_rules": {
+        "bm": 0,
+        "du": 0,
+        "st": 1,
+        "cb": 1,
+        "ca": 1,
+        "gs": 1,
+        "tl": 2
+      }
+    },
+    {
+      "name": "Quick Play",
+      "room_record_hex": "94babce4d0c82db600000000000000000000000000000000000000000000000000000000010000014100517569636b20506c61792a000000000000000000000000000000000000000041414141414242000000000000000000000000000000000000000000000000000041414241424141000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000023515549434b00000000000000000000",
+      "table_metadata": "BAAAAA********AAAAAAAAAAAAAAAAAAAAABBBEBIGJPAAAAA",
+      "ptl_sha256": "d078d49cbab403e5ad91198daa017fc62d1f2e5d692dbd0a81abf34dd8ef0deb",
+      "table": {
+        "service": "B62DC8D0E4BCB994",
+        "owner": "0000000000000000",
+        "raw_index": 0,
+        "table_number": 1,
+        "state": 0,
+        "count": 0,
+        "flags": 0,
+        "type": 66
+      },
+      "result": {
+        "room_flag": 0,
+        "mode": 0,
+        "constructor_disabled": true,
+        "constructor_hint": 25,
+        "update_disabled": false,
+        "disabled": true,
+        "final_hint": 25,
+        "join_disabled": false,
+        "join_hint": 0
+      },
+      "fixed_rules": true,
+      "projected_rules": {
+        "bm": 0,
+        "du": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "gs": 1,
+        "tl": 1
+      }
+    }
+  ]
+}
