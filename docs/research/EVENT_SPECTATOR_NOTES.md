@@ -13,6 +13,15 @@ failed/slow observers do not hold that lock or stop participant gameplay.
 Participant abort and table replacement retire the associated observers.
 Event room roster/control output still uses the shared event sender.
 
+ExitCh, PART and disconnect retire the observer's sender as well as its queued
+packets and admission. Rewatching the same active event gets a new sender owner;
+late completion, failure or final cleanup from the old writer cannot acknowledge
+the new bootstrap, remove its task, or close its connection. Retired writers
+remain tracked until completion so shutdown can cancel and await them. Encrypted
+re-entry tests block an old gameplay write across ExitCh/PART and exercise both
+normal cancellation and late completion/failure. This fixes transport lifecycle
+ordering; it does not establish a native observer presentation timing policy.
+
 Public Start/Turn/Put/Battle/GetAway/Change/Result packets are streamed in order.
 Private EventCard, selected hands and owned-card TCList are excluded. Original
 role4 EventResult receive tests preserve personal profile state and send no ACK.

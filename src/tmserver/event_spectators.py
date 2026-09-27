@@ -18,6 +18,7 @@ class EventSpectators:
         self.viewers = set()
         self.queues = {}
         self.tasks = {}
+        self.senders = set()
         self.closers = set()
         self.stopping = False
 
@@ -177,20 +178,24 @@ class EventSpectators:
             return
         queue.append((target, engine, service, payload))
         if peer not in self.tasks:
-            self.tasks[peer] = asyncio.create_task(self._send(peer))
+            task = self.tasks[peer] = asyncio.create_task(self._send(peer))
+            self.senders.add(task)
+            task.add_done_callback(self.senders.discard)
 
     async def _send(self, peer):
+        task = asyncio.current_task()
         try:
-            while not peer.closed and self.queues.get(peer):
+            while self.tasks.get(peer) is task and not peer.closed and self.queues.get(peer):
                 target, engine, service, payload = self.queues[peer].popleft()
                 source = service_nick(target ^ GAME_KEY)
-                if not await self.adapter.server.deliver(
-                    peer, b":" + source + b"!p@local NOTICE " + peer.nick + b" :" + payload
-                ):
+                # Handle failures here: a retired write cannot close a new admission.
+                await peer.send(b":" + source + b"!p@local NOTICE " + peer.nick + b" :" + payload)
+                if peer.closed:
                     break
                 if service is not None:
                     async with self.adapter.lock:
-                        service.record_sent(peer, payload, epoch=engine)
+                        if self.tasks.get(peer) is task:
+                            service.record_sent(peer, payload, epoch=engine)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -198,10 +203,13 @@ class EventSpectators:
             # task exception nor interrupt the participant event driver.
             self.adapter.server.log("event_observer_send_error", reason=str(exc))
             async with self.adapter.lock:
+                if self.tasks.get(peer) is not task:
+                    return
                 self.disconnect(peer)
             self._close_later(peer)
         finally:
-            self.tasks.pop(peer, None)
+            if self.tasks.get(peer) is task:
+                self.tasks.pop(peer, None)
 
     def disconnect(self, peer):
         self.admissions.pop(peer, None)
@@ -209,10 +217,15 @@ class EventSpectators:
         self.viewers.discard(peer)
         for _, service in self.contexts.values():
             service.disconnect(peer)
+        # A new admission may reuse this peer and engine before old I/O retires.
+        # Task ownership identifies the admission for callbacks and final cleanup.
+        task = self.tasks.pop(peer, None)
+        if task is not None and task is not asyncio.current_task():
+            task.cancel()
 
     async def stop(self):
         self.stopping = True
-        tasks = list(self.tasks.values())
+        tasks = list(self.senders)
         for task in tasks:
             task.cancel()
         if tasks:
