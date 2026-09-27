@@ -10,6 +10,14 @@ Create `TradeService(economy)` once. Bind each authenticated connection with `bi
 
 After the adapter has observed an authenticated invitation and positive peer `TrAns`, call `authorize_pair(side0, side1)`. Then route service-directed A0 `TrEnt` and A2 messages to `handle(peer, payload)`. The return is `None` for an unrelated family or a list of `Delivery(peer, payload, reload_profile=False)`; an empty list is an accepted operation requiring no immediate reply. Malformed or unsupported trade input raises `TradeError`. The adapter should abort the affected exchange and resynchronize, not fabricate a success reply. `begin(side0, side1)` is a trusted adapter/test entry that bypasses TrEnt consent checks; never expose it as a client-controlled operation.
 
+Successful admission consumes every outstanding router invitation and approval
+involving either participant, including approvals with a third peer. An old
+approval cannot survive an intervening completed trade and authorize another
+reservation later. Unrelated pairs remain intact; a rejected or unhandled entry
+does not consume pending approvals. This is a local consent-lifecycle boundary,
+not an inferred historical timeout. A subsequent trade needs a fresh invitation
+and acceptance.
+
 `status(peer)` returns bounded diagnostic state. `abort(peer)` rolls back both sides. `disconnect(peer)` also removes that peer's binding and returns notifications only for its still-connected counterpart. Call the trade disconnect path before dropping the connection from routing. A disconnect after an already committed exchange does not undo it.
 
 The adapter owns timeouts, delivery and durable storage. Persist `economy.snapshot()` **after mutation and before sending final A2/1E Quit replies**, using one atomic replacement for the whole account snapshot. There is no network or filesystem access in this module. If persistence fails, do not send successful completion and continue as if it succeeded; close/resynchronize and resolve the process/disk state before accepting further mutations. A stronger production transaction journal is outside this local service.
@@ -58,6 +66,12 @@ Commit checks both original snapshots, both output capacities, every card and de
 ## Validation and limits
 
 The tests cover consent/identity, exact Init and zero-offer schemas, pagination and maximum body widths, owned duplicate copies, changed confirmation, repeated Ans/Get, both-account commit, overflow discards, deck/name edits including delayed rename, rollback after the first Get, reserved-account protection, snapshot/profile roundtrip, and the recorded original paired-flow final ownership.
+
+Router tests verify participant-wide consent consumption, unrelated-pair
+preservation and failed-entry isolation. An encrypted three-account regression
+approves A/B and C/A, completes an actual A/B card exchange, rejects C's stale
+entry without changing the saved result or reserving A, then reconnects C and
+admits a newly approved C/A trade.
 
 The optional Unicorn test executes **two original x86 clients** through server-produced Init, Card, Data, M3, M4 and Quit. It obtains outgoing Card/Data/Ans/Get from the original sender, executes full original reconciliation and fitting-card move, and compares every final card field and both balances with the Python service. Native compaction may reorder equal-rank cards, so the final comparison is a multiset. The original instruction fixtures substitute heap/runtime/presentation/final enqueue as documented in the existing probe modules. No installed game, desktop control, socket server or native two-player UI is launched.
 
