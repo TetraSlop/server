@@ -120,7 +120,27 @@ for later review and continue independent work.
 - Final82-entry wheel passes clean no-deps installation, actual temporary JSON
   award command and both listeners. Logs:results/overnight-admin-wheel-{build,check}.log.
   Local editable install refreshed; tmserver-admin --help works. Collection981
-  tests has no import errors. PostgreSQL admin execution is not claimed.
+  tests has no import errors. A later PostgreSQL run is recorded below.
+- Continue privacy: the accepted result's profile fingerprint now follows its
+  own validated privacy change, preserving delayed deck edits across a rematch's
+  stake refresh. An unrelated profile change still invalidates the context.
+  First/final-voter encrypted tests cover ownership, stakes, deck edits, restart
+  and save failure. All 42 privacy/reward/transaction tests pass. Commit 6919673.
+- Accepted result state now uses immutable named fields for its seat,
+  reservation, account and profile fingerprint instead of positional tuples.
+  The same 42 tests pass after this readability change (77cf376). Another
+  38 encrypted CPU, three-player, wager, prize and ranking tests pass against
+  the privacy fix before the representation-only change.
+- Real PostgreSQL 16.15 validation passes all 56 existing backend cases and
+  three new offline-admin cases. The latter cover award replay after redemption,
+  event grants/eligibility/configuration, preserving weekly rankings, and actual
+  advisory writer exclusion. Only a new private temporary host was used.
+  Commit 0280422 includes the tests and database validation report. Its owned
+  container, daemon, mounts and temporary data were removed; no listener remains.
+- The rebuilt final 82-entry wheel passes clean installation, the real JSON
+  admin award command, entry points and both service listeners. Logs are
+  results/overnight-final-wheel-{build,check}.log. No optional runtime dependency
+  was needed.
 
 Whole portable regression checkpoint completed:903 tests in798.6 seconds,
 846 passed,56 optional PostgreSQL tests skipped, and one login timeout in the
@@ -131,22 +151,17 @@ checks pass. No native visual validation is claimed by these tests.
 
 ## In progress
 
-- A final encrypted gameplay audit reproduced a rematch failure when Continue
-  changes ranking privacy: a legitimate later Decks packet loses its accepted
-  result context and disconnects both players. `browser_port_options` owns the
-  bounded fix and first/final-voter regression coverage.
-- `texture_load_trace` is validating offline administration against a fresh,
-  private PostgreSQL 16 instance using cached WSL binaries and an image. Only
-  newly created temporary daemon/container/database state is authorized; all
-  owned runtime resources must be stopped and cleaned up after validation.
+- All assigned work, final checks and temporary PostgreSQL cleanup are complete.
+  Agents are idle and no root exec sessions remain active. Latest production
+  commit is 77cf376; subsequent changes add tests and validation records.
 - The transport/profile audit found no new actionable defect. Isolated encrypted
   probes rejected truncated bodies, incorrect extents and bad checksums without
   publishing state; valid follow-up requests succeeded. No protocol policy was
   changed based on speculative request ordering.
-- No root exec sessions remain from the full suite, wheel or editable install.
-  The latest full run is 952 cases; post-checkpoint follow-ups passed their scoped
-  tests and final package check, not a new complete 981-case run.
-- Before further substantial work check current allowance. Last observed 96%
+- The latest full run is 952 cases; post-checkpoint follow-ups passed their scoped
+  tests and package checks, not a new complete 988-case run. Collection now finds
+  988 tests with no import errors (including 59 optional PostgreSQL cases).
+- Before further substantial work check current allowance. Last observed 98%
   used; reset remains 1791063720. Continue only concrete, bounded improvements
   that can be completed and validated within remaining allowance. No reset
   credits, purchases or continuation into a replenished allowance are authorized.

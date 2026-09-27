@@ -23,8 +23,30 @@ and10 lease tests. Collection now finds981 cases without import errors; the full
 The final82-entry wheel passes a fresh dependency-free install and an actual
 temporary JSON award through `tmserver-admin`, as well as both service listeners.
 The local editable environment was refreshed to expose the new command.
-Actual PostgreSQL administration and native reward-screen observation remain
-separate checks; no real save or game window was used for this validation.
+PostgreSQL administration is checked separately below. Native reward-screen
+observation remains deferred; no real save or game window was used.
+
+The subsequent PostgreSQL 16.15 run passes all 56 existing backend cases in
+55.382 seconds and three new admin cases in 1.826 seconds. These cover actual
+award redemption/replay, event grants and eligibility, configuration validation,
+preserved weekly ranking data, and competing-writer rejection. The host uses a
+new private temporary daemon/container and cached image, with loopback access;
+it does not connect to a pre-existing user database. Its container, private
+daemon, mounts and data directory have been removed, and the test port has no
+listener. See the [database validation report](research/ADMIN_POSTGRES_VALIDATION.md).
+
+The Continue/privacy rematch correction passes 42 focused cases, including
+encrypted first/final-voter deck updates, stakes, ownership, reload, unrelated
+profile changes and save failures. Those 42 cases also pass after replacing
+the private accepted-result tuples with immutable named records. Another 38
+CPU, three-player, wager, prize and ranking cases passed against the privacy
+fix before that representation-only change. Collection now finds 988 tests
+without import errors; a new complete 988-case run is not claimed.
+
+After those final production changes, the rebuilt 82-entry wheel again passes
+a clean install without optional dependencies, the actual JSON admin award
+command, both entry points and both service listeners. Logs are
+`results/overnight-final-wheel-{build,check}.log`.
 
 ## Integrated local launch, 2026-09-27
 
