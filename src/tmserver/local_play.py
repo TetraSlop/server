@@ -10,10 +10,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from tmserver.economy_service import EconomyService
 from tmserver.local_accounts import NAMES
 from tmserver.run_server import arguments as server_arguments
 from tmserver.run_server import running_services
+from tmserver.snapshot_validation import validate_snapshot
 from tmserver.state_store import JsonStateStore
 
 
@@ -67,7 +67,7 @@ async def preflight(args):
         if not path.is_file():
             raise ValueError(f"Missing setup file: {path}. See docs/LOCAL_PLAY.md.")
     if args.state.exists():
-        EconomyService.restore(JsonStateStore(args.state).load())
+        validate_snapshot(JsonStateStore(args.state).load())
     process = await asyncio.create_subprocess_exec(
         str(args.loader),
         "--config",

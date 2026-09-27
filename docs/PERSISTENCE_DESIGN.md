@@ -24,6 +24,12 @@ owns schema changes. An ORM object graph, repository hierarchy and another set o
 Pydantic game models would duplicate existing objects without clarifying this
 boundary. Import uses the existing domain restore validators.
 
+Startup, import and administration reject unrecognized snapshot sections and
+account fields before recovery or writes. This prevents an older server from
+silently discarding newer saved data. Individual services then validate their
+journals. The local launcher's read-only setup check validates the complete save,
+including journals, without refunding stakes or collecting pending rewards.
+
 ## What is stored
 
 | Table | Content |

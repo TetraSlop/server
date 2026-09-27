@@ -21,7 +21,9 @@ panel's Quit game button. Window preferences are stored per account under
 These controls and the restored audio need a native check with the updated build.
 
 `Check Setup.cmd` performs only the read-only setup check. It opens no game
-window, starts no service and does not update the save.
+window, starts no service and does not update the save. It validates saved
+accounts and all service journals before checking the loader; it does not run
+interrupted-match recovery.
 
 For multiple local players, close the previous Play session and run from the
 `tmserver` folder:

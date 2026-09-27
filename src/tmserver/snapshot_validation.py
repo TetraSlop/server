@@ -17,6 +17,20 @@ ACCOUNT_FIELDS = frozenset(
 )
 
 
+def validate_snapshot_fields(snapshot):
+    """Reject fields that this version would silently drop when saving again."""
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("accounts"), dict):
+        raise ValueError("saved economy and accounts must be objects")
+    if set(snapshot) - (SERVICE_NAMES | {"version", "accounts"}):
+        raise ValueError("unknown snapshot sections; refusing to discard them")
+    for account in snapshot["accounts"].values():
+        if not isinstance(account, dict) or set(account) != ACCOUNT_FIELDS:
+            raise ValueError("unsupported account fields")
+    for name in SERVICE_NAMES:
+        if snapshot.get(name) is not None and not isinstance(snapshot[name], dict):
+            raise ValueError(f"saved {name} journal must be an object or null")
+
+
 def validate_snapshot(snapshot, *, event_configs=()):
     """Use the domain's restore validators without running startup recovery."""
     from tmserver.auction_economy import AuctionEconomy
@@ -30,16 +44,7 @@ def validate_snapshot(snapshot, *, event_configs=()):
     from tmserver.rating_policy import RatingPolicy
     from tmserver.result_rewards import ResultRewardService
 
-    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("accounts"), dict):
-        raise ValueError("saved economy and accounts must be objects")
-    if set(snapshot) - (SERVICE_NAMES | {"version", "accounts"}):
-        raise ValueError("unknown snapshot sections; refusing to discard them")
-    for account in snapshot["accounts"].values():
-        if not isinstance(account, dict) or set(account) != ACCOUNT_FIELDS:
-            raise ValueError("unsupported account fields")
-    for name in SERVICE_NAMES:
-        if snapshot.get(name) is not None and not isinstance(snapshot[name], dict):
-            raise ValueError(f"saved {name} journal must be an object or null")
+    validate_snapshot_fields(snapshot)
     economy = EconomyService.restore(snapshot)
     auctions = AuctionEconomy.restore(economy, snapshot.get("auction"))
     PrizeService.restore(economy, snapshot.get("prize"))

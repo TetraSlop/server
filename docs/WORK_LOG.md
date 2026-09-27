@@ -195,6 +195,18 @@ checks pass. No native visual validation is claimed by these tests.
 
 ## Current checkpoint
 
+- Startup field validation now shares the same boundary as import/admin.
+  A disposable interrupted-wager save reproduced silent loss of an unknown
+  journal and account field during automatic recovery. Startup now rejects
+  these fields before recovery/writes, for JSON and injected stores. The local
+  setup check validates all service journals while preserving pending recovery.
+  Six new tests cover these cases and older absent/null journals. In total,
+  77 distinct startup/Play/lease/admin/JSON/recovery tests passed across two
+  runs. The first run also named a nonexistent module; the corrected recovery
+  run passed 14 cases (six already covered plus eight session-recovery checks).
+  Logs: results/startup-validation-tests.log and
+  results/startup-validation-recovery-tests.log. Ruff passes.
+
 - Temporary PostgreSQL cleanup is complete. The latest complete portable suite
   covered 988 cases; later admin and admission changes pass scoped tests and
   package checks as recorded above. Current work uses temporary headless peers.

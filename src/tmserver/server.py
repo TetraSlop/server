@@ -47,6 +47,7 @@ from tmserver.ranking_service import METADATA_PATH, RankingService
 from tmserver.rating_policy import RatingPolicy
 from tmserver.result_rewards import ResultRewardService
 from tmserver.room_service import RoomService
+from tmserver.snapshot_validation import validate_snapshot_fields
 from tmserver.state_store import JsonStateStore, StateStore
 from tmserver.table_preferences import TablePreferences
 from tmserver.trade_router import TradeRouter
@@ -126,6 +127,7 @@ class Server(OrdinaryTable):
         )
         saved = self.store.load() if self.store is not None else None
         if saved is not None:
+            validate_snapshot_fields(saved)
             self.economy = EconomyService.restore(saved, seed=1, shop_offers=shop_offers)
         else:
             self.economy = EconomyService(seed=1, shop_offers=shop_offers)
