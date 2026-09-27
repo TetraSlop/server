@@ -264,6 +264,8 @@ class Session:
             return
         for peer in list(members):
             await self.server.deliver(peer, self.prefix + b"PART " + channel)
+        if self.closed:
+            return
         self.channels.discard(channel)
         members.discard(self)
         if not members:
@@ -296,13 +298,29 @@ class Session:
             )
         binding = self.server.event_rooms.room_for_channel(channel)
         if binding is not None and binding.room_channel.upper() == channel.upper():
-            await self.server.event_matches.disconnect(self)
-            key = self.server.ensure_account(self.nick)
-            for room, updates in self.server.event_rooms.disconnect(self, key):
-                await self.server.room_updates(updates, source=service_nick(room.raw_owner))
+            await self.leave_event_room(binding)
             group = service_nick(binding.raw_owner)
         if group is not None:
             await self.server.chat_updates(self.server.chat.leave(self, group))
+
+    async def leave_event_room(self, binding):
+        events = self.server.event_matches
+        watching = events.spectators.admissions.get(self)
+        if (
+            self in binding.room.members
+            or events.coordinator.participant_room(self) == binding.room_id
+            or watching is not None
+            and self.server.event_rooms.room_for_service(watching[0]) is binding
+        ):
+            await events.disconnect(self)
+        # Delivery can close this socket and let the account reconnect. Its
+        # replacement owns any new presence established while we were waiting.
+        if self.closed:
+            return
+        key = self.server.ensure_account(self.nick)
+        updates = binding.room.leave(self)
+        self.server.events.leave_room(key, binding.event_id)
+        await self.server.room_updates(updates, source=service_nick(binding.raw_owner))
 
     async def close(self):
         if self.closed:
