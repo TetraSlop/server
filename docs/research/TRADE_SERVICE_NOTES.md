@@ -55,6 +55,31 @@ Init is `A2/18 @Init=/ID=session@No0=/RA=/M=/CP=/S=@No1=...`. It sends both role
 
 Temporary collection capacity is1030; persisted capacity is1000. Reduced tuples have no unique copy ID, so equal copies are consumed in stable stored order. A full edit batch is validated before applying any edit. The service never accepts client-chosen sale values, prices, points, or currency changes through A2.
 
+While an offer upload is incomplete, an exact already-buffered page is a
+no-op, including page zero after later pages have arrived. A changed page
+replaces the buffered suffix beginning at its start index, after validating
+ownership and multiplicity of the resulting complete prefix. This permits a
+replacement offer to share its first page with the old offer. Gaps and total
+changes without a new page zero remain invalid. Partial offers cannot be
+confirmed or published to the other participant. Completed offers retain the
+existing selection-reset and confirmation rules. This is explicit local
+retry tolerance; the wire has no per-offer generation field.
+
+A read-only inspection of the original uploader reinforces that boundary:
+`10106E30` enqueues each page at `10108DD7`, advances by 15 cards at
+`10108DF1` and loops at `10108E1B` before setting own-state 1 at `10108E21`.
+The outgoing queue routine `10082060` returns without processing UI edits.
+Thus the original 30-card upload uses 15/15 pages within one synchronous call;
+the server's width-aware 14/14/2 test is not that native scheduling behavior.
+The original header contains the trade session and P/E/S/C, without a page
+acknowledgement or generation. Two UI branches at `10018060..100180CE` and
+`100181C9..10018231` return offered cards, clear the count at record+F0 and
+send E=0. Those branches establish an explicit clear-offer action, not that
+every edit must clear first or that a repeated nonempty page zero always
+means reset. Addresses refer to the reconstructed code image SHA256
+`422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879`;
+no new native process or instruction probe was run for this inspection.
+
 Get is not a universal deck-editor barrier: a renamed editor can be detached and sent later. Decks is accepted while waiting for the other Get and also against the most recently completed session while that account remains idle. Late edits revalidate owned cards and can only change associations/names. Later Erase or confirmation messages are rejected after commit. Beginning another trade or disconnecting invalidates that receipt. The public economy method rejects delayed deck edits if another reservation or shop session has begun.
 
 ## Public economy boundary

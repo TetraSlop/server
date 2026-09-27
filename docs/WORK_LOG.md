@@ -19,6 +19,19 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Incomplete trade-offer retries preserve already received later pages
+  (`dda421f`). Previously retrying page zero truncated a 28-card prefix and
+  the subsequent final page aborted the trade. Changed pages replace the
+  buffered suffix only after validating owned copies, preserving legitimate
+  replacement offers that share an earlier prefix. This is local retry policy;
+  original source inspection finds no per-offer generation signal. Two new
+  tests pass, including encrypted exchanges for both roles, unchanged saves
+  until both Get requests, delayed deck names, duplicate Get and exact restart.
+  Twenty-seven existing trade/commit controls pass. Chat/IRC audit passes 15
+  existing tests and confirms the configured 128-account pool fits the native
+  roster bounds; no chat policy or implementation change was needed. Collection
+  finds 1,141 tests; Ruff/whitespace and rebuilt-wheel installation, entry points,
+  recovery and temporary listeners pass. All 80 runtime files byte-match source.
 - Generic profile privacy duplicates now compare numeric selector identity,
   preventing zero-prefixed aliases from overriding the same field in one edit
   (`ac93d52`). Restored opaque float fields are limited to 127 decimal bytes

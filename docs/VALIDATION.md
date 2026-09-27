@@ -1,5 +1,49 @@
 # Packaging and transaction validation
 
+## Pending trade-offer retries, 2026-09-27
+
+Commit `dda421f` preserves exact buffered offer pages when page zero is retried
+after later pages. Previously a valid 30-card upload with 14/14/2 pages lost
+its 28-card prefix and rejected the final page as noncontiguous, aborting the
+exchange. The direct reproduction is `results/trade-page-retry-repro.log`;
+the encrypted baseline fails for both participant roles:
+`results/trade-lifecycle-boundaries-before.log`.
+
+Changed pages now replace only the pending suffix after cumulative ownership
+validation. This also preserves replacement offers with an unchanged first
+page. The two new tests pass in 1.654 seconds, covering ownership-failure
+atomicity, first/middle-page retries, both replacement forms, full encrypted
+confirmation, delayed deck-name editing after the first Get, duplicate Get,
+unchanged saves before paired commit and exact restoration afterward:
+`results/trade-lifecycle-boundaries-focused.log`.
+
+Twenty-seven existing controls pass in 2.794 seconds:
+`tests.test_trade_service.TradeTests`, the encrypted commit/restart and
+disconnect-after-first-Get tests, and `tests.test_commerce.TradeCommitTests`.
+Log: `results/trade-lifecycle-boundaries-controls.log`. Independent review
+checked the identical-prefix replacement ambiguity before accepting the fix.
+No additional defect was found in the bounded challenge/settling/edit audit.
+
+Original uploader inspection, documented in `research/TRADE_SERVICE_NOTES.md`,
+finds fixed 15-card synchronous uploads and explicit E=0 clear actions, but
+no per-offer generation or page acknowledgement. Retry/replacement tolerance
+is therefore local policy, not a recovered historical host algorithm. No new
+original-instruction probe or native UI run was used.
+
+A separate chat/IRC audit passes 15 existing tests in 8.478 seconds:
+`results/chat-roster-boundary-audit.log`. The supported 128-account roster fits
+the original 17-page array even at maximum names/counter widths. Existing
+source evidence establishes signed counter comparisons without wrap-aware
+ordering, but no reliable active-UI capacity denial policy; no new rollover
+or rejection message was invented, and no chat runtime change was needed.
+
+Collection finds 1,141 tests without import errors; Ruff/whitespace pass.
+The 85-entry wheel passes clean dependency-free installation, both entry
+points, JSON administration/recovery and temporary listeners. All 80 runtime
+files byte-match source. Logs: `results/trade-retry-wheel-{build,check}.log`.
+SHA256: `6bc3712a5c20b48942b92bf18b9cf5602516c4d47364fcb981ed388bac1c9548`.
+These focused checks do not claim a fresh whole-suite or PostgreSQL run.
+
 ## Generic profile selectors, scalar bounds and transport audit, 2026-09-27
 
 Commit `ac93d52` compares privacy `NO` selectors by parsed numeric identity.
