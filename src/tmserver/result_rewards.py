@@ -12,7 +12,7 @@ import re
 from copy import copy
 from dataclasses import dataclass, replace
 
-from tmserver.economy_service import Card, EconomyError, parse_named
+from tmserver.economy_service import AccountView, Card, EconomyError, MatchReservation, parse_named
 
 
 class ResultRewardError(EconomyError):
@@ -55,6 +55,16 @@ class _Pending:
     token: object = None
     cards: list | None = None
     names: dict | None = None
+
+
+@dataclass(frozen=True)
+class _Accepted:
+    """Ephemeral deck editor; immutable so staged saves can safely share it."""
+
+    seat: int
+    token: MatchReservation | None
+    account: AccountView
+    profile_basis: bytes
 
 
 class ResultRewardService:
@@ -145,7 +155,10 @@ class ResultRewardService:
 
     def reservation(self, key):
         pending = self._pending.get(key)
-        return pending.token if pending is not None else self._accepted.get(key, (None, None))[1]
+        if pending is not None:
+            return pending.token
+        accepted = self._accepted.get(key)
+        return accepted.token if accepted is not None else None
 
     def _profile_basis(self, key):
         profile = bytearray(self.economy.profile_bytes(key))
@@ -166,16 +179,16 @@ class ResultRewardService:
         accepted = self._accepted.get(key)
         if accepted is None:
             return False
-        if accepted[1] is None:
+        if accepted.token is None:
             raise ResultRewardError("released result context cannot be rebound")
         view = self.economy.match_account(reservation)
         if (
             view.key != key
-            or replace(view, balance=accepted[2].balance) != accepted[2]
-            or self._profile_basis(key) != accepted[3]
+            or replace(view, balance=accepted.account.balance) != accepted.account
+            or self._profile_basis(key) != accepted.profile_basis
         ):
             raise ResultRewardError("result context changed beyond its money balance")
-        self._accepted[key] = (accepted[0], reservation, view, accepted[3])
+        self._accepted[key] = replace(accepted, token=reservation, account=view)
         return True
 
     def commit(self, key):
@@ -195,7 +208,9 @@ class ResultRewardService:
             pending.token, pending.extras, cards=pending.cards, deck_names=pending.names
         )
         del self._pending[key]
-        self._accepted[key] = (pending.seat, token, token.account, self._profile_basis(key))
+        self._accepted[key] = _Accepted(
+            pending.seat, token, token.account, self._profile_basis(key)
+        )
         return token
 
     def save_continue_privacy(self, key, value):
@@ -206,10 +221,10 @@ class ResultRewardService:
         The caller stages this with result acceptance in one transaction.
         """
         accepted = self._accepted.get(key)
-        current = accepted is not None and accepted[3] == self._profile_basis(key)
+        current = accepted is not None and accepted.profile_basis == self._profile_basis(key)
         self.economy.save_ranking_privacy(key, value)
         if current:
-            self._accepted[key] = (*accepted[:3], self._profile_basis(key))
+            self._accepted[key] = replace(accepted, profile_basis=self._profile_basis(key))
 
     def release_context(self, key):
         """After table-token release, keep only a bounded delayed-Decks context.
@@ -224,10 +239,10 @@ class ResultRewardService:
             return False
         if self.economy.is_reserved(key):
             raise ResultRewardError("release table token before idle edit context")
-        if self.economy.account_view(key) != accepted[2]:
+        if self.economy.account_view(key) != accepted.account:
             del self._accepted[key]
             raise ResultRewardError("account changed before result context release")
-        self._accepted[key] = (accepted[0], None, accepted[2], accepted[3])
+        self._accepted[key] = replace(accepted, token=None)
         return True
 
     def handle(self, key, payload):
@@ -247,7 +262,7 @@ class ResultRewardService:
         accepted = self._accepted.get(key)
         if pending is None and accepted is None:
             raise ResultRewardError("no result inventory edit context")
-        expected_seat = pending.seat if pending is not None else accepted[0]
+        expected_seat = pending.seat if pending is not None else accepted.seat
         if seat != expected_seat:
             raise ResultRewardError("result edit header is not authenticated seat")
         if pending is not None:
@@ -258,13 +273,13 @@ class ResultRewardService:
         else:
             if subtype != 0x22:
                 raise ResultRewardError("only delayed Decks is accepted after Continue")
-            if accepted[1] is None:
+            if accepted.token is None:
                 view = self.economy.account_view(key)
-                if self.economy.is_reserved(key) or view != accepted[2]:
+                if self.economy.is_reserved(key) or view != accepted.account:
                     del self._accepted[key]
                     raise ResultRewardError("released result edit context is no longer current")
             else:
-                view = self.economy.match_account(accepted[1])
+                view = self.economy.match_account(accepted.token)
             cards, names = list(view.cards), dict(view.deck_names)
         token = "Erase" if subtype == 0x10 else "Decks"
         if token not in sections:
@@ -329,13 +344,13 @@ class ResultRewardService:
         if pending is not None:
             pending.cards, pending.names = cards, names
         else:
-            if accepted[1] is None:
+            if accepted.token is None:
                 try:
                     self.economy.apply_deck_changes(key, [cards[i] for i in indices], renamed)
                 except EconomyError:
                     del self._accepted[key]
                     raise
-                self._accepted[key] = (
+                self._accepted[key] = _Accepted(
                     seat,
                     None,
                     self.economy.account_view(key),
@@ -343,9 +358,11 @@ class ResultRewardService:
                 )
             else:
                 refreshed = self.economy.commit_match_rewards(
-                    accepted[1], cards=cards, deck_names=names
+                    accepted.token, cards=cards, deck_names=names
                 )
-                self._accepted[key] = (seat, refreshed, refreshed.account, self._profile_basis(key))
+                self._accepted[key] = _Accepted(
+                    seat, refreshed, refreshed.account, self._profile_basis(key)
+                )
         return []
 
     def recover(self, key):
