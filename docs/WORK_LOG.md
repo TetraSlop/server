@@ -100,6 +100,9 @@ for later review and continue independent work.
   module/console entry points and both listeners on temporary ports. Output is
   in results/overnight-weekly-wheel-{build,check}.log. This wheel includes weekly
   rankings and the auction/Quit/PART fixes; no native process was launched.
+- Whole portable checkpoint at source commit db62eeb passed:952 tests in791.0
+  seconds,896 passed and56 optional external PostgreSQL tests skipped. Output:
+  results/overnight-complete-suite.log. No failures or native game launches.
 
 Whole portable regression checkpoint completed:903 tests in798.6 seconds,
 846 passed,56 optional PostgreSQL tests skipped, and one login timeout in the
@@ -110,20 +113,23 @@ checks pass. No native visual validation is claimed by these tests.
 
 ## In progress
 
-- Whole portable suite is running against frozen source at commit db62eeb.
-  Root exec session59735, output results/overnight-complete-suite.log. Database
-  environment variables are cleared only for this process; external PostgreSQL
-  tests will skip. Do not edit source/tests while this checkpoint runs.
-- All agents' fixes are committed and all three agents are idle. Weekly focused
-  output is results/weekly-ranking-checkpoint.log. Launcher tests substitute
-  headless peers or mocks for every child; no native game launch is authorized.
-- Read-only follow-up found one additional candidate, pending reproduction
-  after this run: irc_session.py table-channel PART still calls global event
-  disconnect for any configured event table. ExitCh of observer tableA leaves
-  channelA joined; after entering/watchingB, a late PART A could clear B.
-  Agent texture_upscaling is designing an exact table-ownership guard read-only.
-  Do not edit during the running checkpoint. The other journal restore audit
-  found no analogous historical-field mismatch after the guild fix.
+- Full checkpoint finished; source freeze lifted. Agent texture_upscaling owns
+  irc_session.py, optional event_matchmaking.py accessor and new
+  test_event_table_part.py for exact event TABLE-channel PART ownership.
+  Unassigned selection has no table, so it must survive any table PART.
+- New operator workflow: current prize awards and event grants/eligibility
+  require Python snippets. Agent texture_load_trace owns new admin.py,
+  snapshot_validation.py, test_admin.py, docs/ADMIN.md plus database.py validator
+  extraction and pyproject entrypoint. Explicit target required; no live save
+  defaults, account provisioning, native launch, automatic retail award policy,
+  recovery or weekly rollover. Use existing validators and claim transactions.
+- Agent browser_port_options owns state_store.writer_lease(path), run_server.py
+  integration and test_writer_lease.py. Normal services and admin share a
+  separate stable JSON lifetime lock before load/recovery through shutdown;
+  local_play's existing .play.lock and short commit lock stay unchanged.
+- Coordinate/review these disjoint changes, run focused meaningful checks,
+  then rebuild and check the final wheel. Last usage90% consumed; verify fresh
+  usage before further substantial work. No reset credits are authorized.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
   results/overnight-timeout-recheck.log. Both runs completed. No active test
   sessions from that checkpoint remain.
