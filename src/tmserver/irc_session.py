@@ -374,6 +374,7 @@ class Session:
             cleanup(lambda: self.server.event_cards.disconnect(self.nick.decode("ascii")))
             cleanup(lambda: self.server.events.disconnect(self.nick.decode("ascii")))
             cleanup(lambda: self.server.economy.disconnect(self.nick.decode("ascii")))
+        ordinary_match = ordinary.match if ordinary is not None else None
         affected = [] if retained or ordinary is None else ordinary.table_dependents(self)
         room_groups = [
             (table, cleanup(lambda: table.room.leave(self)))
@@ -412,9 +413,8 @@ class Session:
                     await send(updates)
                 except (OSError, ValueError, asyncio.TimeoutError) as exc:
                     self.server.log("disconnect_cleanup_error", session=self.id, reason=str(exc))
-        for other in affected:
-            if self.server.nicks.get(other.nick) is other:
-                await other.close()
+        if affected:
+            await ordinary.close_released_peers(ordinary_match, affected)
         try:
             await asyncio.wait_for(self.writer.wait_closed(), 5)
         except (OSError, asyncio.TimeoutError):

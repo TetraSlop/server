@@ -621,23 +621,7 @@ class OrdinaryTable:
         if aborted_peers:
             # Session.close can reset a table and await notifications. Never run
             # it under match_lock or close a peer that has since rebound.
-            for peer in aborted_peers:
-                owner = self.host.table_for_peer(peer)
-                if self.host.nicks.get(peer.nick) is not peer or (
-                    owner is not None and (owner is not self or self.match is not match)
-                ):
-                    continue
-                # Publication released this round's reservations. A new busy
-                # account or event admission now belongs to another service;
-                # event observers have no economy reservation to detect.
-                events = self.host.event_matches
-                if (
-                    events.coordinator.participant(peer)
-                    or peer in events.spectators.admissions
-                    or self.host.economy.is_busy(peer.nick.decode("ascii"))
-                ):
-                    continue
-                await peer.close()
+            await self.close_released_peers(match, aborted_peers)
             async with self.match_lock:
                 if self.match is match:
                     await self.publish_room(self.reset_table_updates(match))
@@ -817,11 +801,31 @@ class OrdinaryTable:
         self.detach_spectator(peer)
         if self.departures.request(peer):
             return
+        match = self.match
         affected = self.table_dependents(peer)
         await self.publish_room(self.table_release_updates(peer))
-        for other in affected:
-            if self.host.nicks.get(other.nick) is other:
-                await other.close()
+        await self.close_released_peers(match, affected)
+
+    async def close_released_peers(self, match, peers):
+        """Reconnect old table peers unless a new admission now owns them."""
+        for peer in peers:
+            owner = self.host.table_for_peer(peer)
+            if self.host.nicks.get(peer.nick) is not peer or (
+                owner is not None and (owner is not self or self.match is not match)
+            ):
+                continue
+            # Failed cleanup may retain the old reservation. Otherwise a busy
+            # account belongs to another service. Event observers hold no
+            # reservation, so check their admission separately.
+            retained = self.match is match and peer in self.match_reservations
+            events = self.host.event_matches
+            if (
+                events.coordinator.participant(peer)
+                or peer in events.spectators.admissions
+                or (not retained and self.host.economy.is_busy(peer.nick.decode("ascii")))
+            ):
+                continue
+            await peer.close()
 
     def table_dependents(self, peer):
         # Continue can finish the transient engine before its result inventory
