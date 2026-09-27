@@ -19,6 +19,22 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Rematch follow-up found no atomicity or stranded-player defect. Two new
+  encrypted regressions (`909bef5`) cover four complete rounds: a prize loser
+  left with four cards, and a player unable to fund a doubled stake, each in
+  both voting orders. Rejected final votes preserve engine/RNG, previous votes,
+  pending rewards, reservations, room and saved state; connection cleanup
+  releases both peers and preserves every earned card through exact restart.
+  The tests pass in 11.913 seconds. Original execution (`45401b4`) proves normal
+  yes emits no packet when cards/money are insufficient, while Computer Conf1
+  deliberately permits insufficient money to choose another setup. Fourteen
+  original eligibility cases plus explicit leave pass; no new error policy.
+  Updated the older underfunded-start regression to raise the wager after both
+  peers join, since the new admission guard correctly refuses it earlier.
+  All 21 related prize/wager/privacy checks pass in 53.398 seconds. Collection
+  finds 1,114 tests; Ruff/whitespace pass. No runtime changes or wheel rebuild;
+  all 80 packaged runtime files still byte-match source. See VALIDATION.md and
+  research/CONTINUE_ELIGIBILITY_NOTES.md.
 - New ordinary admissions now enforce the original menu's inventory, CP and
   money restrictions against committed accounts before claiming a seat. The
   previous adapter checked only capacity. Five-card minimum applies to human

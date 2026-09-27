@@ -26,6 +26,19 @@ An interrupted, uncompleted round refunds its entire stake. A completed result r
 
 `next_stake(stake, double)` ports the original bounded doubling rule. Merely calling it or opening Continue changes no balance. The adapter must begin a new round only after **every required Continue acceptance**, and reject unaffordable rematches before a positive response. A no vote charges nothing.
 
+The [Continue eligibility follow-up](CONTINUE_ELIGIBILITY_NOTES.md) executes the
+original doubled/capped constructors, collection counter and senders. A normal
+yes with too few cards or too little money shows a local dialog and sends no
+request. Computer's Conf1 change-setup route still requires five cards but skips
+the next-stake affordability check; it authorizes no round until a new ComGame
+selection. No funds-specific historical negative reply is established.
+
+Encrypted regression tests now complete actual prize/wager rounds, then inject
+invalid final rematch votes in both voting orders. Rejection preserves pending
+rewards, money, previous votes, reservations and saved state. Existing connection
+resynchronization releases both peers and recovers all cards exactly once across
+restart. These server recovery choices remain explicit local policy.
+
 ## Original evidence and remaining wiring
 
 The original instruction references and1,172 cases are in MATCH_PRIZES_NOTES.md and protocol_map/wager_transfer_vectors.py/json:84 debit/refund/doubling cases,588 offline payouts,500 full prize-order/compaction cases. This module's pure payout matches all588 stored original outcomes. Join admission10090145 locally deducts the wager, and VsGameInit M assigns post-debit money. The creator's GameEA EN1 path bypasses that deduction: bm is stored at100504F1, and table-configuration event2 deducts at10052A02 before14send10053491. Do not charge the creator at both GameEN and14. A uniform authoritative start boundary is an explicit local adapter policy. ComGame selection100EC1E2 deducts after NPC selection, so ComGameInit M precedes debit. Rematch event04000054 deducts at100BEFE9. Positive ResultData D1 is added to post-stake balance; T fields are not money. Negative D1 does not implement a debit.

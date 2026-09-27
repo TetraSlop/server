@@ -1,5 +1,33 @@
 # Packaging and transaction validation
 
+## Rematch eligibility and recovery follow-up, 2026-09-27
+
+No runtime defect was found. The new encrypted regressions in `909bef5` preserve
+four complete scenarios: a prize loser has fewer than five cards, or lacks the
+doubled next stake, with each participant making the first Continue vote. Direct
+final-vote rejection leaves match/RNG, prior votes, pending rewards, balances,
+reservations, room, round ID and saved bytes unchanged. The network rejection
+then exercises the existing disconnect/resync policy, releases both participants
+and preserves the exact card multiset across inventory and recovery. Restart
+matches the recovered state without another write. Both tests pass in 11.913
+seconds; these cover business rejection separately from existing save failures.
+
+Original constructor, collection counter, choice and sender execution in
+`45401b4` passes 14 eligibility cases plus explicit leave. Normal Conf0 emits no
+request with fewer than five cards or insufficient doubled/capped stake. Computer
+Conf1 still requires five cards but allows a cheaper setup without funding the
+previous wager. No new negative response is established. See
+[Continue evidence](research/CONTINUE_ELIGIBILITY_NOTES.md); output is
+`results/continue-eligibility-original.json`.
+
+The old underfunded-start test now admits both players before the owner raises
+the wager, so it still reaches final start authorization after the entry fix.
+All 21 related prize, wager and privacy tests pass in 53.398 seconds:
+`results/rematch-prize-wager-followup.log`. Collection finds 1,114 cases without
+import errors; Ruff and whitespace checks pass. This is focused validation,
+not a full-suite, PostgreSQL or rendered native run. No runtime files changed;
+all 80 runtime files in the checked wheel byte-match current source.
+
 ## Authoritative table-entry restrictions, 2026-09-27
 
 The adapter previously admitted new participants without the original menu's

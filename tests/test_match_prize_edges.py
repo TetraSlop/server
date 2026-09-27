@@ -491,11 +491,20 @@ class WagerPrizeEdges(unittest.IsolatedAsyncioTestCase):
             await restored.stop()
 
     async def test_underfunded_start_rejects_all_humans_without_partial_stake(self):
+        from tests.test_match_service import NATIVE_SETTINGS
+
         key = self.keys[1]
         token = self.server.economy.reserve_auction(key)
         self.server.economy.commit_auction(token, debit=9950)
         self.server.persist()
-        await self.offer()
+        # Admit both while the table is free, then let the owner raise its
+        # wager. An already underfunded new guest is now refused at entry.
+        for side in range(2):
+            await self.send(side, packet(0x41, 1, body="@GameEN="))
+        self.assertEqual(len(self.server.match.players), 2)
+        await self.send(0, packet(0x14, body=NATIVE_SETTINGS.replace("/bm=0", "/bm=200")))
+        for side in range(2):
+            await self.send(side, packet(1, body="@Req="))
         before = self.server.economy.snapshot()
         await self.send(0, packet(0x41, 8, body="@GameOK="))
         await self.clients[1].send(
