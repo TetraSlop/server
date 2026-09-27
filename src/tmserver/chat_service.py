@@ -24,13 +24,19 @@ class Delivery:
     payload: bytes
 
 
-def validate_name(name):
+def validate_name(name, *, limit=15):
     if (
         not isinstance(name, bytes)
-        or not 1 <= len(name) <= 15
+        or not 1 <= len(name) <= limit
         or any(c < 32 or c > 126 for c in name)
     ):
-        raise ValueError("chat name must contain 1..15 printable bytes")
+        raise ValueError(f"chat name must contain 1..{limit} printable bytes")
+
+
+def display_name(canonical_name):
+    """Keep native account names intact; chat presentation accepts at most15 bytes."""
+    validate_name(canonical_name, limit=16)
+    return canonical_name[:15]
 
 
 def roster_pages(members, counter):
@@ -63,7 +69,7 @@ def roster_pages(members, counter):
 def relay_text(payload, name, *, private):
     if not payload.startswith(b"GTM0G42"):
         return None
-    validate_name(name)
+    name = display_name(name)
     match = re.fullmatch(rb"GTM0G420008([0-9A-Fa-f]{2})([^\x00\r\n]*)", payload)
     if match is None:
         raise ValueError("unsupported or malformed chat message")
@@ -78,7 +84,9 @@ def relay_text(payload, name, *, private):
     locale = int(fields[1])
     if not -(1 << 31) <= locale < (1 << 31):
         raise ValueError("chat locale outside signed32")
-    validate_name(fields[2])
+    # Native senders copy the full canonical name. Validate that input bound,
+    # then replace it with the authenticated account's shorter display name.
+    validate_name(fields[2], limit=16)
     # Account-owned display identity; preserve raw text, including slashes,
     # at signs and non-ASCII locale bytes after the native TAB separator.
     outgoing = b"@Chat=/La=" + str(locale).encode() + b"/Dt=#CHAT#" + name + b"\t" + fields[3]
@@ -102,7 +110,7 @@ class ChatService:
         nn = fields.get("NN", "")
         if not re.fullmatch("[0-9A-Fa-f]{16}", nn) or int(nn, 16) != identity:
             raise ValueError("chat identity is not the authenticated account")
-        validate_name(name)
+        name = display_name(name)
         members = self.groups.setdefault(group, {})
         candidate = Member(peer, identity, name)
         changed = members.get(peer) != candidate
