@@ -8,6 +8,8 @@ from tmserver.claim_transactions import event_transaction
 from tmserver.event_matchmaking import EventDelivery, EventMatchmaking
 from tmserver.event_spectators import EventSpectators
 from tmserver.identities import GAME_KEY, service_nick
+from tmserver.match_service import decode
+from tmserver.room_routing import validate_room_entry
 
 
 class EventAdapter:
@@ -77,6 +79,11 @@ class EventAdapter:
             if self.failure is not None:
                 raise ValueError("event driver stopped; restart is required")
             key = self.server.ensure_account(peer.nick)
+            message = decode(payload)
+            if message is not None and message.primary in (1, 0x98):
+                binding = self.server.event_rooms.room_for_service(target)
+                if binding is not None:
+                    validate_room_entry(self.server, peer, binding.room)
             watching = self.spectators.admissions.get(peer)
             if self.spectators.handle(peer, key, target, payload):
                 out = (
