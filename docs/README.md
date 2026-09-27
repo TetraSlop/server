@@ -14,3 +14,7 @@ instructions predate packaging; use the root README for current commands.
 Recovered rules are distinguished from local policy in
 [rules provenance](research/RULES_PROVENANCE.md) and
 [coverage](research/EMULATION_COVERAGE.md).
+
+## Current iteration
+
+See [WORK_LOG.md](WORK_LOG.md) for active work, completed fixes and deferred review.
