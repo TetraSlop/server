@@ -6,6 +6,13 @@ wire formats. The named services own game behavior and state. `native_rules`,
 `native_ai` and `native_board_generation` contain executable-derived algorithms;
 reward and rating services document their explicit local policies separately.
 
+The connection router handles service requests before peer delivery. Native game
+messages sent between players must be normalized chat or validated direct trade
+controls. Original control receivers can adopt an arbitrary sender, and their
+lower receive path ignores the fifth service-marker byte; generic `GTM0` relays
+would therefore let a player impersonate service controls. Server-owned replies
+use their normal service delivery paths. Opaque non-game relay traffic is retained.
+
 The model stays ordinary Python dataclasses. SQLAlchemy Core and Alembic are
 optional persistence dependencies. There is no second ORM or Pydantic domain
 model to keep synchronized with the protocol's native representations.

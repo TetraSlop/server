@@ -30,6 +30,9 @@ These fixes have headless regression coverage; the native checks remain pending.
    movement/clicks behave normally and room entry succeeds.
 2. **CPU:** enter Computer, choose an opponent, finish a match, then play a
    rematch. Confirm selection, turns, battles and the result screen progress.
+   Also select two distinct CPU opponents: confirm the 25-cell board and all
+   three turns, finish and rematch, then return to configuration and select just
+   one opponent. The board should return to 16 cells with no stale second NPC.
 3. **Shop:** note money and card count, buy a pack and accept its cards. Sell one
    unwanted card and change a deck name or assignment. Confirm visible changes.
 4. **Reload:** close the game normally, run `Play.cmd` again and check that the

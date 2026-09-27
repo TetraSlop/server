@@ -1,6 +1,65 @@
 # Packaging and transaction validation
 
-## Latest resumed checkpoint, 2026-09-27
+## Two-NPC Computer menu checkpoint, 2026-09-27
+
+The complete suite against an isolated archive of commit `f2306f8` finished
+**1,075 tests in 978.914 seconds: 1,016 passed, 59 optional PostgreSQL checks
+skipped, and no failures**. Output and source metadata are in
+`results/three-player-computer-complete-suite.log` and
+`results/three-player-computer-complete-suite.json`. The child process imported
+only the archived source and had no database URL in its environment. It used
+temporary saves and headless encrypted peers; the temporary source directory
+was removed. Local Play's game-window messages came from mocked launcher tests,
+not native game execution.
+
+Focused checks already pass:
+
+- Original one-human/two-NPC menu, independent personalities, full games,
+  rematches, two/three-seat reconfiguration and result choices: 136 engine and
+  surrounding checks (`55da252`). Three frozen sender vectors preserve original
+  instruction evidence.
+- Both NPC roster entries, distinct identities, sibling-table isolation,
+  one-human admission and target-count stake debit: 52 surrounding checks and
+  18 final adapter/room checks (`c6ec25e`).
+- Five encrypted gameplay/persistence cases in 8.717 seconds (`f2306f8`):
+  default practice, optional wagers/card prizes/ratings, reconfiguration,
+  rematches, once-only refunds, actual earned-card recovery and failed-save
+  atomicity. Other accounts remain unchanged.
+- Six encrypted observer checks in 18.700 seconds (`1732f89`), including the
+  new one-human/two-NPC game. Four original receiver probes additionally accept
+  early/late production snapshots at both NPC name-visibility thresholds.
+- Independent review: all 435 distinct NPC pairs fit initial reply frames;
+  all six finishing orders complete prize choices and a rematch; cancellation
+  refunds once, removes both NPCs and releases the account. No additional
+  production change was needed.
+- Peer-control spoofing (`424a741`): 36 related tests in 47.103 seconds,
+  including 52 rejected payload variations, alternate selectors, both IRC
+  verbs, and preserved valid chat/trade. The forwarding defect was reproduced
+  before the fix. See `results/peer-service-spoofing-related-tests.log`.
+
+After that archived checkpoint, `395cb24` corrects two-NPC deck preparation:
+both ten-card pools are generated before either hand is selected. Eight frozen
+original-instruction cases match every represented card field, the complete
+random-draw digest and final state. All 120 focused NPC/engine/AI/board/prize
+tests pass, as do eight encrypted Computer/observer/persistence checks in
+18.416 seconds (`results/computer-batch-encrypted-tests.log`). Another 120
+single-opponent comparisons against the preceding implementation are unchanged.
+The encrypted practice helper now correctly expects zero rewards when wagers
+are disabled, including a human win (`dbf39f4`); server policy is unchanged.
+Current collection finds 1,079 cases with no import errors. The full archived
+run does not include these four new fixture tests or the deck-order correction.
+
+The final 84-entry wheel passes a fresh dependency-free install, all entry points,
+actual JSON award/account/recovery commands and both service listeners on
+temporary ports. All 79 packaged runtime files byte-match source. Logs:
+`results/computer-batch-wheel-{build,check}.log`. Wheel SHA256:
+`4119bc087dd9d663c3ee00fadf984ae868d501d2d4f08fac28cf4c8542a9014e`.
+Repository-wide Ruff and whitespace checks pass. Real PostgreSQL checks were
+not repeated in this iteration; the previous isolated 59-case pass is below.
+Native rendered-menu checks and historical hosted policy equivalence remain
+separate from this validation.
+
+## Earlier resumed checkpoint, 2026-09-27
 
 An isolated archive of commit `5ee9e81` completed **1,030 tests in 1,181.037
 seconds: 969 passed, 59 optional PostgreSQL cases skipped, and two failures**.

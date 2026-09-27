@@ -10,7 +10,7 @@ checkpoints below retain the research history and its original test counts.
 
 | Area | Current implementation | Next coverage needed |
 |---|---|---|
-| Game transport | Challenge/RSA, original Blowfish/checksum, authenticated IRC, channels and relay | Wider native error/retry coverage |
+| Game transport | Challenge/RSA, original Blowfish/checksum, authenticated IRC, channels and validated chat/trade relay; player-forged service controls blocked | Wider native error/retry coverage |
 | Profile transport | Account-bound authentication, encrypted files, handles/characters/status, bounded cipher retention; original empty file/message enumeration including the mailbox checksum trailer | Wider native Viewer retry/error coverage |
 | Rooms | Directory/PTL, entry, sequenced player/table deltas, replay, rules metadata; multiple configured ordinary rooms and multiple tables per room with independent matches and shared durable accounts | Native scene checks; historical allocation policy remains unknown |
 | Ordinary matches | Original30-opponent computer menu, two/three human seats and optional automatic sizing at Start, native battle/ties/combos/AI, card growth, Ready/Continue/rematch; opt-in wagers/double-up and human/CPU card prizes; opt-in practice departure rules; independent handle/character admission and captured native startup replay | Native validation; partial-result economic/rated departures remain abort/refund |
@@ -29,9 +29,9 @@ checkpoints below retain the research history and its original test counts.
 | Events | Configured rooms and multiple matchmaking tables per event, exact directory keys, owner-routed files, authenticated admission/time/selection/exit, durable progress and F-card collection; encrypted2/3p E matches and observers; original mode8 nonplaying admission | Native event scenes and historical mission/reward/broadcast policy |
 | Optional ratings | Original32-entry offline ring, explicit enrollment, D2/profile/journal atomically persisted; encrypted2/3p andCPU rounds; RN display proven as Memorable Win and preserved | Historical online rating and Memorable Win selection policies remain unknown |
 | Spectators | Original2/3-player snapshot/live preview for ordinary, Computer-menu NPC and configured event tables; complete native Req fields, Observe choices, original NPC name/level handling, bounded independent gameplay queues and encrypted full matches | Opt-in only; bootstrap dialog has no presentation acknowledgement; finite native packet size bounds dense snapshots |
-| Three-player games |25cells/15moves, all3 ack/Continue barriers, original rank formula, all-seat receivers, encrypted two-round persistence, generated/custom special boards, practice departures, original card-prize choices and CBC reward acceptance/overflow/recovery | Native UI checks |
+| Three-player games |25cells/15moves, three humans or one human/two original NPCs, original rank formula, all-seat receivers, encrypted rematches and2↔3 Computer-menu reconfiguration, generated/custom special boards, practice departures, original card-prize choices and CBC reward acceptance/overflow/recovery | Native UI checks; configured server layouts retain their explicit seat-count constraints |
 
-Latest clean complete checkpoint:880 tests passed in1010.618s with no failures/skips.
+Historical research checkpoint:880 tests passed in1010.618s with no failures/skips.
 Preserved output: test_checkpoint_880_results.txt. This includes parallel event
 tables/observers, account pool capacity, room migration and reconnect cleanup,
 as well as shared ordinary rooms and combined three-player rewards.

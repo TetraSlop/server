@@ -193,7 +193,7 @@ checks pass. No native visual validation is claimed by these tests.
   byte-identical. Logs: results/recovery-preview-wheel-{build,check}.log.
   The complete suite has not been repeated after these scoped changes.
 
-## Current checkpoint
+## Earlier recovery and admission checkpoint
 
 - Ordinary PART/disconnect publication no longer closes survivors who have
   entered another table, event or shop while cleanup awaits delivery. Shared
@@ -288,6 +288,96 @@ checks pass. No native visual validation is claimed by these tests.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
   results/overnight-timeout-recheck.log. Both runs completed. No active test
   sessions from that checkpoint remain.
+
+## Two-NPC Computer menu and peer routing — 2026-09-27
+
+- Original menu events, confirmation state and serializer instructions prove
+  the one-human/two-NPC path: header 3, two distinct opponent IDs, 25 cells and 15
+  placements. Three frozen original sender vectors are retained in
+  `tests/fixtures/three_player_computer_sender.json`; the instruction addresses
+  and image hash are documented in `research/NATIVE_OPPONENTS_NOTES.md`.
+- The engine now keeps a separate identity, original personality, rating and
+  hand for each selected NPC, regenerates both hands on rematch and supports
+  switching between one and two opponents. Validation precedes stake debit,
+  RNG and board changes. Mixed human/CPU prize choices continue automatically
+  after a human selection and retain the durable settlement barrier. Engine
+  commit `55da252` passes 136 focused gameplay/AI/prize/observer checks.
+- The adapter publishes both NPCs with distinct reserved nickname IDs, removes
+  the second when switching back to one opponent, and preserves other tables'
+  NPCs. Dynamic admission debits the intended player count before engine resize;
+  Computer tables still admit exactly one human. Commit `c6ec25e` passes 52
+  surrounding tests and 18 final room/adapter checks, including failed-save
+  atomicity and sibling-table isolation. No persistence schema changed.
+- Five encrypted gameplay/persistence tests (`f2306f8`) pass in 8.717 seconds.
+  They cover complete 15-placement games, rematches and 2↔3 reconfiguration,
+  wagers/double-up, ratings, owned-card prizes, interrupted refunds and failed
+  debit publication. A legal deterministic human win earns two actual cards
+  before interrupted acceptance; restart returns those cards exactly once.
+  Default practice preserves money and ownership. The unrelated account is
+  unchanged throughout.
+- An encrypted three-seat observer test (`1732f89`) covers early and mid-game
+  admission, the 25-cell board, both NPC IDs, all 15 placements and ResultData/P3.
+  Observers cannot submit gameplay acknowledgements or receive private result
+  messages. All six surrounding observer tests pass; four original receiver
+  probes accept production bytes for both name-visibility thresholds.
+- Independent review found no actionable regression. All 435 distinct NPC pairs
+  fit initial PLAYACK/TCList frames (maximum 398/372 bytes), all six finishing
+  orders complete mixed human/CPU prizes and rematches, and encrypted selection
+  cancellation refunds once, removes both NPCs and releases the account.
+- A bounded CBC ownership audit found no defect in disposable three-seat
+  Computer adapter fixtures. NPC-owned generated cards grant nothing to the
+  human. One human-owned generated card plus two ordinary prizes recover or
+  accept exactly once, with no NPC account created. The native ordinary board
+  generator emits no CBC/F18, and explicit three-seat Computer boards remain
+  outside supported configuration; this audit does not expose that combination
+  as a new native feature.
+- Original instruction research found that the local menu constructs both
+  ten-card NPC pools before selecting either five-card hand. The initially
+  sequential helper generated different cards. Commit `395cb24` shares a batch
+  helper with the unchanged single-NPC API. Eight frozen original cases match
+  all represented card fields, full RNG stream hashes/counts and final states.
+  All 120 focused NPC/engine/AI/board/prize checks pass; another 120 comparisons
+  against the previous single-NPC implementation are unchanged. The eight
+  encrypted Computer/observer/persistence checks pass in 18.416 seconds.
+  Their practice expectation now handles human wins correctly: with wagers
+  disabled, payout stays zero (`dbf39f4`). No server reward policy changed.
+  The composed original stages exclude intervening scene/board/frame draws;
+  historical hosted scheduling is still unknown.
+- Peer-relay review reproduced forged maintenance/status and initial trade
+  controls. The original receiver ignores the fifth prefix selector, so blocking
+  only canonical `GTM0G` was insufficient. Commit `424a741` permits only validated
+  peer chat/trade within the entire `GTM0` namespace after service dispatch;
+  opaque non-game traffic retains its existing behavior. Four new encrypted
+  cases and 36 related tests pass, including 52 rejection subcases, alternate
+  selectors, lower-case hex, recipient isolation and legitimate traffic.
+  Original ingress/receiver evidence is in `research/PROTOCOL_NOTES.md`.
+- Removed the unreachable fixed-account CR registration fallback (`2f0155c`);
+  authenticated character registration already owns that path. Sixteen scoped
+  checks pass, with another 20 profile/registration/capture checks independently
+  passing. The change removes 20 lines and has no intended behavior change.
+- Further audits found no new defects: 383 captured-request mutations caused no
+  unexpected exception or stranded reservation; 189 malformed/stale match
+  requests left complete engine/RNG state unchanged. The profile audit preserved
+  pending reward/result/event/auction journals through account-isolated reads,
+  handle changes, retries and file deletion requests. No speculative protocol
+  behavior was added from these audits.
+- The complete isolated suite at `f2306f8` passes 1,075 tests in 978.914 seconds:
+  1,016 passed, 59 optional PostgreSQL cases skipped, and no failures. Its
+  temporary source directory was removed. Output and source metadata are in
+  `results/three-player-computer-complete-suite.{log,json}` and detailed checks
+  are in [VALIDATION.md](VALIDATION.md). The final 84-entry wheel passes
+  a clean dependency-free install, entry points, JSON admin/recovery commands
+  and both temporary listeners; all 79 runtime files byte-match source. Logs:
+  `results/computer-batch-wheel-{build,check}.log`. The final package includes
+  `395cb24`; current collection finds 1,079 tests without import errors. The
+  complete archived run predates that correction and its four fixture tests,
+  which have the separate focused checks above. Native rendering and hosted
+  reward equivalence remain separate from these headless checks.
+- All test/package processes for this checkpoint have completed, and reviewers
+  are idle. Ruff and whitespace checks pass. Changes remain local to the GitHub
+  checkout; no native game, live save or upstream repository was touched.
+  Continue with evidence-backed gaps; do not query credits or manufacture
+  protocol policy merely to create more work.
 
 ## Weekly ranking design record
 

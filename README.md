@@ -9,6 +9,11 @@ For the integrated native setup in the sibling `tmloader` checkout, use
 the [native test checklist](docs/NATIVE_TEST_CHECKLIST.md). `Check Setup.cmd`
 validates the setup without opening the game.
 
+The original Computer menu supports one or two CPU opponents from its 30-entry
+roster, including rematches and switching between 16-cell and 25-cell games.
+Encrypted gameplay, rewards, recovery and spectators are tested; the updated
+three-player menu still needs a native screen check.
+
 ## Development
 
 Python 3.13 or newer:

@@ -12,6 +12,12 @@ window. Use the Computer menu for CPU play; the default Local Room table also
 uses a CPU opponent. Keep the launcher console open while playing. Close the
 game window normally to stop the session and both services.
 
+The Computer menu can select one or two distinct NPC opponents. Two opponents
+use the original three-player, 25-cell game; Continue can replay that matchup or
+return to configuration to change opponents/player count. This uses one game
+window and needs no `--clients 3` option. The server path is covered by encrypted
+tests; the new three-player menu presentation remains on the native checklist.
+
 The loader now provides **F10** for its Dear ImGui settings panel and
 **Alt+Enter** for borderless fullscreen. The window edges and maximize button
 resize the display; 4:3 proportions are preserved by default. The panel offers

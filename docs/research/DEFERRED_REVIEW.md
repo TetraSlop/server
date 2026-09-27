@@ -35,6 +35,12 @@ control or game launches are authorized by this note.
   encrypted2/3-player tests pass, but the actual presentation remains unobserved.
 - Check the original Computer menu:30 asset-backed opponents, reconfiguration,
   rematches and leaving. Also check a three-account human table and its25-cell board.
+- Check the newly supported one-human/two-NPC Computer menu: choose two distinct
+  opponents, complete its25-cell/15-placement game and rematch, then reconfigure
+  to one opponent and back. Check prizes/wagers when enabled and a spectator
+  joining mid-game. Frozen original sender vectors, original observer receive
+  instructions and encrypted full-game/recovery checks pass; rendered scenes
+  remain unobserved.
 - Check opt-in ordinary card prizes, overflow discards and delayed deck editing;
   then wagers/double-up and the displayed balance after result and rematch.
 - Check explicit `--ratings local-history` D2 display; lower ratings are better
