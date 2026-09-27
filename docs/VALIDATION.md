@@ -1,5 +1,43 @@
 # Packaging and transaction validation
 
+## Authoritative table-entry restrictions, 2026-09-27
+
+The adapter previously admitted new participants without the original menu's
+card-count, collection-point and wager checks. It now validates the committed
+account before reserving it. The check follows the separate occupied-human,
+empty-fixed, empty-custom and Computer entry paths; admitted members and
+spectators remain exempt. Failed Computer admission also preserves the existing
+match generation. The existing mapped nonfatal errors are an explicit local
+compatibility choice, not recovered historical per-condition replies.
+
+Original fixture `018d201` contains 31 passing instruction cases using production
+metadata and the original PTL projection/Join predicate. See
+[eligibility evidence](research/TABLE_ELIGIBILITY_NOTES.md) for addresses, exact
+boundaries and reproduction. Output: `results/table-eligibility-original.log`.
+
+- Nine in-memory rejection subcases fail before the guard, with the eligible
+  retry case already passing: `results/table-admission-rules-before.log`.
+- The encrypted regression `1dd3361` also fails before the fix. With the fix,
+  both GameEN and Req reject without changing match, room, reservations, economy
+  or saved bytes; the same connection joins after CP bounds are relaxed exactly
+  to its committed value.
+- All 25 initial admission/roster/identity/fixed-room cases pass in 17.055 seconds:
+  `results/table-admission-focused.log`.
+- All 18 Computer startup, captured native traffic, session recovery and observer
+  cases pass in 11.409 seconds: `results/table-admission-boundaries.log`.
+- The final six new checks pass in 1.351 seconds, including the encrypted case,
+  unchanged match generation and a cardless observer:
+  `results/table-admission-rules-final.log`.
+
+These are 45 distinct focused checks, not a new complete-suite or PostgreSQL
+run. Collection finds 1,112 tests without import errors. Ruff and whitespace
+checks pass. No native UI, original assets or live saves were used.
+
+The rebuilt 85-entry wheel passes a clean dependency-free install, both entry
+points, JSON administration/recovery and temporary game/profile listeners. Logs:
+`results/table-admission-wheel-{build,check}.log`. SHA256:
+`074541968e62e1558b6c50fc38aab0709770bcf0c4b14a71842bf1e646e7e93d`.
+
 ## Original table-query audit, 2026-09-27
 
 Original instruction probes pass for both Rule lobby-event branches, the

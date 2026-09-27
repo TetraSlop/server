@@ -15,6 +15,7 @@ from tmserver.match_watchdog import MatchWatchdog
 from tmserver.result_rewards import ResultRewardError
 from tmserver.result_stats import PracticeStats
 from tmserver.spectator_service import SpectatorService
+from tmserver.table_admission import eligibility_failure
 from tmserver.table_admission import rejected as reject_admission
 from tmserver.table_control import channel_exit, viewer_state
 from tmserver.table_preferences import parse_save
@@ -520,8 +521,6 @@ class OrdinaryTable:
                 and msg.primary == 0x41
                 and msg.subtype == 0x12
             )
-            if native_computer_entry:
-                self.reset_match(computer_menu=True)
             match = self.match
             account = self.host.economy.account_view(key)
             if admitting:
@@ -533,23 +532,46 @@ class OrdinaryTable:
                     raise ValueError("admission requires its matching section")
                 validate_admission(fields, section, nn=account.nn, name=account.name)
                 capacity = 1 if self.match_mode == "computer" else self.match_player_count
+                reason = None
                 if not registered and not match.accepting_players:
+                    reason = "unavailable"
+                elif not registered:
+                    # State-1 Join checks CP and money. Empty custom tables and
+                    # Computer entry have distinct gates; existing members and
+                    # observers have already taken their separate paths.
+                    human_entry = section != "GameENC"
+                    bounded = human_entry and match.settings_applied
+                    wagered = human_entry and (bounded or self.room_rules is not None)
+                    reason = eligibility_failure(
+                        account,
+                        wager=match.game_rules["bm"] if wagered else 0,
+                        point_bounds=(match.table_rules["ll"], match.table_rules["lu"])
+                        if bounded
+                        else None,
+                    )
+                if reason is not None:
                     # A valid request can race the last seat or game start. The
                     # mapped failure paths keep the transport usable; they
                     # must not be treated as malformed input and disconnect it.
                     # Use the recovered full/not-ready/generic text paths;
                     # zero and cancellation replies give misleading messages.
                     response = reject_admission(
-                        section, full=match.phase == "lobby" and len(match.players) >= capacity
+                        section,
+                        full=reason == "unavailable"
+                        and match.phase == "lobby"
+                        and len(match.players) >= capacity,
                     )
                     await self.deliver_table_packet(session, response)
                     self.host.log(
                         "table_admission_rejected",
                         session=session.id,
-                        reason="unavailable",
+                        reason=reason,
                         phase=match.phase,
                     )
                     return True
+            if native_computer_entry:
+                self.reset_match(computer_menu=True)
+                match = self.match
             accepting_result = (
                 registered
                 and match.phase == "result"

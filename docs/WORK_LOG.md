@@ -19,6 +19,29 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- New ordinary admissions now enforce the original menu's inventory, CP and
+  money restrictions against committed accounts before claiming a seat. The
+  previous adapter checked only capacity. Five-card minimum applies to human
+  and Computer entry; configured human tables additionally check inclusive CP
+  bounds and wager affordability. Empty custom/fixed tables, Computer entry,
+  existing members and observers retain their distinct native paths. Rejected
+  GameENC no longer replaces the empty match generation before validation.
+  Nine in-memory subcases and an encrypted rejection/retry regression reproduce
+  the old gap. All 45 distinct focused checks pass, including cardless observers
+  and unchanged account/table/save state on rejection. Original fixture
+  `018d201` preserves 31 passing instruction cases; encrypted test `1dd3361`
+  verifies the same connection joins at the exact CP boundary after correction.
+  Error-code selection and direct Req enforcement remain explicit local policy.
+  Collection finds 1,112 tests with no import errors; Ruff/whitespace pass. The
+  rebuilt 85-entry wheel passes clean dependency-free install, entry points,
+  administration/recovery and temporary service listeners. See VALIDATION.md
+  and research/TABLE_ELIGIBILITY_NOTES.md. No native game or live save touched.
+- Bounded trade-entry audit found no production consent bypass or stranded
+  reservation. Router grants are rechecked before every service entry; explicit
+  cancellation and disconnect prevent retained internal authorization from
+  being reused. All 26 existing router/service tests, 12 malformed in-memory
+  variants and two disposable encrypted cancellation/reconnect scenarios pass.
+  No speculative change was made to the documented failed-entry retry policy.
 - Original Rule/CheckJoin audit found no demonstrated defect in current table
   ownership checks. Rule uses the admitted table identity; all three nonzero
   CheckJoin flag combinations select the same recovery cleanup and emit ExitCh.

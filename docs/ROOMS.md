@@ -114,3 +114,24 @@ original directory parsing, room selection and action branches. Encrypted tests
 also cover directory discovery, CPU entry, fixed human settings and game start.
 These checks do not render the native menus; that remains on the
 [native checklist](NATIVE_TEST_CHECKLIST.md).
+
+## Table entry limits
+
+The server checks a new participant's saved inventory and money before claiming
+a seat. Human and Computer entry require at least five owned cards. Joining an
+occupied, configured human table also requires enough money for its wager and
+collection points within both advertised bounds, inclusive. The native menu
+calls these bounds "Card Level", but the original check uses collection points,
+not rating or the displayed level tier.
+
+Creating an empty custom table skips the bounds and wager check because its
+owner chooses the rules after entry. An empty fixed human table still requires
+the preset wager. Computer entry has its separate rule menu, so it checks only
+card count. Existing members can retry admission after settings change, and
+spectators need no owned cards.
+
+An ineligible request receives the existing nonfatal unavailable/start-failure
+reply without reserving the account or changing the table. The same connection
+can retry when eligible. This response choice is replacement-server policy;
+[original eligibility evidence](research/TABLE_ELIGIBILITY_NOTES.md) establishes
+the client menu checks, not historical server error codes for these conditions.

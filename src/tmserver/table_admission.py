@@ -1,6 +1,24 @@
-"""Negative table replies chosen from original admission/error scene paths."""
+"""Native entry restrictions and compatible nonfatal rejection replies."""
 
+from tmserver.economy_service import collection_points
 from tmserver.match_service import packet
+
+
+def eligibility_failure(account, *, wager=0, point_bounds=None):
+    """Check committed inventory/money, not client-supplied profile fields.
+
+    Callers supply only bounds used by the relevant native entry path. This
+    does not check passwords: the original request contains no password proof.
+    """
+    if len(account.cards) < 5:
+        return "insufficient_cards"
+    if account.balance < wager:
+        return "insufficient_money"
+    if point_bounds is not None:
+        lower, upper = point_bounds
+        if not lower <= collection_points(account.cards) <= upper:
+            return "collection_points"
+    return None
 
 
 def rejected(section, *, full):
