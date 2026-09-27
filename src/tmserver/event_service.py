@@ -493,10 +493,10 @@ class EventHost:
         denied = denied or old is None and len(self._members[event_id]) >= 256
         if denied:
             return [named(0xD0, 0, 0, "@EventEn=/Ans=-32870")]
-        text(view.name, 15, empty=False)
+        text(view.name, 16, empty=False)
         member = EventMember(
             view.nn,
-            view.name,
+            view.name[:15],  # The member list has a terminated 16-byte display field.
             0 if old is None else old.steps,
             0 if old is None else old.completed_missions,
             0 if old is None else old.eligibility,

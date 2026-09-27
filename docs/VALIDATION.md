@@ -1,5 +1,49 @@
 # Packaging and transaction validation
 
+## Room/table chat departures and full account names, 2026-09-27
+
+Room DE transitions and native PC departures previously left a departed player
+in the old chat roster. Commit `0a2ec6a` detaches the exact old group before
+notifications. The six failing baseline cases cover ordinary/event moves in
+both directions and both kinds of PC exit. All 13 focused checks pass in
+13.514 seconds, including delayed old-room exits, reconnects and full names:
+`results/chat-room-transition-{before,after}.log`.
+
+The same stale membership occurred after table GameQT, GameExit and host kick.
+Commit `a34cece` removes chat membership only for actual removed players and
+that exact table, alongside reservation cleanup; notification occurs outside
+the match lock. All three baseline subcases fail before the fix, then the new
+regression and existing exit/kick/owner-transfer/retry/round/room controls pass:
+12 tests in 31.001 seconds, `results/chat-table-exits-{before,after}.log`.
+Other chat groups, remaining account reservations and healthy sockets survive.
+
+Full 16-byte saved names were accepted by accounts but rejected by match and
+event admission. Both now validate the canonical input before projecting a
+15-byte display label for terminated client fields. Full CN authentication and
+account/profile bytes remain unchanged. Two new direct regressions fail at the
+old admission boundaries: `results/display-name-before.log`. All five new
+tests then pass in 5.923 seconds, including complete encrypted ordinary/event
+rounds, explicit progress and save/reload: `results/display-name-after.log`.
+Invalid suffixes are rejected before projection; two names sharing a displayed
+prefix remain distinct. The existing match, event-file, event-room and admission
+identity modules pass all 102 tests in 1.365 seconds:
+`results/display-name-controls.log`.
+
+The original-consumer probe (`9f77341`) passes 34 cases against actual production
+output: PLAYACK, VsGameInit, GameOwner and EventMemberList for fresh/restored
+two/three-player accounts with colliding display names. IDs, local seats, owner
+flags and own event progress stay distinct, and full profile bytes are unchanged.
+See `research/DISPLAY_NAME_IDENTITY.md` for execution scope and code hash;
+captured output is `results/display-name-identity-original.json`.
+
+Collection finds 1,127 tests without import errors; Ruff and whitespace checks
+pass. These focused checks do not claim a fresh whole-suite, PostgreSQL or
+native UI run. The rebuilt wheel contains 85 entries and all 80 runtime files
+byte-match source. Clean dependency-free installation, both entry points, JSON
+administration/recovery and temporary listeners pass. Logs:
+`results/room-name-wheel-{build,check}.log`.
+SHA256: `1ffb453b2f724f7004e7c5a4ce93aa3e9800bff5c590f30257ca9221adf80d25`.
+
 ## Event progress publication and claim recovery, 2026-09-27
 
 The direct EventResults API could partly advance earlier participants when a

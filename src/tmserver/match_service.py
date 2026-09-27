@@ -686,8 +686,8 @@ class MatchService:
             raise MatchError("each human needs a distinct profile character ID")
         if isinstance(name, str):
             name = name.encode("ascii")
-        if not name or len(name) > 15 or any(c < 32 or c > 126 for c in name):
-            raise MatchError("name must contain 1..15 printable ASCII bytes")
+        if not name or len(name) > 16 or any(c < 32 or c > 126 for c in name):
+            raise MatchError("name must contain 1..16 printable ASCII bytes")
         if not 0 <= nickname_id <= 0xFFFFFFFFFFFFFFFF:
             raise MatchError("nickname identity outside uint64")
         if type(balance) is not int or not 0 <= balance <= 99_999_999:
@@ -703,7 +703,7 @@ class MatchService:
         player = Player(
             peer,
             character_id,
-            name,
+            name[:15],  # Client labels need a terminator; account identity keeps all 16 bytes.
             nickname_id,
             result_stats.rating,
             balance,

@@ -19,6 +19,26 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Native room departures now detach chat membership as well as the room roster
+  (`0a2ec6a`), including ordinary/event room changes and PC exits. Delayed exits
+  for an old room preserve destination chat. A separate table fix (`a34cece`)
+  clears the exact table's chat membership on GameQT, GameExit and host kick,
+  preserving other groups, remaining reservations and healthy connections.
+  Six room and three table subcases failed before their fixes; the respective
+  focused selections pass all 13 and 12 tests. Notifications run after the
+  synchronous detach, outside the table lock. No native launch was used.
+- Valid 16-byte canonical account names now enter ordinary and event matches.
+  Registration validates the full name before storing a 15-byte client label;
+  event membership uses the same bounded presentation. Authentication and
+  account/profile persistence retain all 16 bytes. Five new regressions pass,
+  including complete encrypted ordinary/event games, progress and restoration;
+  102 existing admission, match and event controls also pass. Research
+  `9f77341` passes 34 original-consumer checks with deliberately identical
+  displayed prefixes, confirming distinct IDs, local seats, owner flags and
+  event progress. See research/DISPLAY_NAME_IDENTITY.md and VALIDATION.md.
+  Collection finds 1,127 cases without import errors; Ruff/whitespace pass.
+  The rebuilt wheel passes clean installation, entry points, administration,
+  recovery and temporary listeners; all 80 runtime files byte-match source.
 - EventResults now prepares all progress updates before publishing any member
   changes. A final participant's conflicting existing progress receipt could
   previously leave earlier participants advanced in a direct service call,
