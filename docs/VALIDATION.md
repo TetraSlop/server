@@ -1,6 +1,6 @@
 # Packaging and transaction validation
 
-## Final server checkpoint, 2026-09-27
+## Latest complete-suite checkpoint, 2026-09-27
 
 The complete suite at commit `fd56461` finished **988 tests in 842.506 seconds:
 929 passed, 59 optional PostgreSQL cases skipped, and no failures**. This uses
@@ -15,6 +15,20 @@ resources were removed, and the working tree is clean at this checkpoint.
 
 Native presentation checks and historical hosted reward-policy equivalence
 remain separate from this validation.
+
+## Subsequent operator-command additions
+
+Commits `861ef3d` and `d618485` add read-only account/reward inspection and
+explicit event-progress administration. All 54 admin/event/prize checks pass
+in 2.178 seconds. They cover remaining rewards after a real partial collection,
+unchanged saves on inspection, account ownership, progress replay/conflicts,
+invalid or excluded members, and retry after failed persistence.
+
+Collection now finds 992 cases without import errors. The full 992-case suite
+and real PostgreSQL checks were not repeated after these scoped changes.
+The updated 82-entry wheel passes a clean install without optional dependencies,
+actual JSON reward and account-inspection commands, entry points and both service
+listeners. Logs: `results/event-progress-wheel-{build,check}.log`.
 
 ## Earlier overnight checkpoints
 

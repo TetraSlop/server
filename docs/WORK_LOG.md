@@ -146,6 +146,21 @@ for later review and continue independent work.
   passed separately as recorded above. Log: results/overnight-final-complete-suite.log.
   The final source, including the immutable result context, is covered by this
   complete run. Launcher output mentioning game windows comes from mock tests.
+- Resumed work adds `tmserver-admin account --account-key KEY`: saved balances,
+  card count, Prize Center points/pending award, event membership and remaining
+  claims. Tests use a real partial event collection with a capped balance, check
+  exact account ownership, preserve null journals and pending recovery, and
+  prove the inspection leaves the save byte-identical. Commit 861ef3d.
+- `tmserver-admin event-progress` records explicit operator steps and configured
+  mission bits through the existing event transaction and durable replay IDs.
+  Exact retries do not repeat progress; conflicting IDs, invalid facts, missing
+  or excluded members fail without changes. Save failure leaves the ID retryable.
+  It grants no assets and infers no historical triggers. Commit d618485.
+- The follow-up admin/event/prize batch passes 54 tests in 2.178 seconds. The
+  rebuilt 82-entry wheel passes clean stdlib-only installation, actual JSON
+  award and account-inspection commands, entry points and both listeners.
+  Logs: results/event-progress-wheel-{build,check}.log. Collection finds 992
+  cases without import errors; the full 992-case suite was not repeated.
 
 Earlier portable regression run:903 tests in798.6 seconds,
 846 passed,56 optional PostgreSQL tests skipped, and one login timeout in the
@@ -157,9 +172,9 @@ checks pass. No native visual validation is claimed by these tests.
 ## Current checkpoint
 
 - All assigned implementation and temporary PostgreSQL cleanup are complete.
-  Agents are idle and no exec sessions remain active. The complete current
-  portable suite finished successfully with TM_TEST_DATABASE_URL absent.
-  Latest production commit is 77cf376; subsequent changes add tests and records.
+  Agents are idle and no exec sessions remain active. The latest complete
+  portable suite covered 988 cases; the later admin follow-ups passed their
+  scoped tests and package checks. Latest production commit is d618485.
 - The transport/profile audit found no new actionable defect. Isolated encrypted
   probes rejected truncated bodies, incorrect extents and bad checksums without
   publishing state; valid follow-up requests succeeded. No protocol policy was
@@ -170,9 +185,9 @@ checks pass. No native visual validation is claimed by these tests.
 - A final synthetic ranking audit confirms fresh hide-name settings after weekly
   rollover, immutable issued files, account-isolated reads/deletes and no files
   retained after restart. Existing file privacy policy remains unchanged.
-- The latest complete run and collection both contain 988 cases, including
-  59 optional PostgreSQL cases. No import errors or test failures remain.
-- Before further substantial work check current allowance. Last observed 99%
+- The latest complete run contains 988 cases and current collection contains
+  992, including 59 optional PostgreSQL cases. No known test failures remain.
+- Before further substantial work check current allowance. Last observed 100%
   used; reset remains 1791063720. Continue only concrete, bounded improvements
   that can be completed and validated within remaining allowance. No reset
   credits, purchases or continuation into a replenished allowance are authorized.
