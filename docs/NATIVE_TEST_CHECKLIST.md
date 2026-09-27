@@ -58,6 +58,12 @@ Use `.\Play.cmd --rewards` to check a CPU result with local reward options, then
 stakes. Note cards/money before and after, accept rewards, close and reopen.
 Check that collected rewards appear once. These tests change the local economy.
 
+During a human rematch, change the ranking hide-name option in the Continue
+dialog, then finish any delayed deck edits. Repeat with the other player making
+the final Continue choice. Both clients should remain connected; the next stake
+should be charged once, and the privacy preference and deck edits should survive
+closing and reopening. This path has encrypted regression coverage.
+
 Finally, `.\Play.cmd --clients 3`: enter Open Tables in all windows and start a
 three-player match. Confirm the 25-cell board, all three turns and result/Continue
 screens. A native UI pass is still needed even though the headless game logic passes.
@@ -65,6 +71,22 @@ screens. A native UI pass is still needed even though the headless game logic pa
 Auction, Prize Center, event and spectator UI checks follow these core passes;
 they remain on the broader deferred-review list. Do not mark this checklist
 passed merely because the process started or exited successfully.
+
+## Operator-queued rewards
+
+Use a disposable test save for these checks. Stop its server, then follow
+[offline administration](ADMIN.md) to queue a small explicit Prize Center award
+for an existing account. Relaunch with that same save, open the Prize Center,
+collect the award, and reopen the game. Confirm the award appears once and the
+points remain credited. Retry the same award ID while the server is stopped;
+the command should report `already-recorded` and no new award should appear.
+
+For a save with configured events and an existing member, also queue a small
+event grant using its matching configuration. Verify the event collection screen
+shows the specified cards and money and accepts them once. Eligibility changes
+should block or restore admission without erasing progress or pending grants.
+These checks verify presentation and collection; they do not validate a
+historical automatic reward formula.
 
 ## Optional weekly rankings
 
