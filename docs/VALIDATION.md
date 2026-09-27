@@ -1,5 +1,59 @@
 # Packaging and transaction validation
 
+## Event admission ownership and repeated validation, 2026-09-27
+
+Commit `a42f147` closes the reverse service-boundary gap: an ordinary observer
+retaining event-room presence could also enter an event watch or event card
+selection. Both paths reproduced before the fix. `EventAdapter` now reuses the
+existing room ownership check before Req/EInit admission; ExitCh, PC and PART
+handling remain unchanged. No new historical protocol or economic policy is
+inferred.
+
+All **42 focused tests pass**: the new regression (both watch and selection)
+in 6.695 seconds, 11 leave/reentry controls in 35.566 seconds, and 30 broader
+event dispatcher controls in 102.169 seconds. They cover rejection before
+transport cleanup can conceal partial mutation, unchanged accounts/rounds and
+reservations, explicit exit followed by successful same-socket admission, and
+identical valid retries. The broader selection exercises full two/three-player
+events, multiple tables, spectators, mode8 and admission expiry. Independent
+source review found no additional issue.
+
+Logs: `results/event-service-boundaries-{before,focused,controls,dispatcher-controls}.log`
+and the original encrypted reproduction in
+`results/event-reverse-observer-admission-repro.log`.
+
+The complete portable suite passes against an isolated archive of baseline
+`2a6bf1cc25e4ad319f024b90bb16dfeb8dec7894`: **1,146 tests in 876.507 seconds,
+1,087 passed and 59 optional PostgreSQL skips, with no failures or errors**.
+The run removed database environment settings and verified all 74 imported
+server modules resolved within its archive. The manifest records 255
+source/test/tool hashes and archive SHA256
+`29b3095b8276a5535ad7c41686fdab5cb234b238c5dcf0c289122d223e30cbc4`.
+Its temporary tree was removed and verified absent. Evidence:
+`results/full-suite-2a6bf1c.log`, `results/full-suite-2a6bf1c-result.json` and
+`results/full-suite-2a6bf1c-manifest.json`.
+
+All **59 PostgreSQL tests pass in 55.163 seconds**, without skips, against a
+separate archive of baseline `2a6bf1c`. Its 467 file hashes remained unchanged.
+The private PostgreSQL 16.15 instance and its owned resources were verified
+removed afterward. See [database evidence](research/ADMIN_POSTGRES_VALIDATION.md).
+This baseline precedes `a42f147`; the 42 scoped tests above cover that later
+dispatcher-only correction. The full 1,147-case suite was not repeated after
+that correction. Native rendering is not part of either check.
+
+A supplemental administration audit passes five scenarios with simultaneous
+auction bids/refunds, unfinished stakes, unaccepted result cards, event membership
+and old weekly ranking state. Reads preserve exact save bytes; each reward or
+event update changes only its owning journal, and exact retries preserve bytes.
+No runtime change was needed. Evidence: `results/admin-journal-boundary-audit.json`.
+
+Current collection finds **1,147 tests** without import errors. Repository-wide
+Ruff and whitespace checks pass. The rebuilt 85-entry wheel passes a clean
+dependency-free install, entry points, JSON administration/recovery and temporary
+service listeners. All 80 packaged runtime files byte-match source. Logs:
+`results/event-admission-wheel-{build,check}.log`.
+SHA256: `6937ece2babc13f40cc5d82527197421e2b8c2f7d2f93ba97f6d3bb859ffe4e5`.
+
 ## Room information and observer service boundaries, 2026-09-27
 
 Commit `df49fc7` reserves the terminator in the native 32-byte room information

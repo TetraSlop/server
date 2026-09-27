@@ -19,6 +19,38 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Reverse service ownership is now enforced before event watch/selection
+  admission (`a42f147`). Both paths previously admitted an ordinary observer
+  that retained event-room presence, leaving simultaneous table ownership.
+  Seven runtime lines reuse the existing room-entry validator. The new test
+  reproduces both baseline failures and checks rejection atomicity, explicit
+  exit, same-socket admission and identical retries. All 42 scoped event,
+  spectator, expiry and departure tests pass. No exit handling, persistence
+  schema or reward policy changed.
+- The complete portable suite on isolated baseline `2a6bf1c` passes 1,146
+  cases in 876.507 seconds: 1,087 passed, 59 optional PostgreSQL skips, no
+  failures or errors. All 74 imported server modules resolved inside the
+  archive; 255 source/test/tool hashes and the archive digest are recorded in
+  `results/full-suite-2a6bf1c-manifest.json`. Its temporary tree is removed.
+  This baseline precedes `a42f147`; the focused checks above cover that later
+  correction. The complete 1,147-case collection has not been rerun afterward.
+- The frozen `2a6bf1c` PostgreSQL checkpoint passes all 59 cases against a new
+  isolated PostgreSQL 16.15 instance in 55.163 seconds, with no skips or
+  failures. All 467 archive hashes stayed fixed; owned container, daemon,
+  namespace mount, temporary storage and loopback listener were removed.
+  These checks precede the dispatcher-only fix above. Five supplemental
+  administration scenarios preserve simultaneous auction/refund, stake,
+  result-card and ranking journals; no further runtime change was needed.
+- Current collection finds 1,147 tests; Ruff, whitespace and the rebuilt
+  wheel's clean install, entry points, JSON administration/recovery and
+  temporary listeners pass. All 80 packaged runtime files byte-match source.
+  Details and evidence paths are in VALIDATION.md. The native checklist now
+  records the user's prior successful title/input/CPU/sound reports separately
+  from acceptance of the latest combined candidate. No native application,
+  desktop input, original asset or live save was used in this iteration.
+  All validation workers and test/package processes for this checkpoint have
+  completed. Native acceptance and historical server-only policies remain on
+  the review list; do not infer parity from these headless checks.
 - Room presence information now reserves its native string terminator
   (`df49fc7`). Original-code research `f268eff` proves that 32 nonzero bytes
   cause a receiver diagnostic and can overread adjacent sender data; the

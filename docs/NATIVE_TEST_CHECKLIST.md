@@ -1,8 +1,22 @@
 # Native validation of the integrated projects
 
-Status: **awaiting user testing**. The loader has not been launched by the agent.
-Headless checks validate startup plumbing and encrypted requests; the following
-checks need the actual game screens. Use the new `Play.cmd`, not the old shortcut.
+Status: **basic play confirmed by the user; current integrated candidate pending**.
+Earlier user reports confirmed a visible title screen, corrected mouse behavior,
+CPU play, working sound, and improved window/settings input behavior. Those
+reports establish that the local game has been playable; they do not certify
+later server rules, loader builds, or replacement assets.
+
+The checks below are acceptance steps for one recorded server/loader/asset
+combination. Headless checks validate startup plumbing and encrypted requests;
+screen appearance and interaction require the user to operate the game. Use
+`Play.cmd`, not an old shortcut. Record the server and loader revisions, deployed
+loader executable hash, selected texture-pack manifest, and launch session ID
+with the results. A newer build on disk is not evidence that it was deployed.
+
+Start with Pass 1 and Pass 2 below: a CPU match/rematch, shop/deck change and
+reload, followed by a two-human match/trade and reload. Keep later event,
+auction, spectator and three-player checks separate so a successful basic pass
+does not imply they were exercised. No agent desktop or input control is needed.
 
 ## Room discovery and rules
 
@@ -24,9 +38,10 @@ game-start paths; rendered menus and actual human input remain to be checked.
 
 ## Updated loader controls
 
-The user's integrated run reported no sound, no resizing and no window close.
-The updated loader enables the native sound engine and replaces the game's
-fullscreen-only handling of desktop window commands. Verify after relaunch:
+The original integrated run exposed sound, resizing, closing and focus problems.
+The loader now enables the native sound engine and handles desktop window
+commands. The user subsequently confirmed sound and improved input/settings
+behavior. Check the complete set below on the candidate being accepted:
 
 - Title/menu music and selection effects are audible (check game Options levels).
 - Drag the edges and maximize/restore; the game keeps 4:3 proportions and the
@@ -40,7 +55,8 @@ fullscreen-only handling of desktop window commands. Verify after relaunch:
 - X, Alt+F4 and Quit game each close the client on separate runs, and the launcher
   stops its services after the last client exits. Window preferences survive relaunch.
 
-These fixes have headless regression coverage; the native checks remain pending.
+These fixes have headless regression coverage and the earlier user confirmations
+above. A complete pass of these controls on the recorded candidate remains pending.
 
 ## Pass 1: one window
 

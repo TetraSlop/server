@@ -1,5 +1,31 @@
 # Offline admin PostgreSQL validation
 
+## Repeated isolated checkpoint, 2026-09-27
+
+The six modules listed below, including `tests.test_admin_postgres`, pass all
+**59 tests in 55.163 seconds**, with no skips, errors or failures, against an
+archive of exact revision `2a6bf1cc25e4ad319f024b90bb16dfeb8dec7894`.
+All 467 archived file hashes remained unchanged. This checkpoint predates the
+subsequent event-admission ownership correction; its focused dispatcher checks
+are recorded separately in [VALIDATION.md](../VALIDATION.md).
+
+The run reused cached Docker 29.8.1 binaries and PostgreSQL 16.15 without
+downloads or Docker Desktop. Its private daemon, socket, data and container
+lived under `/tmp/tm-pg-check.SmxFzX`, with loopback port 49879 verified unused
+before startup. The container ID, ownership label and bind path were checked;
+Windows and container connections returned the same database system identifier,
+`7690327211016986659`. Each test used its own disposable database. Only the
+three standard databases remained afterward.
+
+Cleanup verified removal of the owned container, private daemon, namespace mount
+and temporary root, and absence of Linux and Windows listeners on the test port.
+Cached binaries and images were retained. No existing database or live save was
+used. Evidence is under ignored `results/postgres-validation-2a6bf1c-20260927/`:
+`tests.log`, `test-summary.json`, `source-manifest.json`, `cleanup.log` and
+`cleanup-summary.json`.
+
+## Earlier administration checkpoint
+
 On 2026-09-27, the three tests in `tests/test_admin_postgres.py` passed against
 PostgreSQL 16.15 in 1.826 seconds. They cover:
 
