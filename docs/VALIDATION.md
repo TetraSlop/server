@@ -1,5 +1,42 @@
 # Packaging and transaction validation
 
+## Retired event cleanup ownership, 2026-09-27
+
+Three event cleanup paths could close a connection after a new service took
+ownership: queued cancellation notices, scheduled observer closure, and a
+failed driver's captured peer list. The adapter now shares a final ownership
+check across those paths. Current failed-driver participants still close, idle
+released peers still close, and shared storage failure retains forced closure.
+The ownership decision has no suspension before `Session.close` marks closed.
+
+Eleven new tests cover nine previously failing reentry cases and five passing
+cleanup controls. Queued expiry exercises new ordinary, shop and event selection
+admissions behind a blocked notification. Observer cases use actual encrypted
+`Session.run` input ready before a deferred closer; abort and failed-send paths
+preserve shop/table/watch reentry. Driver cases pause the first socket's close
+while a different selection exits and enters an ordinary table or shop.
+The driver baseline used a coherent archived `27448f7` runtime and verified its
+loaded adapter hash. Evidence: `results/event-queued-cleanup-{before,after}.log`,
+`results/event-deferred-cleanup-{before,after}.log` and
+`results/event-driver-reentry-{before,controls}.log`.
+
+The combined event expiry/gameplay/observer/chat/room/session run passes all
+**64 tests in 95.924 seconds**. Together with the separate driver isolation run,
+**66 distinct focused tests pass**, including encrypted shared-storage failure
+and successful ordinary CPU completion after an event-local failure. Commands
+and source hashes: `results/event-cleanup-ownership-result.json`; main log:
+`results/event-cleanup-ownership-controls.log`.
+
+Independent review found no material issue. Collection finds 1,170 tests with no
+import errors; lint and whitespace checks pass. The clean 89-entry wheel passes
+installation, entry points, JSON administration/recovery and temporary listeners;
+all 84 runtime files match source. Runtime is 20,684 physical Python lines.
+SHA256: `367bdd4665e345f25a435c8a4e9743722ba026d1556cb4fde31cf2474d773aac`.
+Package evidence: `results/event-cleanup-ownership-package-result.json` and
+`results/event-cleanup-ownership-wheel-{build,check}.log`.
+No full-suite, PostgreSQL or native UI run is claimed, and no save format or
+historical gameplay policy changed.
+
 ## Shared reservation checks and timeout cleanup, 2026-09-27
 
 The timeout path's nickname-only close loop could disconnect a survivor after

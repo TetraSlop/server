@@ -57,6 +57,12 @@ worker failures and table departure share a peer cleanup operation that rechecks
 the current owner before closing. An earlier close can release the old table and
 wait on delivery while a survivor reenters.
 
+Event cancellation, deferred observer cleanup and failed-driver cleanup also
+recheck ownership immediately before closing a released connection. A new table,
+event admission, observer admission or busy account keeps that connection alive.
+Peers still owned by a failed event driver close; shared storage failure also
+requires closure even after admission to another service.
+
 The server's auction worker advances due listings once per second independently
 of table timeout checks. Shutdown cancels and awaits it before table/connection
 cleanup; a persistence failure retains the existing fail-closed behavior.

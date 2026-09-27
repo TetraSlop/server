@@ -54,7 +54,7 @@ class EventSpectators:
 
     async def _close(self, peer):
         try:
-            await peer.close()
+            await self.adapter.close_released_peer(peer)
         except Exception as exc:
             self.adapter.server.log("event_observer_close_error", reason=str(exc))
 

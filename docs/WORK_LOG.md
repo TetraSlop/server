@@ -20,6 +20,15 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Queued event cancellation, deferred observer closure and failed-driver cleanup
+  now share a final current-owner check before closing released connections.
+  Nine reentry cases fail on the preceding runtime; eleven new tests cover those
+  cases and five unchanged cleanup controls. All 66 distinct focused tests pass,
+  including encrypted event/observer flow and global storage failure isolation.
+  Independent review, lint, whitespace and clean wheel checks pass; all 84
+  packaged runtime files match source. Collection is 1,170 and runtime is 20,684
+  lines (+17). No protocol, historical policy or save format changed. No native
+  client, full suite or PostgreSQL run was performed. See VALIDATION.md.
 - Timeout cleanup now shares the ownership-aware peer close used by departures
   and worker failures. Three reentry cases fail before and pass after; the
   unclaimed-peer control still closes. All 62 lifecycle/watchdog checks pass.

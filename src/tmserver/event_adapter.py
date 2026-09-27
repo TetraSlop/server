@@ -155,7 +155,7 @@ class EventAdapter:
                             b":" + source + b"!p@local NOTICE " + d.peer.nick + b" :" + d.payload,
                         )
                     for peer in closures:
-                        await peer.close()
+                        await self.close_released_peer(peer)
                 except Exception as exc:
                     if not done.done():
                         done.set_exception(exc)
@@ -164,6 +164,20 @@ class EventAdapter:
                         done.set_result(None)
         finally:
             self.sender = None
+
+    async def close_released_peer(self, peer):
+        """Close a retired event peer only while no newer service owns it."""
+        server = self.server
+        if server.nicks.get(peer.nick) is not peer:
+            return
+        if server.storage_failed is None and (
+            server.table_for_peer(peer) is not None
+            or self.coordinator.participant(peer)
+            or peer in self.spectators.admissions
+            or server.economy.is_busy(peer.nick.decode("ascii"))
+        ):
+            return
+        await peer.close()
 
     async def disconnect(self, peer, *, wait_delivery=True):
         async with self.lock:
@@ -205,7 +219,10 @@ class EventAdapter:
                 or peer in self.spectators.admissions
             ]
             for peer in affected:
-                await peer.close()
+                if self.coordinator.participant(peer) or peer in self.spectators.admissions:
+                    await peer.close()
+                else:
+                    await self.close_released_peer(peer)
 
     def start(self):
         if self.coordinator.configs and self.task is None:
