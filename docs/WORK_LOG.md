@@ -19,6 +19,12 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Portable migration audit restored the standalone NPC selector/name/guild
+  API check inadvertently excluded with its native-dependent class, and added
+  direct name-visibility boundary checks. Removed three empty migration test
+  shells; original instruction tests remain archived. All six NPC API/batch
+  tests pass in 0.017 seconds; collection finds 1,106 tests without import
+  errors. Ruff and whitespace checks pass. No runtime change or wheel rebuild.
 - Follow-up original Computer-menu execution exposed incompatible optional
   fixed CPU presets: hosted constructor100B9DA1 sets gs0, ComGameInit has no
   override, and the menu offers no departure-rule control. Room configuration

@@ -1,5 +1,19 @@
 # Packaging and transaction validation
 
+## Portable NPC test migration audit, 2026-09-27
+
+Restored an asset-independent NPC API check that had been excluded together
+with its original instruction-dependent test class. Portable tests now directly
+check reserved selectors, known NPC names, invalid guilds and name visibility
+at collection-point boundaries. Three other empty migration test shells were
+removed; their original instruction tests remain archived under research/tests.
+
+All six focused NPC API/batch tests pass in 0.017 seconds. The batch checks
+retain original hand, unused-card and RNG-stream comparisons. Collection finds
+1,106 tests with no import errors; Ruff and whitespace checks pass. No runtime
+files changed, so the checked wheel below remains current. This was not a
+full-suite or original-instruction rerun.
+
 ## Native Computer room rule compatibility, 2026-09-27
 
 Original constructor/Init/editor/sender execution found a real gap in optional

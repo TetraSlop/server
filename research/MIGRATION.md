@@ -33,5 +33,13 @@ the original special-AI choice/RNG expectation and 37 authenticated application
 commands through card selection from the recorded CPU match. Their source
 hashes/provenance are retained with the fixtures.
 
+A follow-up audit on 2026-09-27 removed three empty portable test modules for
+admission messages, table eligibility and table passwords. Their original
+instruction tests remain in this archive. The NPC module now restores the
+asset-independent selector/name/guild API check that was excluded with its
+native-dependent class, plus name-visibility boundaries. Actual NPC generation
+and RNG comparisons remain covered by the frozen batch fixtures. This cleanup
+does not promote the archived instruction tests to portable coverage.
+
 The old scratch server, launcher, live save and separate loader repository were
 not migrated in place. This package needs an explicit later launcher switch.
