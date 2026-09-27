@@ -12,7 +12,7 @@ from tmserver.identities import SHOP_RAW, TRADE_RAW, game_id, service_nick
 from tmserver.options_service import save_options
 from tmserver.profile_transactions import character_profile_request
 from tmserver.room_routing import leave_other_rooms, validate_room_entry
-from tmserver.tm_protocol import Command, encode, parse
+from tmserver.tm_protocol import parse
 
 
 @dataclass(frozen=True)
@@ -207,26 +207,6 @@ async def dispatch(session, target, payload):
                 session=session.id,
                 sequence=ordinary_room.room.sequence,
                 replies=len(responses),
-            )
-            return True
-    if target == b"UUIRT71SR" and payload.startswith(b"GTM0P"):
-        commands = parse(payload[5:])
-        if [c.token for c in commands] == [b"CR", b"AN", b"CI"]:
-            # Native 0x101a6110 accepts CS (0x4b), with no payload reads,
-            # and changes registration state from pending to success.
-            identity = commands[0].payload.split(b"\x06")
-            if identity != [b"0x0000000000000001", b"1"]:
-                raise ValueError("unsupported local player registration")
-            session.tm_player = {
-                "id": 1,
-                "name": commands[1].payload,
-                "info": commands[2].payload,
-                "server": target,
-            }
-            answer = b"GTM0P" + encode([Command(b"CS", b"")])
-            await session.send(b":" + target + b"!p@local NOTICE " + session.nick + b" :" + answer)
-            session.server.log(
-                "lobby_registered", session=session.id, target=target.decode("ascii")
             )
             return True
     if payload == b"GTM0GE1000000@TeachDV=":
