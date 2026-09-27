@@ -1,0 +1,623 @@
+{
+  "evidence": "Original isolated x86 instructions with production ComGameInit and synthetic room/player/widget state.",
+  "code_image_sha256": "422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879",
+  "original": {
+    "hosted_constructor": "100B9B0A..100B9DA7; BL==0 at100B9D1B, gs write100B9DA1",
+    "complete_init_receiver": "10101A10 subtype2 -> 10102D21..10103039",
+    "settings_event": "100EB99D..100EBC0B event0400002F -> 100EBABB state5",
+    "settings_open": "100EBCAF..100EBD52 -> 100ED480",
+    "editor_initialization": "100ED480..100ED58E; optional du reset100ED4F6",
+    "editor_apply": "100EE8E5..100EE960; original43/06 header0 sender",
+    "final_sender": "100EBBD0..100EBBEE -> 10106E30; gs serialized101071E8"
+  },
+  "boundaries": [
+    "Direct in-memory MatchService permits hypothetical incompatible presets independently of public startup validation.",
+    "No listener, native application, original asset write or live save access.",
+    "Constructor slice ends before unrelated collection/grade initialization10101530; that helper does not write gs.",
+    "Full original queued ComGameInit/ComList parser and complete final serializer execute unchanged.",
+    "Resource prefetch, generic widget base constructors, widget selection, and final transport are stubbed.",
+    "Actual settings event and editor initialization execute; widget rendering and physical input are not simulated.",
+    "NPC choice is seeded to original ID1; the known opponent-selection loop does not change these rules.",
+    "Synthetic zero-stake authorization returns unchanged balances; no persistence is involved."
+  ],
+  "cases": [
+    {
+      "name": "fixed_gs0_saved2",
+      "preset": {
+        "bm": 0,
+        "du": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "gs": 0,
+        "tl": 4
+      },
+      "room_context": 0,
+      "saved_tet": {
+        "bm": 200,
+        "du": 1,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 2,
+        "tl": 5
+      },
+      "after_constructor": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 0,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "production_init": "GTM0G43000200@ComGameInit=/RA=300/M=10000/CP=222/S=5/R=0|1|0|1|4|0|0@ComList=/L=30/D=300|293|290|289|282|278|272|267|259|250|199|192|189|182|177|170|169|162|156|149|145|143|138|137|135|131|129|126|111|100",
+      "after_init": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 4,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "initial_start": "GTM0G43000602@ComGame=/Rule=0|1|0|1|4|0|0|0/Com=1",
+      "initial_result": {
+        "accepted": true,
+        "phase": "selection",
+        "game_rules": {
+          "bm": 0,
+          "du": 0,
+          "st": 1,
+          "cb": 0,
+          "ca": 1,
+          "gs": 0,
+          "tl": 4
+        }
+      },
+      "settings_event": "0400002F",
+      "parent_state_after_event": 5,
+      "initial_editor_indices": [
+        0,
+        1,
+        0,
+        4,
+        0
+      ],
+      "after_editor_open": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 4,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_rules": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 5,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_save": "GTM0G43000600@ComGame=/Rule=0|1|0|1|5|0|0",
+      "edited_save_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "edited_start": "GTM0G43000602@ComGame=/Rule=0|1|0|1|5|0|0|0/Com=1",
+      "edited_start_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "saved_tet_unchanged": true
+    },
+    {
+      "name": "fixed_gs1_saved2",
+      "preset": {
+        "bm": 0,
+        "du": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "gs": 1,
+        "tl": 4
+      },
+      "room_context": 0,
+      "saved_tet": {
+        "bm": 200,
+        "du": 1,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 2,
+        "tl": 5
+      },
+      "after_constructor": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 0,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "production_init": "GTM0G43000200@ComGameInit=/RA=300/M=10000/CP=222/S=5/R=0|1|0|1|4|0|0@ComList=/L=30/D=300|293|290|289|282|278|272|267|259|250|199|192|189|182|177|170|169|162|156|149|145|143|138|137|135|131|129|126|111|100",
+      "after_init": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 4,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "initial_start": "GTM0G43000602@ComGame=/Rule=0|1|0|1|4|0|0|0/Com=1",
+      "initial_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "settings_event": "0400002F",
+      "parent_state_after_event": 5,
+      "initial_editor_indices": [
+        0,
+        1,
+        0,
+        4,
+        0
+      ],
+      "after_editor_open": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 4,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_rules": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 5,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_save": "GTM0G43000600@ComGame=/Rule=0|1|0|1|5|0|0",
+      "edited_save_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "edited_start": "GTM0G43000602@ComGame=/Rule=0|1|0|1|5|0|0|0/Com=1",
+      "edited_start_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "saved_tet_unchanged": true
+    },
+    {
+      "name": "fixed_gs2_saved0",
+      "preset": {
+        "bm": 0,
+        "du": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "gs": 2,
+        "tl": 4
+      },
+      "room_context": 0,
+      "saved_tet": {
+        "bm": 200,
+        "du": 1,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 0,
+        "tl": 5
+      },
+      "after_constructor": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 0,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "production_init": "GTM0G43000200@ComGameInit=/RA=300/M=10000/CP=222/S=5/R=0|1|0|1|4|0|0@ComList=/L=30/D=300|293|290|289|282|278|272|267|259|250|199|192|189|182|177|170|169|162|156|149|145|143|138|137|135|131|129|126|111|100",
+      "after_init": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 4,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "initial_start": "GTM0G43000602@ComGame=/Rule=0|1|0|1|4|0|0|0/Com=1",
+      "initial_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "settings_event": "0400002F",
+      "parent_state_after_event": 5,
+      "initial_editor_indices": [
+        0,
+        1,
+        0,
+        4,
+        0
+      ],
+      "after_editor_open": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 4,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_rules": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 5,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_save": "GTM0G43000600@ComGame=/Rule=0|1|0|1|5|0|0",
+      "edited_save_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "edited_start": "GTM0G43000602@ComGame=/Rule=0|1|0|1|5|0|0|0/Com=1",
+      "edited_start_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "saved_tet_unchanged": true
+    },
+    {
+      "name": "fixed_gs0_saved0",
+      "preset": {
+        "bm": 0,
+        "du": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "gs": 0,
+        "tl": 4
+      },
+      "room_context": 0,
+      "saved_tet": {
+        "bm": 200,
+        "du": 1,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 0,
+        "tl": 5
+      },
+      "after_constructor": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 0,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "production_init": "GTM0G43000200@ComGameInit=/RA=300/M=10000/CP=222/S=5/R=0|1|0|1|4|0|0@ComList=/L=30/D=300|293|290|289|282|278|272|267|259|250|199|192|189|182|177|170|169|162|156|149|145|143|138|137|135|131|129|126|111|100",
+      "after_init": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 4,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "initial_start": "GTM0G43000602@ComGame=/Rule=0|1|0|1|4|0|0|0/Com=1",
+      "initial_result": {
+        "accepted": true,
+        "phase": "selection",
+        "game_rules": {
+          "bm": 0,
+          "du": 0,
+          "st": 1,
+          "cb": 0,
+          "ca": 1,
+          "gs": 0,
+          "tl": 4
+        }
+      },
+      "settings_event": "0400002F",
+      "parent_state_after_event": 5,
+      "initial_editor_indices": [
+        0,
+        1,
+        0,
+        4,
+        0
+      ],
+      "after_editor_open": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 4,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_rules": {
+        "bm": 0,
+        "st": 1,
+        "cb": 0,
+        "ca": 1,
+        "tl": 5,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_save": "GTM0G43000600@ComGame=/Rule=0|1|0|1|5|0|0",
+      "edited_save_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "edited_start": "GTM0G43000602@ComGame=/Rule=0|1|0|1|5|0|0|0/Com=1",
+      "edited_start_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "saved_tet_unchanged": true
+    },
+    {
+      "name": "custom_saved2",
+      "preset": null,
+      "room_context": 1,
+      "saved_tet": {
+        "bm": 200,
+        "du": 1,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 2,
+        "tl": 5
+      },
+      "after_constructor": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 0,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "production_init": "GTM0G43000200@ComGameInit=/RA=300/M=10000/CP=222/S=5/R=0|0|0|0|2|0|0@ComList=/L=30/D=300|293|290|289|282|278|272|267|259|250|199|192|189|182|177|170|169|162|156|149|145|143|138|137|135|131|129|126|111|100",
+      "after_init": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 2,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "initial_start": "GTM0G43000602@ComGame=/Rule=0|0|0|0|2|0|0|0/Com=1",
+      "initial_result": {
+        "accepted": true,
+        "phase": "selection",
+        "game_rules": {
+          "bm": 0,
+          "du": 0,
+          "st": 0,
+          "cb": 0,
+          "ca": 0,
+          "gs": 0,
+          "tl": 2
+        }
+      },
+      "settings_event": "0400002F",
+      "parent_state_after_event": 5,
+      "initial_editor_indices": [
+        1,
+        1,
+        1,
+        2,
+        0
+      ],
+      "after_editor_open": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 2,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_rules": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 3,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_save": "GTM0G43000600@ComGame=/Rule=0|0|0|0|3|0|0",
+      "edited_save_result": {
+        "accepted": true,
+        "phase": "computer_menu",
+        "game_rules": {
+          "bm": 0,
+          "du": 0,
+          "st": 0,
+          "cb": 0,
+          "ca": 0,
+          "gs": 1,
+          "tl": 3
+        }
+      },
+      "edited_start": "GTM0G43000602@ComGame=/Rule=0|0|0|0|3|0|0|0/Com=1",
+      "edited_start_result": {
+        "accepted": true,
+        "phase": "selection",
+        "game_rules": {
+          "bm": 0,
+          "du": 0,
+          "st": 0,
+          "cb": 0,
+          "ca": 0,
+          "gs": 0,
+          "tl": 3
+        }
+      },
+      "saved_tet_unchanged": true
+    },
+    {
+      "name": "fixed_du1_optional_editor",
+      "preset": {
+        "bm": 0,
+        "du": 1,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "gs": 0,
+        "tl": 4
+      },
+      "room_context": 0,
+      "saved_tet": {
+        "bm": 200,
+        "du": 1,
+        "st": 0,
+        "cb": 1,
+        "ca": 0,
+        "gs": 2,
+        "tl": 5
+      },
+      "after_constructor": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 0,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "production_init": "GTM0G43000200@ComGameInit=/RA=300/M=10000/CP=222/S=5/R=0|0|0|0|4|1|0@ComList=/L=30/D=300|293|290|289|282|278|272|267|259|250|199|192|189|182|177|170|169|162|156|149|145|143|138|137|135|131|129|126|111|100",
+      "after_init": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 4,
+        "du": 1,
+        "view": 0,
+        "gs": 0
+      },
+      "initial_start": "GTM0G43000602@ComGame=/Rule=0|0|0|0|4|1|0|0/Com=1",
+      "initial_result": {
+        "accepted": true,
+        "phase": "selection",
+        "game_rules": {
+          "bm": 0,
+          "du": 1,
+          "st": 0,
+          "cb": 0,
+          "ca": 0,
+          "gs": 0,
+          "tl": 4
+        }
+      },
+      "settings_event": "0400002F",
+      "parent_state_after_event": 5,
+      "initial_editor_indices": [
+        1,
+        1,
+        1,
+        4,
+        0
+      ],
+      "after_editor_open": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 4,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_rules": {
+        "bm": 0,
+        "st": 0,
+        "cb": 0,
+        "ca": 0,
+        "tl": 5,
+        "du": 0,
+        "view": 0,
+        "gs": 0
+      },
+      "edited_save": "GTM0G43000600@ComGame=/Rule=0|0|0|0|5|0|0",
+      "edited_save_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "edited_start": "GTM0G43000602@ComGame=/Rule=0|0|0|0|5|0|0|0/Com=1",
+      "edited_start_result": {
+        "accepted": false,
+        "error": "game settings conflict with configured room rules",
+        "phase": "computer_menu",
+        "rng_unchanged": true
+      },
+      "saved_tet_unchanged": true
+    }
+  ]
+}
