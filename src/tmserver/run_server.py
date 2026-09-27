@@ -15,6 +15,7 @@ from tmserver.profile_service import ProfileServer
 from tmserver.server import Server
 from tmserver.shop_offers import load_shop_offers
 from tmserver.spectator_service import SpectatorService
+from tmserver.state_store import writer_lease
 
 DIRECTORY = Path.cwd() / "var"
 
@@ -188,6 +189,8 @@ async def running_services(args):
             from tmserver.postgres_store import PostgresStateStore
 
             store = resources.enter_context(PostgresStateStore(args.database_url))
+        else:
+            resources.enter_context(writer_lease(args.state))
         async with serving(args, events, tables, progress, store) as services:
             yield services
 
@@ -216,13 +219,15 @@ async def serving(args, events, tables, progress, store):
         shop_offers=load_shop_offers(args.shop_offers) if args.shop_offers else None,
         spectator=SpectatorService(enabled=args.spectator_preview),
     )
-    profile = ProfileServer(args.log_dir / "local_profile_traffic.jsonl", game)
     try:
-        game_port = await game.start(args.game_port)
-        profile_port = await profile.start(args.profile_port)
-        yield RunningServices(game, profile, game_port, profile_port)
+        profile = ProfileServer(args.log_dir / "local_profile_traffic.jsonl", game)
+        try:
+            game_port = await game.start(args.game_port)
+            profile_port = await profile.start(args.profile_port)
+            yield RunningServices(game, profile, game_port, profile_port)
+        finally:
+            await profile.stop()
     finally:
-        await profile.stop()
         await game.stop()
 
 

@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 import tempfile
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Protocol
 
@@ -54,6 +54,27 @@ def _writer_lock(path):
             import fcntl
 
             fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+
+
+@contextmanager
+def writer_lease(path):
+    """Own a local JSON economy until service or offline administration ends.
+
+    This cooperative lifetime lease is separate from each store commit lock.
+    Keep its stable .writer.lock sidecar in place; process exit releases the
+    operating-system lock without needing stale-owner files or timeouts.
+    """
+    path = Path(path).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with ExitStack() as resources:
+        try:
+            resources.enter_context(_writer_lock(path.with_name(path.name + ".writer")))
+        except OSError as exc:
+            raise OSError(
+                f"Cannot acquire JSON writer lease for {path}; another server or admin "
+                "command may be using this save."
+            ) from exc
         yield
 
 

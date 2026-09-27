@@ -38,8 +38,13 @@ save selected accounts, and save selected accounts with named journals.
 
 ## Current limits
 
-One process owns one economy. PostgreSQL uses a session writer lock; JSON uses a
-short file lock and checks the previous file contents before replacing a save.
+One process owns one economy. PostgreSQL uses a session writer lock. Packaged
+JSON services and offline administration share `writer_lease(path)` for their
+whole lifetime, before loading or recovering state until shutdown completes.
+JSON also uses a separate short commit lock and checks the previous file
+contents before replacing a save. Callers using `Server` or `JsonStateStore`
+directly must acquire the lifetime lease themselves; low-level save methods
+retain their existing optimistic writer checks.
 All writes are synchronous. JSON rewrites the complete save; PostgreSQL limits
 account writes but stores each service journal as a complete JSONB document.
 Large journals and slow storage can therefore pause all clients on the event loop.
