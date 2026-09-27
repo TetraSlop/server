@@ -1,0 +1,34 @@
+# Event card collection
+
+`event_cards.py` implements the separate F service as a durable collection of explicitly granted cards and money. It does not start a match or infer historical event rewards. Sixteen service tests pass, including freshly executed original receive/send/controller comparisons. `protocol_map/event_card_vectors.json` records 28 original-code cases. The combined event, economy, prize, auction, result-recovery and table-preferences suite passes 149 tests. No desktop control or native game launch was used.
+
+## Integration and persistence
+
+Construct `EventCardService(economy, event_host)`, or restore with `EventCardService.restore(economy, event_host, saved_event_cards)`. Route authenticated F/90 and active F/B2 to `handle(key, payload, event_id=...)`, and send its returned payloads from that event's published F identity. Unrelated traffic returns `None`. `is_active` and `status` expose routing context. `disconnect` releases the reservation while preserving durable grants. Keep `EventConfig.card_service_enabled` false until routing and atomic persistence are available.
+
+Only trusted policy code can call `grant(key, event_id, stable_grant_id, cards=(), money=0)`. The member must already exist; each grant contains at most 30 validated undecked cards and at most 99,999,999 T. Exact grant-ID replay is harmless, including after fully claiming and restarting; a different grant under the same ID fails. No client message can mint a grant. `pending` returns outstanding cards and money, without consuming anything.
+
+Persist `economy.snapshot()`, `host.snapshot()` and `service.snapshot()` together **before** sending replies. Money is credited and its grant consumed before EcmInit because the client sends no money acknowledgement. EcmInit contains the prior balance in M and only the newly credited amount in PM. At the money cap, unapplied money remains pending. An active entry retry replays the same response; after Get it instead returns the current balance with PM=0/C=0. Cards remain pending until authenticated B2/Get; Get atomically validates overflow discards/decks, applies the inventory and advances the grant offsets. A repeated Get is harmless. Quit is rejected until a nonempty card batch has passed Get. Empty or money-only visits need no Get.
+
+The UI allocates nine reveal slots, so each visit freezes at most nine FIFO cards. A serializer guard also enforces the original 447-byte named-body limit; all tested maximum-width ordinary card tuples fit a nine-card batch. Further cards remain pending for another visit. Grants arriving during a visit wait for the next visit. Cards accepted before reveal remain owned after a disconnect. Unaccepted cards and staged edits roll back; reconnect can collect them without crediting money twice. Restore never fabricates a live native scene or reservation.
+
+The shared public economy methods `reserve_delivery`, `commit_delivery` and `release_delivery` enforce exclusive account ownership and bounded inventory. They reuse the general escrow checks but create no auction entries. Match, shop, trade, auction and Prize Center access cannot mutate an account while collection is active. Requests must use the correct authenticated NN/CN, native session and event identity. Closed Quit replays are also event-scoped.
+
+Existing members may collect durable grants after the event ends, including after reconnect. New event enrollment remains closed after end. This is an explicit local recovery policy; it is not proof of the historical server's entitlement rules. E match initialization retains its separate active-time gate.
+
+## Original client contract
+
+- F/CardReq is family90; family91 accepts it. Child1009A020 has the sole direct caller100FF36C in parent100FF270. The parent sets player+E6=2 at100FF3C4 and prepares nine rendered cards. The outer allocation at100771BC is6E4 bytes with count9 at1007721D.
+- Positive91 advances the child at1009A1D5, which posts event03001A3B at1009A2DF. Parent100FFB21..100FFB47 handles it, then100FFB74 polls shared receiver10101A10 subtype13. This is a B2 collection initializer, not43/EventGameInit.
+- EcmInit starts at1010577F. `/N` is the session; `/RA` rating; `/M` actual balance (negative values clamp to zero); `/CP` points; `/S` main inventory count; `/RT` player+B0; `/PM` pending money at player+CC; `/C` incoming card count. N0..NC-1 each carry full8 card tuples into player+4B90 with stride16. Header1 returns failure at10105873; header0 succeeds even when body sessionN=1.
+- Controller100FFE50 state9 skips Get if count0 at100FFEB8..100FFEE0. For a nonempty fitting batch,100FFEE5..100FFF07 checks capacity and sends **B2/15 Get before revealing the cards**. Reveal states10/11 show every card; there is no choose-one operation.
+- State13 animates pending money into balance. Entry1010040A caps balance at99,999,999. The fast path101005AA adds all pending money and clears it; the next invocation reapplies the cap. No money ACK is emitted.
+- State15 at10100683 checks capacity again. A fitting batch moves every temporary card via100B8180 at101006BD, compacts via100B8BE0, clears the temporary count and advances to17. It sends no additional Get. Overflow instead opens100EEF50 with context0 at10100764..10100778; generic overflow sends Erase/Decks and B2/Get at100EF29B..100EF2A4. Event0400003B resumes the parent.
+- Completion sends B2/17 Quit at100FF887 and waits at100FFDCA, polling Dead on failure. The original receiver accepts the ordinary `@Quit=/N=session/D=0/B=0` used here and clears player+EA. The separate EQuit Stat bits exist, but their downstream business meaning remains unproven and is not fabricated.
+- The parent is reached at10077249 when the event overview posts03001A40. Native UI eligibility at10078398..10078405 checks positive steps with rank1..3, a completed mission, class count3, or class count4 plus a positive `(steps-1)//steps_per_class`. These are screen-entry conditions, not authoritative historical grant contents or server reward rules. Configured prize-display records remain presentation only.
+
+## Validation and limits
+
+Original cases cover EcmInit headers0/1/2/255 and counts0/1/9, fit versus overflow at1000 cards, empty visits, actual card merges, money animation/cap, wrong/right Quit source/session, and context0 Get. Service tests cover account spoofing, stale sessions, frozen batches, exactly-once money and card claims, restart, post-end collection, inventory overflow, authentic deck/erase edits, card multiplicity, malformed persistence, disabled capability, reservation conflicts and more than nine pending cards.
+
+No automatic mission thresholds, tournament award allocation or historical eligibility formula is implemented. A trusted event engine or explicit administrator grant must supply actual entitlements. Client-visible collection is implemented; full event-match initialization and progress production remain separate work.

@@ -1,0 +1,13 @@
+{
+  "rooms": [
+    {
+      "name": "Open Tables",
+      "room_raw": 257,
+      "table_raw": 513,
+      "room_channel": "#OPENROOM",
+      "table_channel": "#OPENTABLE1",
+      "mode": "versus",
+      "players": "auto"
+    }
+  ]
+}

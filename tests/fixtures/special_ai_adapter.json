@@ -1,0 +1,13 @@
+{
+  "hand": 2,
+  "field": 5,
+  "rng": [
+    47,
+    2,
+    22,
+    0,
+    0,
+    15
+  ],
+  "source": "Original x86 AI executed by original SpecialMatchTests fixture; seed 812; draws 47,2,22,0,0,15."
+}

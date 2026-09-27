@@ -1,0 +1,20 @@
+{
+  "events": [
+    {
+      "id": "local_festival",
+      "listing": {"key_region": "Local Lobby", "key_event": "Local Festival", "description": "Borrowed-card local games", "scalar": 4096},
+      "data": {"classes": ["First", "Next"], "steps_per_class": 4},
+      "start": 0,
+      "end": 2147483647,
+      "room_raw": 4096,
+      "init_raw": 4097,
+      "card_raw": 4098,
+      "match_enabled": true,
+      "card_service_enabled": true
+    }
+  ],
+  "tables": [
+    {"event_id": "local_festival", "table_raw": 4099, "channel": "#EVTABLE001", "player_count": 2}
+  ],
+  "progress_policy": "none"
+}

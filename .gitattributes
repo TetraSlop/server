@@ -1,0 +1,2 @@
+* text=auto eol=lf
+research/tests/*.py -text whitespace=-blank-at-eof,cr-at-eol

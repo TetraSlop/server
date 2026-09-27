@@ -1,0 +1,1027 @@
+{
+  "environment": "Windows 11 Python 3.13.15; JSON on the local Windows volume; PostgreSQL 16.15 in private WSL Docker using a Linux volume, synchronous_commit and fsync on. Single serial pass, no competing test suite.",
+  "runs": [
+    {
+      "measured_at": "2026-09-27T06:36:03.010009+00:00",
+      "backend": "memory",
+      "players": 32,
+      "population": 32,
+      "requested_seconds": 10.0,
+      "actual_seconds": 10.009,
+      "think_ms": 0,
+      "login_concurrency": 4,
+      "operations": 44193,
+      "operations_per_second": 4415.43,
+      "latency": {
+        "heartbeat": {
+          "count": 33129,
+          "p50_ms": 5.81,
+          "p95_ms": 11.372,
+          "p99_ms": 13.738,
+          "max_ms": 18.586
+        },
+        "options": {
+          "count": 5536,
+          "p50_ms": 12.142,
+          "p95_ms": 18.118,
+          "p99_ms": 20.256,
+          "max_ms": 21.989
+        },
+        "inventory": {
+          "count": 5528,
+          "p50_ms": 7.201,
+          "p95_ms": 10.726,
+          "p99_ms": 12.184,
+          "max_ms": 14.315
+        }
+      },
+      "login_latency": {
+        "count": 32,
+        "p50_ms": 1005.395,
+        "p95_ms": 1287.832,
+        "p99_ms": 1292.242,
+        "max_ms": 1292.242
+      },
+      "failures": [],
+      "server": {
+        "status": "complete",
+        "server_wall_seconds": 10.009,
+        "server_cpu_seconds": 9.953,
+        "save_latency": {
+          "count": 11064,
+          "p50_ms": 0.0,
+          "p95_ms": 0.0,
+          "p99_ms": 0.0,
+          "max_ms": 0.001
+        },
+        "event_loop_lag": {
+          "count": 536,
+          "p50_ms": 8.571,
+          "p95_ms": 14.783,
+          "p99_ms": 18.126,
+          "max_ms": 20.286
+        },
+        "verified_accounts": 32,
+        "durable_reload_verified": false,
+        "save_bytes": null
+      },
+      "python": "3.13.15",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "workload": "six heartbeats, one option save, one owned-card deck edit per eight operations",
+      "limits": "Closed-loop loopback clients; no think time by default; no active games; traffic-file logging disabled; bounded synthetic account pool; population includes dormant accounts."
+    },
+    {
+      "measured_at": "2026-09-27T06:36:47.656691+00:00",
+      "backend": "memory",
+      "players": 128,
+      "population": 128,
+      "requested_seconds": 10.0,
+      "actual_seconds": 10.019,
+      "think_ms": 0,
+      "login_concurrency": 4,
+      "operations": 43971,
+      "operations_per_second": 4388.92,
+      "latency": {
+        "heartbeat": {
+          "count": 32944,
+          "p50_ms": 22.953,
+          "p95_ms": 46.849,
+          "p99_ms": 55.21,
+          "max_ms": 67.773
+        },
+        "options": {
+          "count": 5523,
+          "p50_ms": 49.244,
+          "p95_ms": 72.438,
+          "p99_ms": 82.521,
+          "max_ms": 90.255
+        },
+        "inventory": {
+          "count": 5504,
+          "p50_ms": 29.167,
+          "p95_ms": 43.449,
+          "p99_ms": 47.525,
+          "max_ms": 58.802
+        }
+      },
+      "login_latency": {
+        "count": 128,
+        "p50_ms": 930.433,
+        "p95_ms": 1227.796,
+        "p99_ms": 1405.056,
+        "max_ms": 1437.5
+      },
+      "failures": [],
+      "server": {
+        "status": "complete",
+        "server_wall_seconds": 10.019,
+        "server_cpu_seconds": 9.984,
+        "save_latency": {
+          "count": 11027,
+          "p50_ms": 0.0,
+          "p95_ms": 0.0,
+          "p99_ms": 0.0,
+          "max_ms": 0.001
+        },
+        "event_loop_lag": {
+          "count": 237,
+          "p50_ms": 30.229,
+          "p95_ms": 58.69,
+          "p99_ms": 69.783,
+          "max_ms": 71.283
+        },
+        "verified_accounts": 128,
+        "durable_reload_verified": false,
+        "save_bytes": null
+      },
+      "python": "3.13.15",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "workload": "six heartbeats, one option save, one owned-card deck edit per eight operations",
+      "limits": "Closed-loop loopback clients; no think time by default; no active games; traffic-file logging disabled; bounded synthetic account pool; population includes dormant accounts."
+    },
+    {
+      "measured_at": "2026-09-27T06:44:25.077101+00:00",
+      "backend": "json",
+      "players": 8,
+      "population": 8,
+      "requested_seconds": 10.0,
+      "actual_seconds": 10.097,
+      "think_ms": 0,
+      "login_concurrency": 4,
+      "operations": 905,
+      "operations_per_second": 89.63,
+      "latency": {
+        "heartbeat": {
+          "count": 673,
+          "p50_ms": 2.34,
+          "p95_ms": 211.18,
+          "p99_ms": 460.15,
+          "max_ms": 1128.272
+        },
+        "options": {
+          "count": 120,
+          "p50_ms": 225.101,
+          "p95_ms": 489.437,
+          "p99_ms": 1245.609,
+          "max_ms": 1245.838
+        },
+        "inventory": {
+          "count": 112,
+          "p50_ms": 143.885,
+          "p95_ms": 621.271,
+          "p99_ms": 812.148,
+          "max_ms": 855.328
+        }
+      },
+      "login_latency": {
+        "count": 8,
+        "p50_ms": 1111.641,
+        "p95_ms": 1303.82,
+        "p99_ms": 1303.82,
+        "max_ms": 1303.82
+      },
+      "failures": [],
+      "server": {
+        "status": "complete",
+        "server_wall_seconds": 10.1,
+        "server_cpu_seconds": 1.625,
+        "save_latency": {
+          "count": 232,
+          "p50_ms": 28.4,
+          "p95_ms": 98.643,
+          "p99_ms": 276.809,
+          "max_ms": 296.961
+        },
+        "event_loop_lag": {
+          "count": 37,
+          "p50_ms": 206.959,
+          "p95_ms": 847.503,
+          "p99_ms": 1118.953,
+          "max_ms": 1118.953
+        },
+        "verified_accounts": 8,
+        "durable_reload_verified": true,
+        "save_bytes": 210983
+      },
+      "python": "3.13.15",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "workload": "six heartbeats, one option save, one owned-card deck edit per eight operations",
+      "limits": "Closed-loop loopback clients; no think time by default; no active games; traffic-file logging disabled; bounded synthetic account pool; population includes dormant accounts."
+    },
+    {
+      "measured_at": "2026-09-27T06:37:08.002273+00:00",
+      "backend": "json",
+      "players": 32,
+      "population": 32,
+      "requested_seconds": 10.0,
+      "actual_seconds": 10.337,
+      "think_ms": 0,
+      "login_concurrency": 4,
+      "operations": 3104,
+      "operations_per_second": 300.27,
+      "latency": {
+        "heartbeat": {
+          "count": 2304,
+          "p50_ms": 4.302,
+          "p95_ms": 284.308,
+          "p99_ms": 341.928,
+          "max_ms": 423.532
+        },
+        "options": {
+          "count": 416,
+          "p50_ms": 376.476,
+          "p95_ms": 494.63,
+          "p99_ms": 496.359,
+          "max_ms": 497.138
+        },
+        "inventory": {
+          "count": 384,
+          "p50_ms": 214.822,
+          "p95_ms": 393.348,
+          "p99_ms": 429.105,
+          "max_ms": 442.288
+        }
+      },
+      "login_latency": {
+        "count": 32,
+        "p50_ms": 1034.167,
+        "p95_ms": 1250.573,
+        "p99_ms": 1295.187,
+        "max_ms": 1295.187
+      },
+      "failures": [],
+      "server": {
+        "status": "complete",
+        "server_wall_seconds": 10.338,
+        "server_cpu_seconds": 5.641,
+        "save_latency": {
+          "count": 800,
+          "p50_ms": 10.26,
+          "p95_ms": 13.349,
+          "p99_ms": 70.292,
+          "max_ms": 130.615
+        },
+        "event_loop_lag": {
+          "count": 40,
+          "p50_ms": 246.652,
+          "p95_ms": 435.566,
+          "p99_ms": 438.201,
+          "max_ms": 438.201
+        },
+        "verified_accounts": 32,
+        "durable_reload_verified": true,
+        "save_bytes": 841554
+      },
+      "python": "3.13.15",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "workload": "six heartbeats, one option save, one owned-card deck edit per eight operations",
+      "limits": "Closed-loop loopback clients; no think time by default; no active games; traffic-file logging disabled; bounded synthetic account pool; population includes dormant accounts."
+    },
+    {
+      "measured_at": "2026-09-27T06:38:00.447904+00:00",
+      "backend": "json",
+      "players": 128,
+      "population": 128,
+      "requested_seconds": 10.0,
+      "actual_seconds": 15.807,
+      "think_ms": 0,
+      "login_concurrency": 4,
+      "operations": 1152,
+      "operations_per_second": 72.88,
+      "latency": {
+        "heartbeat": {
+          "count": 768,
+          "p50_ms": 17.319,
+          "p95_ms": 2798.431,
+          "p99_ms": 3580.198,
+          "max_ms": 3791.868
+        },
+        "options": {
+          "count": 256,
+          "p50_ms": 5582.217,
+          "p95_ms": 6076.171,
+          "p99_ms": 6078.473,
+          "max_ms": 6078.961
+        },
+        "inventory": {
+          "count": 128,
+          "p50_ms": 2045.112,
+          "p95_ms": 3820.195,
+          "p99_ms": 3982.95,
+          "max_ms": 4012.964
+        }
+      },
+      "login_latency": {
+        "count": 128,
+        "p50_ms": 858.996,
+        "p95_ms": 1170.686,
+        "p99_ms": 1272.237,
+        "max_ms": 1309.824
+      },
+      "failures": [],
+      "server": {
+        "status": "complete",
+        "server_wall_seconds": 15.807,
+        "server_cpu_seconds": 10.172,
+        "save_latency": {
+          "count": 384,
+          "p50_ms": 31.52,
+          "p95_ms": 91.5,
+          "p99_ms": 124.468,
+          "max_ms": 147.935
+        },
+        "event_loop_lag": {
+          "count": 8,
+          "p50_ms": 1599.011,
+          "p95_ms": 5578.268,
+          "p99_ms": 5578.268,
+          "max_ms": 5578.268
+        },
+        "verified_accounts": 128,
+        "durable_reload_verified": true,
+        "save_bytes": 3363936
+      },
+      "python": "3.13.15",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "workload": "six heartbeats, one option save, one owned-card deck edit per eight operations",
+      "limits": "Closed-loop loopback clients; no think time by default; no active games; traffic-file logging disabled; bounded synthetic account pool; population includes dormant accounts."
+    },
+    {
+      "measured_at": "2026-09-27T06:39:45.878534+00:00",
+      "backend": "json",
+      "players": 8,
+      "population": 1000,
+      "requested_seconds": 10.0,
+      "actual_seconds": 10.712,
+      "think_ms": 0,
+      "login_concurrency": 4,
+      "operations": 203,
+      "operations_per_second": 18.95,
+      "latency": {
+        "heartbeat": {
+          "count": 147,
+          "p50_ms": 1.038,
+          "p95_ms": 1104.652,
+          "p99_ms": 1327.251,
+          "max_ms": 1327.756
+        },
+        "options": {
+          "count": 32,
+          "p50_ms": 1506.116,
+          "p95_ms": 1601.581,
+          "p99_ms": 1601.619,
+          "max_ms": 1601.619
+        },
+        "inventory": {
+          "count": 24,
+          "p50_ms": 939.602,
+          "p95_ms": 1533.444,
+          "p99_ms": 1568.835,
+          "max_ms": 1568.835
+        }
+      },
+      "login_latency": {
+        "count": 8,
+        "p50_ms": 1318.656,
+        "p95_ms": 1723.753,
+        "p99_ms": 1723.753,
+        "max_ms": 1723.753
+      },
+      "failures": [],
+      "server": {
+        "status": "complete",
+        "server_wall_seconds": 10.712,
+        "server_cpu_seconds": 9.766,
+        "save_latency": {
+          "count": 56,
+          "p50_ms": 184.627,
+          "p95_ms": 233.911,
+          "p99_ms": 281.096,
+          "max_ms": 281.096
+        },
+        "event_loop_lag": {
+          "count": 7,
+          "p50_ms": 1524.39,
+          "p95_ms": 1593.673,
+          "p99_ms": 1593.673,
+          "max_ms": 1593.673
+        },
+        "verified_accounts": 8,
+        "durable_reload_verified": true,
+        "save_bytes": 26264230
+      },
+      "python": "3.13.15",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "workload": "six heartbeats, one option save, one owned-card deck edit per eight operations",
+      "limits": "Closed-loop loopback clients; no think time by default; no active games; traffic-file logging disabled; bounded synthetic account pool; population includes dormant accounts."
+    },
+    {
+      "measured_at": "2026-09-27T06:44:45.005368+00:00",
+      "backend": "postgres",
+      "players": 8,
+      "population": 8,
+      "requested_seconds": 10.0,
+      "actual_seconds": 10.373,
+      "think_ms": 0,
+      "login_concurrency": 4,
+      "operations": 520,
+      "operations_per_second": 50.13,
+      "latency": {
+        "heartbeat": {
+          "count": 384,
+          "p50_ms": 1.465,
+          "p95_ms": 517.27,
+          "p99_ms": 679.793,
+          "max_ms": 770.242
+        },
+        "options": {
+          "count": 72,
+          "p50_ms": 400.306,
+          "p95_ms": 532.272,
+          "p99_ms": 533.024,
+          "max_ms": 533.024
+        },
+        "inventory": {
+          "count": 64,
+          "p50_ms": 460.381,
+          "p95_ms": 798.835,
+          "p99_ms": 921.185,
+          "max_ms": 921.185
+        }
+      },
+      "login_latency": {
+        "count": 8,
+        "p50_ms": 2696.936,
+        "p95_ms": 3632.115,
+        "p99_ms": 3632.115,
+        "max_ms": 3632.115
+      },
+      "failures": [],
+      "server": {
+        "status": "complete",
+        "server_wall_seconds": 10.373,
+        "server_cpu_seconds": 0.453,
+        "save_latency": {
+          "count": 136,
+          "p50_ms": 70.755,
+          "p95_ms": 119.14,
+          "p99_ms": 151.257,
+          "max_ms": 151.69
+        },
+        "event_loop_lag": {
+          "count": 19,
+          "p50_ms": 482.714,
+          "p95_ms": 915.915,
+          "p99_ms": 915.915,
+          "max_ms": 915.915
+        },
+        "verified_accounts": 8,
+        "durable_reload_verified": true,
+        "save_bytes": null
+      },
+      "python": "3.13.15",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "workload": "six heartbeats, one option save, one owned-card deck edit per eight operations",
+      "limits": "Closed-loop loopback clients; no think time by default; no active games; traffic-file logging disabled; bounded synthetic account pool; population includes dormant accounts."
+    },
+    {
+      "measured_at": "2026-09-27T06:38:24.267052+00:00",
+      "backend": "postgres",
+      "players": 32,
+      "population": 32,
+      "requested_seconds": 10.0,
+      "actual_seconds": 10.072,
+      "think_ms": 0,
+      "login_concurrency": 4,
+      "operations": 447,
+      "operations_per_second": 44.38,
+      "latency": {
+        "heartbeat": {
+          "count": 319,
+          "p50_ms": 4.59,
+          "p95_ms": 2228.93,
+          "p99_ms": 2804.31,
+          "max_ms": 2915.733
+        },
+        "options": {
+          "count": 64,
+          "p50_ms": 1922.148,
+          "p95_ms": 1925.796,
+          "p99_ms": 1926.188,
+          "max_ms": 1926.188
+        },
+        "inventory": {
+          "count": 64,
+          "p50_ms": 1607.636,
+          "p95_ms": 2995.319,
+          "p99_ms": 3179.521,
+          "max_ms": 3179.521
+        }
+      },
+      "login_latency": {
+        "count": 32,
+        "p50_ms": 849.967,
+        "p95_ms": 1237.386,
+        "p99_ms": 1330.368,
+        "max_ms": 1330.368
+      },
+      "failures": [],
+      "server": {
+        "status": "complete",
+        "server_wall_seconds": 10.072,
+        "server_cpu_seconds": 0.234,
+        "save_latency": {
+          "count": 128,
+          "p50_ms": 89.415,
+          "p95_ms": 109.94,
+          "p99_ms": 122.181,
+          "max_ms": 129.524
+        },
+        "event_loop_lag": {
+          "count": 7,
+          "p50_ms": 1476.501,
+          "p95_ms": 3175.398,
+          "p99_ms": 3175.398,
+          "max_ms": 3175.398
+        },
+        "verified_accounts": 32,
+        "durable_reload_verified": true,
+        "save_bytes": null
+      },
+      "python": "3.13.15",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "workload": "six heartbeats, one option save, one owned-card deck edit per eight operations",
+      "limits": "Closed-loop loopback clients; no think time by default; no active games; traffic-file logging disabled; bounded synthetic account pool; population includes dormant accounts."
+    },
+    {
+      "measured_at": "2026-09-27T06:39:29.983178+00:00",
+      "backend": "postgres",
+      "players": 128,
+      "population": 128,
+      "requested_seconds": 10.0,
+      "actual_seconds": 19.528,
+      "think_ms": 0,
+      "login_concurrency": 4,
+      "operations": 661,
+      "operations_per_second": 33.85,
+      "latency": {
+        "heartbeat": {
+          "count": 405,
+          "p50_ms": 15.546,
+          "p95_ms": 9538.61,
+          "p99_ms": 11090.298,
+          "max_ms": 11465.387
+        },
+        "options": {
+          "count": 128,
+          "p50_ms": 7174.297,
+          "p95_ms": 7178.752,
+          "p99_ms": 7179.499,
+          "max_ms": 7179.6
+        },
+        "inventory": {
+          "count": 128,
+          "p50_ms": 6330.932,
+          "p95_ms": 11702.61,
+          "p99_ms": 12176.679,
+          "max_ms": 12274.011
+        }
+      },
+      "login_latency": {
+        "count": 128,
+        "p50_ms": 788.564,
+        "p95_ms": 1157.593,
+        "p99_ms": 1282.447,
+        "max_ms": 1376.801
+      },
+      "failures": [],
+      "server": {
+        "status": "complete",
+        "server_wall_seconds": 19.528,
+        "server_cpu_seconds": 0.641,
+        "save_latency": {
+          "count": 256,
+          "p50_ms": 89.716,
+          "p95_ms": 113.288,
+          "p99_ms": 164.084,
+          "max_ms": 203.177
+        },
+        "event_loop_lag": {
+          "count": 5,
+          "p50_ms": 7.591,
+          "p95_ms": 12288.716,
+          "p99_ms": 12288.716,
+          "max_ms": 12288.716
+        },
+        "verified_accounts": 128,
+        "durable_reload_verified": true,
+        "save_bytes": null
+      },
+      "python": "3.13.15",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "workload": "six heartbeats, one option save, one owned-card deck edit per eight operations",
+      "limits": "Closed-loop loopback clients; no think time by default; no active games; traffic-file logging disabled; bounded synthetic account pool; population includes dormant accounts."
+    },
+    {
+      "measured_at": "2026-09-27T06:41:33.968555+00:00",
+      "backend": "postgres",
+      "players": 8,
+      "population": 1000,
+      "requested_seconds": 10.0,
+      "actual_seconds": 10.082,
+      "think_ms": 0,
+      "login_concurrency": 4,
+      "operations": 457,
+      "operations_per_second": 45.33,
+      "latency": {
+        "heartbeat": {
+          "count": 337,
+          "p50_ms": 2.406,
+          "p95_ms": 519.745,
+          "p99_ms": 712.445,
+          "max_ms": 796.757
+        },
+        "options": {
+          "count": 64,
+          "p50_ms": 467.257,
+          "p95_ms": 570.677,
+          "p99_ms": 571.422,
+          "max_ms": 571.422
+        },
+        "inventory": {
+          "count": 56,
+          "p50_ms": 493.458,
+          "p95_ms": 870.758,
+          "p99_ms": 910.465,
+          "max_ms": 910.465
+        }
+      },
+      "login_latency": {
+        "count": 8,
+        "p50_ms": 3513.109,
+        "p95_ms": 4116.091,
+        "p99_ms": 4116.091,
+        "max_ms": 4116.091
+      },
+      "failures": [],
+      "server": {
+        "status": "complete",
+        "server_wall_seconds": 10.083,
+        "server_cpu_seconds": 0.531,
+        "save_latency": {
+          "count": 120,
+          "p50_ms": 76.672,
+          "p95_ms": 122.174,
+          "p99_ms": 131.876,
+          "max_ms": 141.163
+        },
+        "event_loop_lag": {
+          "count": 19,
+          "p50_ms": 503.417,
+          "p95_ms": 902.222,
+          "p99_ms": 902.222,
+          "max_ms": 902.222
+        },
+        "verified_accounts": 8,
+        "durable_reload_verified": true,
+        "save_bytes": null
+      },
+      "python": "3.13.15",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "workload": "six heartbeats, one option save, one owned-card deck edit per eight operations",
+      "limits": "Closed-loop loopback clients; no think time by default; no active games; traffic-file logging disabled; bounded synthetic account pool; population includes dormant accounts."
+    }
+  ],
+  "database_probe": {
+    "server_version": "16.15",
+    "synchronous_commit": "on",
+    "fsync": "on",
+    "windows_to_wsl_select_one": {
+      "count": 30,
+      "p50_ms": 0.376,
+      "p95_ms": 0.437,
+      "p99_ms": 3.524,
+      "max_ms": 3.524
+    },
+    "bound_parameter_16_bytes": {
+      "count": 12,
+      "p50_ms": 0.509,
+      "p95_ms": 11.8,
+      "p99_ms": 11.8,
+      "max_ms": 11.8
+    },
+    "bound_parameter_8192_bytes": {
+      "count": 12,
+      "p50_ms": 44.032,
+      "p95_ms": 44.58,
+      "p99_ms": 44.58,
+      "max_ms": 44.58
+    }
+  },
+  "database_save_trace": [
+    {
+      "kind": "balance",
+      "total_ms": 98.957,
+      "outside_statements_ms": 55.051,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.106
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 42.8
+        }
+      ]
+    },
+    {
+      "kind": "balance",
+      "total_ms": 48.676,
+      "outside_statements_ms": 3.565,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.162
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 43.949
+        }
+      ]
+    },
+    {
+      "kind": "balance",
+      "total_ms": 47.949,
+      "outside_statements_ms": 3.81,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.081
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 43.058
+        }
+      ]
+    },
+    {
+      "kind": "balance",
+      "total_ms": 47.886,
+      "outside_statements_ms": 3.576,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.269
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 43.041
+        }
+      ]
+    },
+    {
+      "kind": "balance",
+      "total_ms": 48.244,
+      "outside_statements_ms": 3.768,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.185
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 43.291
+        }
+      ]
+    },
+    {
+      "kind": "balance",
+      "total_ms": 46.63,
+      "outside_statements_ms": 2.444,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.152
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 43.034
+        }
+      ]
+    },
+    {
+      "kind": "balance",
+      "total_ms": 87.109,
+      "outside_statements_ms": 41.289,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.021
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 44.799
+        }
+      ]
+    },
+    {
+      "kind": "balance",
+      "total_ms": 46.122,
+      "outside_statements_ms": 3.537,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 0.892
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 41.693
+        }
+      ]
+    },
+    {
+      "kind": "inventory",
+      "total_ms": 91.882,
+      "outside_statements_ms": 4.097,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.391
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 42.802
+        },
+        {
+          "statement": "DELETE FROM cards",
+          "ms": 0.748
+        },
+        {
+          "statement": "INSERT INTO cards",
+          "ms": 42.844
+        }
+      ]
+    },
+    {
+      "kind": "inventory",
+      "total_ms": 91.986,
+      "outside_statements_ms": 3.803,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 0.955
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 43.417
+        },
+        {
+          "statement": "DELETE FROM cards",
+          "ms": 0.649
+        },
+        {
+          "statement": "INSERT INTO cards",
+          "ms": 43.162
+        }
+      ]
+    },
+    {
+      "kind": "inventory",
+      "total_ms": 92.483,
+      "outside_statements_ms": 3.705,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.037
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 43.407
+        },
+        {
+          "statement": "DELETE FROM cards",
+          "ms": 0.696
+        },
+        {
+          "statement": "INSERT INTO cards",
+          "ms": 43.638
+        }
+      ]
+    },
+    {
+      "kind": "inventory",
+      "total_ms": 90.617,
+      "outside_statements_ms": 2.961,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 0.805
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 43.148
+        },
+        {
+          "statement": "DELETE FROM cards",
+          "ms": 1.077
+        },
+        {
+          "statement": "INSERT INTO cards",
+          "ms": 42.626
+        }
+      ]
+    },
+    {
+      "kind": "inventory",
+      "total_ms": 92.823,
+      "outside_statements_ms": 3.837,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 0.874
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 44.428
+        },
+        {
+          "statement": "DELETE FROM cards",
+          "ms": 0.744
+        },
+        {
+          "statement": "INSERT INTO cards",
+          "ms": 42.94
+        }
+      ]
+    },
+    {
+      "kind": "inventory",
+      "total_ms": 92.253,
+      "outside_statements_ms": 3.815,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 0.864
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 43.495
+        },
+        {
+          "statement": "DELETE FROM cards",
+          "ms": 0.447
+        },
+        {
+          "statement": "INSERT INTO cards",
+          "ms": 43.632
+        }
+      ]
+    },
+    {
+      "kind": "inventory",
+      "total_ms": 92.125,
+      "outside_statements_ms": 4.036,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.006
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 43.184
+        },
+        {
+          "statement": "DELETE FROM cards",
+          "ms": 0.593
+        },
+        {
+          "statement": "INSERT INTO cards",
+          "ms": 43.306
+        }
+      ]
+    },
+    {
+      "kind": "inventory",
+      "total_ms": 92.306,
+      "outside_statements_ms": 4.062,
+      "statements": [
+        {
+          "statement": "UPDATE state_meta SET",
+          "ms": 1.103
+        },
+        {
+          "statement": "UPDATE accounts SET",
+          "ms": 42.987
+        },
+        {
+          "statement": "DELETE FROM cards",
+          "ms": 0.804
+        },
+        {
+          "statement": "INSERT INTO cards",
+          "ms": 43.35
+        }
+      ]
+    }
+  ]
+}

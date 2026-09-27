@@ -1,0 +1,567 @@
+{
+  "scope": "Original A2 receiver, M3 Ans sender, full100182C0 destructive offer reconciliation, fitting local move block10017F17..10017F84, Get serializer and Quit refresh. Two isolated emulators manually receive a coherent server sequence. Presentation/audio/heap/final enqueue hooks inherited from shop fixture. No native UI, sockets or durable server.",
+  "case_count": 36,
+  "groups": {
+    "challenge": [
+      {
+        "ours": 0,
+        "peer": 0,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 0,
+        "peer": 1,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 0,
+        "peer": 2,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 0,
+        "peer": 3,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 1,
+        "peer": 0,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 1,
+        "peer": 1,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 1,
+        "peer": 2,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 1,
+        "peer": 3,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 2,
+        "peer": 0,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 2,
+        "peer": 1,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 2,
+        "peer": 2,
+        "return_value": 0,
+        "sends": [
+          {
+            "payload": "A2001C11@Ans=/P=1/M=2",
+            "body": "@Ans=/P=1/M=2",
+            "target": [
+              0,
+              0
+            ]
+          }
+        ],
+        "match": true
+      },
+      {
+        "ours": 2,
+        "peer": 3,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 3,
+        "peer": 0,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 3,
+        "peer": 1,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 3,
+        "peer": 2,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      },
+      {
+        "ours": 3,
+        "peer": 3,
+        "return_value": 0,
+        "sends": [],
+        "match": true
+      }
+    ],
+    "completion": [
+      {
+        "ours": 0,
+        "peer": 0,
+        "return_value": 1,
+        "inventory_unchanged": true,
+        "match": true
+      },
+      {
+        "ours": 1,
+        "peer": 1,
+        "return_value": 1,
+        "inventory_unchanged": true,
+        "match": true
+      },
+      {
+        "ours": 2,
+        "peer": 2,
+        "return_value": 1,
+        "inventory_unchanged": true,
+        "match": true
+      },
+      {
+        "ours": 3,
+        "peer": 3,
+        "return_value": 1,
+        "inventory_unchanged": true,
+        "match": true
+      },
+      {
+        "ours": 2,
+        "peer": 1,
+        "return_value": 1,
+        "inventory_unchanged": true,
+        "match": true
+      },
+      {
+        "ours": 1,
+        "peer": 2,
+        "return_value": 1,
+        "inventory_unchanged": true,
+        "match": true
+      }
+    ],
+    "reconciliation": [
+      {
+        "our_selection_byte": 0,
+        "peer_selection_byte": 0,
+        "main_ids": [
+          1,
+          2,
+          6,
+          7
+        ],
+        "temporary_ids": [],
+        "peer_buffer_first_id": 8,
+        "peer_count": 0,
+        "balance": 10000,
+        "local_result_class": 2,
+        "match": true
+      },
+      {
+        "our_selection_byte": 0,
+        "peer_selection_byte": 1,
+        "main_ids": [
+          1,
+          2,
+          7
+        ],
+        "temporary_ids": [],
+        "peer_buffer_first_id": 8,
+        "peer_count": 0,
+        "balance": 10000,
+        "local_result_class": 4,
+        "match": true
+      },
+      {
+        "our_selection_byte": 0,
+        "peer_selection_byte": 2,
+        "main_ids": [
+          1,
+          2,
+          7
+        ],
+        "temporary_ids": [],
+        "peer_buffer_first_id": 8,
+        "peer_count": 0,
+        "balance": 10000,
+        "local_result_class": 4,
+        "match": true
+      },
+      {
+        "our_selection_byte": 1,
+        "peer_selection_byte": 0,
+        "main_ids": [
+          1,
+          2,
+          6,
+          7
+        ],
+        "temporary_ids": [
+          8
+        ],
+        "peer_buffer_first_id": 65535,
+        "peer_count": 0,
+        "balance": 10000,
+        "local_result_class": 0,
+        "match": true
+      },
+      {
+        "our_selection_byte": 1,
+        "peer_selection_byte": 1,
+        "main_ids": [
+          1,
+          2,
+          7
+        ],
+        "temporary_ids": [
+          8
+        ],
+        "peer_buffer_first_id": 65535,
+        "peer_count": 0,
+        "balance": 10000,
+        "local_result_class": 2,
+        "match": true
+      },
+      {
+        "our_selection_byte": 1,
+        "peer_selection_byte": 2,
+        "main_ids": [
+          1,
+          2,
+          7
+        ],
+        "temporary_ids": [
+          8
+        ],
+        "peer_buffer_first_id": 65535,
+        "peer_count": 0,
+        "balance": 10000,
+        "local_result_class": 2,
+        "match": true
+      },
+      {
+        "our_selection_byte": 2,
+        "peer_selection_byte": 0,
+        "main_ids": [
+          1,
+          2,
+          6,
+          7
+        ],
+        "temporary_ids": [],
+        "peer_buffer_first_id": 8,
+        "peer_count": 0,
+        "balance": 10000,
+        "local_result_class": 2,
+        "match": true
+      },
+      {
+        "our_selection_byte": 2,
+        "peer_selection_byte": 1,
+        "main_ids": [
+          1,
+          2,
+          7
+        ],
+        "temporary_ids": [],
+        "peer_buffer_first_id": 8,
+        "peer_count": 0,
+        "balance": 10000,
+        "local_result_class": 4,
+        "match": true
+      },
+      {
+        "our_selection_byte": 2,
+        "peer_selection_byte": 2,
+        "main_ids": [
+          1,
+          2,
+          7
+        ],
+        "temporary_ids": [],
+        "peer_buffer_first_id": 8,
+        "peer_count": 0,
+        "balance": 10000,
+        "local_result_class": 4,
+        "match": true
+      }
+    ],
+    "routing": [
+      {
+        "mode": 3,
+        "header": 18,
+        "sender": [
+          305419896,
+          2596069104
+        ],
+        "return_value": 0,
+        "match": true
+      },
+      {
+        "mode": 3,
+        "header": 17,
+        "sender": [
+          2,
+          3
+        ],
+        "return_value": 0,
+        "match": true
+      },
+      {
+        "mode": 4,
+        "header": 18,
+        "sender": [
+          305419896,
+          2596069104
+        ],
+        "return_value": 0,
+        "match": true
+      },
+      {
+        "mode": 4,
+        "header": 17,
+        "sender": [
+          2,
+          3
+        ],
+        "return_value": 0,
+        "match": true
+      }
+    ],
+    "paired_flow": [
+      {
+        "name": "two_original_clients_on_seeded_complementary_offers",
+        "clients": [
+          {
+            "side": 0,
+            "before": {
+              "balance": 10000,
+              "main_count": 2,
+              "temporary_count": 2,
+              "main_ids": [
+                1,
+                2,
+                65535
+              ],
+              "temporary_ids": [
+                6,
+                7,
+                65535,
+                65535
+              ],
+              "active_mode": 4,
+              "queue_count": 0
+            },
+            "reconciled": {
+              "balance": 10000,
+              "main_count": 3,
+              "temporary_count": 1,
+              "main_ids": [
+                1,
+                2,
+                6,
+                65535
+              ],
+              "temporary_ids": [
+                8,
+                65535,
+                65535,
+                65535
+              ],
+              "active_mode": 4,
+              "queue_count": 0
+            },
+            "merged": {
+              "balance": 10000,
+              "main_count": 4,
+              "temporary_count": 0,
+              "main_ids": [
+                1,
+                2,
+                6,
+                8,
+                65535
+              ],
+              "temporary_ids": [
+                65535,
+                65535,
+                65535,
+                65535
+              ],
+              "active_mode": 4,
+              "queue_count": 0
+            },
+            "final_ids": [
+              1,
+              2,
+              6,
+              8
+            ],
+            "final_mode": 0,
+            "sends": [
+              {
+                "payload": "A2001C11@Ans=/P=0/M=2",
+                "body": "@Ans=/P=0/M=2",
+                "target": [
+                  0,
+                  0
+                ]
+              },
+              {
+                "payload": "A2001D11@Get=/P=0",
+                "body": "@Get=/P=0",
+                "target": [
+                  0,
+                  0
+                ]
+              }
+            ],
+            "match": true
+          },
+          {
+            "side": 1,
+            "before": {
+              "balance": 10000,
+              "main_count": 2,
+              "temporary_count": 2,
+              "main_ids": [
+                3,
+                4,
+                65535
+              ],
+              "temporary_ids": [
+                8,
+                9,
+                65535,
+                65535
+              ],
+              "active_mode": 4,
+              "queue_count": 0
+            },
+            "reconciled": {
+              "balance": 10000,
+              "main_count": 3,
+              "temporary_count": 1,
+              "main_ids": [
+                3,
+                4,
+                9,
+                65535
+              ],
+              "temporary_ids": [
+                7,
+                65535,
+                65535,
+                65535
+              ],
+              "active_mode": 4,
+              "queue_count": 0
+            },
+            "merged": {
+              "balance": 10000,
+              "main_count": 4,
+              "temporary_count": 0,
+              "main_ids": [
+                3,
+                4,
+                9,
+                7,
+                65535
+              ],
+              "temporary_ids": [
+                65535,
+                65535,
+                65535,
+                65535
+              ],
+              "active_mode": 4,
+              "queue_count": 0
+            },
+            "final_ids": [
+              3,
+              4,
+              9,
+              7
+            ],
+            "final_mode": 0,
+            "sends": [
+              {
+                "payload": "A2001C11@Ans=/P=1/M=2",
+                "body": "@Ans=/P=1/M=2",
+                "target": [
+                  0,
+                  0
+                ]
+              },
+              {
+                "payload": "A2001D11@Get=/P=1",
+                "body": "@Get=/P=1",
+                "target": [
+                  0,
+                  0
+                ]
+              }
+            ],
+            "match": true
+          }
+        ],
+        "combined_models_before": [
+          1,
+          2,
+          3,
+          4,
+          6,
+          7,
+          8,
+          9
+        ],
+        "combined_models_after": [
+          1,
+          2,
+          6,
+          8,
+          3,
+          4,
+          9,
+          7
+        ],
+        "match": true
+      }
+    ]
+  },
+  "limits": [
+    "M4 receiver success is separate from the UI ready-state gate; seeded reconciliation is invoked at its known completion entry.",
+    "The paired case tests local conservation for one coherent exchange; it does not implement or prove server escrow/atomicity.",
+    "Get is invoked after the observed completion event; full controller animation/event-loop scheduling is not exercised.",
+    "Interactive overflow/discard, cancellation after commit and duplicate completion remain separate paths."
+  ]
+}

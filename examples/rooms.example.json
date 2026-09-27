@@ -1,0 +1,22 @@
+{
+  "rooms": [
+    {
+      "name": "Second Room",
+      "room_raw": 257,
+      "table_raw": 513,
+      "room_channel": "#ROOM2",
+      "table_channel": "#TABLE2",
+      "mode": "versus",
+      "players": 2
+    },
+    {
+      "name": "Computer Room",
+      "room_raw": 258,
+      "table_raw": 514,
+      "room_channel": "#ROOM3",
+      "table_channel": "#TABLE3",
+      "mode": "computer",
+      "players": 2
+    }
+  ]
+}
