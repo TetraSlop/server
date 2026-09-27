@@ -86,6 +86,20 @@ for later review and continue independent work.
   guild or the supported0-to-registered transition; historical rows are never
   rewritten and immutable identity checks remain. Three new regressions and
   the64-test auction/profile/claim batch pass, including encrypted restart.
+- Unsupported multiplayer Quit/Break: survivors no longer remain connected to
+  a finished engine with no timeout. Existing durable refund/recovery completes,
+  affected sessions close outside the match lock, and the old table resets.
+  Generation/admission guards preserve newer tables, event observers/players and
+  busy services. Event and shop rebind races both failed without these guards.
+  The59-test focused departure/rooms/watchdog/prize/rules batch passes.
+- Event channel PART: leaving an old event channel no longer cancels current
+  event presence, selection, match or observer admission. Current-room PART and
+  full socket close retain proper cleanup. Five new encrypted tests and31
+  surrounding tests pass; four new regressions fail against the old handler.
+- Fresh wheel build/check succeeds with80 entries: clean dependency-free install,
+  module/console entry points and both listeners on temporary ports. Output is
+  in results/overnight-weekly-wheel-{build,check}.log. This wheel includes weekly
+  rankings and the auction/Quit/PART fixes; no native process was launched.
 
 Whole portable regression checkpoint completed:903 tests in798.6 seconds,
 846 passed,56 optional PostgreSQL tests skipped, and one login timeout in the
@@ -96,22 +110,13 @@ checks pass. No native visual validation is claimed by these tests.
 
 ## In progress
 
-- Weekly implementation/review/combined focused checks are complete. Full
-  portable suite and fresh wheel build/check remain after the next fix settles.
-  Focused output:results/weekly-ranking-checkpoint.log. No native game launched;
-  the launcher tests substitute headless peers or mocks for every child.
-- Agent browser_port_options reproduced unsupported active Quit stranding a
-  connected human counterpart after the match is finished/reservations released.
-  It owns ordinary_table.py and test_departure_integration.py for minimal cleanup
-  and encrypted regressions. Supported practice departures must remain intact.
-- Agent texture_upscaling reproduced stale PART of an old event channel
-  cancelling a newer event selection. It owns irc_session.py and new
-  tests/test_event_room_part.py for channel-scoped cleanup, retaining global
-  socket-close cleanup.
-- Auction guild-history fix is complete and checked; texture_load_trace is idle.
-- After these three targeted fixes settle, freeze source for the complete
-  portable suite and wheel build/check; do not start further source edits
-  during that checkpoint.
+- Whole portable suite is running against frozen source at commit db62eeb.
+  Root exec session59735, output results/overnight-complete-suite.log. Database
+  environment variables are cleared only for this process; external PostgreSQL
+  tests will skip. Do not edit source/tests while this checkpoint runs.
+- All agents' fixes are committed and all three agents are idle. Weekly focused
+  output is results/weekly-ranking-checkpoint.log. Launcher tests substitute
+  headless peers or mocks for every child; no native game launch is authorized.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
   results/overnight-timeout-recheck.log. Both runs completed. No active test
   sessions from that checkpoint remain.
