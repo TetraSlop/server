@@ -33,7 +33,10 @@ async def dispatch_event(session, target, payload):
             validate_room_entry(server, session, binding.room)
         was_member = session in binding.room.members
         responses = binding.room.handle(
-            session, payload, authenticated_identity=(view.nn, view.player_id)
+            session,
+            payload,
+            authenticated_identity=(view.nn, view.player_id),
+            authenticated_name=view.name,
         )
         if responses is None:
             return False

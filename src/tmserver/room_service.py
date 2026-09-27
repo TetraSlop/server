@@ -386,7 +386,7 @@ class RoomService:
             ]
         )
 
-    def handle(self, peer, payload, *, authenticated_identity=None):
+    def handle(self, peer, payload, *, authenticated_identity=None, authenticated_name=None):
         if not payload.startswith(b"GTM0L"):
             return None
         commands = parse(payload[5:])
@@ -401,6 +401,13 @@ class RoomService:
                     raise ValueError("room presence differs from authenticated account")
                 if struct.unpack_from("<Q", record, 8)[0] != self.room_id:
                     raise ValueError("room presence names a different room")
+            # Native DE/PD uses the canonical character name, not its separate
+            # handle alias. Compare the full fixed-width field before publishing.
+            if (
+                authenticated_name is not None
+                and record[0x28:0x38].rstrip(b"\0") != authenticated_name
+            ):
+                raise ValueError("room presence name differs from authenticated account")
             if (
                 any(other is not peer and old[0] == identity for other, old in self.members.items())
                 or identity in self.npcs

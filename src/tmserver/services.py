@@ -193,7 +193,10 @@ async def dispatch(session, target, payload):
             validate_room_entry(session.server, session, ordinary_room.room)
         was_member = session in ordinary_room.room.members
         responses = ordinary_room.room.handle(
-            session, payload, authenticated_identity=(account.nn, account.player_id)
+            session,
+            payload,
+            authenticated_identity=(account.nn, account.player_id),
+            authenticated_name=account.name,
         )
         if responses is not None:
             chat_updates = (
