@@ -277,12 +277,13 @@ class EventMatchmaking:
         self.host.complete_admission(key)
         return [EventDelivery(peer, config.init_id, p) for p in replies]
 
+    def _admission_expired(self, event_id, deadline):
+        return self.clock() >= deadline or self.host._now() >= self.host.config(event_id).end
+
     def poll(self):
         out = list(self._initial)
         for peer, e in tuple(self._entries.items()):
-            if e.epoch is None and (
-                self.clock() >= e.deadline or self.host._now() >= self.host.config(e.event_id).end
-            ):
+            if e.epoch is None and self._admission_expired(e.event_id, e.deadline):
                 del self._entries[peer]
                 self.economy.release_match(e.reservation)
                 if peer not in self._closures:
@@ -291,8 +292,8 @@ class EventMatchmaking:
             event_id = c.event_id
             r = self._rounds.get(table_id)
             if r is not None:
-                if r.phase in ("proposal", "backoff", "admission") and (
-                    self.clock() >= r.deadline or self.host._now() >= self.host.config(event_id).end
+                if r.phase in ("proposal", "backoff", "admission") and self._admission_expired(
+                    event_id, r.deadline
                 ):
                     out += self.cancel(event_id, r.epoch)
                 elif r.phase == "backoff" and self.clock() >= r.retry_at:
@@ -553,6 +554,12 @@ class EventMatchmaking:
             return None
         if target not in (self.host.config(event_id).room_id, r.config.table_id):
             raise EventError("participant message targets a different event table")
+        # A final GameOK can arrive before the next poll and otherwise promote
+        # an expired admission to a playing round with a fresh watchdog.
+        if r.phase in ("proposal", "backoff", "admission") and self._admission_expired(
+            event_id, r.deadline
+        ):
+            return self.cancel(event_id, r.epoch)
         if target == self.host.config(event_id).room_id:
             if msg.primary != 0xD3:
                 return None
