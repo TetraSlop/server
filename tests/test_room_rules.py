@@ -149,7 +149,7 @@ class FixedRoomMatchTests(unittest.TestCase):
         self.assertEqual((service.game_rules["gs"], service.game_rules["tl"]), (0, 0))
 
     def test_computer_conflicts_reject_before_any_authorization_randomness_or_mutation(self):
-        rules = RoomRules(bm=100, st=1, cb=1, ca=1, gs=2, tl=3)
+        rules = RoomRules(bm=100, st=1, cb=1, ca=1, gs=0, tl=3)
         authorize = Mock(
             side_effect=lambda service, *_args, **_kw: {0: service.players[0].balance - 100}
         )
@@ -180,7 +180,7 @@ class FixedRoomMatchTests(unittest.TestCase):
         authorize.assert_called_once()
 
     def test_double_up_reconfiguration_accepts_only_the_server_selected_next_stake(self):
-        rules = RoomRules(bm=100, du=1)
+        rules = RoomRules(bm=100, du=1, gs=0)
         stakes = []
 
         def authorize(service, _round, stake, **_kwargs):

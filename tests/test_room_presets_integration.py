@@ -91,7 +91,7 @@ class RoomPresetConfiguration(unittest.IsolatedAsyncioTestCase):
             513,
             b"#MIXED",
             b"#HUMAN",
-            rules=RoomRules(tl=3),
+            rules=RoomRules(gs=0, tl=3),
             tables=(OrdinaryTableConfig(514, b"#CPU", mode="computer"),),
         )
         server = Server(ordinary_rooms=(config,))

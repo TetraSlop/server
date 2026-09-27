@@ -19,6 +19,22 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Follow-up original Computer-menu execution exposed incompatible optional
+  fixed CPU presets: hosted constructor100B9DA1 sets gs0, ComGameInit has no
+  override, and the menu offers no departure-rule control. Room configuration
+  now rejects fixed gs1/2 if any primary/additional table is CPU, before startup
+  can publish an unplayable preset. Generic engine message domains remain
+  unchanged; shipped Local Room and human presets are unchanged. Two new tests
+  reproduce the missing validation before the fix. All 20 relevant checks,
+  ten mocked-launcher/configuration checks, and the final three new cases pass;
+  the latter include actual original-start bytes over encrypted transport into
+  card selection/StartData with saved preferences preserved. Original evidence
+  `52611e3` also proves optional Computer editing remains unlocked and clears
+  double-up; direct starts preserve it. The limitation is documented for later
+  native review. The rebuilt 85-entry wheel passes clean installation and
+  temporary service/admin checks, with all 80 runtime files equal to source.
+  See VALIDATION.md and research/COMPUTER_ROOM_RULES.md. No game/assets/live
+  save/desktop input was touched.
 - Room follow-up found no new production defect. Original admission/editor/
   sender execution confirms that fixed rooms skip the game-rule editor and
   copy the advertised PTL game rules, while Open Tables uses saved game defaults.

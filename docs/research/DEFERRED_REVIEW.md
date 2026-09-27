@@ -6,6 +6,13 @@ control or game launches are authorized by this note.
 
 ## Native checks requiring the user
 
+- Custom fixed CPU rooms: the hosted Computer menu always sends departure
+  rule gs0, so room configuration now requires gs0 whenever a fixed room has
+  a CPU table. Unlike human fixed rooms, Computer's rule editor stays editable
+  and clears double-up when opened; a conflicting edit is still rejected by
+  the server. Confirm presentation before adopting these custom rooms broadly.
+  The supplied CPU room remains custom, and supplied fixed rooms are human-only.
+  See COMPUTER_ROOM_RULES.md for original instruction evidence.
 - After importing a copy of the save into PostgreSQL, run
   `python -B server/run_local_game.py --database` with TM_DATABASE_URL set in the
   dependency environment. Check shop Buy/Get, sale, deck rename, a two-account

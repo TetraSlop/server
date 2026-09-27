@@ -123,7 +123,7 @@ class FixedRoomLifecycleTests(unittest.IsolatedAsyncioTestCase):
     async def test_capped_double_up_and_reconfiguration_keep_current_and_starting_rules_separate(
         self,
     ):
-        rules = RoomRules(bm=1250, du=1, st=1, cb=1, ca=1, gs=2, tl=4)
+        rules = RoomRules(bm=1250, du=1, st=1, cb=1, ca=1, gs=0, tl=4)
         await self.start(rules, allow_wagers=True)
         key = self.peers[0].nick.decode()
         for round_number, conf in ((1, 0), (2, 1), (3, 0)):

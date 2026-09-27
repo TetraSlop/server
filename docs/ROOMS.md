@@ -55,6 +55,12 @@ Additional `tables` inherit the parent room's rules and retain their own mode.
 | `gs` | Departure rule | 0 Substitute, 1 Invalid, 2 Loss | 1 |
 | `tl` | Turn time | 0: 15 seconds; 1: 30 seconds; 2: 1 minute; 3: 3 minutes; 4: 5 minutes; 5: 10 minutes | 2 |
 
+If a fixed room contains any Computer table, its rules must explicitly include
+`"gs": 0`. The original hosted Computer constructor sets that value to zero;
+its initialization message and rule editor cannot change it. Other values are
+rejected during configuration loading instead of creating a room whose native
+start request will fail. Human-only rooms support all three departure rules.
+
 Unknown fields, booleans and out-of-range values fail configuration validation.
 Nonzero wagers or double-up require the existing economic hooks; the supplied
 presets keep both zero. An explicitly configured board must agree with the
@@ -77,6 +83,16 @@ defaults first. Both can use personal table options. The
 editor selection, initialization and the actual Apply sender. Its four captured
 Apply messages pass encrypted replay against the corresponding supplied rooms.
 Changing between rooms and restarting preserves saved personal game defaults.
+
+Computer uses a separate rule editor that remains editable even in a fixed
+room. Its edits must still agree with the preset; opening it also clears the
+client's double-up option. Direct opponent selection preserves the received
+double-up value, so the server does not prohibit that preset. Prefer custom
+rules for CPU rooms when players should freely change these options. The
+supplied lineup keeps Local Room custom and all fixed rooms human-only.
+[Computer-menu evidence](research/COMPUTER_ROOM_RULES.md) records the original
+constructor, initialization, editor and sender boundaries. Native presentation
+of custom fixed CPU rooms remains a review item.
 
 ## Computer availability
 

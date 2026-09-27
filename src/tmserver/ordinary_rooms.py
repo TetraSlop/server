@@ -95,6 +95,14 @@ class OrdinaryRoomConfig:
             not isinstance(t, OrdinaryTableConfig) for t in self.tables
         ):
             raise ValueError("additional room tables must be a tuple of table configurations")
+        if (
+            self.rules is not None
+            and self.rules.gs != 0
+            and any(t.mode == "computer" for t in (self, *self.tables))
+        ):
+            # The hosted Computer constructor sets gs=0, and its menu has no
+            # departure-rule control. ComGameInit carries no override for it.
+            raise ValueError("fixed rooms with Computer tables require departure rule gs=0")
         if len(self.tables) > 126:
             raise ValueError("room tables and trade service exceed native128-slot limit")
         RoomService(

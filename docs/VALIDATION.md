@@ -1,5 +1,42 @@
 # Packaging and transaction validation
 
+## Native Computer room rule compatibility, 2026-09-27
+
+Original constructor/Init/editor/sender execution found a real gap in optional
+fixed CPU rooms. The hosted Computer constructor always sets departure rule
+`gs=0`; ComGameInit carries no override and the Computer editor has no departure
+control. A preset requiring gs1/2 therefore rejected an unchanged valid native
+start. Public room configuration now requires gs0 for fixed rooms containing
+any CPU table, including an additional CPU table in a mixed room. Human-only
+presets and the shipped custom CPU room retain their behavior.
+
+Six original instruction chains (`52611e3`) also establish that personal saved
+rules do not replace Computer Init values. Fixed-room context does not lock the
+Computer editor. Opening that optional editor clears double-up; direct opponent
+selection preserves it. These boundaries are documented in
+[Computer room rules](research/COMPUTER_ROOM_RULES.md), with visible-editor
+limitations retained on the review list.
+
+- Both new configuration regressions fail before the guard (five subcases).
+- All 20 rule/configuration/room/lifecycle checks pass in 2.278 seconds:
+  `results/computer-room-rules-tests.log`.
+- All ten configuration and mocked-launcher checks pass in 8.254 seconds:
+  `results/computer-room-rules-launch-tests.log`. No game was launched.
+- The final three new checks pass in 0.598 seconds, including an encrypted
+  replay of the original gs0 start through actual card selection/StartData,
+  with different personal defaults preserved:
+  `results/computer-room-rules-native-wire-tests.log`.
+
+The rebuilt 85-entry wheel passes clean dependency-free installation, entry
+points, JSON administration/recovery and both temporary service listeners.
+All 80 packaged runtime files byte-match source. Logs:
+`results/computer-room-rules-wheel-{build,check}.log`. SHA256:
+`76c0f340f07cd5225bfe0520b8b76918ee5995cff1461542d206897ce1d325b0`.
+This remains focused validation, not a new full-suite, PostgreSQL or rendered
+native run. Collection finds 1,104 cases without import errors. Ruff and
+whitespace checks pass. The ten rule unit cases also pass after their valid
+CPU examples were aligned with native gs0.
+
 ## Fixed-room editor and lifecycle follow-up, 2026-09-27
 
 No new runtime defect was found after `ef6db73`. Original instructions now trace
