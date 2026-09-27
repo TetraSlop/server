@@ -16,13 +16,13 @@ Encrypted authentication failure closes without guessing an error-response key.
 import asyncio
 import hashlib
 import hmac
-import json
 import secrets
 import struct
 import time
 from pathlib import Path
 
 from tmserver import pol_wire as wire
+from tmserver.diagnostic_log import report_failure, write_record
 from tmserver.identities import player_id as game_player_id
 from tmserver.local_accounts import account_specs, display_name
 from tmserver.profile_location import FileOwner
@@ -59,6 +59,7 @@ class ProfileServer:
     def __init__(self, log_path, game_server=None):
         self.accounts = getattr(game_server, "account_specs", SYNTHETIC_ACCOUNTS)
         self.log_path = Path(log_path)
+        self.log_error = None
         self.listener = None
         self.tasks = set()
         self.writers = set()
@@ -104,8 +105,14 @@ class ProfileServer:
             self.statuses[key] = status
 
     def log(self, event, **details):
-        with self.log_path.open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps(dict(time=time.time(), event=event, **details)) + "\n")
+        if self.log_error is not None:
+            return
+        try:
+            with self.log_path.open("a", encoding="utf-8") as stream:
+                write_record(stream, dict(time=time.time(), event=event, **details))
+        except OSError as error:
+            self.log_error = error
+            report_failure("Profile", error)
 
     async def start(self, port=51220):
         self.listener = await asyncio.start_server(self.handle, "127.0.0.1", port)

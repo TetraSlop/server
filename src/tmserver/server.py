@@ -7,7 +7,6 @@ Only synthetic accounts listed below are accepted. No production credentials.
 """
 
 import asyncio
-import json
 import time
 from collections import deque
 from contextlib import contextmanager
@@ -19,6 +18,7 @@ from tmserver.character_profiles import CharacterProfiles
 from tmserver.chat_service import ChatService
 from tmserver.claim_transactions import auction_transaction
 from tmserver.commerce import Commerce
+from tmserver.diagnostic_log import report_failure, write_record
 from tmserver.economy_service import EconomyService
 from tmserver.event_adapter import EventAdapter
 from tmserver.event_cards import EventCardService
@@ -107,6 +107,7 @@ class Server(OrdinaryTable):
         self.accounts = {key.encode("ascii"): value[1] for key, value in self.account_specs.items()}
         self.connection_limit = max(8, len(self.accounts))
         self.log_file = Path(log_path).open("a", encoding="utf-8") if log_path else None
+        self.log_error = None
         self.sessions = set()
         self.tasks = set()
         self.nicks = {}
@@ -472,10 +473,14 @@ class Server(OrdinaryTable):
             return False
 
     def log(self, event, **fields):
+        if self.log_file is None or self.log_error is not None:
+            return
         record = {"time": time.time(), "event": event, **fields}
-        if self.log_file:
-            self.log_file.write(json.dumps(record, ensure_ascii=True) + "\n")
-            self.log_file.flush()
+        try:
+            write_record(self.log_file, record)
+        except OSError as error:
+            self.log_error = error
+            report_failure("Game", error)
 
     async def start(self, port=51241):
         if self.storage_failed is not None:
@@ -532,6 +537,11 @@ class Server(OrdinaryTable):
             await asyncio.gather(*list(self.tasks), return_exceptions=True)
         if self.room_task is not None:
             await self.room_task
-        if self.log_file:
-            self.log_file.close()
-            self.log_file = None
+        stream, self.log_file = self.log_file, None
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError as error:
+                if self.log_error is None:
+                    self.log_error = error
+                    report_failure("Game", error)
