@@ -78,6 +78,13 @@ in 458 original-instruction cases. The tested ordinary offline result calculator
 preserves RN; profile import and the hosted ResultData receiver supply it.
 This adds no historical selection formula and does not change runtime policy.
 
+The [VS. Rating source audit](VS_RATING_SOURCES.md) adds 93 original cases.
+It recovers an offline random-component producer, separate from the average
+rating ring, and the formatter's suppression of the second component for
+tied/losing classes. Hosted neutral components preserve the saved total through
+full result presentation and export. Historical hosted component selection is
+still unknown; using the offline randomness remains a separate policy choice.
+
 Automatic human tables now freeze two/three seats at the owner's Start action,
 with matching board size, rewards and persistence. This option passed225
 focused test executions before the subsequent invitation correction. Start

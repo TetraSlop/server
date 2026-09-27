@@ -19,6 +19,26 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- VS. Rating source research (`ade40fb`) recovers the original offline random
+  component generator and its separate presentation rule: first result order
+  draws two rand%1000 components; other orders draw -(rand%1500),0. The original
+  formatter clears the second component for result classes at least two.
+  This can treat fully tied seats asymmetrically and is not historical hosted
+  policy. All 93 original checks pass, including complete hosted profile import,
+  ResultData receive, presentation and export at unsigned RT boundaries. Neutral
+  T0/T1 preserves every imported bit, so the current server needs no runtime
+  fix. Evidence is in research/VS_RATING_SOURCES.md; optional adoption is recorded
+  for later review. Existing average-rating policy remains separate.
+- Auction follow-up found no query, settlement or recovery defect. All 12 wire
+  service checks pass in 0.037 seconds. An independent 36-test settlement and
+  transaction selection passes in 4.238 seconds; 13 additional in-memory
+  scenarios preserve combined payment/refund cap residuals across three
+  restarts and exercise expiry during each collection phase followed by
+  completion, disconnect or restart. Frozen collection contents, neighboring
+  reservations, later receipts and total cards/money remain correct. Existing
+  regressions cover these paths, so no duplicate tests or runtime edits were
+  added. Exact selections/results are retained in the auction audit logs named
+  in VALIDATION.md.
 - Memorable Win source research (`addf270`) passes 458 original-instruction
   cases with a write watch over RN: all 430 ordinary offline score/seat
   combinations and ten online result controls preserve it; three profile

@@ -1,5 +1,42 @@
 # Packaging and transaction validation
 
+## VS. Rating producer and neutral hosted controls, 2026-09-27
+
+Original probe `ade40fb` passes 93 cases: 72 complete offline result/presentation
+cases, 20 hosted profile import/ResultData receive/presentation/export cases,
+and one constructor store. The offline producer supplies random signed changes
+based on unique result ordering; the original formatter removes the second
+component for tied/losing classes. These are client-local rules, not recovered
+historical hosted selection or scheduling.
+
+Hosted neutral `T=0|0|count` preserves imported RT totals 0, 1, INT_MAX,
+0x80000000 and UINT_MAX through the actual presentation states and export.
+VS. Player Games and Prize Points remain independent. No runtime fix is needed.
+See [the scoped evidence](research/VS_RATING_SOURCES.md), reproducible probe and
+`results/vs-rating-sources-original.json`. Only supplied random outputs and final
+drawing/runtime boundaries are intercepted; the consequential rating formatter
+executes. No native application or original asset writes were involved.
+
+## Auction collection follow-up, 2026-09-27
+
+No query, settlement or recovery defect was found. Existing regressions cover
+the audited contracts; no duplicate tests or runtime changes were added.
+
+- All 12 auction service checks pass in 0.037 seconds, including immutable
+  query files, filtering, account-scoped cleanup and queries during collection:
+  `results/auction-query-followup.log`.
+- A focused 36-test core/transaction/integration selection passes in 4.238
+  seconds. Exact test names are in `results/auction-settlement-audit-tests.log`.
+- Thirteen additional in-memory cases pass, recorded in
+  `results/auction-settlement-audit-matrix.log`: combined seller payment and
+  outbid refund at the money cap retain the same residual receipt across three
+  restarts; expiry during all four collection phases stays outside that visit's
+  frozen claims. Completion, disconnect and restart preserve exact later
+  payment/card collection and reservation identity. Money and cards conserve.
+
+These are focused checks using disposable data, not a new full-suite,
+PostgreSQL or native UI run. The last verified wheel remains unchanged.
+
 ## Memorable Win sources and progression follow-up, 2026-09-27
 
 Original probe `addf270` passes 458 cases, watching every byte of the RN buffer

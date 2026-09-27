@@ -119,6 +119,12 @@ scratch launchers are not the packaged entry points.
 
 ## Policy that the original client cannot establish alone
 
+An optional policy choice remains whether to expose the original offline
+VS. Rating generator. It uses random deltas and can treat tied seats differently;
+it is separate from the current average-rating ring. Preserve VS. Rating by
+default unless a separate local policy is deliberately selected. The historical
+hosted formula remains unknown; see [source evidence](VS_RATING_SOURCES.md).
+
 The captured native room/table/chat/selection replay now covers independent
 HID0 and character1. Recheck current Computer/event/observer scenes when at the
 desktop; their full native admission fields are now accepted and authenticated.

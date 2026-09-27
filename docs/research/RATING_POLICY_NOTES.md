@@ -1,5 +1,12 @@
 # Optional rating integration boundary
 
+Average rating, VS. Rating and Memorable Win are separate values. The
+[VS. Rating source audit](VS_RATING_SOURCES.md) recovers the offline random
+component generator and verifies that neutral hosted result components preserve
+the saved total. The [Memorable Win audit](MEMORABLE_WIN_SOURCES.md) finds no
+selection formula in the tested offline result calculation. Neither changes
+this optional average-rating policy or establishes historical hosted behavior.
+
 `RatingPolicy` connects the proved ring in LOCAL_RATING_HISTORY_NOTES.md to the existing atomic card-growth/statistics boundary. Mode defaults to `preserve`. Explicit `local-history` mode enrolls a missing account with32 neutral entries **at its existing saved sequence**. Enrollment alone never changes its current profile rating, RN or unrelated bytes. Its first completed result receives the original ring calculation. This is the chosen local policy for existing profiles whose historical ring is unavailable.
 
 Construct `RatingPolicy(economy, mode='preserve'|'local-history', snapshot=saved_or_None)`. Save `policy.snapshot()` in the same JSON document as EconomyService and the result/money ledgers. The snapshot preserves history when policy is disabled; runtime mode remains an explicit startup choice.
