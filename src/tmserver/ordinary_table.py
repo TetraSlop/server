@@ -704,22 +704,27 @@ class OrdinaryTable:
         task.add_done_callback(self.spectator_tasks.discard)
 
     async def send_spectator(self, peer, queue):
+        sender = (queue, asyncio.current_task())
         try:
-            while not peer.closed:
+            while not peer.closed and self.spectator_senders.get(peer) == sender:
                 epoch, payload, tracked = await queue.get()
                 if epoch is not self.match or (tracked and not self.spectators.active(peer)):
                     continue
-                if not await self.deliver_table_packet(peer, payload):
+                # Own failure cleanup so retired I/O cannot close a new admission.
+                source = service_nick(self.table_raw)
+                await peer.send(b":" + source + b"!p@local NOTICE " + peer.nick + b" :" + payload)
+                if peer.closed:
                     return
                 if tracked:
                     async with self.match_lock:
-                        self.spectators.record_sent(peer, payload, epoch=epoch)
+                        if self.spectator_senders.get(peer) == sender:
+                            self.spectators.record_sent(peer, payload, epoch=epoch)
         except (ValueError, OSError, asyncio.TimeoutError) as exc:
             self.host.log("spectator_delivery_error", session=peer.id, reason=str(exc))
-            await peer.close()
+            if self.spectator_senders.get(peer) == sender:
+                await peer.close()
         finally:
-            sender = self.spectator_senders.get(peer)
-            if sender is not None and sender[1] is asyncio.current_task():
+            if self.spectator_senders.get(peer) == sender:
                 self.spectator_senders.pop(peer, None)
 
     async def run_spectator_poll(self):

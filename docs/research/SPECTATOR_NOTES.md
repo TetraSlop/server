@@ -22,6 +22,17 @@ This is a paced preview, not a validated native spectator session. The original 
 
 Call state methods under the existing match lock. Never await socket I/O while holding that lock. Use one bounded sender task per observer; preserve order, finish the write/drain, then reacquire the lock for `record_sent`. On write failure, disconnect only that observer. The adapter authorizes current table-channel membership and service identity before calling `handle`. It must also close/clean up evicted observers and discard queued writes from retired epochs.
 
+Ordinary ExitCh/PART cleanup retires the sender as well as its observer state.
+Every completion, failure and final cleanup checks that the sender still owns
+the current admission. A delayed old WatchInfo cannot acknowledge a replacement
+bootstrap even when both watches use the same match and identical payloads; an
+old network error cannot close the new admission. The writer handles transport
+errors within this ownership check, while ordinary participant delivery keeps
+its existing failure recovery. Tracked gameplay and untracked PLAYACK replies
+retain their existing ordering, and retired tasks stay tracked until shutdown
+or completion. Encrypted re-entry fixtures verify both exit paths, unchanged
+participant/account state, and current-writer failure isolation.
+
 An observer requesting a snapshot during battle waits for the next clean selection/turn boundary. Unsupported snapshots, turn gaps, backlog overflow, replaced rounds, and replaced matches remove only the observer. Ordinary two-seat, sixteen-cell matches are supported; three-player boards and post-result/replay spectator flows are outside this preview.
 
 ## Original watch entry before 43/25
