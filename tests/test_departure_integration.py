@@ -3,12 +3,16 @@
 import asyncio
 import tempfile
 import unittest
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+from tests.test_event_rooms import config, presence
 from tests.test_server import Client
-from tmserver.identities import TABLE_RAW, player_id, service_nick
+from tmserver.event_matchmaking import EventTableConfig
+from tmserver.identities import GAME_KEY, SHOP_RAW, TABLE_RAW, game_id, player_id, service_nick
 from tmserver.match_service import decode, packet
 from tmserver.match_watchdog import MatchWatchdog
+from tmserver.ordinary_rooms import OrdinaryRoomConfig
 from tmserver.room_service import TABLE_CHANNEL
 from tmserver.server import Server
 
@@ -30,7 +34,9 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.server.stop()
         self.temp.cleanup()
 
-    async def start(self, *, count=2, accounts=None, rule=0, enabled=True, watchdog=None, **kwargs):
+    async def start(
+        self, *, count=2, accounts=None, rule=0, enabled=True, watchdog=None, stake=0, **kwargs
+    ):
         self.server = Server(
             state_path=self.path,
             match_mode="versus",
@@ -50,6 +56,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.received[side] = []
         self.keys = [c.nick.decode() for c in self.clients]
         self.peers = [self.server.nicks[c.nick] for c in self.clients]
+        self.initial_accounts = self.server.economy.snapshot()
         for side in range(count):
             await self.send(
                 side, packet(0x41, 1, body=f"@GameEN=/NN={player_id(self.clients[side].nick):016X}")
@@ -58,7 +65,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
             0,
             packet(
                 0x14,
-                body=f"@Tet=/bm=0/du=0/st=0/cb=0/ca=0/gs={rule}/tl=0@Tab=/in=0/lu=100/ll=0/au=300/al=100/co=0/pa=0",
+                body=f"@Tet=/bm={stake}/du=0/st=0/cb=0/ca=0/gs={rule}/tl=0@Tab=/in=0/lu=100/ll=0/au=300/al=100/co=0/pa=0",
             ),
         )
         for side in range(count):
@@ -353,12 +360,162 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(wait.reason, "result_continue")
         self.assertEqual(wait.missing_peers, (self.peers[0],))
 
-    async def test_default_explicit_quit_remains_legacy_abort(self):
-        await self.start(enabled=False)
-        await self.send(0, packet(0x43, 5, 10, "@Quit=/No=0"))
+    async def read_until_closed(self, side):
+        messages = []
+        for _ in range(100):
+            line = await self.clients[side].read(timeout=3)
+            if not line:
+                return messages
+            if b" :GTM0G" in line:
+                messages.append(decode(line.split(b" :", 1)[1]))
+        self.fail("aborted participant did not disconnect")
+
+    async def assert_explicit_abort(self, payload):
+        await self.clients[0].send(b"NOTICE " + service_nick(TABLE_RAW) + b" :" + payload)
+        messages = await asyncio.gather(*(self.read_until_closed(s) for s in sorted(self.live)))
+        self.assertTrue(all(peer.closed for peer in self.peers))
         self.assertEqual(self.original.phase, "finished")
         self.assertEqual(self.original.departure_seats, ())
         self.assertFalse(self.server.match_reservations)
+        self.assertIsNot(self.server.match, self.original)
+        self.assertEqual(self.server.match.players, [])
+        self.assertIsNone(self.server.watchdog.observe(self.server.match, self.server.match))
+        self.assertEqual(self.server.economy.snapshot(), self.initial_accounts)
+        self.assertTrue(all(not self.server.economy.is_busy(key) for key in self.keys))
+        self.assertFalse(any(m.subtype == 0x0D for rows in messages for m in rows))
+        return messages
+
+    async def test_default_explicit_quit_disconnects_every_waiting_participant(self):
+        await self.start(count=3, enabled=False)
+        for side in range(3):
+            await self.send(side, packet(0x43, 9, 0, f"@TurnData=/Ans={side}"))
+        messages = await self.assert_explicit_abort(packet(0x43, 5, 10, "@Quit=/No=0"))
+        self.assertEqual([m.subtype for m in messages[0]], [5])
+
+    async def test_rated_explicit_quit_aborts_even_with_departures_enabled(self):
+        await self.start(rating_mode="local-history")
+        ratings = self.server.ratings.snapshot()
+        await self.assert_explicit_abort(packet(0x43, 5, 10, "@Quit=/No=0"))
+        self.assertEqual(self.server.ratings.snapshot(), ratings)
+
+    async def test_economic_quit_refunds_once_and_restores_without_reservations(self):
+        await self.start(allow_wagers=True, card_prizes=True, stake=137)
+        self.assertTrue(all(self.server.economy.balance(key) == 9863 for key in self.keys))
+        await self.assert_explicit_abort(packet(0x43, 5, 10, "@Quit=/No=0"))
+        ledger = self.server.match_economy.snapshot()
+        self.assertEqual(ledger["rounds"][0]["money"], "refunded")
+        self.assertTrue(ledger["rounds"][0]["closed"])
+        for _ in range(2):
+            restored = Server(state_path=self.path)
+            try:
+                self.assertEqual(restored.economy.snapshot(), self.initial_accounts)
+                self.assertEqual(restored.match_economy.snapshot(), ledger)
+            finally:
+                await restored.stop()
+
+    async def test_card_prize_break_aborts_without_awarding_or_losing_cards(self):
+        await self.start(card_prizes=True)
+        character = self.server.economy.account_view(self.keys[0]).player_id
+        await self.assert_explicit_abort(packet(0x43, 0x27, 3, f"@Break=/ID={character}"))
+        self.assertEqual(self.server.result_rewards.snapshot()["pending"], [])
+
+    @asynccontextmanager
+    async def paused_abort_cleanup(self):
+        """Let the survivor enter another service between the two closes."""
+        first_closed, finish_close = asyncio.Event(), asyncio.Event()
+        closing_tasks = []
+        close = self.peers[0].close
+
+        async def pause_after_close():
+            closing_tasks.append(asyncio.current_task())
+            await close()
+            first_closed.set()
+            await finish_close.wait()
+
+        self.peers[0].close = pause_after_close
+        try:
+            await self.clients[0].send(
+                b"NOTICE " + service_nick(TABLE_RAW) + b" :" + packet(0x43, 5, 10, "@Quit=/No=0")
+            )
+            await asyncio.wait_for(first_closed.wait(), 3)
+            self.live.remove(0)
+            yield
+        finally:
+            finish_close.set()
+            if closing_tasks:
+                await asyncio.wait_for(asyncio.shield(closing_tasks[0]), 3)
+
+    async def test_abort_cleanup_does_not_close_survivor_rebound_to_another_table(self):
+        room = OrdinaryRoomConfig(b"Other Room", 0x101, 0x201, b"#ROOM2", b"#TABLE2")
+        await self.start(enabled=False, ordinary_rooms=(room,))
+        async with self.paused_abort_cleanup():
+            await self.clients[1].send(
+                b"NOTICE "
+                + service_nick(room.table_raw)
+                + b" :"
+                + packet(0x41, 1, body=f"@GameEN=/NN={player_id(self.clients[1].nick):016X}")
+            )
+            await self.flush(1)
+            owner = self.server.table_for_peer(self.peers[1])
+            self.assertIsNotNone(owner)
+            self.assertEqual(owner.table_raw, room.table_raw)
+        await self.flush(1)
+        self.assertFalse(self.peers[1].closed)
+        self.assertIs(self.server.table_for_peer(self.peers[1]), owner)
+        self.assertTrue(self.server.economy.is_reserved(self.keys[1]))
+
+    async def test_abort_cleanup_preserves_survivors_new_event_admission(self):
+        event = config(match_enabled=True, card_service_enabled=True)
+        table = EventTableConfig(event.id, game_id(0x1003), b"#EVTABLE001")
+        await self.start(
+            enabled=False, event_configs=(event,), event_tables=(table,), event_clock=lambda: 200
+        )
+        async with self.paused_abort_cleanup():
+            view = self.server.economy.account_view(self.keys[1])
+            messages = (
+                (event.room_id, presence(event.room_id, view.nn, view.player_id, view.name)),
+                (event.room_id, packet(0xD1, 4, body=f"@EventTimeReq=/NN={view.nn:016X}")),
+                (
+                    event.init_id,
+                    packet(
+                        0x98,
+                        body=f"@EInitReq=/NN={view.nn:016X}/HID=0/CN={view.name.hex()}"
+                        f"/Dm=1/Vol=1/GID={view.player_id:016X}",
+                    ),
+                ),
+            )
+            for target, payload in messages:
+                await self.clients[1].send(
+                    b"NOTICE " + service_nick(target ^ GAME_KEY) + b" :" + payload
+                )
+                await self.flush(1)
+            coordinator = self.server.event_matches.coordinator
+            self.assertTrue(coordinator.participant(self.peers[1]))
+            self.assertIsNone(self.server.table_for_peer(self.peers[1]))
+        await self.flush(1)
+        self.assertFalse(self.peers[1].closed)
+        self.assertTrue(coordinator.participant(self.peers[1]))
+        self.assertTrue(self.server.economy.is_reserved(self.keys[1]))
+
+    async def test_abort_cleanup_preserves_survivors_new_shop_session(self):
+        await self.start(enabled=False)
+        async with self.paused_abort_cleanup():
+            view = self.server.economy.account_view(self.keys[1])
+            await self.clients[1].send(
+                b"NOTICE "
+                + service_nick(SHOP_RAW)
+                + b" :"
+                + packet(
+                    0xB0,
+                    body=f"@ShReq=/NN={view.nn:016X}/HID=0/Dm=0/Vol=0/CN={view.name.hex()}",
+                )
+            )
+            messages = await self.flush(1)
+            self.assertTrue(any(b"@ShEnter=/EN=1" in p for p in messages))
+            self.assertIsNone(self.server.table_for_peer(self.peers[1]))
+        await self.flush(1)
+        self.assertFalse(self.peers[1].closed)
+        self.assertTrue(self.server.economy.is_busy(self.keys[1]))
 
 
 if __name__ == "__main__":

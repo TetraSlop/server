@@ -264,6 +264,30 @@ class OrdinaryRoomsIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([len(t.room.members) for t in self.tables], [1, 1])
         self.assertTrue(all(not t.match_reservations for t in self.tables))
 
+    async def test_explicit_quit_aborts_only_its_table_and_other_round_can_finish(self):
+        await self.start(allow_wagers=True)
+        await self.admit(0, stake=1)
+        await self.admit(1, stake=2)
+        other = self.tables[1].match
+        before = other.snapshot()
+        await self.clients[0].send(
+            b"NOTICE "
+            + service_nick(self.tables[0].table_raw)
+            + b" :"
+            + packet(0x43, 5, 10, "@Quit=/No=0")
+        )
+        for _ in range(30):
+            if not await self.clients[0].read():
+                break
+        else:
+            self.fail("quitter did not disconnect")
+        await self.assert_closed(1)
+        self.assertFalse(self.tables[0].match_reservations)
+        self.assertEqual(other.snapshot(), before)
+        self.assertTrue(all(self.server.economy.balance(self.keys[s]) == 10000 for s in (0, 1)))
+        await self.finish((1,))
+        await self.leave_result(1)
+
     async def test_owner_scoped_encrypted_directory_ptl_and_room_replay(self):
         await self.start()
         await self.admit(0)

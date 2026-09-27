@@ -363,6 +363,7 @@ class OrdinaryTable:
             await self.publish_room(self.room.clear_npcs())
 
     async def dispatch_table(self, session, payload):
+        aborted_peers = ()
         async with self.match_lock:
             if self.host.storage_failed is not None:
                 raise OSError("state storage failed")
@@ -531,6 +532,14 @@ class OrdinaryTable:
                 and msg.subtype == 0x11
                 and not next(p for p in match.players if p.peer is session).departed
             )
+            aborting_multiplayer = (
+                registered
+                and msg.primary == 0x43
+                and msg.subtype in (5, 0x27)
+                and match.phase in ("selection", "turn", "battle", "result")
+                and not match.departure_supported(session)
+                and sum(p.peer is not None and not p.departed for p in match.players) > 1
+            )
             revision = match.settings_revision
             old_players = list(match.players)
             old_owner = match.owner_peer
@@ -549,6 +558,12 @@ class OrdinaryTable:
                     result_stats=PracticeStats.from_profile(self.host.economy.profile_bytes(key)),
                 )
                 responses = match.handle(session, payload)
+                if aborting_multiplayer and match.phase == "finished":
+                    # Unsupported Quit/Break ends the engine without a terminal
+                    # notice to the other humans. Reconnect them after the
+                    # existing durable refund/recovery path has published.
+                    aborted_peers = tuple(p.peer for p in old_players if p.peer is not None)
+                    self.departures.abort(match)
                 if preference_update is not None and responses is not None:
                     with self.host.commerce.edit_account(key) as economy:
                         economy.save_table_preferences(key, **preference_update)
@@ -603,7 +618,30 @@ class OrdinaryTable:
                 "match_service", session=session.id, replies=len(responses), state=match.snapshot()
             )
             self.schedule_match_work(match)
-            return True
+        if aborted_peers:
+            # Session.close can reset a table and await notifications. Never run
+            # it under match_lock or close a peer that has since rebound.
+            for peer in aborted_peers:
+                owner = self.host.table_for_peer(peer)
+                if self.host.nicks.get(peer.nick) is not peer or (
+                    owner is not None and (owner is not self or self.match is not match)
+                ):
+                    continue
+                # Publication released this round's reservations. A new busy
+                # account or event admission now belongs to another service;
+                # event observers have no economy reservation to detect.
+                events = self.host.event_matches
+                if (
+                    events.coordinator.participant(peer)
+                    or peer in events.spectators.admissions
+                    or self.host.economy.is_busy(peer.nick.decode("ascii"))
+                ):
+                    continue
+                await peer.close()
+            async with self.match_lock:
+                if self.match is match:
+                    await self.publish_room(self.reset_table_updates(match))
+        return True
 
     async def roster_presence(self, session, room_id):
         """Accepted room PD is the guest's native post-GameEA barrier."""
