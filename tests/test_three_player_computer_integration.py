@@ -134,8 +134,10 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(match.prize_commit_required)
         result = next(decode(r).sections for r in received if b"@ResultData=" in r)
         self.assertEqual(int(result["ResultData"]["P"]), match.player_count)
-        reward = max(
-            0, offline_payout(match.observer_snapshot().scores, ratings, match.round_stake)
+        reward = (
+            max(0, offline_payout(match.observer_snapshot().scores, ratings, match.round_stake))
+            if match.allow_wagers
+            else 0
         )
         self.assertEqual(int(result["No0"]["D"].split("|")[1]), reward)
         self.assertEqual(self.server.economy.balance(self.key), balance + reward)
