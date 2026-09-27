@@ -20,15 +20,23 @@ async def leave_other_rooms(server, peer, key, room):
     # Called only after destination DE succeeded. Detach every old roster
     # before awaiting delivery, so a full/invalid destination never moves us.
     updates = []
+    chat_updates = []
     for previous in server.ordinary_room_routes.values():
         if previous.room.room_root is not room.room_root:
-            updates.append(
-                (service_nick(previous.room.room_id ^ GAME_KEY), previous.room.leave(peer))
-            )
+            source = service_nick(previous.room.room_id ^ GAME_KEY)
+            was_member = peer in previous.room.members
+            updates.append((source, previous.room.leave(peer)))
+            if was_member:
+                chat_updates.extend(server.chat.leave(peer, source))
     for binding in server.event_rooms.rooms:
         if binding.room is not room.room_root:
-            updates.append((service_nick(binding.raw_owner), binding.room.leave(peer)))
+            source = service_nick(binding.raw_owner)
+            was_member = peer in binding.room.members
+            updates.append((source, binding.room.leave(peer)))
+            if was_member:
+                chat_updates.extend(server.chat.leave(peer, source))
             server.events.leave_room(key, binding.event_id)
     for source, deliveries in updates:
         if deliveries:
             await server.room_updates(deliveries, source=source)
+    await server.chat_updates(chat_updates)

@@ -31,11 +31,17 @@ async def dispatch_event(session, target, payload):
         entering = len(commands) == 1 and commands[0].token == b"DE"
         if entering:
             validate_room_entry(server, session, binding.room)
+        was_member = session in binding.room.members
         responses = binding.room.handle(
             session, payload, authenticated_identity=(view.nn, view.player_id)
         )
         if responses is None:
             return False
+        chat_updates = (
+            server.chat.leave(session, target)
+            if was_member and session not in binding.room.members
+            else []
+        )
         if entering and session in binding.room.members:
             await leave_other_rooms(server, session, key, binding.room)
         with event_transaction(server, (key,)) as state:
@@ -44,6 +50,7 @@ async def dispatch_event(session, target, payload):
             if len(commands) == 1 and commands[0].token == b"PC":
                 state.events.leave_room(key, event_id)
         await server.room_updates(responses, source=target)
+        await server.chat_updates(chat_updates)
         return True
     if payload.startswith(b"GTM0G420001") and route == "room":
         replies = server.chat.enter(session, target, payload, identity=view.nn, name=view.name)

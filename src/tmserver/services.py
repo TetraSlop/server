@@ -191,13 +191,20 @@ async def dispatch(session, target, payload):
         entering = len(commands) == 1 and commands[0].token == b"DE"
         if entering:
             validate_room_entry(session.server, session, ordinary_room.room)
+        was_member = session in ordinary_room.room.members
         responses = ordinary_room.room.handle(
             session, payload, authenticated_identity=(account.nn, account.player_id)
         )
         if responses is not None:
+            chat_updates = (
+                session.server.chat.leave(session, target)
+                if was_member and session not in ordinary_room.room.members
+                else []
+            )
             if entering and session in ordinary_room.room.members:
                 await leave_other_rooms(session.server, session, key, ordinary_room.room)
             await ordinary_room.publish_room(responses)
+            await session.server.chat_updates(chat_updates)
             if len(commands) == 1 and commands[0].token == b"PD":
                 table = session.server.table_for_peer(session)
                 if table is not None:
