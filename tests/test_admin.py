@@ -314,6 +314,72 @@ class AdminTests(unittest.TestCase):
                 self.execute(*argv)
             self.assertEqual(self.load(), before)
 
+    def test_explicit_progress_replays_exactly_and_preserves_rewards_and_accounts(self):
+        self.enable_events()
+        self.execute(*self.prize())
+        self.execute(*self.grant())
+        before = self.load()
+        command = (
+            "event-progress",
+            "--account-key",
+            "alice",
+            "--event",
+            "festival",
+            "--id",
+            "manual-1",
+            "--steps",
+            "2",
+            "--completed-missions",
+            "1",
+        )
+        self.assertEqual(self.execute(*command)["status"], "recorded")
+        saved = self.load()
+        self.assertEqual(
+            {k: v for k, v in saved.items() if k != "events"},
+            {k: v for k, v in before.items() if k != "events"},
+        )
+        summary = self.execute("account", "--account-key", "alice")["events"][0]
+        self.assertEqual((summary["steps"], summary["completed_missions"]), (2, 1))
+        self.assertEqual(summary["pending"], dict(cards=0, money=75))
+        unchanged = self.path.read_bytes()
+        self.assertEqual(self.execute(*command)["status"], "already-recorded")
+        with self.assertRaisesRegex(ValueError, "different facts"):
+            self.execute(*command, "--steps", "3")
+        self.assertEqual(self.path.read_bytes(), unchanged)
+        self.execute(*command, "--id", "manual-2", "--steps", "1", "--completed-missions", "0")
+        member = self.execute("account", "--account-key", "alice")["events"][0]
+        self.assertEqual((member["steps"], member["completed_missions"]), (3, 1))
+        before_failure = self.path.read_bytes()
+        with patch.object(JsonStateStore, "save_changes", side_effect=OSError("save failed")):
+            with self.assertRaises(OSError):
+                self.execute(*command, "--id", "manual-3", "--steps", "1")
+        self.assertEqual(self.path.read_bytes(), before_failure)
+        self.assertEqual(
+            self.execute(*command, "--id", "manual-3", "--steps", "1")["status"], "recorded"
+        )
+
+    def test_progress_rejects_invalid_facts_missing_members_and_excluded_members(self):
+        self.enable_events()
+        command = ["event-progress", "--account-key", "alice", "--event", "festival", "--id", "one"]
+        before = self.path.read_bytes()
+        for flags in (
+            ("--steps", "-1"),
+            ("--steps", str(1 << 31)),
+            ("--completed-missions", "4"),
+            ("--completed-missions", "-1"),
+            ("--account-key", "bob"),
+            ("--event", "missing"),
+            ("--id", "invalid/id"),
+        ):
+            with self.subTest(flags=flags), self.assertRaises(ValueError):
+                self.execute(*command, *flags)
+            self.assertEqual(self.path.read_bytes(), before)
+        self.execute(*self.eligibility(-1))
+        before = self.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "excluded"):
+            self.execute(*command, "--steps", "1")
+        self.assertEqual(self.path.read_bytes(), before)
+
     def test_event_configuration_must_match_saved_ids_and_fingerprints(self):
         self.enable_events()
         before = self.path.read_bytes()

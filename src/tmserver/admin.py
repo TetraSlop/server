@@ -1,4 +1,4 @@
-"""Offline rewards and event eligibility for an explicitly selected saved economy."""
+"""Offline account inspection, rewards and event administration for a selected save."""
 
 import argparse
 import json
@@ -63,6 +63,14 @@ def arguments(argv=None):
     eligibility.add_argument(
         "--value", type=int, required=True, help="signed integer; negative excludes"
     )
+    progress = commands.add_parser("event-progress", help="record explicit local event progress")
+    progress.add_argument("--account-key", required=True)
+    progress.add_argument("--event", required=True)
+    progress.add_argument("--id", required=True, help="stable update ID for retries")
+    progress.add_argument("--steps", type=int, default=0, help="nonnegative additional steps")
+    progress.add_argument(
+        "--completed-missions", type=int, default=0, help="additional mission bitmask"
+    )
     return parser.parse_args(argv)
 
 
@@ -125,6 +133,15 @@ class AdminState:
                 cards = tuple(self.card(values) for values in args.card)
                 changed = state.cards.grant(key, args.event, args.id, cards=cards, money=args.money)
                 result.update(id=args.id, status="queued" if changed else "already-recorded")
+            elif args.command == "event-progress":
+                changed = state.events.update_progress(
+                    key,
+                    args.event,
+                    args.id,
+                    steps_delta=args.steps,
+                    completed_missions=args.completed_missions,
+                )
+                result.update(id=args.id, status="recorded" if changed else "already-recorded")
             else:
                 member = state.events.member(key, args.event)
                 state.events.set_eligibility(key, args.event, args.value)

@@ -1,7 +1,7 @@
 # Offline reward administration
 
-`tmserver-admin` lists saved accounts, queues explicit rewards, and changes an
-existing event member's eligibility. It uses the same validators and atomic
+`tmserver-admin` inspects saved accounts, queues explicit rewards, and records
+event progress or eligibility. It uses the same validators and atomic
 transactions as the game server. JSON administration needs only the normal
 Python installation; PostgreSQL needs the optional `tmserver[postgres]` packages.
 
@@ -123,6 +123,25 @@ member from event admission and collection; zero restores ordinary eligibility.
 The command preserves membership, progress and pending grants. It neither
 enrolls a missing member nor changes progress. Output reports `updated` or
 `unchanged`, with the stored value.
+
+## Record explicit event progress
+
+```powershell
+tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json event-progress --account-key KEY --event festival --id local-progress-001 --steps 2 --completed-missions 1
+```
+
+This records an operator's explicit local-policy decision for an existing,
+eligible event member. `--steps` adds a nonnegative number of steps; the total
+must fit 0 through 2,147,483,647. `--completed-missions` is a decimal bitmask of
+additional completed missions: 1 for the first bit, 2 for the second, 4 for the
+third, or their sum. Only configured mission bits are accepted. Existing
+completed bits remain set. Both options default to zero.
+
+Use one stable `--id` per logical update. An exact retry reports `already-recorded`
+without adding steps twice; changing that ID's facts is rejected. A fresh update
+reports `recorded`. Progress and its replay receipt are saved together. This
+command does not grant cards, money or Prize Center points, and does not infer
+historical mission triggers. Inspect the resulting state with `account`.
 
 ## PostgreSQL and commit behavior
 
