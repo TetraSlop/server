@@ -16,6 +16,9 @@ fullscreen-only handling of desktop window commands. Verify after relaunch:
 - F10 opens the Dear ImGui panel. Try size presets, the aspect toggle and
   borderless fullscreen. Alt+Enter toggles fullscreen without opening settings.
 - Panel clicks do not operate the game. Return to game and Escape close the panel.
+- The pointer is visible in settings and over the title bar. Alt+Tab and the
+  Windows key switch away normally; TM does not jump back to the foreground or
+  move the pointer while another window has focus. Size presets keep settings usable.
 - X, Alt+F4 and Quit game each close the client on separate runs, and the launcher
   stops its services after the last client exits. Window preferences survive relaunch.
 
