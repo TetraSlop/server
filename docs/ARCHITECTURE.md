@@ -25,6 +25,13 @@ An exception before publication discards the staged changes. A storage error
 closes admission and the affected connections; that writer must be restarted.
 Durable receipts handle a commit whose acknowledgement was lost.
 
+Diagnostic log failures are separate from saved-state failures. A runtime log
+open/write/flush/close error disables that service's diagnostics and reports once
+through standard Python logging; responses and disconnect/shutdown cleanup
+continue. The game log still opens before startup, and a configured path that
+cannot be opened still fails startup. Save errors retain the fail-closed behavior
+above.
+
 Use `commerce` for account-only edits, `match_transactions` for match settlement,
 `claim_transactions` for auction/prize/event claims and `profile_transactions`
 for character-profile records. Each coordinator shows its participants and

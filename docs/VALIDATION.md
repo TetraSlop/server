@@ -1,6 +1,41 @@
 # Packaging and transaction validation
 
-## Latest complete-suite checkpoint, 2026-09-27
+## Latest resumed checkpoint, 2026-09-27
+
+An isolated archive of commit `5ee9e81` completed **1,030 tests in 1,181.037
+seconds: 969 passed, 59 optional PostgreSQL cases skipped, and two failures**.
+Both failures came from spectator-test setup applying settings after Req had
+already begun the frozen start handshake. The captured client sequence is
+GameEN, Apply, GameReady, Req, GameOK. The helper now follows that sequence and
+checks the advertised observation rule before acceptance; both failed cases
+pass. Production rules were not relaxed. The broader observer/startup/captured
+traffic rerun passes all 65 checks in 125.977 seconds (`46d6de5`). All 971
+non-database cases from the complete run have therefore passed across that run
+and the targeted correction; the complete run was not repeated afterward.
+
+Output and the exact source commit are in `results/resumed-complete-suite.log`
+and `results/resumed-complete-suite.json`. The temporary source directory was
+removed. The run used disposable saves and headless peers, with optional
+database URLs removed from its environment.
+
+Subsequent changes have separate focused checks:
+
+- Unknown journal/receipt fields are rejected before recovery writes: 128 checks
+  pass, preserving supported legacy formats (`cab0f83`).
+- Each of eight collection-response interruption points preserves credits and
+  uncollected cards while another player remains active: 31 checks pass
+  (`f8cc389`, tests only).
+- Runtime log I/O failure no longer interrupts replies or cleanup, while state
+  failures still stop mutations: 79 checks pass (`8b17927`).
+
+Current collection finds 1,048 tests with no import errors. The complete
+1,048-case suite and real PostgreSQL checks have not been repeated. The 84-entry
+wheel passes a fresh dependency-free install, actual JSON award/account/recovery
+commands, all entry-point checks and both service listeners. All 79 packaged
+runtime files byte-match the current source. Logs:
+`results/resumed-final-wheel-{build,check}.log`. Ruff and whitespace checks pass.
+
+## Earlier complete-suite checkpoint
 
 The complete suite at commit `fd56461` finished **988 tests in 842.506 seconds:
 929 passed, 59 optional PostgreSQL cases skipped, and no failures**. This uses

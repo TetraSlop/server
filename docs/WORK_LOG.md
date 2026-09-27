@@ -195,6 +195,50 @@ checks pass. No native visual validation is claimed by these tests.
 
 ## Current checkpoint
 
+- Ordinary PART/disconnect publication no longer closes survivors who have
+  entered another table, event or shop while cleanup awaits delivery. Shared
+  ownership guards cover both callers and the earlier Quit/Break path. Failed
+  cleanup still closes peers retaining the old reservation. Commit 5ee9e81
+  passes 68 focused checks, including 13 new rebind/failure scenarios.
+- Late B2 event selection now uses the same expiry rules as polling and ready
+  messages. Expired Decks/CardSelect/Quit cannot save an edit, return success or
+  create a delayed-editor receipt; active games and legitimate old receipts
+  retain their behavior. Commit ec290e0 passes 33 domain and three encrypted
+  lifecycle/failure checks, including eight new regressions.
+- A claim-delivery audit passed 92 domain/encrypted tests without finding a
+  new defect. Transmission failure at individual entry responses is the next
+  focused check; results/collection-delivery-audit.log records the baseline.
+- Follow-up collection checks now interrupt every response of Prize Center,
+  event-card and multi-page auction entry. All eight cutoffs preserve committed
+  credits and all uncollected cards, release the failed peer's reservation, and
+  leave another peer's active Prize Center session intact. Commit f8cc389 adds
+  three parameterized tests; the 31-test integration/transaction batch passes
+  in 33.442 seconds. No production change was needed.
+- Journal restoration now rejects nine previously lossy extension locations,
+  including nested award and reward receipts. Commit cab0f83 covers auction,
+  Prize Center, result rewards and character profiles. Seven new regressions
+  prove rejection through direct restore, shared validation, admin and startup
+  before any save rewrite; 128 related checks pass. The legacy optional auction
+  return journal and absent/null service journals remain supported.
+- The isolated complete run of 5ee9e81 finished 1,030 cases in 1,181.037 seconds:
+  969 passed, 59 optional PostgreSQL cases skipped, two spectator-rule setup
+  failures. The helper sent Apply after Req began the frozen start handshake.
+  Captured commands 6/15/27/29/30 establish GameEN, Apply, GameReady, Req, GameOK.
+  Test-only commit 46d6de5 uses that order and verifies PLAYACK's observation rule.
+  Both failed cases and all 65 broader observer/startup/capture checks pass in
+  125.977 seconds. Production protection remains intact. All 971 non-database
+  cases from that complete run passed across the run and targeted correction;
+  the entire run was not repeated afterward.
+  The temporary source archive was removed. Logs:
+  results/resumed-complete-suite.log and results/resumed-complete-suite.json.
+  No live save or database was used.
+- Diagnostic I/O failure no longer interrupts protocol replies or cleanup.
+  The previous log flush failure stopped shutdown after one peer, left a
+  healthy survivor reserved, and could retain a completed accept task. Commit
+  8b17927 keeps file ownership/JSONL contents, reports once through standard
+  logging and disables later diagnostic writes. Save failures remain fatal.
+  Eight new tests plus nearby server/profile/recovery/transaction checks pass
+  all 79 cases. Game startup still rejects an unopenable configured log path.
 - Startup field validation now shares the same boundary as import/admin.
   A disposable interrupted-wager save reproduced silent loss of an unknown
   journal and account field during automatic recovery. Startup now rejects
@@ -207,9 +251,10 @@ checks pass. No native visual validation is claimed by these tests.
   Logs: results/startup-validation-tests.log and
   results/startup-validation-recovery-tests.log. Ruff passes.
 
-- Temporary PostgreSQL cleanup is complete. The latest complete portable suite
-  covered 988 cases; later admin and admission changes pass scoped tests and
-  package checks as recorded above. Current work uses temporary headless peers.
+- Temporary PostgreSQL and isolated-source cleanup are complete. The resumed
+  complete suite covered 1,030 cases; later journal/logging changes and the
+  spectator setup correction pass scoped checks, as recorded above. Current
+  collection includes 18 additional tests added after the isolated checkpoint.
 - The transport/profile audit found no new actionable defect. Isolated encrypted
   probes rejected truncated bodies, incorrect extents and bad checksums without
   publishing state; valid follow-up requests succeeded. No protocol policy was
@@ -220,16 +265,25 @@ checks pass. No native visual validation is claimed by these tests.
 - A final synthetic ranking audit confirms fresh hide-name settings after weekly
   rollover, immutable issued files, account-isolated reads/deletes and no files
   retained after restart. Existing file privacy policy remains unchanged.
-- The latest complete run contains 988 cases and the latest collection contains
-  1,010, including 59 optional PostgreSQL cases. No known test failures remain.
+- The earlier complete passing run contains 988 cases; the resumed complete
+  run exercised 1,030, with its two setup failures corrected and verified above.
+  Current collection contains 1,048 cases, including 59 optional PostgreSQL cases.
+  No known failures or pending fixes remain at this checkpoint. Optional real
+  PostgreSQL checks were not repeated after the earlier isolated 59-case pass.
 - The user explicitly resumed work, requested no further credit checks and
   reported resetting access themselves. Continue the approved work without
   querying usage or stopping at a displayed percentage. Do not purchase credits
   or redeem a reset through tools.
-- Recurring continuation is active with the updated instruction. Root completed
-  the read-only startup-recovery preview and package checks.
-  `browser_port_options` is auditing ordinary cleanup after a dependent rebinds;
-  `texture_upscaling` is checking late event Decks/CardSelect before expiry polls.
+- Recurring continuation is active with the updated instruction. Review and
+  validation for this checkpoint are complete. The clean 84-entry wheel passes all
+  dependency-free install, entry-point, JSON admin/recovery and listener checks;
+  all 79 packaged runtime files byte-match the current source. Logs:
+  results/resumed-final-wheel-{build,check}.log.
+  `texture_upscaling` completed journal field preservation;
+  `collection_delivery_audit` completed individual response interruption tests;
+  `browser_port_options` completed diagnostic failure handling and corrected
+  the spectator setup against original startup ordering. Agents are idle and
+  no exec sessions remain active.
   Changes require concrete failures and must preserve existing protocol policy.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
   results/overnight-timeout-recheck.log. Both runs completed. No active test
@@ -266,9 +320,10 @@ refunds/wrap, CPU/human results, caps/ties and immutable files. Implementation
 and the 40-test combined focused check are complete. Subsequent complete
 portable runs and the real PostgreSQL administration checks passed, as above.
 
-Continue by reviewing active fixes, running their relevant checks, updating this
-log and committing locally. The thread heartbeat may resume this work under the
-latest user instruction: keep working without checking credits.
+Continue evidence-backed protocol and recovery investigation from this checked
+source. Avoid inventing historical policies or changing supported behavior just
+to add work. The thread heartbeat may resume under the latest user instruction:
+keep working without checking credits.
 
 ## Review later
 
