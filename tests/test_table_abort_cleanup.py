@@ -3,6 +3,7 @@
 import asyncio
 import struct
 import unittest
+from contextlib import nullcontext
 from unittest.mock import patch
 
 from tests.test_event_rooms import presence
@@ -201,12 +202,26 @@ class WorkerFailureReentryTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(old.phase, "turn")
             survivor, key = peers[1], peers[1].nick.decode()
             blocked.block = True
-            method = "advance" if worker == "continuation" else "depart"
-            with patch.object(old, method, side_effect=ValueError("injected worker failure")):
+            fault = (
+                nullcontext()
+                if worker == "watchdog"
+                else patch.object(
+                    old,
+                    "advance" if worker == "continuation" else "depart",
+                    side_effect=ValueError("injected worker failure"),
+                )
+            )
+            with fault:
                 if worker == "continuation":
                     # Replace only the continuation's outcome with a fault.
                     old.phase, old._pending_battle = "battle", 0
                     task = asyncio.create_task(table.run_match_work(old))
+                elif worker == "watchdog":
+                    now = [0.0]
+                    table.watchdog = MatchWatchdog(clock=lambda: now[0], ack_timeout=1)
+                    table.watchdog.observe(old, old)
+                    now[0] = 1
+                    task = asyncio.create_task(table.check_match_timeout())
                 else:
                     self.assertTrue(table.departures.request(peers[0]))
                     task = table.departures.task
@@ -237,7 +252,9 @@ class WorkerFailureReentryTests(unittest.IsolatedAsyncioTestCase):
                     self.assertTrue(server.economy.is_busy(key))
                 after_entry = server.snapshot()
                 blocked.release.set()
-                await asyncio.wait_for(asyncio.shield(task), 2)
+                result = await asyncio.wait_for(asyncio.shield(task), 2)
+                if worker == "watchdog":
+                    self.assertEqual(result.reason, "turn_ack")
                 if owner is not None:
                     await asyncio.wait_for(entering, 2)
             self.assertEqual(survivor.closed, destination == "none")
@@ -269,6 +286,11 @@ class WorkerFailureReentryTests(unittest.IsolatedAsyncioTestCase):
         for destination in ("none", "same-table", "other-table", "shop"):
             with self.subTest(destination=destination):
                 await self.check_cleanup("departure", destination)
+
+    async def test_timeout_preserves_new_service_and_closes_unclaimed_peers(self):
+        for destination in ("none", "same-table", "other-table", "shop"):
+            with self.subTest(destination=destination):
+                await self.check_cleanup("watchdog", destination)
 
 
 if __name__ == "__main__":

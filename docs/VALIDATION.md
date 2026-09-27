@@ -1,5 +1,40 @@
 # Packaging and transaction validation
 
+## Shared reservation checks and timeout cleanup, 2026-09-27
+
+The timeout path's nickname-only close loop could disconnect a survivor after
+entry into a replacement match, another table or shop while earlier room
+notifications waited. The new injected-clock regression fails in all three
+cases on `728ff6b`; its unclaimed-peer control already passed. Reusing
+`close_released_peers` fixes those failures. All **62 lifecycle/watchdog tests
+pass in 43.254 seconds**, covering cleanup, deadlines, departures and session
+recovery. Evidence: `results/timeout-reentry-{before,after}.log` and
+`results/timeout-consolidation-controls.log`.
+
+Two private economy helpers consolidate single-account token validation and
+release. Public APIs, exact error messages/order, token identity, release
+idempotence and Prize's independent points check are preserved. All **44 public
+before/after comparisons match byte-for-byte** and **120 scoped tests pass in
+0.322 seconds**, including rollback, forged tokens, delivery and reward claims.
+Exact commands: `results/economy-capability-validation.json`; comparison probe:
+`results/economy-capability-equivalence.py`. Independent review found no semantic
+difference. Runtime decreases by 23 lines to 20,667; no save format changed.
+
+Collection finds 1,159 tests with no import errors; lint and whitespace checks
+pass. The 89-entry wheel passes clean installation, entry points, JSON
+administration/recovery and temporary listeners. All 84 runtime files match
+source; SHA256 is
+`b729e3ae40830e81bf5f15ff0e689e7e669a95ded25ba2f3fb13ef1f1f0439ca`.
+Evidence: `results/reservation-timeout-result.json` and
+`results/reservation-timeout-wheel-{build,check}.log`. The 182 focused tests are
+distinct; no new full-suite, PostgreSQL or native UI run is claimed.
+
+A separate read-only configuration audit found no concrete defect: 29 synthetic
+route/capacity cases, 110 complete event-round configurations and 23 existing
+ordinary/event controls pass. Evidence and scope are recorded in
+`results/room-configuration-audit-summary.json`. These checks cover generated
+records and headless game flow, not native UI acceptance or historical policies.
+
 ## Closed sessions and retired worker cleanup, 2026-09-27
 
 Two buffered-input regressions fail on the preceding runtime: a valid encrypted

@@ -309,6 +309,26 @@ class EconomyService:
         template[0xB6] = value
         account.template = bytes(template)
 
+    def _reservation_view(self, reservation, expected_type, name):
+        if not isinstance(reservation, expected_type):
+            raise EconomyError(f"invalid {name} reservation")
+        view = reservation.account
+        if (
+            self._reservations.get(view.key) is not reservation
+            or self.account_view(view.key) != view
+        ):
+            raise EconomyError(f"stale {name} reservation")
+        return view
+
+    def _release_reservation(self, reservation, expected_type, name):
+        if not isinstance(reservation, expected_type):
+            raise EconomyError(f"invalid {name} reservation")
+        key = reservation.account.key
+        if self._reservations.get(key) is not reservation:
+            return False
+        del self._reservations[key]
+        return True
+
     def reserve_auction(self, key):
         account = self._account(key)
         if self.is_reserved(key) or account.session is not None or account.pending is not None:
@@ -357,13 +377,7 @@ class EconomyService:
         return token
 
     def release_prize(self, reservation):
-        if not isinstance(reservation, PrizeReservation):
-            raise EconomyError("invalid Prize Center reservation")
-        key = reservation.account.key
-        if self._reservations.get(key) is not reservation:
-            return False
-        del self._reservations[key]
-        return True
+        return self._release_reservation(reservation, PrizeReservation, "Prize Center")
 
     def commit_prize(
         self,
@@ -383,14 +397,8 @@ class EconomyService:
         This boundary checks ownership, capacity, multiplicity and the original
         unsigned99999 point cap. Options/unrelated profile fields are preserved.
         """
-        if not isinstance(reservation, PrizeReservation):
-            raise EconomyError("invalid Prize Center reservation")
-        view = reservation.account
-        if (
-            self._reservations.get(view.key) is not reservation
-            or self.account_view(view.key) != view
-            or self.prize_points(view.key) != reservation.points
-        ):
+        view = self._reservation_view(reservation, PrizeReservation, "Prize Center")
+        if self.prize_points(view.key) != reservation.points:
             raise EconomyError("stale Prize Center reservation")
         if (
             type(debit) is not int
@@ -421,13 +429,7 @@ class EconomyService:
         return None
 
     def release_auction(self, reservation):
-        if not isinstance(reservation, AuctionReservation):
-            raise EconomyError("invalid auction reservation")
-        key = reservation.account.key
-        if self._reservations.get(key) is not reservation:
-            return False
-        del self._reservations[key]
-        return True
+        return self._release_reservation(reservation, AuctionReservation, "auction")
 
     def commit_auction(
         self,
@@ -451,14 +453,7 @@ class EconomyService:
         only when explicitly requested by the collection coordinator. Returns a
         refreshed capability when keep_reserved; stale capabilities never replay.
         """
-        if not isinstance(reservation, AuctionReservation):
-            raise EconomyError("invalid auction reservation")
-        view = reservation.account
-        if (
-            self._reservations.get(view.key) is not reservation
-            or self.account_view(view.key) != view
-        ):
-            raise EconomyError("stale auction reservation")
+        view = self._reservation_view(reservation, AuctionReservation, "auction")
         if any(type(x) is not int or not 0 <= x <= MAX_MONEY for x in (debit, credit)):
             raise EconomyError("invalid auction money transfer")
         balance = view.balance - debit + credit
@@ -495,24 +490,10 @@ class EconomyService:
         return reservation
 
     def release_match(self, reservation):
-        if not isinstance(reservation, MatchReservation):
-            raise EconomyError("invalid match reservation")
-        key = reservation.account.key
-        if self._reservations.get(key) is not reservation:
-            return False
-        del self._reservations[key]
-        return True
+        return self._release_reservation(reservation, MatchReservation, "match")
 
     def _match_view(self, reservation):
-        if not isinstance(reservation, MatchReservation):
-            raise EconomyError("invalid match reservation")
-        view = reservation.account
-        if (
-            self._reservations.get(view.key) is not reservation
-            or self.account_view(view.key) != view
-        ):
-            raise EconomyError("stale match reservation")
-        return view
+        return self._reservation_view(reservation, MatchReservation, "match")
 
     def match_account(self, reservation):
         """Public immutable view after checking a live table capability."""

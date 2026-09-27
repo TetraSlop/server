@@ -726,11 +726,7 @@ class OrdinaryTable:
             # invented; reconnect loads the last durable completed round.
             self.departures.abort(match)
             match.cancel_pending()
-        for peer in peers:
-            # Closing the first peer resets this table. A replacement session
-            # cannot be mistaken for another peer from the expired generation.
-            if self.host.nicks.get(peer.nick) is peer:
-                await peer.close()
+        await self.close_released_peers(match, peers)
         if self.match is match:
             async with self.match_lock:
                 await self.publish_room(self.reset_table_updates(match))

@@ -20,6 +20,17 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Timeout cleanup now shares the ownership-aware peer close used by departures
+  and worker failures. Three reentry cases fail before and pass after; the
+  unclaimed-peer control still closes. All 62 lifecycle/watchdog checks pass.
+  Single-account reservation validation/release now have two shared helpers;
+  all 44 before/after behavior comparisons and 120 scoped economy tests pass.
+  Runtime falls by 23 lines to 20,667. Independent review found no issue; no
+  protocol, reward policy or save format changed. Collection is 1,159; lint,
+  whitespace and clean wheel checks pass, with all 84 runtime files matching
+  source. A separate configuration audit
+  found no defect in 29 route/capacity probes, 110 complete event configurations
+  and 23 existing ordinary/event controls. See VALIDATION.md.
 - Closed connections now discard buffered frames before login or service
   dispatch; two regressions previously reopened a shop or rebound a closed
   connection. Failed continuation/departure workers reuse the existing guarded

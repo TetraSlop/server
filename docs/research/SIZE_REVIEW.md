@@ -1,5 +1,21 @@
 # Server size and structure review
 
+## Reservation and timeout consolidation, 2026-09-27
+
+Single-account reservation checks now share two private helpers inside
+`EconomyService`: validate the live account capability, or release the exact
+issued token. Public service-specific methods and Prize's extra points check
+remain explicit. This removes 19 lines; exchange conservation and inventory
+settlement retain their distinct rules. Forty-four public before/after cases
+are identical and all 120 scoped economy tests pass.
+
+Timeout cleanup also reused a weaker copy of peer-close logic. Replacing it with
+the existing ownership-aware operation removes four lines and fixes three
+reentry failures. All 62 scoped lifecycle checks pass. The package is now
+**20,667 physical Python lines in 81 files**, 23 fewer than `728ff6b` and 180
+fewer than the original `844b6cf` size review. This is a small consolidation;
+there is still no evidence for a safe multi-thousand-line cut at the same scope.
+
 ## Remaining packet duplication review, 2026-09-27
 
 The earlier suggestion to share named packet parsing was reviewed against
