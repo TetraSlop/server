@@ -29,7 +29,7 @@ class RoomRules:
         ):
             value = getattr(self, key)
             if type(value) is not int or not 0 <= value <= maximum:
-                raise ValueError(f"room rule {key} must be an integer in0..{maximum}")
+                raise ValueError(f"room rule {key} must be an integer in 0..{maximum}")
 
     def as_dict(self):
         return {key: getattr(self, key) for key in ("bm", "du", "st", "cb", "ca", "gs", "tl")}

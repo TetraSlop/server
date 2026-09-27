@@ -61,7 +61,8 @@ class RoomTests(unittest.TestCase):
         r = files["b/g/RL000"][0x48:]
         self.assertEqual(struct.unpack_from("<Q", r)[0], ROOM_ID)
         self.assertEqual(r[0x6D:0x70], b"ABA")
-        self.assertEqual(r[0x49:0x50], b"AAAAADA")
+        self.assertEqual(r[0x28:0x2A], b"BA")  # Custom rules, Computer enabled.
+        self.assertEqual(r[0x49:0x50], b"AAAAACB")
         self.assertEqual(r[0xB8:0xC5].split(b"\0")[0], ROOM_CHANNEL)
         self.assertTrue(ROOM_CHANNEL.startswith(b"#") and TABLE_CHANNEL.startswith(b"#"))
         self.assertLessEqual(max(len(ROOM_CHANNEL), len(TABLE_CHANNEL)), 12)

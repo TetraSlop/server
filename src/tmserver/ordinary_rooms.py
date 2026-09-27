@@ -17,6 +17,7 @@ from tmserver.identities import (
 )
 from tmserver.ordinary_table import OrdinaryTable
 from tmserver.room_service import ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL, RoomService, alphahex
+from tmserver.room_rules import RoomRules
 from tmserver.spectator_service import SpectatorService
 
 
@@ -62,8 +63,11 @@ class OrdinaryRoomConfig:
     players: int = 2
     tables: tuple[OrdinaryTableConfig, ...] = ()
     flexible_seats: bool = False
+    rules: RoomRules | None = None
 
     def __post_init__(self):
+        if self.rules is not None and not isinstance(self.rules, RoomRules):
+            raise ValueError("room rules require a RoomRules value")
         if (
             not isinstance(self.name, bytes)
             or not re.fullmatch(rb"[ -~]{1,30}", self.name)
@@ -116,10 +120,17 @@ def load_ordinary_rooms(path):
         if (
             not isinstance(row, dict)
             or not required <= set(row)
-            or set(row) - required - {"mode", "players", "tables"}
+            or set(row) - required - {"mode", "players", "tables", "rules"}
         ):
             raise ValueError("missing or unknown ordinary room configuration field")
         row = dict(row)
+        if "rules" in row:
+            if not isinstance(row["rules"], dict):
+                raise ValueError("room rules must be an object")
+            try:
+                row["rules"] = RoomRules(**row["rules"])
+            except TypeError as exc:
+                raise ValueError("unknown room rule field") from exc
         if row.get("players") == "auto":
             row.update(players=3, flexible_seats=True)
         extra = row.get("tables", [])
@@ -202,6 +213,7 @@ def configure_rooms(host, configs):
             table_id=game_id(config.table_raw),
             room_channel=config.room_channel,
             table_channel=config.table_channel,
+            computer_enabled=config.mode == "computer",
         )
         for index, table_config in enumerate((config, *config.tables)):
             slot = (
@@ -211,6 +223,7 @@ def configure_rooms(host, configs):
                     game_id(table_config.table_raw),
                     table_config.table_channel,
                     table_config.players,
+                    computer_enabled=table_config.mode == "computer",
                 )
             )
             template = host.spectators
@@ -231,6 +244,7 @@ def configure_rooms(host, configs):
                 match_mode=table_config.mode,
                 match_player_count=table_config.players,
                 flexible_seats=table_config.flexible_seats,
+                room_rules=config.rules,
                 allow_cbc=host.allow_cbc,
                 card_prizes=host.card_prizes,
                 allow_wagers=host.allow_wagers,
@@ -261,16 +275,18 @@ def directory_files(host):
         struct.pack_into("<I", record, 0x18, sum(t.table_count > 0 for t in table.room.tables))
         struct.pack_into("<H", record, 0x24, 1)
         record[0x27] = 1
-        record[0x28] = ord("A")
+        record[0x28] = ord("A" if config.rules is not None else "B")
+        record[0x29] = ord("A") if any(t.computer_enabled for t in table.room.tables) else 0
         name = config.name + b"*"
         record[0x2A : 0x2A + len(name)] = name
-        record[0x49:0x50] = b"AAAAADA"
+        record[0x49:0x50] = (config.rules or RoomRules()).packed()
         record[0x6A:0x6D] = alphahex(len(table.room.tables), 3)
         record[0x6D:0x70] = alphahex(16, 3)
         record[0x70] = ord("A")
         record[0xB8 : 0xB8 + len(config.room_channel)] = config.room_channel
     struct.pack_into("<I", rooms, 0x48 + 0x10, len(host.room.members))
     struct.pack_into("<I", rooms, 0x48 + 0x18, int(host.room.table_count > 0))
+    rooms[0x48 + 0x29] = ord("A") if host.room.computer_enabled else 0
     struct.pack_into(
         "<II",
         zones,

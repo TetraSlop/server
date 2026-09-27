@@ -19,6 +19,24 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Latest user-reported room fix: Computer was greyed out because RL record
+  `+0x29` was zero. Original instruction execution confirms this flag is
+  independent of fixed-rule display at `+0x28` and Chat at `+0x70`. Corrected
+  Local Room enables Computer with zero money; human tables advertise prefix
+  `B` and reject direct Computer admission without reserving or disconnecting.
+  The launcher now adds Classic, Special and Quick Play fixed rooms alongside
+  Open Tables. A validated immutable RoomRules value supplies advertisements,
+  engine rules and resets; saved preferences do not overwrite the preset.
+  Configuration/enforcement is explicit local policy. Foundation `e247d04`,
+  original evidence `79f34a5`, encrypted fixed-room startup `b6c4547`.
+  All 131 engine, 41 adapter, 31 admission, six discovery and two fixed-room
+  focused test executions pass; original probes also cover all five actual
+  production advertisements. Review found no actionable issue. Collection is
+  1,097 tests; the full suite and real PostgreSQL were not rerun. The new
+  85-entry wheel passes clean installation and temporary service/admin checks;
+  all 80 runtime files match source. Details and hash are in VALIDATION.md.
+  User should restart Play.cmd, enter Local Room, select an empty table and
+  choose Computer. Native menu rendering still needs user observation.
 - IRC channel rosters: joining a room with the supported 128-account pool
   exceeded the 512-byte framed-line limit. JOIN now emits multiple complete
   NAMES replies followed by its existing completion reply. Repeated JOIN at

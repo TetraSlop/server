@@ -40,6 +40,7 @@ class OrdinaryTable:
         watchdog=None,
         spectator=None,
         flexible_seats=False,
+        room_rules=None,
     ):
         self.host = host
         self.room = room
@@ -54,6 +55,7 @@ class OrdinaryTable:
         self.match_mode = match_mode
         self.match_player_count = match_player_count
         self.flexible_seats = flexible_seats
+        self.room_rules = room_rules
         self.computer_menu = computer_menu
         self.match_start_fields = match_start_fields
         self.allow_cbc = allow_cbc
@@ -68,6 +70,8 @@ class OrdinaryTable:
         self.spectator_tasks = set()
         self.spectator_poll_task = None
         self.match = self.new_match()
+        if room_rules is not None:
+            self.empty_table_updates()
         self.spectators.reset(self.match)
         self.watchdog.observe(self.match, self.match)
 
@@ -85,6 +89,7 @@ class OrdinaryTable:
             allow_cbc=self.allow_cbc,
             card_prizes=self.card_prizes,
             flexible_seats=self.flexible_seats,
+            room_rules=self.room_rules,
             allow_wagers=self.allow_wagers,
             allow_departures=self.departures.enabled,
             npc_nickname_id=0x1FF + self.room.table_number,
@@ -154,7 +159,11 @@ class OrdinaryTable:
         if match is not self.match:
             return []
         self.reset_match()
-        return self.room.set_table(0, 0, 0) + self.room.clear_npcs()
+        return self.empty_table_updates() + self.room.clear_npcs()
+
+    def empty_table_updates(self):
+        rules = self.room_rules.as_dict() if self.room_rules is not None else None
+        return self.room.set_table(0, 0, 0, rules)
 
     def match_tokens(self, match):
         return {
@@ -345,7 +354,7 @@ class OrdinaryTable:
                 )
                 await self.publish_room(updates)
         if match.phase == "finished":
-            updates = self.room.set_table(0, 0, 0)
+            updates = self.empty_table_updates()
             self.release_match_accounts()
             match.cancel_pending()
         elif match.phase != "lobby":
@@ -424,6 +433,9 @@ class OrdinaryTable:
             admitting = (msg.primary == 1 and "Req" in msg.sections) or (
                 msg.primary == 0x41 and msg.subtype in (1, 0x12)
             )
+            if msg.primary == 0x41 and msg.subtype == 0x12 and self.match_mode != "computer":
+                await self.deliver_table_packet(session, reject_admission("GameENC", full=False))
+                return True
             registered = any(p.peer is session for p in self.match.players)
             viewing = viewer_state(msg)
             exiting_channel = channel_exit(msg)

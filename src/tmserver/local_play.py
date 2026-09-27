@@ -214,7 +214,11 @@ async def run(args):
                 flush=True,
             )
             print(f"Session: {session}\nSave: {args.state}\nLogs: {log_dir}", flush=True)
-            print("Use Computer for CPU play; Open Tables for a human match.", flush=True)
+            print(
+                "CPU play: Local Room > empty table > Computer. "
+                "Human play: Open Tables or a rules room.",
+                flush=True,
+            )
             codes = await play_clients(args, services, session, log_dir)
             (log_dir / "exits.json").write_text(json.dumps(codes) + "\n", encoding="utf8")
         if any(codes):

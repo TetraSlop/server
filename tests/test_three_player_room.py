@@ -46,7 +46,7 @@ class ThreePlayerRoomTests(unittest.TestCase):
 
     def test_room_directory_does_not_encode_per_table_seat_count(self):
         record = directory_files()["b/g/RL000"][0x48:]
-        self.assertEqual(record[0x28], ord("A"))
+        self.assertEqual(record[0x28], ord("B"))  # Custom rules, independent of seat count.
         self.assertEqual(record[0x6A:0x70], b"AABABA")  # one table, sixteen room members
 
 

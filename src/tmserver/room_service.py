@@ -10,6 +10,7 @@ from collections import OrderedDict
 
 from tmserver.identities import ROOM_RAW, TABLE_RAW, TRADE_RAW, game_id
 from tmserver.match_service import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
+from tmserver.room_rules import RoomRules
 from tmserver.table_metadata import table_info as encode_table_info
 from tmserver.tm_protocol import Command, encode, parse
 
@@ -26,14 +27,17 @@ def alphahex(value, width):
     return bytes(65 + int(x, 16) for x in f"{value:0{width}X}")
 
 
-def table_info(number=1, count=0, owner=0, game_rules=None, table_rules=None):
-    return encode_table_info(
+def table_info(
+    number=1, count=0, owner=0, game_rules=None, table_rules=None, *, computer_enabled=True
+):
+    encoded = encode_table_info(
         number,
         count,
         owner,
         DEFAULT_GAME_RULES if game_rules is None else game_rules,
         DEFAULT_TABLE_RULES if table_rules is None else table_rules,
     )
+    return (b"A" if computer_enabled else b"B") + encoded[1:]
 
 
 def directory_files():
@@ -49,9 +53,10 @@ def directory_files():
     struct.pack_into("<Q", r, 0, ROOM_ID)
     struct.pack_into("<H", r, 0x24, 1)
     r[0x27] = 1
-    r[0x28] = ord("A")
+    r[0x28] = ord("B")  # No fixed room rules; tables choose their own.
+    r[0x29] = ord("A")  # Separate native permission for Computer play.
     r[0x2A:0x35] = b"Local Room*"
-    r[0x49:0x50] = b"AAAAADA"  # wager0, flags0, time3, quit0
+    r[0x49:0x50] = RoomRules(**DEFAULT_GAME_RULES).packed()
     r[0x6A:0x6D] = alphahex(1, 3)
     r[0x6D:0x70] = alphahex(16, 3)
     r[0x70] = ord("A")
@@ -95,9 +100,13 @@ class RoomService:
         table_id=TABLE_ID,
         table_channel=TABLE_CHANNEL,
         service_records=None,
+        computer_enabled=True,
     ):
         if type(player_count) is not int or player_count not in (2, 3):
             raise ValueError("table player count must be two or three")
+        if type(computer_enabled) is not bool:
+            raise ValueError("Computer availability must be boolean")
+        self.computer_enabled = computer_enabled
         if type(room_id) is not int or not 0 < room_id < 1 << 64:
             raise ValueError("invalid room identity")
         if not isinstance(room_channel, bytes) or not re.fullmatch(
@@ -146,8 +155,9 @@ class RoomService:
             channels.add(channel.upper())
         self.player_count = player_count
         self.room_id, self.room_channel = room_id, room_channel
-        self.table_id, self.table_channel = table_id, (
-            table_channel if table_id is not None else None
+        self.table_id, self.table_channel = (
+            table_id,
+            (table_channel if table_id is not None else None),
         )
         self.service_records = records
         self.sequence = 100
@@ -157,13 +167,13 @@ class RoomService:
         self.table_state = 0
         self.table_count = 0
         self.table_owner = 0
-        self.table_metadata = table_info()
+        self.table_metadata = table_info(computer_enabled=computer_enabled)
         self.table_number = 1
         self.room_root = self
         self.tables = [self]
         self.npc_tables = {}
 
-    def add_table(self, table_id, table_channel, player_count=2):
+    def add_table(self, table_id, table_channel, player_count=2, *, computer_enabled=True):
         """Prepublish another independent table under this room's one sequence."""
         if self.table_id is None:
             raise ValueError("ordinary tables need an ordinary parent room")
@@ -185,9 +195,12 @@ class RoomService:
             table_id=table_id,
             table_channel=table_channel,
             service_records=(),
+            computer_enabled=computer_enabled,
         )
         state.table_number = len(self.tables) + 1
-        state.table_metadata = table_info(number=state.table_number)
+        state.table_metadata = table_info(
+            number=state.table_number, computer_enabled=computer_enabled
+        )
         view = RoomTableView(self, state)
         self.tables.append(view)
         return view
@@ -239,6 +252,7 @@ class RoomService:
             owner=owner,
             game_rules=game_rules,
             table_rules=table_rules,
+            computer_enabled=slot.computer_enabled,
         )
         if (state, count, owner, metadata) == (
             slot.table_state,
@@ -301,7 +315,8 @@ class RoomService:
             if (
                 identity in records
                 or identity in members
-                or identity in self.npcs and self.npc_tables[identity] != table_id
+                or identity in self.npcs
+                and self.npc_tables[identity] != table_id
             ):
                 raise ValueError("practice opponent identity is already present")
             records[identity] = payload, record
@@ -446,6 +461,7 @@ class RoomTableView:
             "table_channel",
             "table_number",
             "player_count",
+            "computer_enabled",
             "table_state",
             "table_count",
             "table_owner",

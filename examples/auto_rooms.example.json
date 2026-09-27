@@ -8,6 +8,36 @@
       "table_channel": "#OPENTABLE1",
       "mode": "versus",
       "players": "auto"
+    },
+    {
+      "name": "Classic Rules",
+      "room_raw": 258,
+      "table_raw": 514,
+      "room_channel": "#CLASSIC",
+      "table_channel": "#CLASSICTABLE",
+      "mode": "versus",
+      "players": "auto",
+      "rules": {"tl": 2}
+    },
+    {
+      "name": "Special Rules",
+      "room_raw": 259,
+      "table_raw": 515,
+      "room_channel": "#SPECIAL",
+      "table_channel": "#SPECIALTABLE",
+      "mode": "versus",
+      "players": "auto",
+      "rules": {"st": 1, "cb": 1, "ca": 1, "tl": 2}
+    },
+    {
+      "name": "Quick Play",
+      "room_raw": 260,
+      "table_raw": 516,
+      "room_channel": "#QUICK",
+      "table_channel": "#QUICKTABLE",
+      "mode": "versus",
+      "players": "auto",
+      "rules": {"tl": 1}
     }
   ]
 }

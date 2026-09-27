@@ -4,6 +4,24 @@ Status: **awaiting user testing**. The loader has not been launched by the agent
 Headless checks validate startup plumbing and encrypted requests; the following
 checks need the actual game screens. Use the new `Play.cmd`, not the old shortcut.
 
+## Room discovery and rules
+
+Restart `Play.cmd` after the room-directory update. Confirm Local Room, Open
+Tables, Classic Rules, Special Rules and Quick Play appear in the lobby.
+
+- In Local Room, select an empty table: Computer should be available with at
+  least five cards, including when the account has zero money.
+- Open Tables should show room rules as "Not Set". Classic Rules should show
+  one-minute turns without special board flags; Special Rules should show
+  one-minute turns with all three enabled; Quick Play should show thirty-second
+  turns without special board flags. Those human rooms disable Computer.
+- With two or three windows, enter a fixed room and start a human match. Check
+  that the displayed rules and resulting board agree. Leave and return; the
+  empty table should retain that room's preset.
+
+Original instruction probes and encrypted peers pass these directory and
+game-start paths; rendered menus and actual human input remain to be checked.
+
 ## Updated loader controls
 
 The user's integrated run reported no sound, no resizing and no window close.
@@ -28,7 +46,8 @@ These fixes have headless regression coverage; the native checks remain pending.
 
 1. **Startup:** double-click `Play.cmd`. Confirm the title is visible, mouse
    movement/clicks behave normally and room entry succeeds.
-2. **CPU:** enter Computer, choose an opponent, finish a match, then play a
+2. **CPU:** enter Local Room, select an empty table, choose Computer and an
+   opponent, finish a match, then play a
    rematch. Confirm selection, turns, battles and the result screen progress.
    Also select two distinct CPU opponents: confirm the 25-cell board and all
    three turns, finish and rematch, then return to configuration and select just

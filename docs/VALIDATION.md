@@ -1,5 +1,54 @@
 # Packaging and transaction validation
 
+## Room discovery, Computer availability and presets, 2026-09-27
+
+The original client requires ASCII `A` at RL room-record `+0x29` before it
+enables Computer. The old directory left this byte zero. The corrected
+advertisement now enables Local Room and leaves human tables explicitly
+human-only. [Original evidence](research/ROOM_COMPUTER_GATE.md) includes 12
+Computer cases, two table-prefix comparisons and all five actual launcher
+rooms through original RL/PTL parsing, selected-room copying and action checks.
+Local Room enables Computer with zero money and 25 cards; the other rooms
+retain human Join. The fixture freezes the directory and table-file hashes.
+
+The launcher now supplies Open Tables plus fixed Classic, Special and Quick
+Play rooms. Their engine rules, directory fields, empty-table metadata and
+reset state agree. Configured rules survive Computer-menu replacement too;
+personal saved defaults remain separate. These presets and their enforcement
+are explicit local policy. See [room configuration](ROOMS.md).
+
+Focused validation passed:
+
+- 131 rules, engine, settings, Computer and board checks (`e247d04`).
+- 41 room, directory, shared-table and launcher checks in 86.364 seconds
+  (`results/room-presets-adapter-tests.log`).
+- 31 admission, captured startup, transition, metadata, CPU and snapshot
+  checks in 22.824 seconds (`results/room-presets-admission-tests.log`).
+- Six new discovery/configuration cases in 1.421 seconds: original production
+  fixture equality, five-room lifecycle, mixed human/CPU tables, invalid
+  configuration, encrypted directory-to-two-NPC entry, and nonfatal rejection
+  of Computer admission to a human table
+  (`results/room-presets-discovery-tests.log`).
+- Two encrypted fixed-room cases in 3.134 seconds (`b6c4547`): saved defaults,
+  rule query/Apply, native-order human startup and generated special board;
+  conflicting Apply leaves the preset and economy intact while an unrelated
+  client remains healthy. This tests protocol sequencing, not native editor UI.
+- Independent review found no actionable defect; an in-memory fixed CPU probe
+  preserved identical directory, table and engine rules through three-seat
+  configuration, Quit and reset.
+
+Current collection finds **1,097 tests** without import errors. This iteration
+does not repeat the full suite or real PostgreSQL tests. Ruff and whitespace
+checks pass. Test saves and listeners were temporary; the native game and live
+save were not opened or modified.
+
+The 85-entry wheel passes a fresh dependency-free installation, entry points,
+JSON administrative/recovery commands and both listeners on temporary ports.
+All 80 packaged runtime files byte-match source. Logs:
+`results/room-presets-wheel-{build,check}.log`. SHA256:
+`35e91e2f233f63c0c2c05888413eea3eb3d5fd92994183d511786d1b921e0bc3`.
+Visible menus and actual native input remain on the native checklist.
+
 ## Two-NPC Computer menu checkpoint, 2026-09-27
 
 The complete suite against an isolated archive of commit `f2306f8` finished

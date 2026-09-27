@@ -8,8 +8,8 @@ prepared. Start with **`tmserver/Play.cmd`**, rather than the earlier shortcut.
 
 Double-click `Play.cmd`. It checks the loader's files and DLL hashes, starts the
 packaged game/profile services on free loopback ports, and opens one native game
-window. Use the Computer menu for CPU play; the default Local Room table also
-uses a CPU opponent. Keep the launcher console open while playing. Close the
+window. Enter **Local Room**, select an empty table, then choose **Computer**
+for CPU play. Keep the launcher console open while playing. Close the
 game window normally to stop the session and both services.
 
 The Computer menu can select one or two distinct NPC opponents. Two opponents
@@ -17,6 +17,23 @@ use the original three-player, 25-cell game; Continue can replay that matchup or
 return to configuration to change opponents/player count. This uses one game
 window and needs no `--clients 3` option. The server path is covered by encrypted
 tests; the new three-player menu presentation remains on the native checklist.
+
+The launcher provides these rooms in the lobby:
+
+| Room | Players | Rules |
+| --- | --- | --- |
+| Local Room | You and one or two CPU opponents | Choose settings in Computer. |
+| Open Tables | Two or three humans | The table owner chooses settings. |
+| Classic Rules | Two or three humans | One-minute turns, no special board flags. |
+| Special Rules | Two or three humans | One-minute turns, all three special board flags. |
+| Quick Play | Two or three humans | Thirty-second turns, no special board flags. |
+
+The three fixed presets start with no wager or double-up. Their advertised rules
+match the game and survive table resets; saved personal defaults do not replace
+them. Computer is available in Local Room. The human rooms disable that action.
+The missing room permission that previously greyed out Computer is corrected;
+close the old session and restart `Play.cmd` to load the updated directory.
+See [room configuration](ROOMS.md) for the fields and original-client evidence.
 
 The loader now provides **F10** for its Dear ImGui settings panel and
 **Alt+Enter** for borderless fullscreen. The window edges and maximize button

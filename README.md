@@ -11,6 +11,8 @@ validates the setup without opening the game.
 
 The original Computer menu supports one or two CPU opponents from its 30-entry
 roster, including rematches and switching between 16-cell and 25-cell games.
+Reach it through **Local Room → an empty table → Computer**. The launcher also
+provides [Open Tables, Classic, Special and Quick Play rooms](docs/ROOMS.md).
 Encrypted gameplay, rewards, recovery and spectators are tested; the updated
 three-player menu still needs a native screen check.
 

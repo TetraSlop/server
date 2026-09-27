@@ -117,7 +117,9 @@ class Server(OrdinaryTable):
         self.counter = 0
         self.listener = None
         self.storage_failed = None
-        self.room = RoomService(player_count=match_player_count)
+        self.room = RoomService(
+            player_count=match_player_count, computer_enabled=match_mode == "computer"
+        )
         self.chat = ChatService()
         self.state_path = Path(state_path) if state_path else None
         # Injected stores are owned by the caller, including constructor failures.
