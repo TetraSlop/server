@@ -185,6 +185,7 @@ class EventMatchmaking:
         self._last = {}
         self._serial = 0
         self._closures = []
+        self._releases = []
         self._initial = []
         for c in configs:
             binding = self._binding(c.event_id)
@@ -778,6 +779,7 @@ class EventMatchmaking:
         for e in r.entries:
             self._entries.pop(e.peer, None)
             self.economy.release_match(e.reservation)
+            self._releases.append((e.peer, r.config.table_id))
         binding = self._binding(event_id)
         return self._room_deliveries(binding, self._slot(r.config).set_table(0, 0, 0))
 
@@ -828,6 +830,11 @@ class EventMatchmaking:
         """Affected aborted-round peers; adapter closes outside its lock."""
         peers, self._closures = tuple(self._closures), []
         return peers
+
+    def take_releases(self):
+        """Drain exact table memberships ended by completion or cancellation."""
+        releases, self._releases = tuple(self._releases), []
+        return releases
 
     def take_errors(self):
         """Drain local policy failures for adapter diagnostics; never wire text."""

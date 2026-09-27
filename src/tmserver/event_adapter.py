@@ -5,7 +5,7 @@ import uuid
 from collections import deque
 
 from tmserver.claim_transactions import event_transaction
-from tmserver.event_matchmaking import EventMatchmaking
+from tmserver.event_matchmaking import EventDelivery, EventMatchmaking
 from tmserver.event_spectators import EventSpectators
 from tmserver.identities import GAME_KEY, service_nick
 
@@ -77,18 +77,38 @@ class EventAdapter:
             if self.failure is not None:
                 raise ValueError("event driver stopped; restart is required")
             key = self.server.ensure_account(peer.nick)
+            watching = self.spectators.admissions.get(peer)
             if self.spectators.handle(peer, key, target, payload):
-                return True
-            out = self.coordinator.handle(peer, key, target, payload, joined_channels=peer.channels)
-            if out is None:
-                return False
-            out += self._settle()
+                out = (
+                    self._leave_chat(peer, watching[0])
+                    if watching is not None and peer not in self.spectators.admissions
+                    else []
+                )
+            else:
+                out = self.coordinator.handle(
+                    peer, key, target, payload, joined_channels=peer.channels
+                )
+                if out is None:
+                    return False
+                out += self._settle()
             done = self._queue(out, self.coordinator.take_closures())
         await self._wait_delivery(done)
         return True
 
+    def _leave_chat(self, peer, table_id):
+        source = service_nick(table_id ^ GAME_KEY)
+        return [
+            EventDelivery(d.peer, table_id, d.payload) for d in self.server.chat.leave(peer, source)
+        ]
+
     def _queue(self, deliveries, closures=()):
+        # Every release source reaches this synchronous barrier under the lock.
+        # Detach before notifications allow a peer/table to be admitted again.
+        chat = []
+        for peer, table_id in self.coordinator.take_releases():
+            chat.extend(self._leave_chat(peer, table_id))
         self.spectators.publish(deliveries)
+        deliveries = (*deliveries, *chat)
         if not deliveries and not closures:
             return None
         done = asyncio.get_running_loop().create_future()
