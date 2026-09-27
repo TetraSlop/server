@@ -19,6 +19,21 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Generic profile privacy duplicates now compare numeric selector identity,
+  preventing zero-prefixed aliases from overriding the same field in one edit
+  (`ac93d52`). Restored opaque float fields are limited to 127 decimal bytes
+  and finite float32 output, preserving their original spelling, negative
+  values, subnormals and underflow. Invalid saves reject before interrupted
+  match recovery can rewrite them. Sixteen selector cases and fourteen float
+  cases reproduce the former acceptance; 25 related tests pass after the fix.
+  Source note `b140354` records the native 128-byte parser buffer and float32
+  destination, without inventing historical formulas or CRT overflow behavior.
+  Independent review found no additional issue. A separate profile transport
+  audit passes 25 existing tests and six encrypted authentication/cache/slicing/
+  shutdown scenarios without requiring changes. Collection finds 1,139 tests;
+  lint and the rebuilt wheel's clean installation, entry points, recovery and
+  temporary listeners pass. All 80 runtime files byte-match source. These are
+  focused checks, not a new whole-suite, PostgreSQL or native UI run.
 - IRC channel capitalization no longer creates duplicate memberships or misses
   departure cleanup (`f9e0235`). Known rooms/tables/services retain their exact
   advertised spelling; generic channels reuse their first spelling. ASCII

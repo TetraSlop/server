@@ -1,5 +1,49 @@
 # Packaging and transaction validation
 
+## Generic profile selectors, scalar bounds and transport audit, 2026-09-27
+
+Commit `ac93d52` compares privacy `NO` selectors by parsed numeric identity.
+Previously `6`/`06` or `14`/`014` bypassed duplicate detection and overwrote
+the same field. Sixteen subcases fail before the fix, covering CR/GR, both
+selectors and orderings, and registered/unregistered profiles:
+`results/profile-selector-alias-before.log`. The regression passes after,
+preserving all earlier edits on rejection and accepting single aliases and
+distinct selectors: `results/profile-selector-alias-after.log`.
+
+Restored PO float fields 12–15 now reject text beyond 127 bytes and values
+that overflow float32. Source note `research/PROFILE_SCALAR_BOUNDS.md`
+(`b140354`) records the original 128-byte terminated parser buffer and
+`fstp dword` destination. These are local output safeguards, not recovered
+historical formulas or a claim about the original CRT's overflow behavior.
+The existing decimal-only syntax remains unchanged. Valid negative values,
+signed zero, maximum finite values, subnormals and underflow retain their
+exact saved spelling in public responses.
+
+Fourteen rejection subcases fail before the fix: twelve across the four
+float fields, plus two startup cases with interrupted-match recovery pending.
+The latter now preserve saved bytes and reserved balances on rejection.
+Logs: `results/profile-scalar-bounds-before.log`. All 25 tests in
+`tests.test_character_profiles`, `tests.test_profile_transactions` and
+`tests.test_startup_snapshot_validation` pass in 1.614 seconds, including
+28 valid float boundary subcases and encrypted read/edit/restart controls:
+`results/profile-scalar-bounds-after.log`. Independent review found no issue.
+
+A separate read-only ProfileServer audit found no defect. Twenty-five existing
+tests pass in 9.813 seconds: `results/profile-context-audit-tests.log`.
+Six supplemental encrypted scenarios pass: failed-auth cache preservation,
+foreign-owner reads/deletes, sliced/EOF reads across IRC reconnect, truncated
+authenticated deletes, shutdown during three incomplete framing stages and
+fresh-service rejection of stale contexts. Log:
+`results/profile-context-audit-matrix.log`. No extra runtime changes or
+duplicate tests were added for these already-correct paths.
+
+Collection finds 1,139 tests without import errors; Ruff/whitespace pass.
+The 85-entry wheel passes clean dependency-free installation, both entry
+points, JSON administration/recovery and temporary listeners. All 80 runtime
+files byte-match source. Logs: `results/profile-scalar-wheel-{build,check}.log`.
+SHA256: `f0d841d1b23056c763cfb435388272d850eff4169aebca707df9e4151979ce9a`.
+These focused checks do not claim a fresh whole-suite, PostgreSQL or native UI run.
+
 ## Channel case aliases and authenticated room names, 2026-09-27
 
 Commit `f9e0235` resolves JOIN, PART and channel relay aliases to advertised
