@@ -1,5 +1,20 @@
 # Packaging and transaction validation
 
+## Original table-query audit, 2026-09-27
+
+Original instruction probes pass for both Rule lobby-event branches, the
+current-table sender, response/cache export, CheckJoin sender and all four
+Boolean reply combinations. Every nonzero combination selects recovery cleanup
+and sends ExitCh; the probe stops before the later channel transition. No
+individual-bit seat or membership meaning is established. The existing ownership
+guard has no demonstrated compatibility defect from these paths.
+
+Commit `04fbb4d` preserves the probe and
+[scope/reproduction notes](research/TABLE_QUERY_NOTES.md). Output is retained in
+`results/table-query-original.log`. This uses isolated original instructions
+with synthetic state and substituted widget/transport boundaries; no native UI
+or network was exercised. There is no runtime change or new portable fixture.
+
 ## Portable NPC test migration audit, 2026-09-27
 
 Restored an asset-independent NPC API check that had been excluded together

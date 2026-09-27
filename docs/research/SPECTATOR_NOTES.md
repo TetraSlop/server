@@ -49,6 +49,10 @@ Therefore an active-table nonparticipant may receive current PLAYACK settings/ro
 
 The normal successful state0..4 path does not consume the 2E CheckJoin reply. Its parser `10086570` packs `Join | (Mem << 1)`; a separate recovery branch `10093090` selects state200 for nonzero and202 for zero. The original meaning of these two integers is not established. Assigning Join1/Mem0 to a watchable local table is an explicit local policy, not a recovered historical admission rule. Evidence is also in `../protocol_map/spectator_entry_evidence.asm`.
 
+The [table-query follow-up](TABLE_QUERY_NOTES.md) executes all four Boolean
+combinations and the recovery cleanup child's first step: every nonzero result
+emits ExitCh. It also traces Rule queries to the current admitted table.
+
 ## Snapshot contract and corrected CH meaning
 
 Selection-phase bootstrap is only `43/25` header0 WatchInfo. Turn-phase bootstrap is ordered `43/25` header1 WatchInfo, `43/26` WatchCard, then the exact last emitted TurnData09 including its original shared random bytes.

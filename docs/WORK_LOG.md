@@ -19,6 +19,13 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Original Rule/CheckJoin audit found no demonstrated defect in current table
+  ownership checks. Rule uses the admitted table identity; all three nonzero
+  CheckJoin flag combinations select the same recovery cleanup and emit ExitCh.
+  The individual flags' historical server meanings remain unproved, so existing
+  availability mappings remain explicit local policy. Both Rule event branches,
+  response/cache export and four flag probes pass. Reproducible evidence is in
+  research/TABLE_QUERY_NOTES.md (`04fbb4d`); no runtime changes were made.
 - Portable migration audit restored the standalone NPC selector/name/guild
   API check inadvertently excluded with its native-dependent class, and added
   direct name-visibility boundary checks. Removed three empty migration test
