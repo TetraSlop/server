@@ -117,6 +117,13 @@ checks pass. No native visual validation is claimed by these tests.
 - All agents' fixes are committed and all three agents are idle. Weekly focused
   output is results/weekly-ranking-checkpoint.log. Launcher tests substitute
   headless peers or mocks for every child; no native game launch is authorized.
+- Read-only follow-up found one additional candidate, pending reproduction
+  after this run: irc_session.py table-channel PART still calls global event
+  disconnect for any configured event table. ExitCh of observer tableA leaves
+  channelA joined; after entering/watchingB, a late PART A could clear B.
+  Agent texture_upscaling is designing an exact table-ownership guard read-only.
+  Do not edit during the running checkpoint. The other journal restore audit
+  found no analogous historical-field mismatch after the guild fix.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
   results/overnight-timeout-recheck.log. Both runs completed. No active test
   sessions from that checkpoint remain.
