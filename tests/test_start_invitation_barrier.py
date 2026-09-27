@@ -90,7 +90,7 @@ class StartInvitationBarrierNetwork(unittest.IsolatedAsyncioTestCase):
         for side in (0, 1):
             await self.table(side, packet(1, body="@Req="))
             await self.table(side, packet(65, 8, body="@GameOK="))
-        self.assertEqual(self.server.match.phase, "lobby")
+        self.assertEqual(self.server.default_table.match.phase, "lobby")
         late = await self.enter(2, token=b"PD", ready=True)
         self.assertEqual(
             [(decode(p).primary, decode(p).subtype) for s, p in late[2] if p.startswith(b"GTM0G")],
@@ -101,7 +101,8 @@ class StartInvitationBarrierNetwork(unittest.IsolatedAsyncioTestCase):
         await self.table(2, packet(1, body="@Req="))
         await self.table(2, packet(65, 8, body="@GameOK="))
         self.assertEqual(
-            (self.server.match.phase, self.server.match.player_count), ("selection", 3)
+            (self.server.default_table.match.phase, self.server.default_table.match.player_count),
+            ("selection", 3),
         )
 
 

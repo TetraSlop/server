@@ -119,12 +119,16 @@ class RoomServiceBoundaryTests(unittest.IsolatedAsyncioTestCase):
             for side in range(2):
                 for target in (table, room):
                     await chat(side, target)
-            before = server.snapshot(), server.match.snapshot(), dict(server.match_reservations)
+            before = (
+                server.snapshot(),
+                server.default_table.match.snapshot(),
+                dict(server.default_table.match_reservations),
+            )
             room_counter = server.chat.counters[room]
             observer = peers[1]
             replies = await send(1, table, packet(32, body="@ExitCh="))
-            self.assertNotIn(observer, server.spectator_admissions)
-            self.assertNotIn(observer, server.spectator_senders)
+            self.assertNotIn(observer, server.default_table.spectator_admissions)
+            self.assertNotIn(observer, server.default_table.spectator_senders)
             self.assertEqual(set(server.chat.groups[table]), {peers[0]})
             view = server.economy.account_view(fixture.clients[0].nick.decode())
             self.assertEqual(
@@ -136,7 +140,12 @@ class RoomServiceBoundaryTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(set(server.chat.groups[room]), set(peers))
             self.assertEqual(server.chat.counters[room], room_counter)
             self.assertEqual(
-                (server.snapshot(), server.match.snapshot(), server.match_reservations), before
+                (
+                    server.snapshot(),
+                    server.default_table.match.snapshot(),
+                    server.default_table.match_reservations,
+                ),
+                before,
             )
             counters = dict(server.chat.counters)
             repeated = await send(1, table, packet(32, body="@ExitCh="))
@@ -158,7 +167,12 @@ class RoomServiceBoundaryTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(set(server.chat.groups[table]), set(peers))
             self.assertEqual(set(server.chat.groups[room]), set(peers))
             self.assertEqual(
-                (server.snapshot(), server.match.snapshot(), server.match_reservations), before
+                (
+                    server.snapshot(),
+                    server.default_table.match.snapshot(),
+                    server.default_table.match_reservations,
+                ),
+                before,
             )
             for side, peer in enumerate(peers):
                 self.assertIs(server.nicks[fixture.clients[side].nick], peer)

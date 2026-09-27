@@ -71,9 +71,9 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
             dx, dy = DIRECTIONS[direction]
             fields = [0] * 16
             fields[5 + dx + 4 * dy] = 18
-            self.server.match_start_fields = fields
-            self.server.allow_cbc = True
-            self.server.reset_match()
+            self.server.default_table.match_start_fields = fields
+            self.server.default_table.allow_cbc = True
+            self.server.default_table.reset_match()
         if full:
             for key in self.keys:
                 token = self.server.economy.reserve_delivery(key)
@@ -84,7 +84,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
 
     async def play(self, *, cbc=False, seed=0):
         await self.admit()
-        match = self.server.match
+        match = self.server.default_table.match
         self.before = [self.server.economy.inventory(k) for k in self.keys]
         for side, cards in enumerate(self.before):
             body = "@CardSelect=/C=5" + "".join(
@@ -122,7 +122,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         return match
 
     async def choices(self):
-        match = self.server.match
+        match = self.server.default_table.match
         while match.prize_choice is not None:
             choice = match.prize_choice
             replies = await self.send(
@@ -161,8 +161,8 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         winner = match.prize_choice.winner
         await self.clients[winner].close()
         self.assertEqual(await self.clients[1 - winner].read(), b"")
-        self.assertFalse(self.server.match_reservations)
-        self.assertEqual(self.server.match.players, [])
+        self.assertFalse(self.server.default_table.match_reservations)
+        self.assertEqual(self.server.default_table.match.players, [])
         for key, expected in zip(self.keys, grown):
             self.assertEqual(
                 Counter(values(c) for c in self.server.economy.inventory(key)), expected
@@ -260,7 +260,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         expected[values(discard)] -= 1
         self.assertEqual(Counter(values(c) for c in self.server.economy.inventory(key)), +expected)
         self.assertEqual(len(self.server.economy.inventory(key)), 1000)
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         restored, path = await self.restore_copy()
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
@@ -325,7 +325,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         winner = settlement.transfers[0].winner
         loser = 1 - winner
         await self.send(winner, packet(0x43, 0x11, winner, "@Continue=/Ans=1/PR=0/Conf=0"))
-        self.assertEqual(self.server.match.phase, "result")
+        self.assertEqual(self.server.default_table.match.phase, "result")
         expected = [self.expected(settlement, s) for s in range(2)]
         await self.clients[loser].close()
         self.assertEqual(await self.clients[winner].read(), b"")
@@ -446,7 +446,7 @@ class WagerPrizeEdges(unittest.IsolatedAsyncioTestCase):
         await self.offer()
         for side in range(2):
             await self.send(side, packet(0x41, 8, body="@GameOK="))
-        self.assertEqual(self.server.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.phase, "selection")
         self.assertEqual([self.server.economy.balance(k) for k in self.keys], [9800, 9800])
 
     async def test_paid_rematch_late_decks_survive_stake_refresh_and_abort_refund(self):
@@ -454,8 +454,8 @@ class WagerPrizeEdges(unittest.IsolatedAsyncioTestCase):
         settlement = await self.choices()
         for side in range(2):
             await self.send(side, packet(0x43, 0x11, side, "@Continue=/Ans=1/PR=0/Conf=0"))
-        self.assertEqual(self.server.match.phase, "selection")
-        self.assertEqual(self.server.match.round_stake, 400)
+        self.assertEqual(self.server.default_table.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.round_stake, 400)
         side = settlement.transfers[0].winner
         key = self.keys[side]
         balance = self.server.economy.balance(key)
@@ -480,7 +480,7 @@ class WagerPrizeEdges(unittest.IsolatedAsyncioTestCase):
         await self.clients[side].close()
         self.assertEqual(await self.clients[1 - side].read(), b"")
         self.assertEqual(self.server.economy.balance(key), balance + 400)
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         restored, path = await self.restore_copy()
         try:
             self.assertEqual(
@@ -501,7 +501,7 @@ class WagerPrizeEdges(unittest.IsolatedAsyncioTestCase):
         # wager. An already underfunded new guest is now refused at entry.
         for side in range(2):
             await self.send(side, packet(0x41, 1, body="@GameEN="))
-        self.assertEqual(len(self.server.match.players), 2)
+        self.assertEqual(len(self.server.default_table.match.players), 2)
         await self.send(0, packet(0x14, body=NATIVE_SETTINGS.replace("/bm=0", "/bm=200")))
         for side in range(2):
             await self.send(side, packet(1, body="@Req="))
@@ -513,7 +513,7 @@ class WagerPrizeEdges(unittest.IsolatedAsyncioTestCase):
         for client in self.clients:
             self.assertEqual(await client.read(), b"")
         self.assertEqual(self.server.economy.snapshot(), before)
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         self.assertFalse(self.server.match_economy.snapshot()["rounds"])
 
     async def test_failed_rematch_stake_save_emits_no_acceptance_and_restart_keeps_prior_result(

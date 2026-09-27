@@ -130,7 +130,7 @@ class SettingsStartIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(ack.sections["Tet"]["tl"], "0")
         if stage == "accepted":
             await self.send(1, packet(0x41, 8, body="@GameOK="))
-        match = self.server.match
+        match = self.server.default_table.match
         before = self.server.economy.snapshot()
         self.assertEqual(await self.send(0, packet(0x14, body=NATIVE_SETTINGS)), [[], []])
         self.assertEqual(match.settings_revision, 1)
@@ -143,10 +143,10 @@ class SettingsStartIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await client.read(), b"")
         self.assertEqual(match.rules_body(), NATIVE_SETTINGS)
         self.assertEqual(match.settings_revision, 1)
-        self.assertIsNot(self.server.match, match)
-        self.assertFalse(self.server.match.players)
-        self.assertFalse(self.server.match_reservations)
-        self.assertFalse(self.server.table_roster.invitations)
+        self.assertIsNot(self.server.default_table.match, match)
+        self.assertFalse(self.server.default_table.match.players)
+        self.assertFalse(self.server.default_table.match_reservations)
+        self.assertFalse(self.server.default_table.table_roster.invitations)
         self.assertEqual(self.server.room.table_count, 0)
         self.assertEqual(self.server.economy.snapshot(), before)
         for client in self.clients:
@@ -171,9 +171,9 @@ class SettingsStartIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(ack.sections["Tet"]["tl"], "5")
             self.assertEqual(bytes.fromhex(ack.sections["Tab"]["pw"]), b"NewPass!")
             await self.send(side, packet(0x41, 8, body="@GameOK="))
-        self.assertEqual(self.server.match.phase, "selection")
-        self.assertEqual(self.server.match.rules_body(), CHANGED_SETTINGS)
-        self.assertEqual(self.server.match.settings_revision, 2)
+        self.assertEqual(self.server.default_table.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.rules_body(), CHANGED_SETTINGS)
+        self.assertEqual(self.server.default_table.match.settings_revision, 2)
 
 
 if __name__ == "__main__":

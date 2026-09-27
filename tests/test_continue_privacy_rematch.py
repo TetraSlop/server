@@ -35,8 +35,8 @@ class ContinuePrivacyIntegration(unittest.IsolatedAsyncioTestCase):
             await self.send(
                 seat, packet(0x43, 0x11, seat, f"@Continue=/Ans=1/PR={int(seat == voter)}/Conf=0")
             )
-        self.assertEqual(self.server.match.phase, "selection")
-        self.assertEqual(self.server.match.round_stake, 400)
+        self.assertEqual(self.server.default_table.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.round_stake, 400)
         for seat, key in enumerate(self.keys):
             self.assertEqual(self.server.economy.balance(key), paid[seat] - 400)
             self.assertEqual(
@@ -115,7 +115,7 @@ class ContinuePrivacyTransactions(TableFixture, unittest.TestCase):
                 self.begin()
                 self.result()
                 self.prepare_prize()
-                self.server.commit_match_prizes(self.match)
+                self.server.default_table.commit_match_prizes(self.match)
                 key = self.keys[0]
                 if accepted:
                     with match_transaction(self.server, (key,)) as state:

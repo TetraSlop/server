@@ -79,8 +79,8 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 f"@N{i}=/D=" + "|".join(map(str, c.full())) for i, c in enumerate(cards)
             )
             await self.send(side, packet(0x43, 7, side, body))
-        self.assertEqual(self.server.match.phase, "turn")
-        self.original = self.server.match
+        self.assertEqual(self.server.default_table.match.phase, "turn")
+        self.original = self.server.default_table.match
         self.before = self.server.economy.snapshot()
 
     async def settle(self):
@@ -88,7 +88,10 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         for _ in range(100):
             tasks = [
                 t
-                for t in (self.server.departures.task, self.server.match_task)
+                for t in (
+                    self.server.default_table.departures.task,
+                    self.server.default_table.match_task,
+                )
                 if t is not None and not t.done()
             ]
             if not tasks:
@@ -136,7 +139,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         ]
 
     async def finish(self):
-        match = self.server.match
+        match = self.server.default_table.match
         for _ in range(50):
             if match.phase == "result":
                 return
@@ -163,18 +166,18 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.fail("match did not finish")
 
     async def continue_leave(self, side):
-        match = self.server.match
+        match = self.server.default_table.match
         await self.send(side, packet(0x43, 14, match.sequence, f"@Ready=/Ans={side}"))
         await self.send(side, packet(0x43, 17, side, "@Continue=/Ans=2/PR=0/Conf=0"))
         self.assertEqual(match.phase, "finished")
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         for key in self.keys:
             self.assertFalse(self.server.economy.is_reserved(key))
 
     async def test_two_player_disconnect_substitutes_retains_then_settles_and_reconnects(self):
         await self.start(rule=0)
         await self.drop(0)
-        self.assertIs(self.server.match, self.original)
+        self.assertIs(self.server.default_table.match, self.original)
         self.assertEqual(self.original.departure_seats, (0,))
         self.assertTrue(self.server.economy.is_reserved(self.keys[0]))
         self.assertEqual(len(self.notices(1, 0x23)), 1)
@@ -201,7 +204,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.start(rule=1)
         await self.drop(1)
         self.assertEqual(self.original.phase, "finished")
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         self.assertEqual(self.server.economy.snapshot(), self.before)
         self.assertEqual(len(self.notices(0, 0x23)), 1)
         self.assertEqual(self.notices(0, 0x24), [])
@@ -293,8 +296,8 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         # Tracked accept tasks finish only after their close path detached peers.
         await asyncio.wait_for(asyncio.gather(*list(self.server.tasks)), 3)
         await self.settle()
-        self.assertFalse(self.server.match_reservations)
-        self.assertIsNot(self.server.match, self.original)
+        self.assertFalse(self.server.default_table.match_reservations)
+        self.assertIsNot(self.server.default_table.match, self.original)
         for key in self.keys:
             self.assertFalse(self.server.economy.is_reserved(key))
         await self.server.stop()
@@ -303,10 +306,10 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         now = [0]
         await self.start(watchdog=MatchWatchdog(clock=lambda: now[0]))
         now[0] = 120
-        timeout = await self.server.check_match_timeout()
+        timeout = await self.server.default_table.check_match_timeout()
         self.assertEqual(timeout.reason, "turn_ack")
         await self.settle()
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         self.assertEqual(self.original.departure_seats, ())
         self.assertTrue(all(p.closed for p in self.peers))
 
@@ -333,7 +336,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.start(rule=0)
         await self.drop(0)
         await asyncio.wait_for(self.server.stop(), 3)
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         self.assertEqual(self.server.economy.snapshot(), self.before)
         for key in self.keys:
             self.assertFalse(self.server.economy.is_reserved(key))
@@ -342,7 +345,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.start(rating_mode="local-history")
         await self.clients[0].close()
         self.assertEqual(await self.clients[1].read(), b"")
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         self.assertEqual(self.original.departure_seats, ())
         self.assertEqual(self.server.economy.snapshot(), self.before)
 
@@ -350,13 +353,13 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         now = [0]
         await self.start(watchdog=MatchWatchdog(clock=lambda: now[0]))
         await self.drop(1)
-        wait = self.server.watchdog.observe(self.original, self.original)
+        wait = self.server.default_table.watchdog.observe(self.original, self.original)
         self.assertEqual(wait.missing_peers, (self.peers[0],))
         await self.finish()
-        wait = self.server.watchdog.observe(self.original, self.original)
+        wait = self.server.default_table.watchdog.observe(self.original, self.original)
         self.assertEqual(wait.missing_peers, (self.peers[0],))
         await self.send(0, packet(0x43, 14, self.original.sequence, "@Ready=/Ans=0"))
-        wait = self.server.watchdog.observe(self.original, self.original)
+        wait = self.server.default_table.watchdog.observe(self.original, self.original)
         self.assertEqual(wait.reason, "result_continue")
         self.assertEqual(wait.missing_peers, (self.peers[0],))
 
@@ -376,10 +379,14 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(peer.closed for peer in self.peers))
         self.assertEqual(self.original.phase, "finished")
         self.assertEqual(self.original.departure_seats, ())
-        self.assertFalse(self.server.match_reservations)
-        self.assertIsNot(self.server.match, self.original)
-        self.assertEqual(self.server.match.players, [])
-        self.assertIsNone(self.server.watchdog.observe(self.server.match, self.server.match))
+        self.assertFalse(self.server.default_table.match_reservations)
+        self.assertIsNot(self.server.default_table.match, self.original)
+        self.assertEqual(self.server.default_table.match.players, [])
+        self.assertIsNone(
+            self.server.default_table.watchdog.observe(
+                self.server.default_table.match, self.server.default_table.match
+            )
+        )
         self.assertEqual(self.server.economy.snapshot(), self.initial_accounts)
         self.assertTrue(all(not self.server.economy.is_busy(key) for key in self.keys))
         self.assertFalse(any(m.subtype == 0x0D for rows in messages for m in rows))

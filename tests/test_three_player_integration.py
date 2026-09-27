@@ -54,10 +54,12 @@ class ThreePlayerIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.send(side, packet(1, body="@Req=/NN=" + nn))
         for side in range(3):
             await self.send(side, packet(0x41, 8, body="@GameOK="))
-            self.assertEqual(self.server.match.phase, "selection" if side == 2 else "lobby")
+            self.assertEqual(
+                self.server.default_table.match.phase, "selection" if side == 2 else "lobby"
+            )
 
     async def round(self):
-        match = self.server.match
+        match = self.server.default_table.match
         self.assertEqual(len(match.start_board.fields), 25)
         before = [self.server.economy.inventory(k) for k in self.keys]
         counts = [
@@ -116,10 +118,12 @@ class ThreePlayerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.round()
         for side in range(3):
             await self.send(side, packet(0x43, 17, side, "@Continue=/Ans=1/PR=0/Conf=0"))
-            self.assertEqual(self.server.match.phase, "selection" if side == 2 else "result")
+            self.assertEqual(
+                self.server.default_table.match.phase, "selection" if side == 2 else "result"
+            )
         await self.round()
         await self.send(2, packet(0x43, 17, 2, "@Continue=/Ans=2/PR=0/Conf=0"))
-        self.assertEqual(self.server.match.phase, "finished")
+        self.assertEqual(self.server.default_table.match.phase, "finished")
         for key in self.keys:
             self.assertFalse(self.server.economy.is_reserved(key))
         restored = Server(
@@ -136,8 +140,8 @@ class ThreePlayerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.clients[2].close()
         for client in self.clients[:2]:
             self.assertEqual(await client.read(), b"")
-        self.assertEqual(self.server.match.players, [])
-        self.assertFalse(self.server.match_reservations)
+        self.assertEqual(self.server.default_table.match.players, [])
+        self.assertFalse(self.server.default_table.match_reservations)
         self.assertEqual(self.server.economy.snapshot(), before)
 
 

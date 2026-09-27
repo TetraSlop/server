@@ -57,9 +57,10 @@ class ComputerMenuIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             list(map(int, info["ComList"]["D"].split("|"))), [n.rating for n in OPPONENTS]
         )
-        self.assertEqual(self.server.match.phase, "computer_menu")
+        self.assertEqual(self.server.default_table.match.phase, "computer_menu")
         self.assertEqual(
-            self.server.watchdog.observe(self.server.match).reason, "computer_configuration"
+            self.server.default_table.watchdog.observe(self.server.default_table.match).reason,
+            "computer_configuration",
         )
 
     async def choose(self, npc):
@@ -69,7 +70,10 @@ class ComputerMenuIntegrationTests(unittest.IsolatedAsyncioTestCase):
             ),
             [],
         )
-        self.assertEqual((self.server.match.phase, self.server.match.npc_id), ("selection", npc))
+        self.assertEqual(
+            (self.server.default_table.match.phase, self.server.default_table.match.npc_id),
+            ("selection", npc),
+        )
 
     async def play(self):
         previous_count = PracticeStats.from_profile(
@@ -83,7 +87,7 @@ class ComputerMenuIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([decode(r).subtype for r in replies], [7, 8, 9])
         self.assertFalse(any(b"VsGameInit" in r or b"/CN=" in r for r in replies))
         for _ in range(30):
-            match = self.server.match
+            match = self.server.default_table.match
             if match.phase == "result":
                 break
             await self.request(TABLE_RAW, packet(0x43, 9, match.sequence, "@TurnData=/Ans=0"))
@@ -108,23 +112,23 @@ class ComputerMenuIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decode(replies[0]).subtype, 0x1A)
 
     async def test_original_menu_three_rounds_rematch_reconfigure_and_durable_leave(self):
-        self.assertFalse(self.server.match.computer_menu)
+        self.assertFalse(self.server.default_table.match.computer_menu)
         await self.menu()
         await self.choose(1)
         await self.play()
-        self.assertEqual(self.server.match.players[1].name, b"Flower Girl Natasha")
-        old = self.server.match.ai_cards
+        self.assertEqual(self.server.default_table.match.players[1].name, b"Flower Girl Natasha")
+        old = self.server.default_table.match.ai_cards
         await self.request(TABLE_RAW, packet(0x43, 17, 0, "@Continue=/Ans=1/PR=0/Conf=0"))
-        self.assertNotEqual(self.server.match.ai_cards, old)
+        self.assertNotEqual(self.server.default_table.match.ai_cards, old)
         await self.play()
         replies = await self.request(TABLE_RAW, packet(0x43, 17, 0, "@Continue=/Ans=1/PR=0/Conf=1"))
         self.assertEqual([decode(r).subtype for r in replies], [4])
-        self.assertEqual(self.server.match.phase, "computer_menu")
+        self.assertEqual(self.server.default_table.match.phase, "computer_menu")
         await self.choose(30)
         await self.play()
-        self.assertEqual(self.server.match.completed_matches, 3)
+        self.assertEqual(self.server.default_table.match.completed_matches, 3)
         await self.request(TABLE_RAW, packet(0x43, 17, 0, "@Continue=/Ans=2/PR=0/Conf=0"))
-        self.assertEqual(self.server.match.phase, "finished")
+        self.assertEqual(self.server.default_table.match.phase, "finished")
         self.assertFalse(self.server.economy.is_reserved(self.key))
         restored = Server(state_path=self.state_path)
         try:
@@ -135,14 +139,14 @@ class ComputerMenuIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_original_entry_is_per_table_generation(self):
         await self.client.join(TABLE_CHANNEL)
         await self.menu()
-        self.assertTrue(self.server.match.computer_menu)
+        self.assertTrue(self.server.default_table.match.computer_menu)
         await self.request(TABLE_RAW, packet(0x41, 0x0D, body="@GameExit="))
         await self.client.send(b"PART :" + TABLE_CHANNEL)
         self.assertIn(b" PART ", await self.client.read())
         await self.client.send(b"PING :released")
         self.assertEqual(await self.client.read(), b"PONG released")
-        self.assertFalse(self.server.match.computer_menu)
-        self.assertEqual(self.server.match.players, [])
+        self.assertFalse(self.server.default_table.match.computer_menu)
+        self.assertEqual(self.server.default_table.match.players, [])
         self.assertFalse(self.server.economy.is_reserved(self.key))
 
 

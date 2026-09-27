@@ -20,6 +20,25 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Removed the server/default-table inheritance relationship. Every ordinary
+  table now has the same concrete owner, including `server.default_table`.
+  Route maps, callbacks and disconnect ownership retain table identity; shared
+  account services remain on the server. Auction expiry now has its own
+  server-owned task with explicit start/stop handling. Fifty test files use the
+  new access path, including assignments and fault-injection targets. Runtime
+  size is 20,681 lines: this ownership cleanup adds nine lines and is not a
+  source-size reduction. The architecture document describes the new boundary.
+- The 30 focused ownership/transaction tests pass, as do two new automatic
+  auction maintenance tests for durable expiry, shutdown and write failure.
+  Independent source review and in-memory table isolation checks found no
+  material issue. The complete portable suite passes 1,154 cases in 862.518
+  seconds: 1,095 passed, 59 optional PostgreSQL skips, no failures or errors.
+  All 240 source/test/tool/configuration hashes stayed unchanged, and all 76
+  loaded runtime modules resolved inside this checkout. Clean wheel installation,
+  entry points, JSON administration/recovery and temporary listeners pass, with
+  all 82 runtime files matching source. See VALIDATION.md and the
+  `results/table-ownership-full*` evidence. PostgreSQL and native UI were not
+  exercised in this checkpoint.
 - Consolidated six inventory editors into shared pure parsing, stable owned-copy
   matching and immutable card edits. Each service retains its authorization,
   numeric/name dialect, pending state and commit boundary. Card fields now have

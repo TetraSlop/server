@@ -25,9 +25,9 @@ class ThreePlayerCBC(unittest.IsolatedAsyncioTestCase):
         dx, dy = DIRECTIONS[direction]
         fields = [0] * 25
         fields[12 + dx + 5 * dy] = 18
-        self.server.match_start_fields = fields
-        self.server.allow_cbc = True
-        self.server.reset_match()
+        self.server.default_table.match_start_fields = fields
+        self.server.default_table.allow_cbc = True
+        self.server.default_table.reset_match()
         if full:
             for key in self.keys:
                 token = self.server.economy.reserve_delivery(key)
@@ -38,7 +38,7 @@ class ThreePlayerCBC(unittest.IsolatedAsyncioTestCase):
                 )
         self.server.persist()
         await self.admit()
-        match = self.server.match
+        match = self.server.default_table.match
         for seat, key in enumerate(self.keys):
             cards = self.server.economy.inventory(key)[:5]
             body = "@CardSelect=/C=5" + "".join(
@@ -94,7 +94,7 @@ class ThreePlayerCBC(unittest.IsolatedAsyncioTestCase):
     async def test_generated_card_accepted_by_current_owner_and_saved_once(self):
         winner = await self.play_cbc()
         await self.send(winner, packet(0x43, 17, winner, "@Continue=/Ans=2/PR=0/Conf=0"))
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         for seat, key in enumerate(self.keys):
             cards = self.server.economy.inventory(key)
             self.assertEqual(len(cards), 11 if seat == winner else 10)
@@ -127,7 +127,7 @@ class ThreePlayerCBC(unittest.IsolatedAsyncioTestCase):
         for seat, c in enumerate(self.clients):
             if seat != winner:
                 self.assertEqual(await c.read(), b"")
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         for seat, k in enumerate(self.keys):
             self.assertEqual(len(self.server.economy.inventory(k)), 10)
             pending = self.server.auction_ledger.pending(k)

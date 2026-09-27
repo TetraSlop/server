@@ -38,7 +38,7 @@ class CPUPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
             TABLE_RAW, packet(0x43, 6, 2, f"@ComGame=/Rule=0|0|0|0|2|0|0|1/Com={npc}")
         )
         await self.play()
-        match = self.server.match
+        match = self.server.default_table.match
         while match.prize_choice is not None:
             choice = match.prize_choice
             self.assertEqual(choice.winner, 0, "CPU choices must resolve without human input")

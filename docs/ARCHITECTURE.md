@@ -29,6 +29,25 @@ and name dialects, pending state and commit timing. Offered trade copies cannot
 be selected for editing, but assigning their deck slot still clears that slot
 throughout the inventory. These differences are explicit at the call sites.
 
+## Table and server lifetimes
+
+`Server` owns shared account services, connections, room routing and auction
+maintenance. Every ordinary table is an `OrdinaryTable`, including
+`server.default_table`; the server does not inherit or forward table methods.
+The default room remains `server.room`, the same object used by the default
+table. Route maps and peer/channel lookups always return a table instance.
+
+Each table owns its current match, reservation tokens, lock, roster, departure
+worker and observer queues. Reset replaces that table's match and roster while
+preserving the table's identity and its live references to shared services.
+Tables in the same room share only the intended room membership and listing
+state. Match callbacks remain bound to their table. Tests and diagnostic callers
+use `server.default_table.match` (and the corresponding table methods) explicitly.
+
+The server's auction worker advances due listings once per second independently
+of table timeout checks. Shutdown cancels and awaits it before table/connection
+cleanup; a persistence failure retains the existing fail-closed behavior.
+
 ## A durable operation
 
 1. A handler opens the appropriate concrete transaction context.

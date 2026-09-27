@@ -1,5 +1,45 @@
 # Packaging and transaction validation
 
+## Explicit ordinary-table ownership, 2026-09-27
+
+`Server` no longer inherits `OrdinaryTable`. Its `default_table` is an explicit
+instance, like every additional table, and all routes and callbacks retain the
+actual table owner. Auction expiry has its own server task instead of running
+only through the default table's watchdog. Protocol packets, save formats and
+economic policy are unchanged. Runtime size is 20,681 physical Python lines,
+nine more than the preceding checkpoint; this is an ownership improvement.
+
+Fifty existing test files now use explicit default-table access, including
+assignments and fault-injection targets. The focused selection passes all
+**30 tests in 50.059 seconds**: simultaneous CPU/human tables, failure/timeout
+isolation, observer ownership, disconnect/reentry races and match transactions.
+Evidence: `results/default-table-ownership-focused.log`. Two new maintenance
+tests pass in 0.335 seconds, exercising real listing/bid transactions with two
+ordinary tables, durable automatic expiry, shutdown cancellation and failed-save
+rollback without retries. Their fixtures replace only the maintenance clock;
+table watchdogs retain their own timing. Independent source review and in-memory
+table/reset isolation checks found no material issue.
+
+The complete portable suite on the final runtime/test tree passes **1,154
+cases in 862.518 seconds: 1,095 passed, 59 optional PostgreSQL skips, no failures
+or errors**. Database environment settings were removed before collection.
+All 240 source/test/tool/configuration hashes remained unchanged, and all 76
+loaded runtime modules resolved inside this checkout's `src` directory.
+This full run covers the earlier inventory/card consolidation as well.
+Evidence: `results/table-ownership-full.log`,
+`results/table-ownership-full-result.json` and
+`results/table-ownership-full-manifest.json`.
+
+Ruff and whitespace checks pass. The rebuilt wheel passes a clean dependency-free
+install, entry points, JSON administration/recovery and temporary service
+listeners. All 82 packaged runtime files byte-match source, in an 87-entry wheel.
+Evidence: `results/table-ownership-wheel-{build,check}.log` and
+`results/table-ownership-wheel-result.json`.
+SHA256: `0eb5374ab1b53448bb4992fe5ab2a189421283832e9f91fbc5223107331410e1`.
+
+PostgreSQL was not started for this checkpoint. Native applications, desktop
+input and live saves were not used; local-play tests mock client launches.
+
 ## Shared inventory edits and card values, 2026-09-27
 
 Six inventory editors now share pure record parsing and card application, and

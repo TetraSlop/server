@@ -212,7 +212,8 @@ def configure_rooms(host, configs):
     if struct.unpack_from("<I", initial, 0x40)[0] + len(configs) > 256:
         raise ValueError("ordinary rooms exceed native directory capacity")
     host.ordinary_room_configs = configs
-    tables = [host]
+    default = host.default_table
+    tables = [default]
     bindings = []
     for config in configs:
         room = RoomService(
@@ -234,7 +235,7 @@ def configure_rooms(host, configs):
                     computer_enabled=table_config.mode == "computer",
                 )
             )
-            template = host.spectators
+            template = default.spectators
             observer = SpectatorService(
                 enabled=template.enabled,
                 clock=template.clock,
@@ -245,18 +246,17 @@ def configure_rooms(host, configs):
                 max_backlog=template.max_backlog,
                 max_observers=template.max_observers,
             )
-            table = OrdinaryTable()
-            table.initialize_table(
+            table = OrdinaryTable(
                 host,
                 slot,
                 match_mode=table_config.mode,
                 match_player_count=table_config.players,
                 flexible_seats=table_config.flexible_seats,
                 room_rules=config.rules,
-                allow_cbc=host.allow_cbc,
-                card_prizes=host.card_prizes,
-                allow_wagers=host.allow_wagers,
-                allow_departures=host.departures.enabled,
+                allow_cbc=default.allow_cbc,
+                card_prizes=default.card_prizes,
+                allow_wagers=default.allow_wagers,
+                allow_departures=default.departures.enabled,
                 spectator=observer,
             )
             tables.append(table)
@@ -266,7 +266,7 @@ def configure_rooms(host, configs):
     host.ordinary_table_routes = {service_nick(t.table_raw): t for t in tables}
     host.ordinary_room_bindings = tuple(bindings)
     host.ordinary_room_routes = {
-        service_nick(t.room.room_id ^ GAME_KEY): t for t in (host, *(t for _, t in bindings))
+        service_nick(t.room.room_id ^ GAME_KEY): t for t in (default, *(t for _, t in bindings))
     }
 
 

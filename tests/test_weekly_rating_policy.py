@@ -274,11 +274,11 @@ class WeeklyRatingTransactionTests(TableFixture, unittest.TestCase):
                 patch.object(self.server, "persist_changes", side_effect=fail),
                 self.assertRaises(OSError),
             ):
-                self.server.commit_match_results(self.match)
+                self.server.default_table.commit_match_results(self.match)
             self.assertEqual(self.server.snapshot(), baseline)
             self.assertEqual(store.path.read_bytes(), saved)
             self.assertIs(self.server.ratings.periods, periods)
-            self.server.commit_match_results(self.match)
+            self.server.default_table.commit_match_results(self.match)
             self.assertEqual(self.server.ratings.snapshot(), proposed[0])
             self.assertEqual(JsonStateStore(store.path).load()["ratings"], proposed[0])
             self.assertIsNot(self.server.ratings.periods, periods)

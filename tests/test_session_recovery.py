@@ -55,7 +55,7 @@ class SessionRecoveryTests(unittest.IsolatedAsyncioTestCase):
         return peer
 
     async def admit(self, peer):
-        await self.server.dispatch_table(peer, packet(0x41, 1, body="@GameEN="))
+        await self.server.default_table.dispatch_table(peer, packet(0x41, 1, body="@GameEN="))
 
     async def test_failed_room_recipient_preserves_requester_and_other_delivery(self):
         healthy = self.peer()
@@ -71,14 +71,14 @@ class SessionRecoveryTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertFalse(healthy.closed)
         self.assertIs(self.server.nicks[healthy.nick], healthy)
-        self.assertTrue(any(p.peer is healthy for p in self.server.match.players))
+        self.assertTrue(any(p.peer is healthy for p in self.server.default_table.match.players))
         self.assertTrue(any(notice in data for _, data in healthy.writer.writes))
         self.assertTrue(any(b"@GameEA=/EN=1" in data for _, data in healthy.writer.writes))
 
     async def test_close_detaches_before_waiting_for_notifications(self):
         peer = self.peer()
         await self.admit(peer)
-        original = self.server.match
+        original = self.server.default_table.match
         peer.channels.add(b"#test")
         self.server.channels[b"#test"] = {peer}
         entered, release = asyncio.Event(), asyncio.Event()
@@ -97,8 +97,8 @@ class SessionRecoveryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn(peer.nick, self.server.nicks)
                 self.assertNotIn(peer, self.server.sessions)
                 self.assertNotIn(b"#test", self.server.channels)
-                self.assertIsNot(original, self.server.match)
-                self.assertNotIn(peer, self.server.match_reservations)
+                self.assertIsNot(original, self.server.default_table.match)
+                self.assertNotIn(peer, self.server.default_table.match_reservations)
                 # Rebinding the same account while old notifications wait is safe.
                 replacement = self.peer()
             finally:
@@ -159,23 +159,23 @@ class SessionRecoveryTests(unittest.IsolatedAsyncioTestCase):
         for request in requests:
             with self.subTest(request=request):
                 try:
-                    await self.server.dispatch_table(peer, request)
+                    await self.server.default_table.dispatch_table(peer, request)
                 except ValueError:
                     pass  # Explicit rejection is also compatible with this guard.
-                self.assertEqual(self.server.match.players, [])
-                self.assertNotIn(peer, self.server.match_reservations)
+                self.assertEqual(self.server.default_table.match.players, [])
+                self.assertNotIn(peer, self.server.default_table.match_reservations)
                 self.assertFalse(self.server.economy.is_reserved(peer.nick.decode("ascii")))
 
     async def test_cleanup_stage_failure_still_releases_table(self):
         peer = self.peer()
         await self.admit(peer)
-        original = self.server.match
+        original = self.server.default_table.match
         with patch.object(
             self.server.trade, "disconnect", side_effect=ValueError("cleanup-stage fault")
         ):
             await peer.close()
-        self.assertIsNot(original, self.server.match)
-        self.assertNotIn(peer, self.server.match_reservations)
+        self.assertIsNot(original, self.server.default_table.match)
+        self.assertNotIn(peer, self.server.default_table.match_reservations)
         self.assertFalse(self.server.economy.is_reserved(peer.nick.decode("ascii")))
         self.assertTrue(peer.writer.closed)
         self.assertNotIn(peer.nick, self.server.nicks)
@@ -215,13 +215,13 @@ class SessionRecoveryTests(unittest.IsolatedAsyncioTestCase):
         owner = self.peer()
         other = self.peer(1)
         await self.admit(owner)
-        original = self.server.match
+        original = self.server.default_table.match
         await self.admit(other)
         self.assertFalse(other.closed)
         self.assertTrue(any(b"@GameEA=/EN=-32870" in data for _, data in other.writer.writes))
-        self.assertIs(original, self.server.match)
+        self.assertIs(original, self.server.default_table.match)
         self.assertEqual([p.peer for p in original.players], [owner])
-        self.assertNotIn(other, self.server.match_reservations)
+        self.assertNotIn(other, self.server.default_table.match_reservations)
         self.assertFalse(self.server.economy.is_reserved(other.nick.decode()))
 
 

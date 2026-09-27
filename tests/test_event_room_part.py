@@ -122,12 +122,12 @@ class EventRoomPartTests(unittest.IsolatedAsyncioTestCase):
         await self.send(
             0, game_id(TABLE_RAW), packet(0x41, 1, body=native_identity(view, "GameEN"))
         )
-        engine = self.server.match
-        token = self.server.match_reservations[self.peers[0]]
+        engine = self.server.default_table.match
+        token = self.server.default_table.match_reservations[self.peers[0]]
         before = self.server.snapshot(), engine.snapshot(), self.server.room.snapshot()
         await self.channel(0, b"PART", self.old.room_channel)
-        self.assertIs(self.server.match, engine)
-        self.assertIs(self.server.match_reservations[self.peers[0]], token)
+        self.assertIs(self.server.default_table.match, engine)
+        self.assertIs(self.server.default_table.match_reservations[self.peers[0]], token)
         self.assertIn(self.peers[0], self.server.room.members)
         self.assertEqual(
             (self.server.snapshot(), engine.snapshot(), self.server.room.snapshot()), before

@@ -111,7 +111,9 @@ class FullNameTableIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(ack.sections["PLAYACK"]["EN"], "1")
         for side in range(2):
             await self.send(side, packet(0x41, 8, body="@GameOK="))
-        self.assertEqual([p.name for p in self.server.match.players], [PREFIX, PREFIX])
+        self.assertEqual(
+            [p.name for p in self.server.default_table.match.players], [PREFIX, PREFIX]
+        )
         await self.play_round()
         restored = Server(state_path=self.path, match_mode="versus")
         try:

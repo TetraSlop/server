@@ -29,7 +29,7 @@ class TableSettingsIntegrationTests(unittest.IsolatedAsyncioTestCase):
         joiner = f"{player_id(self.clients[1].nick):016X}"
         replies = await self.send(1, packet(0x41, 1, 1, "@GameEN=/NN=" + joiner))
         self.assertEqual(decode(replies[1][0]).sections["GameEA"]["EN"], "2")
-        self.assertEqual(self.server.match.owner_id, int(owner, 16))
+        self.assertEqual(self.server.default_table.match.owner_id, int(owner, 16))
         for seat, identity in enumerate((owner, joiner)):
             replies = await self.send(seat, packet(1, body="@Req=/NN=" + identity))
             playack = next(decode(p) for p in replies[seat] if decode(p).primary == 2)
@@ -45,8 +45,8 @@ class TableSettingsIntegrationTests(unittest.IsolatedAsyncioTestCase):
             + packet(0x41, 1, body="@GameEN=/NN=" + foreign)
         )
         self.assertEqual(await self.clients[0].read(), b"")
-        self.assertFalse(self.server.match.players)
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match.players)
+        self.assertFalse(self.server.default_table.match_reservations)
         await self.clients[1].send(b"PING :still-here")
         self.assertEqual(await self.clients[1].read(), b"PONG still-here")
 

@@ -65,7 +65,7 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
             line = await c.read()
             self.assertTrue(line)
             if line == b"PONG player-barrier":
-                task = self.server.match_task
+                task = self.server.default_table.match_task
                 if drained and task is None:
                     return out
                 if task is not None:
@@ -95,8 +95,8 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply.primary, 2)
         self.assertEqual(reply.sections["PLAYACK"]["EN"], "1")
         self.assertFalse(self.server.economy.is_reserved(c.nick.decode()))
-        self.assertEqual(len(self.server.match.players), 2)
-        self.assertIsNone(self.server.match.players[1].peer)
+        self.assertEqual(len(self.server.default_table.match.players), 2)
+        self.assertIsNone(self.server.default_table.match.players[1].peer)
 
     async def request_watch(self):
         await self.clients[1].send(
@@ -109,9 +109,9 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
         for _ in range(3):
             await self.read_watch()
         peer = self.server.nicks[self.clients[1].nick]
-        match = self.server.match
+        match = self.server.default_table.match
         before = match.snapshot()
-        tokens = dict(self.server.match_reservations)
+        tokens = dict(self.server.default_table.match_reservations)
         for body, expected in (("@Viewer=/IN=0", True), ("@Viewer=/OUT=0", False)):
             await self.clients[1].send(b"NOTICE " + self.target + b" :" + packet(65, 17, body=body))
             await self.clients[1].send(b"PING :viewer-barrier")
@@ -120,22 +120,22 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.clients[1].send(b"NOTICE " + self.target + b" :" + packet(32, body="@ExitCh="))
         await self.clients[1].send(b"PING :exit-barrier")
         self.assertEqual(await self.clients[1].read(), b"PONG exit-barrier")
-        self.assertNotIn(peer, self.server.spectator_admissions)
+        self.assertNotIn(peer, self.server.default_table.spectator_admissions)
         self.assertEqual(match.snapshot(), before)
-        self.assertEqual(self.server.match_reservations, tokens)
+        self.assertEqual(self.server.default_table.match_reservations, tokens)
         self.assertFalse(peer.closed)
 
     async def test_real_watch_bootstrap_and_full_match_live_order(self):
         await self.admit_watch()
-        before = self.server.match.snapshot()
+        before = self.server.default_table.match.snapshot()
         economy = self.server.economy.snapshot()
         await self.request_watch()
         bootstrap = [await self.read_watch() for _ in range(3)]
         self.assertEqual([decode(r).subtype for r in bootstrap], [0x25, 0x26, 9])
-        self.assertEqual(self.server.match.snapshot(), before)
+        self.assertEqual(self.server.default_table.match.snapshot(), before)
         self.assertEqual(self.server.economy.snapshot(), economy)
         for _ in range(30):
-            m = self.server.match
+            m = self.server.default_table.match
             if m.phase == "result":
                 break
             await self.player(packet(0x43, 9, m.sequence, "@TurnData=/Ans=0"))
@@ -162,7 +162,7 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
             b"NOTICE " + self.target + b" :" + packet(0x43, 9, 9, "@TurnData=/Ans=1")
         )
         self.assertEqual(await self.clients[1].read(), b"")
-        self.assertEqual(self.server.match.phase, "result")
+        self.assertEqual(self.server.default_table.match.phase, "result")
         self.assertFalse(self.server.nicks[self.clients[0].nick].closed)
 
     async def test_slow_observer_write_does_not_block_participant_or_timer(self):
@@ -184,10 +184,11 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.wait_for(self.player(packet(0x43, 9, 0, "@TurnData=/Ans=0")), 2)
                 await asyncio.wait_for(self.player(packet(0x43, 10, 0, "@PutData=/P=0/H=0/F=0")), 2)
                 self.assertTrue(
-                    self.server.match.sequence > 0 or self.server.match.phase == "battle"
+                    self.server.default_table.match.sequence > 0
+                    or self.server.default_table.match.phase == "battle"
                 )
                 async with asyncio.timeout(1):
-                    async with self.server.match_lock:
+                    async with self.server.default_table.match_lock:
                         pass
             finally:
                 release.set()
@@ -196,10 +197,10 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_watch_without_channel_admission_has_no_player_or_account_effect(self):
-        before = self.server.match.snapshot()
+        before = self.server.default_table.match.snapshot()
         await self.request_watch()
         self.assertEqual(await self.clients[1].read(), b"")
-        self.assertEqual(self.server.match.snapshot(), before)
+        self.assertEqual(self.server.default_table.match.snapshot(), before)
         self.assertFalse(self.server.economy.is_reserved(self.clients[1].nick.decode()))
 
 

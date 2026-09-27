@@ -140,9 +140,9 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
         for i in range(3):
             await self.admit(i)
         await self.send(0, packet(0x14, body=NATIVE_SETTINGS))
-        match = self.server.match
+        match = self.server.default_table.match
         before = self.server.economy.snapshot()
-        tokens = dict(self.server.match_reservations)
+        tokens = dict(self.server.default_table.match_reservations)
         removed = self.clients[1]
         removed_peer = self.server.nicks[removed.nick]
         removed_key = removed.nick.decode()
@@ -152,18 +152,18 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
             [[(decode(p).primary, decode(p).subtype) for p in r] for r in replies],
             [[(65, 6), (65, 12)], [(65, 12)], [(65, 12)], []],
         )
-        self.assertIs(self.server.match, match)
+        self.assertIs(self.server.default_table.match, match)
         self.assertEqual(self.server.economy.snapshot(), before)
         self.assertFalse(self.server.economy.is_reserved(removed_key))
         for peer, token in tokens.items():
             if peer is not removed_peer:
-                self.assertEqual(self.server.match_reservations[peer], token)
+                self.assertEqual(self.server.default_table.match_reservations[peer], token)
         self.assertEqual(
             await self.send(0, kick(player_id(removed.nick))),
             [[packet(0x41, 6, body="@GameQA=/QT=2")], [], [], []],
         )
         with self.assertRaises(ValueError):
-            await self.server.dispatch_table(removed_peer, packet(1, body="@Req="))
+            await self.server.default_table.dispatch_table(removed_peer, packet(1, body="@Req="))
         self.assertEqual(await self.send(1, packet(0x41, 8, body="@GameOK=")), [[], [], [], []])
         await self.admit(3)
         self.clients = [self.clients[i] for i in (0, 2, 3)]
@@ -180,13 +180,13 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.server.economy.profile_bytes(removed_key), removed_profile)
         await removed.send(b"PING :removed-still-connected")
         self.assertEqual(await removed.read(), b"PONG removed-still-connected")
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
 
     async def test_host_can_leave_transfer_ownership_and_replacement_plays(self):
         for i in range(3):
             await self.admit(i)
         await self.send(0, packet(0x14, body=NATIVE_SETTINGS))
-        match = self.server.match
+        match = self.server.default_table.match
         before = self.server.economy.snapshot()
         old_host = self.clients[0]
         request = packet(65, 5, body="@GameQT=")
@@ -195,7 +195,7 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
             [[(decode(p).primary, decode(p).subtype) for p in r] for r in replies],
             [[(65, 6)], [(65, 4), (26, 0)], [(65, 4), (26, 0)], []],
         )
-        self.assertIs(self.server.match, match)
+        self.assertIs(self.server.default_table.match, match)
         self.assertEqual(match.owner_peer, self.server.nicks[self.clients[1].nick])
         self.assertEqual(self.server.room.table_owner, player_id(self.clients[1].nick))
         self.assertEqual(self.server.room.table_count, 2)
@@ -221,10 +221,10 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
         for i in range(3):
             await self.admit(i)
         await self.send(0, packet(20, body=NATIVE_SETTINGS))
-        match = self.server.match
+        match = self.server.default_table.match
         owner = match.owner_peer
         guest = self.clients[1]
-        channel = self.server.table_channel
+        channel = self.server.default_table.table_channel
         await guest.send(b"JOIN " + channel)
         self.assertIn(b"JOIN :" + channel, await guest.read())
         self.assertIn(b" 353 ", await guest.read())
@@ -238,15 +238,15 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertIn(b"PART " + channel, await guest.read())
         for i in range(4):
             self.assertEqual(await self.flush(i), [])
-        self.assertIs(self.server.match, match)
+        self.assertIs(self.server.default_table.match, match)
         self.assertIs(match.owner_peer, owner)
         self.assertEqual(self.server.room.table_count, 2)
-        self.assertEqual(len(self.server.match_reservations), 2)
+        self.assertEqual(len(self.server.default_table.match_reservations), 2)
 
     async def test_kick_before_settings_updates_empty_table_metadata(self):
         for i in range(3):
             await self.admit(i)
-        self.assertFalse(self.server.match.settings_applied)
+        self.assertFalse(self.server.default_table.match.settings_applied)
         self.assertEqual((self.server.room.table_state, self.server.room.table_count), (0, 3))
         await self.send(0, kick(player_id(self.clients[1].nick)))
         self.assertEqual((self.server.room.table_state, self.server.room.table_count), (0, 2))
@@ -256,7 +256,7 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
         for i in range(3):
             await self.admit(i)
         await self.send(0, packet(20, body=NATIVE_SETTINGS))
-        match = self.server.match
+        match = self.server.default_table.match
         peer = self.server.nicks[self.clients[1].nick]
         await self.send(1, packet(65, 5, body="@GameQT="))
         self.assertIn(peer, match.kicked_peers)
@@ -264,8 +264,8 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
         await peer.close()
         self.assertNotIn(peer, match.kicked_peers)
         self.assertNotIn((peer, 5), match.lobby_exit_receipts)
-        self.assertIs(self.server.match, match)
-        self.assertEqual(len(self.server.match_reservations), 2)
+        self.assertIs(self.server.default_table.match, match)
+        self.assertEqual(len(self.server.default_table.match_reservations), 2)
 
 
 if __name__ == "__main__":

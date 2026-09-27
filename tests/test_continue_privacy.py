@@ -92,10 +92,10 @@ class PrivacyIntegration(unittest.IsolatedAsyncioTestCase):
         before = self.server.economy.snapshot()
         for seat, privacy in ((0, 2), (1, 1)):
             with self.assertRaises(MatchError):
-                await self.server.dispatch_table(
+                await self.server.default_table.dispatch_table(
                     peer, packet(0x43, 17, seat, f"@Continue=/Ans=1/PR={privacy}/Conf=0")
                 )
-            self.assertEqual(self.server.match.phase, "result")
+            self.assertEqual(self.server.default_table.match.phase, "result")
             self.assertEqual(self.server.economy.snapshot(), before)
 
     async def test_storage_failure_withholds_continue_acknowledgement(self):
@@ -108,7 +108,7 @@ class PrivacyIntegration(unittest.IsolatedAsyncioTestCase):
         ):
             with patch.object(self.server, "deliver") as deliver:
                 with self.assertRaises(OSError):
-                    await self.server.dispatch_table(
+                    await self.server.default_table.dispatch_table(
                         peer, packet(0x43, 17, 0, "@Continue=/Ans=2/PR=1/Conf=0")
                     )
                 deliver.assert_not_called()

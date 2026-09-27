@@ -26,7 +26,7 @@ from tmserver.table_roster import TableRoster
 class OrdinaryTable:
     """Own one match; access shared account and delivery services through host."""
 
-    def initialize_table(
+    def __init__(
         self,
         host,
         room,
@@ -740,11 +740,6 @@ class OrdinaryTable:
         while self.host.storage_failed is None:
             await asyncio.sleep(1)
             await self.check_match_timeout()
-            try:
-                if self.host is self:
-                    self.host.advance_auctions()
-            except OSError as exc:
-                self.host.log("auction_storage_error", reason=str(exc))
 
     def queue_spectator(self, deliveries, epoch, *, tracked=True):
         """Enqueue without awaiting observer I/O while participant state is locked."""

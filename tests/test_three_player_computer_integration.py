@@ -67,17 +67,19 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
         )
         replies = await self.request(TABLE_RAW, packet(0x43, 6, len(opponents) + 1, body))
         self.assertFalse(any(b"@StartData=" in r for r in replies))
-        match = self.server.match
+        match = self.server.default_table.match
         self.assertEqual(match.player_count, len(opponents) + 1)
         self.assertEqual(tuple(p.npc_id for p in match.players[1:]), opponents)
         self.assertEqual(self.server.economy.balance(self.key), balance - stake)
         self.assertEqual(self.server.room.table_count, len(opponents) + 1)
         self.assertEqual(len(self.server.room.npcs), len(opponents))
-        self.assertEqual(set(self.server.match_reservations), {self.server.nicks[self.client.nick]})
+        self.assertEqual(
+            set(self.server.default_table.match_reservations), {self.server.nicks[self.client.nick]}
+        )
         return replies
 
     async def play(self, *, strategic=False):
-        match = self.server.match
+        match = self.server.default_table.match
         # A separate deterministic client strategy gives the recovery fixture
         # a real human win without changing the server's random stream/cards.
         choices = CRTLCG(4)
@@ -167,7 +169,7 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
         await self.menu()
         await self.choose((1, 3), double=1, special=1)
         kept, earned, _ = await self.play()
-        old_hands = tuple(tuple(p.selected) for p in self.server.match.players[1:])
+        old_hands = tuple(tuple(p.selected) for p in self.server.default_table.match.players[1:])
         before = self.server.economy.balance(self.key)
         await self.continue_game()
         self.assertEqual(self.server.economy.balance(self.key), before - 200)
@@ -175,7 +177,7 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
             Counter(map(full, self.server.economy.inventory(self.key))), Counter(kept + earned)
         )
         self.assertNotEqual(
-            tuple(tuple(p.selected) for p in self.server.match.players[1:]), old_hands
+            tuple(tuple(p.selected) for p in self.server.default_table.match.players[1:]), old_hands
         )
         await self.play()
         before = self.server.economy.balance(self.key)
@@ -187,7 +189,7 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
         await self.choose((1, 30))
         kept, earned, _ = await self.play()
         await self.continue_game(leave=True)
-        self.assertEqual(self.server.match.phase, "finished")
+        self.assertEqual(self.server.default_table.match.phase, "finished")
         self.assertFalse(self.server.room.npcs)
         self.assertFalse(self.server.economy.is_reserved(self.key))
         self.assertEqual(

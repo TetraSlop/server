@@ -106,7 +106,7 @@ class ComputerAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.peer = self.peers[0]
         self.key = self.peer.nick.decode()
         self.view = self.server.economy.account_view(self.key)
-        await self.server.dispatch_table(
+        await self.server.default_table.dispatch_table(
             self.peer, packet(0x41, 0x12, body=native_identity(self.view, "GameENC"))
         )
 
@@ -114,7 +114,7 @@ class ComputerAdapterTests(unittest.IsolatedAsyncioTestCase):
         await self.server.stop()
 
     async def test_selected_count_is_saved_with_one_debit_before_engine_resize(self):
-        match = self.server.match
+        match = self.server.default_table.match
         self.assertEqual(match.player_count, 2)
         before = self.server.snapshot()
         other = self.peers[1].nick.decode()
@@ -129,42 +129,46 @@ class ComputerAdapterTests(unittest.IsolatedAsyncioTestCase):
             )
 
         with patch.object(self.server, "persist_changes", side_effect=save) as write:
-            balances = self.server.authorize_match_round(match, 1, 100, player_count=3)
+            balances = self.server.default_table.authorize_match_round(
+                match, 1, 100, player_count=3
+            )
         write.assert_called_once()
         self.assertEqual(balances, {0: self.view.balance - 100})
         self.assertEqual(
             self.server.economy.snapshot()["accounts"][other], before["accounts"][other]
         )
         self.assertEqual(match.player_count, 2)
-        self.assertEqual(set(self.server.match_reservations), {self.peer})
+        self.assertEqual(set(self.server.default_table.match_reservations), {self.peer})
 
     async def test_failed_override_save_preserves_tokens_journals_and_engine(self):
         before = deepcopy(self.server.snapshot())
-        token = self.server.match_reservations[self.peer]
+        token = self.server.default_table.match_reservations[self.peer]
         with patch.object(self.server, "persist_changes", side_effect=OSError("save failed")):
             with self.assertRaises(OSError):
-                self.server.authorize_match_round(self.server.match, 1, 100, player_count=3)
+                self.server.default_table.authorize_match_round(
+                    self.server.default_table.match, 1, 100, player_count=3
+                )
         self.assertEqual(self.server.snapshot(), before)
-        self.assertIs(self.server.match_reservations[self.peer], token)
+        self.assertIs(self.server.default_table.match_reservations[self.peer], token)
         self.assertEqual(self.server.economy.match_account(token), token.account)
-        self.assertEqual(self.server.match.player_count, 2)
-        self.assertIsNone(self.server.match_economy_round)
+        self.assertEqual(self.server.default_table.match.player_count, 2)
+        self.assertIsNone(self.server.default_table.match_economy_round)
 
     async def test_computer_admission_remains_one_human(self):
         peer = self.peers[1]
         view = self.server.economy.account_view(peer.nick.decode())
-        await self.server.dispatch_table(
+        await self.server.default_table.dispatch_table(
             peer, packet(0x41, 0x12, body=native_identity(view, "GameENC"))
         )
-        self.assertEqual([p.peer for p in self.server.match.players], [self.peer])
-        self.assertEqual(set(self.server.match_reservations), {self.peer})
+        self.assertEqual([p.peer for p in self.server.default_table.match.players], [self.peer])
+        self.assertEqual(set(self.server.default_table.match_reservations), {self.peer})
         self.assertFalse(self.server.economy.is_reserved(peer.nick.decode()))
         self.assertFalse(peer.closed)
 
     async def test_publish_updates_both_npcs_then_removes_only_second(self):
         room = self.server.room
         room.handle(self.peer, presence(identity=self.view.nn))
-        match = self.server.match
+        match = self.server.default_table.match
         self.assertEqual(match.npc_nickname_id, 0x200)
         self.assertEqual(match.second_npc_nickname_id, 0x400)
         match.players += [
@@ -173,14 +177,14 @@ class ComputerAdapterTests(unittest.IsolatedAsyncioTestCase):
         ]
         match._resize_lobby(3)
         match.phase = "selection"
-        await self.server.publish_match(match, [])
+        await self.server.default_table.publish_match(match, [])
         self.assertEqual((room.table_count, set(room.npcs)), (3, {0x200, 0x400}))
         before = room.snapshot()
-        await self.server.publish_match(match, [])
+        await self.server.default_table.publish_match(match, [])
         self.assertEqual(room.snapshot(), before)
         match.players.pop()
         match._resize_lobby(2)
-        await self.server.publish_match(match, [])
+        await self.server.default_table.publish_match(match, [])
         self.assertEqual((room.table_count, set(room.npcs)), (2, {0x200}))
 
 

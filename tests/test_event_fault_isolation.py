@@ -55,14 +55,14 @@ class EventFaultIsolation(unittest.IsolatedAsyncioTestCase):
         identity = f"/NN={view.nn:016X}/HID={view.player_id}"
         await self.request(TABLE_RAW, packet(0x41, 0x12, body="@GameENC=" + identity))
         await self.request(TABLE_RAW, packet(1, body="@Req=" + identity))
-        self.assertEqual(self.server.match.phase, "computer_menu")
+        self.assertEqual(self.server.default_table.match.phase, "computer_menu")
 
     async def failed(self, global_storage=False):
         await self.start()
         await self.admit()
         await self.menu()
         await self.choose(1)
-        before = self.server.match.snapshot()
+        before = self.server.default_table.match.snapshot()
 
         def fail():
             if global_storage:
@@ -81,10 +81,10 @@ class EventFaultIsolation(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(self.server.economy.is_reserved(self.key))
         else:
             self.assertIn(self.client.nick, self.server.nicks)
-            self.assertEqual(self.server.match.snapshot(), before)
+            self.assertEqual(self.server.default_table.match.snapshot(), before)
             await self.play_cpu()
             await self.request(TABLE_RAW, packet(0x43, 17, 0, "@Continue=/Ans=2/PR=0/Conf=0"))
-            self.assertEqual(self.server.match.phase, "finished")
+            self.assertEqual(self.server.default_table.match.phase, "finished")
 
     async def test_event_failure_preserves_and_finishes_ordinary_match(self):
         await self.failed()

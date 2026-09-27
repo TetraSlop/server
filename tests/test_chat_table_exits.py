@@ -68,8 +68,8 @@ class ChatTableExitTests(unittest.IsolatedAsyncioTestCase):
                     await self.send(0, target, packet(0x14, body=NATIVE_SETTINGS))
                     owner, guest = self.peers
                     before = self.server.economy.snapshot()
-                    match = self.server.match
-                    owner_token = self.server.match_reservations[owner]
+                    match = self.server.default_table.match
+                    owner_token = self.server.default_table.match_reservations[owner]
                     room_counter = self.server.chat.counters[room]
                     request = (
                         packet(0x41, 5, body=f"@GameQT=/ID={player_id(guest.nick):016X}")
@@ -94,10 +94,10 @@ class ChatTableExitTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(self.rosters(replies[1], target), [])
                     self.assertEqual(set(self.server.chat.groups[room]), {owner, guest})
                     self.assertEqual(self.server.chat.counters[room], room_counter)
-                    self.assertIs(self.server.match, match)
+                    self.assertIs(self.server.default_table.match, match)
                     self.assertEqual([p.peer for p in match.players], [owner])
-                    self.assertIs(self.server.match_reservations[owner], owner_token)
-                    self.assertNotIn(guest, self.server.match_reservations)
+                    self.assertIs(self.server.default_table.match_reservations[owner], owner_token)
+                    self.assertNotIn(guest, self.server.default_table.match_reservations)
                     self.assertEqual(self.server.economy.snapshot(), before)
 
                     destination = service_nick(EXTRA.table_raw)

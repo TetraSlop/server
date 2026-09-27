@@ -56,7 +56,7 @@ from tmserver.trade_service import TradeService
 ACCOUNTS = {key.encode("ascii"): value[1] for key, value in account_specs().items()}
 
 
-class Server(OrdinaryTable):
+class Server:
     def __init__(
         self,
         log_path=None,
@@ -116,6 +116,7 @@ class Server(OrdinaryTable):
         self.room_task = None
         self.counter = 0
         self.listener = None
+        self.auction_task = None
         self.storage_failed = None
         self.room = RoomService(
             player_count=match_player_count, computer_enabled=match_mode == "computer"
@@ -220,7 +221,7 @@ class Server(OrdinaryTable):
             progress_policy=event_progress_policy,
             allow_observers=spectator is not None and spectator.enabled,
         )
-        self.initialize_table(
+        self.default_table = OrdinaryTable(
             self,
             self.room,
             match_mode=match_mode,
@@ -491,10 +492,19 @@ class Server(OrdinaryTable):
         self.listener = await asyncio.start_server(self.accept, "127.0.0.1", port, limit=MAX_LINE)
         for table in self.ordinary_tables:
             table.start_table_tasks()
+        self.auction_task = asyncio.create_task(self.run_auctions())
         self.event_matches.start()
         port = self.listener.sockets[0].getsockname()[1]
         self.log("listening", address="127.0.0.1", port=port)
         return port
+
+    async def run_auctions(self):
+        while self.storage_failed is None:
+            await asyncio.sleep(1)
+            try:
+                self.advance_auctions()
+            except OSError as exc:
+                self.log("auction_storage_error", reason=str(exc))
 
     async def accept(self, reader, writer):
         if self.storage_failed is not None or len(self.sessions) >= self.connection_limit:
@@ -521,6 +531,10 @@ class Server(OrdinaryTable):
     async def stop(self):
         if self.listener:
             self.listener.close()
+        if self.auction_task is not None:
+            self.auction_task.cancel()
+            await asyncio.gather(self.auction_task, return_exceptions=True)
+            self.auction_task = None
         for table in self.ordinary_tables:
             await table.stop_table_tasks()
         await self.event_matches.stop()

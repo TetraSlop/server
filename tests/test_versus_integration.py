@@ -43,7 +43,7 @@ class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):
             line = await client.read()
             self.assertTrue(line, "unexpected disconnect")
             if line == b"PONG match-barrier":
-                task = self.server.match_task
+                task = self.server.default_table.match_task
                 if drained and task is None:
                     return out
                 if task is not None:
@@ -70,7 +70,7 @@ class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.send(side, packet(1, body="@Req=/NN=" + identity))
         for side in range(2):
             await self.send(side, packet(0x41, 8, body="@GameOK="))
-        self.assertEqual(self.server.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.phase, "selection")
 
     async def play_round(self, first_field=None):
         before = [self.server.economy.inventory(k) for k in self.keys]
@@ -86,7 +86,7 @@ class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.send(side, packet(0x43, 7, side, body))
         received = [[], []]
         for turn in range(10):
-            match = self.server.match
+            match = self.server.default_table.match
             self.assertEqual(match.sequence, turn)
             for side in range(2):
                 replies = await self.send(side, packet(0x43, 9, turn, f"@TurnData=/Ans={side}"))
@@ -146,17 +146,17 @@ class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):
         first = [self.server.economy.profile_bytes(k) for k in self.keys]
         for side in range(2):
             await self.send(side, packet(0x43, 17, side, "@Continue=/Ans=1/PR=0/Conf=0"))
-        self.assertEqual(self.server.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.phase, "selection")
         self.assertEqual([self.server.economy.profile_bytes(k) for k in self.keys], first)
         await self.play_round()
-        self.assertEqual(self.server.match.completed_matches, 2)
+        self.assertEqual(self.server.default_table.match.completed_matches, 2)
         latest = [self.server.economy.profile_bytes(k) for k in self.keys]
         await self.send(0, packet(0x43, 17, 0, "@Continue=/Ans=2/PR=0/Conf=0"))
-        finished = self.server.match
+        finished = self.server.default_table.match
         self.assertEqual(finished.phase, "finished")
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         self.assertEqual(await self.send(0, packet(1, body="@Req=")), [[], []])
-        self.assertIs(self.server.match, finished)
+        self.assertIs(self.server.default_table.match, finished)
         self.assertEqual([self.server.economy.profile_bytes(k) for k in self.keys], latest)
         restored = Server(state_path=self.path, match_mode="versus")
         try:
@@ -167,12 +167,12 @@ class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_active_disconnect_aborts_both_without_partial_growth(self):
         await self.admit()
         before = self.server.economy.snapshot()
-        original = self.server.match
+        original = self.server.default_table.match
         await self.clients[0].close()
         self.assertEqual(await self.clients[1].read(), b"")
-        self.assertIsNot(self.server.match, original)
-        self.assertEqual(self.server.match.players, [])
-        self.assertFalse(self.server.match_reservations)
+        self.assertIsNot(self.server.default_table.match, original)
+        self.assertEqual(self.server.default_table.match.players, [])
+        self.assertFalse(self.server.default_table.match_reservations)
         self.assertEqual(self.server.economy.snapshot(), before)
         for key in self.keys:
             self.assertFalse(self.server.economy.is_reserved(key))
@@ -200,12 +200,15 @@ class CBCRewardIntegrationTests(unittest.IsolatedAsyncioTestCase):
         dx, dy = DIRECTIONS[direction]
         fields = [0] * 16
         fields[5 + dx + 4 * dy] = 18
-        self.server.match_start_fields = fields
-        self.server.allow_cbc = True
-        self.server.reset_match()
+        self.server.default_table.match_start_fields = fields
+        self.server.default_table.allow_cbc = True
+        self.server.default_table.reset_match()
         await self.admit()
         await self.play_round(first_field=5)
-        finals = [self.server.match.final_cards(self.server.nicks[c.nick]) for c in self.clients]
+        finals = [
+            self.server.default_table.match.final_cards(self.server.nicks[c.nick])
+            for c in self.clients
+        ]
         self.assertEqual(sum(len(f.extras) for f in finals), 1)
         self.assertTrue(all(self.server.result_rewards.has_pending(k) for k in self.keys))
         return finals
@@ -214,7 +217,7 @@ class CBCRewardIntegrationTests(unittest.IsolatedAsyncioTestCase):
         finals = await self.cbc_round()
         for side in range(2):
             await self.send(side, packet(0x43, 17, side, "@Continue=/Ans=1/PR=0/Conf=0"))
-        self.assertEqual(self.server.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.phase, "selection")
         for side, key in enumerate(self.keys):
             cards = self.server.economy.inventory(key)
             self.assertEqual(len(cards), 10 + len(finals[side].extras))

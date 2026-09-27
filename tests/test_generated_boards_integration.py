@@ -83,11 +83,11 @@ class GeneratedBoardsIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.send(0, packet(0x41, 0x12, body=f"@GameENC=/NN={identity}/HID=1"))
             replies = await self.send(0, packet(1, body=f"@Req=/NN={identity}/HID=1"))
             self.assertTrue(any(b"@ComGameInit=" in reply for reply in replies[0]))
-            initial_rng = self.server.match.rng.state
+            initial_rng = self.server.default_table.match.rng.state
             base = [stake, *flags, 3, 0, 2]
             await self.send(0, packet(0x43, 6, 0, "@ComGame=/Rule=" + "|".join(map(str, base))))
             self.assertEqual(
-                self.server.match.rng.state,
+                self.server.default_table.match.rng.state,
                 initial_rng,
                 "menu preview must not generate cards or a board",
             )
@@ -126,19 +126,23 @@ class GeneratedBoardsIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(
                     list(map(int, init.sections["VsGameInit"]["R"].split("|"))), expected_rules
                 )
-        self.assertEqual(self.server.match.phase, "selection")
-        self.assertEqual(tuple(self.server.match.game_rules[k] for k in ("st", "cb", "ca")), flags)
+        self.assertEqual(self.server.default_table.match.phase, "selection")
+        self.assertEqual(
+            tuple(self.server.default_table.match.game_rules[k] for k in ("st", "cb", "ca")), flags
+        )
         self.assertEqual(
             [self.server.economy.balance(key) for key in self.keys], [10000 - stake] * self.humans
         )
 
     async def finish_round(self, *, seed=0):
-        match = self.server.match
+        match = self.server.default_table.match
         moves = random.Random(seed)
         for _ in range(300):
             if match.phase == "result":
                 break
-            self.assertIsNone(self.server.match_task, "request barrier must drain scheduled work")
+            self.assertIsNone(
+                self.server.default_table.match_task, "request barrier must drain scheduled work"
+            )
             if match.phase == "battle":
                 self.assertIsNotNone(
                     match.players[match.active].peer,
@@ -187,7 +191,9 @@ class GeneratedBoardsIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 (stats.count, stats.rating, stats.reward_sum), (count, latest[2], latest[6])
             )
-            self.assertEqual(latest[1], self.server.match.players[seat].result_stats.current_reward)
+            self.assertEqual(
+                latest[1], self.server.default_table.match.players[seat].result_stats.current_reward
+            )
         durable = EconomyService.restore(json.loads(self.path.read_text()))
         self.assertEqual(durable.snapshot(), self.server.economy.snapshot())
 

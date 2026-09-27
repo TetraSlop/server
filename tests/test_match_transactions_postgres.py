@@ -27,7 +27,7 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
             raise psycopg.OperationalError("injected lost match COMMIT acknowledgement")
 
         before = self.server.snapshot()
-        tokens = dict(self.server.match_reservations)
+        tokens = dict(self.server.default_table.match_reservations)
         with (
             patch.object(psycopg.Connection, "commit", committed_but_lost),
             self.assertRaises(OSError),
@@ -35,10 +35,10 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
             operation()
         self.assertIsNotNone(self.server.storage_failed)
         self.assertEqual(self.server.snapshot(), before)
-        self.assertEqual(self.server.match_reservations, tokens)
+        self.assertEqual(self.server.default_table.match_reservations, tokens)
         for token in tokens.values():
             self.assertIs(self.server.economy._reservations[token.account.key], token)
-        self.server.release_match_accounts()
+        self.server.default_table.release_match_accounts()
 
     def restart_twice(self):
         recovered = Server(store=self.reopen(), account_count=3, rating_mode="local-history")
@@ -87,9 +87,9 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
             patch.object(self.store, "_save_services", side_effect=fail),
             self.assertRaises(OSError),
         ):
-            self.server.commit_match_results(self.match)
+            self.server.default_table.commit_match_results(self.match)
         self.assertEqual(self.server.snapshot(), memory)
-        self.assertFalse(self.server.match_committed)
+        self.assertFalse(self.server.default_table.match_committed)
         self.assertEqual(self.reopen().load(), durable)
 
     def test_lost_stake_ack_refunds_only_the_durable_debit_on_restart(self):
@@ -102,7 +102,7 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
     def test_lost_result_ack_preserves_one_payout_rating_and_cbc_award(self):
         self.begin()
         self.prepare_result()
-        self.lose_ack(lambda: self.server.commit_match_results(self.match))
+        self.lose_ack(lambda: self.server.default_table.commit_match_results(self.match))
         restored = self.restart_twice()
         self.assertEqual([restored.economy.balance(k) for k in self.keys[:2]], [10100, 9900])
         for key in self.keys[:2]:
@@ -114,7 +114,7 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
         self.begin()
         self.result()
         award = self.prepare_prize()
-        self.lose_ack(lambda: self.server.commit_match_prizes(self.match))
+        self.lose_ack(lambda: self.server.default_table.commit_match_prizes(self.match))
         self.match.confirm_prize_commit.assert_not_called()
         restored = self.restart_twice()
         self.assertEqual(len(restored.economy.inventory(self.keys[1])), 9)
@@ -129,7 +129,7 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
         self.begin()
         self.result()
         self.prepare_prize()
-        self.server.commit_match_prizes(self.match)
+        self.server.default_table.commit_match_prizes(self.match)
 
         def accept():
             with match_transaction(self.server, (self.keys[0],)) as state:

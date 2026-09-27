@@ -47,7 +47,7 @@ class OrdinaryRoomConfiguration(unittest.IsolatedAsyncioTestCase):
         host = Server(account_count=4, ordinary_rooms=rows)
         try:
             self.assertEqual(len(host.ordinary_tables), 3)
-            self.assertIsNot(host.ordinary_tables[1].match_lock, host.match_lock)
+            self.assertIsNot(host.ordinary_tables[1].match_lock, host.default_table.match_lock)
             self.assertIs(host.ordinary_tables[1].host.economy, host.economy)
         finally:
             await host.stop()

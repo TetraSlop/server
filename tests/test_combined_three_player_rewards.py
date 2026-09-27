@@ -26,7 +26,8 @@ class CombinedThreePlayerRewards(unittest.IsolatedAsyncioTestCase):
         self.before = [self.server.economy.inventory(k) for k in self.keys]
         await self.play_cbc()
         self.extras = [
-            self.server.match.final_cards(self.server.nicks[c.nick]).extras for c in self.clients
+            self.server.default_table.match.final_cards(self.server.nicks[c.nick]).extras
+            for c in self.clients
         ]
         _, settlement = await self.choose()
         self.assertTrue(settlement.transfers, "fixture must transfer ordinary owned cards too")
@@ -51,7 +52,7 @@ class CombinedThreePlayerRewards(unittest.IsolatedAsyncioTestCase):
             await self.send(
                 seat, packet(0x43, 17, seat, f"@Continue=/Ans={2 if seat==2 else 1}/PR=0/Conf=0")
             )
-        self.assertEqual(self.server.match.phase, "finished")
+        self.assertEqual(self.server.default_table.match.phase, "finished")
         for key, (kept, awarded) in zip(self.keys, self.want):
             self.assertEqual(
                 Counter(map(prizes.full, self.server.economy.inventory(key))),

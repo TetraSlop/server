@@ -37,7 +37,7 @@ class TableFixture:
         for peer in self.peers:
             key = peer.nick.decode()
             token = self.server.economy.reserve_match(key)
-            self.server.match_reservations[peer] = token
+            self.server.default_table.match_reservations[peer] = token
             players.append(
                 SimpleNamespace(
                     peer=peer, updated=token.account.cards[:5], rating=300, departed=False
@@ -46,16 +46,16 @@ class TableFixture:
         self.match = SimpleNamespace(
             players=players, mode="versus", player_count=2, card_prizes=True, allow_wagers=True
         )
-        self.server.match = self.match
+        self.server.default_table.match = self.match
         self.server.persist()
 
     def begin(self):
-        return self.server.authorize_match_round(self.match, 1, 100)
+        return self.server.default_table.authorize_match_round(self.match, 1, 100)
 
     def prepare_result(self):
         scores = (7, 3)
-        payouts = self.server.quote_match_result(self.match, 1, scores, (300, 300))
-        changes = self.server.quote_match_rating(self.match, 1, scores)
+        payouts = self.server.default_table.quote_match_result(self.match, 1, scores, (300, 300))
+        changes = self.server.default_table.quote_match_rating(self.match, 1, scores)
         results = {}
         for seat, peer in enumerate(self.peers):
             key = peer.nick.decode()
@@ -78,7 +78,7 @@ class TableFixture:
 
     def result(self):
         self.prepare_result()
-        self.server.commit_match_results(self.match)
+        self.server.default_table.commit_match_results(self.match)
 
     def prepare_prize(self):
         source = self.match.players[1].updated[0]
@@ -96,7 +96,7 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
         self.prepare_table()
 
     def assert_tokens(self, original):
-        self.assertEqual(self.server.match_reservations, original)
+        self.assertEqual(self.server.default_table.match_reservations, original)
         for token in original.values():
             self.assertIs(self.server.economy._reservations[token.account.key], token)
 
@@ -109,7 +109,7 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
             self.assertEqual(set(accounts), set(self.keys[:2]))
             self.assertEqual([a["balance"] for a in accounts.values()], [9900, 9900])
             self.assertEqual(journals["match_economy"]["rounds"][0]["money"], "escrow")
-            self.assertIsNone(self.server.match_economy_round)
+            self.assertIsNone(self.server.default_table.match_economy_round)
 
         with patch.object(self.server, "persist_changes", side_effect=save) as write:
             self.assertEqual(self.begin(), {0: 9900, 1: 9900})
@@ -118,21 +118,21 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
 
     def test_failed_stake_retains_accounts_journals_and_table_capabilities(self):
         before = self.server.snapshot()
-        tokens = dict(self.server.match_reservations)
+        tokens = dict(self.server.default_table.match_reservations)
         with (
             patch.object(self.server, "persist_changes", side_effect=OSError("stake write")),
             self.assertRaises(OSError),
         ):
             self.begin()
         self.assertEqual(self.server.snapshot(), before)
-        self.assertIsNone(self.server.match_economy_round)
+        self.assertIsNone(self.server.default_table.match_economy_round)
         self.assert_tokens(tokens)
 
     def test_failed_result_retains_profiles_ratings_money_and_commit_marks(self):
         self.begin()
         self.prepare_result()
         before = self.server.snapshot()
-        tokens = dict(self.server.match_reservations)
+        tokens = dict(self.server.default_table.match_reservations)
 
         def fail(accounts, journals):
             self.assertEqual(self.server.snapshot(), before)
@@ -146,22 +146,22 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
             patch.object(self.server, "persist_changes", side_effect=fail),
             self.assertRaises(OSError),
         ):
-            self.server.commit_match_results(self.match)
+            self.server.default_table.commit_match_results(self.match)
         self.assertEqual(self.server.snapshot(), before)
         self.assert_tokens(tokens)
-        self.assertFalse(self.server.match_committed)
+        self.assertFalse(self.server.default_table.match_committed)
 
     def test_prize_failure_cannot_lose_cards_or_publish_reward_entitlements(self):
         self.begin()
         self.result()
         self.prepare_prize()
         before = self.server.snapshot()
-        tokens = dict(self.server.match_reservations)
+        tokens = dict(self.server.default_table.match_reservations)
         with (
             patch.object(self.server, "persist_changes", side_effect=OSError("prize write")),
             self.assertRaises(OSError),
         ):
-            self.server.commit_match_prizes(self.match)
+            self.server.default_table.commit_match_prizes(self.match)
         self.match.confirm_prize_commit.assert_not_called()
         self.assertEqual(self.server.snapshot(), before)
         self.assert_tokens(tokens)
@@ -175,7 +175,7 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
         self.begin()
         self.result()
         self.prepare_prize()
-        self.server.commit_match_prizes(self.match)
+        self.server.default_table.commit_match_prizes(self.match)
         self.assertEqual(len(self.server.economy.inventory(self.keys[1])), 9)
         self.assertEqual(self.server.result_rewards.status(self.keys[0])["extra_count"], 2)
         with match_transaction(self.server, (self.keys[0],)) as state:
@@ -189,7 +189,7 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
         self.begin()
         self.result()
         self.prepare_prize()
-        self.server.commit_match_prizes(self.match)
+        self.server.default_table.commit_match_prizes(self.match)
         key = self.keys[0]
         pending = self.server.result_rewards._pending[key]
         before = deepcopy(pending.cards), self.server.snapshot()
@@ -207,22 +207,22 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
     def test_abort_failure_does_not_publish_refund_or_release_table(self):
         self.begin()
         before = self.server.snapshot()
-        tokens = dict(self.server.match_reservations)
+        tokens = dict(self.server.default_table.match_reservations)
         with (
             patch.object(self.server, "persist_changes", side_effect=OSError("refund write")),
             self.assertRaises(OSError),
         ):
-            self.server.release_match_accounts()
+            self.server.default_table.release_match_accounts()
         self.assertEqual(self.server.snapshot(), before)
         self.assert_tokens(tokens)
-        self.server.release_match_accounts()
+        self.server.default_table.release_match_accounts()
         self.assertEqual([self.server.economy.balance(k) for k in self.keys], [10000] * 3)
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
 
     def test_lobby_cleanup_releases_capabilities_after_roster_removal(self):
         self.match.players.clear()
-        self.server.release_match_accounts()
-        self.assertFalse(self.server.match_reservations)
+        self.server.default_table.release_match_accounts()
+        self.assertFalse(self.server.default_table.match_reservations)
         for key in self.keys:
             self.assertFalse(self.server.economy.is_reserved(key))
 
@@ -230,18 +230,18 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
         self.begin()
         self.result()
         self.prepare_prize()
-        self.server.commit_match_prizes(self.match)
+        self.server.default_table.commit_match_prizes(self.match)
         before = self.server.snapshot()
         with (
             patch.object(self.server, "persist_changes", side_effect=OSError("recovery write")),
             self.assertRaises(OSError),
         ):
-            self.server.release_match_accounts()
+            self.server.default_table.release_match_accounts()
         self.assertEqual(self.server.snapshot(), before)
-        self.server.release_match_accounts()
+        self.server.default_table.release_match_accounts()
         self.assertEqual(len(self.server.auction_ledger.pending(self.keys[0])), 2)
         committed = self.server.snapshot()
-        self.server.release_match_accounts()
+        self.server.default_table.release_match_accounts()
         self.assertEqual(self.server.snapshot(), committed)
 
     def test_real_json_failure_fences_writer_then_restart_refunds_once(self):
@@ -256,9 +256,10 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
                 patch.object(Path, "replace", side_effect=OSError("disk failure")),
                 self.assertRaises(OSError),
             ):
-                self.server.release_match_accounts()
+                self.server.default_table.release_match_accounts()
             self.assertIsNotNone(self.server.storage_failed)
-            self.server.release_match_accounts()  # Failed-writer cleanup does no recovery.
+            # Failed-writer cleanup does no recovery.
+            self.server.default_table.release_match_accounts()
             self.assertEqual([self.server.economy.balance(k) for k in self.keys[:2]], [9900] * 2)
             self.assertEqual(store.path.read_bytes(), original)
             self.assertTrue(store.failed)

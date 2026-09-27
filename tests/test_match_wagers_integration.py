@@ -32,7 +32,7 @@ class WagerIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.send(side, packet(0x41, 1, body="@GameEN=/NN=" + nn))
             if side == 0:
                 settings = NATIVE_SETTINGS.replace("/bm=0/du=0", "/bm=200/du=1")
-                for key, value in self.server.match.special_flags.items():
+                for key, value in self.server.default_table.match.special_flags.items():
                     settings = settings.replace(f"/{key}=0", f"/{key}={value}")
                 await self.send(side, packet(0x14, body=settings))
             await self.send(side, packet(1, body="@Req=/NN=" + nn))
@@ -53,8 +53,8 @@ class WagerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.admit()
         await self.play()
         await self.choose()
-        match = self.server.match
-        completed = self.server.match_economy.status(self.server.match_economy_round)
+        match = self.server.default_table.match
+        completed = self.server.match_economy.status(self.server.default_table.match_economy_round)
         payouts = completed["payouts"]
         self.assertEqual(sum(payouts.values()), 200 * self.player_count)
         after = [9800 + payouts[s] for s in range(self.player_count)]
@@ -135,7 +135,7 @@ class ComputerWagerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.select(200)
         self.assertEqual(self.server.economy.balance(self.key), 9800)
         await self.play()
-        match = self.server.match
+        match = self.server.default_table.match
         reward = max(
             0,
             offline_payout(

@@ -32,7 +32,7 @@ class EventSpectators:
                 if bound == target:
                     self.disconnect(peer)
                     self._close_later(peer)
-        template = self.adapter.server.spectators
+        template = self.adapter.server.default_table.spectators
         service = SpectatorService(
             enabled=template.enabled,
             clock=template.clock,
@@ -61,7 +61,7 @@ class EventSpectators:
     def handle(self, peer, key, target, payload):
         server = self.adapter.server
         coordinator = self.adapter.coordinator
-        if self.stopping or not server.spectators.enabled:
+        if self.stopping or not server.default_table.spectators.enabled:
             return False
         msg = decode(payload)
         if msg is None:
@@ -172,7 +172,7 @@ class EventSpectators:
         if peer.closed or self.stopping:
             return
         queue = self.queues.setdefault(peer, deque())
-        if len(queue) >= self.adapter.server.spectators.max_backlog + 3:
+        if len(queue) >= self.adapter.server.default_table.spectators.max_backlog + 3:
             self.disconnect(peer)
             self._close_later(peer)
             return

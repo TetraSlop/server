@@ -34,9 +34,9 @@ class StorageFailureTests(unittest.IsolatedAsyncioTestCase):
         server.ensure_account(peer.nick)
         server.nicks[peer.nick] = peer
         server.sessions.add(peer)
-        server.match.register(peer)
+        server.default_table.match.register(peer)
         key = peer.nick.decode()
-        server.match_reservations[peer] = server.economy.reserve_match(key)
+        server.default_table.match_reservations[peer] = server.economy.reserve_match(key)
         server.room.set_table(0, 1, player_id(peer.nick))
         peer.channels.add(b"#test")
         server.channels[b"#test"] = {peer}
@@ -51,7 +51,7 @@ class StorageFailureTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(peer, server.sessions)
         self.assertFalse(server.channels)
         await server.stop()
-        self.assertEqual(server.match.players, [])
+        self.assertEqual(server.default_table.match.players, [])
         self.assertFalse(server.economy.is_reserved(key))
         self.assertEqual(server.economy.snapshot(), before)
 

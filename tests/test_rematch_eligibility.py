@@ -41,18 +41,18 @@ class RematchEligibilityTests(unittest.IsolatedAsyncioTestCase):
         await self.offer(stake=200 if self.wagers else 0, double=int(self.wagers))
         for side in range(2):
             await self.send(side, packet(0x41, 8, body="@GameOK="))
-        self.assertEqual(self.server.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.phase, "selection")
 
     def result_state(self, match):
         return {
             "saved": self.path.read_bytes(),
             "host": self.server.snapshot(),
-            "reservations": dict(self.server.match_reservations),
+            "reservations": dict(self.server.default_table.match_reservations),
             "votes": dict(match.continues),
             "match": match.snapshot(),
             "rng": match.rng.state,
             "balances": [player.balance for player in match.players],
-            "round": self.server.match_economy_round,
+            "round": self.server.default_table.match_economy_round,
             "room": (self.server.room.snapshot(), self.server.room.sequence),
         }
 
@@ -68,7 +68,7 @@ class RematchEligibilityTests(unittest.IsolatedAsyncioTestCase):
         # Inspect the real dispatch failure before transport cleanup recovers
         # any unaccepted rewards. The previous player's accepted vote remains.
         with self.assertRaisesRegex(ValueError, reason):
-            await self.server.dispatch_table(peer, vote(last))
+            await self.server.default_table.dispatch_table(peer, vote(last))
         self.assertEqual(self.result_state(match), before)
         self.assertEqual(len(match.continues), 1)
 
@@ -76,8 +76,8 @@ class RematchEligibilityTests(unittest.IsolatedAsyncioTestCase):
         await self.clients[last].send(b"NOTICE " + service_nick(TABLE_RAW) + b" :" + vote(last))
         for client in self.clients:
             self.assertEqual(await client.read(), b"")
-        self.assertFalse(self.server.match_reservations)
-        self.assertEqual(self.server.match.players, [])
+        self.assertFalse(self.server.default_table.match_reservations)
+        self.assertEqual(self.server.default_table.match.players, [])
         self.assertTrue(all(not self.server.economy.is_busy(key) for key in self.keys))
         self.assertEqual(
             [self.server.economy.balance(key) for key in self.keys], before["balances"]

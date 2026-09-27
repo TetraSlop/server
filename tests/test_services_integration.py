@@ -57,7 +57,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         for _ in range(200):
             line = await self.client.read()
             if line == b"PONG service-check":
-                task = self.server.match_task
+                task = self.server.default_table.match_task
                 if drained_work and task is None:
                     return responses
                 if task is not None:
@@ -131,7 +131,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             [(decode(p).primary, decode(p).subtype) for p in out[1:]], [(0x41, 9), (0x43, 1)]
         )
-        self.assertEqual(self.server.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.phase, "selection")
         await self.client.send(b"PART :" + TABLE_CHANNEL)
         self.assertEqual(
             await self.client.read(), b":" + self.client.nick + b"!p@local PART " + TABLE_CHANNEL
@@ -175,13 +175,13 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.request(
             TABLE_RAW, packet(0x41, 1, body=f"@GameEN=/NN={player_id(self.client.nick):016X}")
         )
-        current = self.server.match.rules_body()
+        current = self.server.default_table.match.rules_body()
         before = read_preferences(self.profile())
         self.assertEqual(await self.request(TABLE_RAW, save_preferences(tbl=0)), [])
         saved = read_preferences(self.profile())
         self.assertEqual(saved["Tet"], SAVED_GAME)
         self.assertEqual(saved["Tab"], before["Tab"])
-        self.assertEqual(self.server.match.rules_body(), current)
+        self.assertEqual(self.server.default_table.match.rules_body(), current)
         self.assertTrue(self.server.economy.is_reserved(self.key))
         self.assertEqual(await self.request(TABLE_RAW, save_preferences(gm=0)), [])
         expected = {"Tet": SAVED_GAME, "Tab": dict(SAVED_TABLE, pw=SAVED_TABLE["pw"].upper())}
@@ -191,7 +191,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(read_preferences(restored.economy.profile_bytes(self.key)), expected)
         finally:
             await restored.stop()
-        self.assertEqual(self.server.match.rules_body(), current)
+        self.assertEqual(self.server.default_table.match.rules_body(), current)
 
     def profile(self):
         service = ProfileServer(Path(self.temp.name) / "profile.jsonl", self.server)
@@ -239,7 +239,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.request(TABLE_RAW, packet(0x43, 7, 0, body))
         received = []
         for _ in range(30):
-            m = self.server.match
+            m = self.server.default_table.match
             if m.phase == "result":
                 break
             received += await self.request(
@@ -254,12 +254,12 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 received += await self.request(
                     TABLE_RAW, packet(0x43, 11, m.sequence, f"@BattleSelect=/B={m.targets[0]}")
                 )
-        self.assertEqual(self.server.match.phase, "result")
-        self.assertEqual(self.server.match.sequence, 10)
-        self.assertEqual(self.server.match.snapshot()["hand_counts"], [0, 0])
+        self.assertEqual(self.server.default_table.match.phase, "result")
+        self.assertEqual(self.server.default_table.match.sequence, 10)
+        self.assertEqual(self.server.default_table.match.snapshot()["hand_counts"], [0, 0])
         self.assertEqual(sum(decode(x).subtype == 13 for x in received), 1)
         peer = self.server.nicks[self.client.nick]
-        final = self.server.match.final_cards(peer)
+        final = self.server.default_table.match.final_cards(peer)
         saved = self.server.economy.inventory(self.key)
         self.assertEqual(
             tuple("|".join(map(str, c.full())) for c in saved[:5]),
@@ -273,7 +273,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decode(result[0]).subtype, 0x1A)
         self.assertEqual(await self.request(TABLE_RAW, packet(0x43, 14, 10, "@Ready=/Ans=0")), [])
         await self.request(TABLE_RAW, packet(0x43, 17, 0, "@Continue=/Ans=2/PR=0/Conf=0"))
-        self.assertEqual(self.server.match.phase, "finished")
+        self.assertEqual(self.server.default_table.match.phase, "finished")
         self.assertEqual(self.profile(), after)
         restored = Server(state_path=self.state_path)
         try:
@@ -282,8 +282,25 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await restored.stop()
 
     async def test_complete_special_cpu_match_through_encrypted_socket(self):
-        self.server.match_start_fields = (3, 0, 0, 0, 0, 7, 9, 0, 0, 0, 17, 0, 0, 0, 0, 0)
-        self.server.reset_match()
+        self.server.default_table.match_start_fields = (
+            3,
+            0,
+            0,
+            0,
+            0,
+            7,
+            9,
+            0,
+            0,
+            0,
+            17,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+        self.server.default_table.reset_match()
         await self.test_complete_practice_match_through_encrypted_socket()
 
     async def test_detached_result_deck_name_edit_after_continue_and_part(self):
@@ -293,7 +310,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             await self.client.read(), b":" + self.client.nick + b"!p@local PART " + TABLE_CHANNEL
         )
-        self.assertEqual(self.server.match.players, [])
+        self.assertEqual(self.server.default_table.match.players, [])
         self.assertFalse(self.server.economy.is_reserved(self.key))
         before = self.server.economy.inventory(self.key)
         payload = packet(0x43, 0x22, 0, "@Decks=/P=0/C=0@DN1=/S=" + b"After Match".hex())
@@ -334,7 +351,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
             f"@N{i}=/D=" + "|".join(map(str, c.full())) for i, c in enumerate(cards)
         )
         await self.request(TABLE_RAW, packet(0x43, 7, 0, body))
-        match = self.server.match
+        match = self.server.default_table.match
         for _ in range(20):
             if match.sequence == 9:
                 break
@@ -421,7 +438,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         replies = await self.request(TABLE_RAW, packet(0x43, 7, 0, body))
         self.assertEqual([decode(x).subtype for x in replies], [7, 8, 9])
-        self.assertEqual(self.server.match.snapshot()["hand_counts"], [5, 5])
+        self.assertEqual(self.server.default_table.match.snapshot()["hand_counts"], [5, 5])
         self.assertEqual(await self.request(TABLE_RAW, packet(0x43, 9, 0, "@TurnData=/Ans=0")), [])
         self.assertEqual(self.profile(), before)
 

@@ -69,10 +69,10 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.send(side, packet(1, body="@Req=/NN=" + nn))
         for side in range(self.player_count):
             await self.send(side, packet(0x41, 8, body="@GameOK="))
-        self.assertEqual(self.server.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.phase, "selection")
 
     async def play(self):
-        match = self.server.match
+        match = self.server.default_table.match
         rng = random.Random(0)
         self.before = [self.server.economy.inventory(k) for k in self.keys]
         for side, cards in enumerate(self.before):
@@ -113,7 +113,7 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         return match
 
     async def choose(self):
-        match = self.server.match
+        match = self.server.default_table.match
         choices = 0
         while match.prize_choice is not None:
             choice = match.prize_choice
@@ -129,7 +129,7 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     def expected(self, settlement, seat):
         lost = {a.original_slot for a in settlement.transfers if a.loser == seat}
-        grown = self.server.match.players[seat].updated
+        grown = self.server.default_table.match.players[seat].updated
         kept = [full(c) for i, c in enumerate(grown) if i not in lost] + [
             full(c) for c in self.before[seat][5:]
         ]
@@ -153,14 +153,14 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 )
             for seat in range(self.player_count):
                 await self.send(seat, packet(0x43, 17, seat, "@Continue=/Ans=1/PR=0/Conf=0"))
-            self.assertEqual(self.server.match.phase, "selection")
+            self.assertEqual(self.server.default_table.match.phase, "selection")
             for key, cards in zip(self.keys, expected):
                 self.assertEqual(Counter(map(full, self.server.economy.inventory(key))), cards)
                 self.assertEqual(self.server.economy.balance(key), 10000)
             self.assertEqual(
                 sum(sum(x.values()) for x in expected), sum(len(x) for x in self.before)
             )
-        self.assertEqual(self.server.match.completed_matches, 2)
+        self.assertEqual(self.server.default_table.match.completed_matches, 2)
 
     async def test_restart_recovers_unaccepted_prizes_once(self):
         await self.admit()
@@ -189,10 +189,10 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_failed_last_choice_save_never_acknowledges_or_loses_cards(self):
         await self.admit()
         await self.play()
-        choice = self.server.match.prize_choice
+        choice = self.server.default_table.match.prize_choice
         self.assertIsNotNone(choice, "fixture must require a winner choice")
         while True:
-            preview = copy.deepcopy(self.server.match._prizes)
+            preview = copy.deepcopy(self.server.default_table.match._prizes)
             preview.select(choice.winner, choice.options[0].hand_index, choice_id=choice.choice_id)
             if preview.complete:
                 break
@@ -200,7 +200,7 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 choice.winner,
                 packet(0x43, 15, choice.winner, f"@GetSelect=/H={choice.options[0].hand_index}"),
             )
-            choice = self.server.match.prize_choice
+            choice = self.server.default_table.match.prize_choice
         before = self.path.read_bytes()
         with patch.object(Path, "replace", side_effect=OSError("injected prize save failure")):
             await self.clients[choice.winner].send(

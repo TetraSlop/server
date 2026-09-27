@@ -102,18 +102,27 @@ class EventServiceBoundaryTests(unittest.IsolatedAsyncioTestCase):
                             f"/CN={view.name.hex()}/Dm=1/Vol=1/GID={view.player_id:016X}",
                         )
                         reply_count = 2
-                    before = server.snapshot(), server.match.snapshot(), event.engine.snapshot()
+                    before = (
+                        server.snapshot(),
+                        server.default_table.match.snapshot(),
+                        event.engine.snapshot(),
+                    )
                     tokens = dict(server.economy._reservations)
                     # Check before transport-error cleanup could hide a second
                     # admission or release the original observer's ownership.
                     with self.assertRaisesRegex(ValueError, "current table"):
                         await server.event_matches.dispatch(peer, target, request)
-                    self.assertIn(peer, server.spectator_admissions)
+                    self.assertIn(peer, server.default_table.spectator_admissions)
                     self.assertNotIn(peer, spectators.admissions)
                     self.assertIsNone(coordinator.session(peer))
                     self.assertEqual(server.economy._reservations, tokens)
                     self.assertEqual(
-                        (server.snapshot(), server.match.snapshot(), event.engine.snapshot()), before
+                        (
+                            server.snapshot(),
+                            server.default_table.match.snapshot(),
+                            event.engine.snapshot(),
+                        ),
+                        before,
                     )
                     await self.barrier(event.observer)
                     await event.drain()
@@ -122,7 +131,7 @@ class EventServiceBoundaryTests(unittest.IsolatedAsyncioTestCase):
                         b"NOTICE " + ordinary.target + b" :" + packet(32, body="@ExitCh=")
                     )
                     await self.barrier(event.observer)
-                    self.assertNotIn(peer, server.spectator_admissions)
+                    self.assertNotIn(peer, server.default_table.spectator_admissions)
                     source = service_nick(target ^ GAME_KEY)
 
                     async def enter():
@@ -150,7 +159,12 @@ class EventServiceBoundaryTests(unittest.IsolatedAsyncioTestCase):
                     )
                     self.assertEqual(server.economy._reservations, reserved)
                     self.assertEqual(
-                        (server.snapshot(), server.match.snapshot(), event.engine.snapshot()), before
+                        (
+                            server.snapshot(),
+                            server.default_table.match.snapshot(),
+                            event.engine.snapshot(),
+                        ),
+                        before,
                     )
                     await self.barrier(event.observer)
                     await event.drain()

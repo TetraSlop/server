@@ -103,7 +103,7 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(logged.records), 1)
         self.assertEqual(broken.calls, {"write": 1, "flush": 1, "close": 1})
         self.assertIn("flush", str(server.log_error))
-        self.assertFalse(server.match_reservations)
+        self.assertFalse(server.default_table.match_reservations)
         self.assertFalse(server.economy.is_reserved(peers[0].nick.decode()))
         self.assertIsNone(server.storage_failed)
 

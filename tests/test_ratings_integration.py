@@ -51,7 +51,7 @@ class RatingIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.keys = [c.nick.decode() for c in self.clients]
 
     def assert_ratings(self, history_before):
-        match = self.server.match
+        match = self.server.default_table.match
         scores = match.observer_snapshot().scores
         for seat, key in enumerate(self.keys):
             state = history_before[seat].next(classify_result(scores, seat))
@@ -83,7 +83,7 @@ class RatingIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 await self.send(seat, packet(0x43, 17, seat, "@Continue=/Ans=1/PR=0/Conf=0"))
         self.assertEqual(
             sum(self.server.economy.balance(k) for k in self.keys)
-            + self.server.match.round_stake * self.player_count,
+            + self.server.default_table.match.round_stake * self.player_count,
             10000 * self.player_count,
         )
         crash = self.path.with_name("restart.json")
@@ -166,7 +166,7 @@ class CpuRatingIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.menu()
         await self.select(200, npc=30)
         await self.play()
-        match = self.server.match
+        match = self.server.default_table.match
         scores = match.observer_snapshot().scores
         expected = HistoryState().next(classify_result(scores, 0))
         self.assertEqual(self.server.ratings.history.state(self.key), expected)
@@ -175,7 +175,9 @@ class CpuRatingIntegrationTests(unittest.IsolatedAsyncioTestCase):
             expected.rating,
         )
         self.assertEqual(
-            self.server.match_economy.status(self.server.match_economy_round)["payouts"][0],
+            self.server.match_economy.status(self.server.default_table.match_economy_round)[
+                "payouts"
+            ][0],
             match.final_cards(self.server.nicks[self.client.nick]).stats.current_reward,
         )
 

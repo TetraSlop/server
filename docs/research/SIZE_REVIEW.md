@@ -1,6 +1,29 @@
 # Server size and structure review
 
-## Current consolidation checkpoint, 2026-09-27
+## Table ownership checkpoint, 2026-09-27
+
+The default table is now an explicit `OrdinaryTable`, just like additional
+tables. `Server` owns shared services and no longer inherits table fields or
+methods. Route maps, match callbacks, locks, reservation tokens and reset logic
+all refer to the actual table instance. Auction expiry now has a server-owned
+worker instead of a special branch in the default table's timeout loop.
+
+This improves ownership rather than reducing source size: the runtime package
+is **20,681 physical Python lines in 79 files**, nine more than the preceding
+checkpoint and 166 fewer than `844b6cf`. No forwarding properties or dynamic
+attribute proxy were added. Fifty test files now access the default table
+explicitly, including their assignment and fault-injection sites. Two new tests
+cover automatic auction expiry, shutdown and failed persistence.
+
+The complete portable suite passes 1,095 tests with 59 optional PostgreSQL
+skips and no failures; see [validation](../VALIDATION.md). The remaining bounded
+readability candidate is separating card catalogue/generation from account and
+shop handling. It would relocate roughly 140 lines and remove a match-to-shop
+dependency, not materially reduce total size. A follow-up source audit found no
+large safe block of remaining duplication; similar validators and settlement
+branches often encode different domains or commit boundaries.
+
+## Shared inventory and card checkpoint, 2026-09-27
 
 The runtime package at `844b6cf` contained **20,847 physical Python lines in
 77 files**. The first consolidation pass reduces this to **20,672 lines in
@@ -21,9 +44,9 @@ test lines in 153 files, and this pass adds one 186-line compatibility module.
 Research, documentation and dependencies are also excluded. Line counts include
 blank lines and comments; reducing those would not simplify the implementation.
 
-The next substantial structural target is table ownership and lifecycle handling,
-followed by the large match/economy dispatchers. No projected line saving is
-claimed before implementing and measuring those changes. The older review below
+Table ownership was the next structural target after this pass and is now
+addressed above. The large match/economy dispatchers remain candidates; no
+projected line saving is claimed before measuring changes. The older review below
 is retained as a historical checkpoint; its paths and counts predate packaging
 and subsequent feature work.
 

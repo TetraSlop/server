@@ -37,7 +37,7 @@ class CustomThreePlayerBoards(unittest.IsolatedAsyncioTestCase):
     assert_persisted_result = generated.GeneratedBoardsIntegrationTests.assert_persisted_result
 
     async def selection(self, fields):
-        match = self.server.match
+        match = self.server.default_table.match
         rng = CRTLCG(match.rng.state)
         shared = [rng() & 255 for _ in range(8)]
         for seat, key in enumerate(self.keys):
@@ -62,7 +62,9 @@ class CustomThreePlayerBoards(unittest.IsolatedAsyncioTestCase):
     async def test_all_non_cbc_tiles_complete_paid_rounds_and_rematches(self):
         for fields in LAYOUTS:
             async with self.scenario(3, money=True, start_fields=fields):
-                flags = tuple(self.server.match.special_flags[k] for k in ("st", "cb", "ca"))
+                flags = tuple(
+                    self.server.default_table.match.special_flags[k] for k in ("st", "cb", "ca")
+                )
                 await self.admit(flags, stake=137)
                 for number in (1, 2):
                     await self.selection(fields)
@@ -79,8 +81,8 @@ class CustomThreePlayerBoards(unittest.IsolatedAsyncioTestCase):
                                 f"@Continue=/Ans={1 if number==1 else 2}/PR=0/Conf=0",
                             ),
                         )
-                self.assertEqual(self.server.match.phase, "finished")
-                self.assertFalse(self.server.match_reservations)
+                self.assertEqual(self.server.default_table.match.phase, "finished")
+                self.assertFalse(self.server.default_table.match_reservations)
 
 
 class CustomEventBoard(unittest.IsolatedAsyncioTestCase):

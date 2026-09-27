@@ -75,14 +75,14 @@ class NativeCaptureReplayTests(unittest.IsolatedAsyncioTestCase):
                             received.append(decode(line.split(b" :", 1)[1]))
                     else:
                         self.fail("capture replay response limit")
-                self.assertEqual(server.match.phase, "turn")
-                self.assertEqual(server.match.players[0].character_id, 1)
-                self.assertEqual(len(server.match.players[0].hand), 5)
+                self.assertEqual(server.default_table.match.phase, "turn")
+                self.assertEqual(server.default_table.match.players[0].character_id, 1)
+                self.assertEqual(len(server.default_table.match.players[0].hand), 5)
                 self.assertTrue(
                     any(r.primary == 2 and r.sections["PLAYACK"]["EN"] == "1" for r in received)
                 )
                 self.assertTrue(any(r.primary == 0x43 and r.subtype == 8 for r in received))
-                self.assertEqual(len(server.match_reservations), 1)
+                self.assertEqual(len(server.default_table.match_reservations), 1)
             finally:
                 if hasattr(client, "writer"):
                     await client.close()

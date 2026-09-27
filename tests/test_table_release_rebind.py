@@ -45,13 +45,13 @@ class TableReleaseRebindTests(unittest.IsolatedAsyncioTestCase):
                 self.server.sessions.add(peer)
                 self.peers.append(peer)
             for peer in self.peers[:2]:
-                await peer.command(b"JOIN", [self.server.table_channel])
-                await self.server.dispatch_table(peer, packet(65, 1, body="@GameEN="))
-                await self.server.dispatch_table(peer, packet(1, body="@Req="))
+                await peer.command(b"JOIN", [self.server.default_table.table_channel])
+                await self.server.default_table.dispatch_table(peer, packet(65, 1, body="@GameEN="))
+                await self.server.default_table.dispatch_table(peer, packet(1, body="@Req="))
             for peer in self.peers[:2]:
-                await self.server.dispatch_table(peer, packet(65, 8, body="@GameOK="))
-            self.assertEqual(self.server.match.phase, "selection")
-            self.original = self.server.match
+                await self.server.default_table.dispatch_table(peer, packet(65, 8, body="@GameOK="))
+            self.assertEqual(self.server.default_table.match.phase, "selection")
+            self.original = self.server.default_table.match
             self.sibling, self.unrelated = self.server.ordinary_tables[1:]
             await self.unrelated.dispatch_table(self.peers[2], packet(65, 1, body="@GameEN="))
             self.unrelated_before = (
@@ -65,7 +65,7 @@ class TableReleaseRebindTests(unittest.IsolatedAsyncioTestCase):
     @asynccontextmanager
     async def paused_cleanup(self, trigger):
         entered, resume = asyncio.Event(), asyncio.Event()
-        publish = self.server.publish_room
+        publish = self.server.default_table.publish_room
 
         async def pause_first_publication(deliveries):
             if not entered.is_set():
@@ -73,15 +73,19 @@ class TableReleaseRebindTests(unittest.IsolatedAsyncioTestCase):
                 await resume.wait()
             await publish(deliveries)
 
-        with patch.object(self.server, "publish_room", side_effect=pause_first_publication):
+        with patch.object(
+            self.server.default_table, "publish_room", side_effect=pause_first_publication
+        ):
             owner = self.peers[0]
             task = asyncio.create_task(
-                owner.part(self.server.table_channel) if trigger == "part" else owner.close()
+                owner.part(self.server.default_table.table_channel)
+                if trigger == "part"
+                else owner.close()
             )
             try:
                 await asyncio.wait_for(entered.wait(), 10)
-                self.assertIsNot(self.server.match, self.original)
-                self.assertFalse(self.server.match_reservations)
+                self.assertIsNot(self.server.default_table.match, self.original)
+                self.assertFalse(self.server.default_table.match_reservations)
                 yield
             finally:
                 resume.set()
@@ -163,7 +167,7 @@ class TableReleaseRebindTests(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(trigger=trigger, target=target):
                     async with self.lobby():
                         peer = self.peers[1]
-                        table = self.server if target == "same" else self.sibling
+                        table = self.server.default_table if target == "same" else self.sibling
                         async with self.paused_cleanup(trigger):
                             await table.dispatch_table(peer, packet(65, 1, body="@GameEN="))
                             current = table.match
@@ -237,25 +241,27 @@ class TableReleaseRebindTests(unittest.IsolatedAsyncioTestCase):
                     async with self.paused_cleanup(trigger):
                         pass
                     self.assertTrue(self.peers[1].closed)
-                    self.assertFalse(self.server.match_reservations)
+                    self.assertFalse(self.server.default_table.match_reservations)
                     self.assertFalse(self.server.economy.is_reserved(self.peers[1].nick.decode()))
                     self.assertEqual(self.server.economy.snapshot(), before)
 
     async def test_failed_initial_release_still_closes_original_dependent(self):
         async with self.lobby():
             owner, dependent = self.peers[:2]
-            release = self.server.table_release_updates
+            release = self.server.default_table.table_release_updates
 
             def fail_first(peer):
                 if peer is owner:
                     raise OSError("injected initial cleanup failure")
                 return release(peer)
 
-            with patch.object(self.server, "table_release_updates", side_effect=fail_first):
+            with patch.object(
+                self.server.default_table, "table_release_updates", side_effect=fail_first
+            ):
                 await owner.close()
             self.assertTrue(dependent.closed)
-            self.assertIsNot(self.server.match, self.original)
-            self.assertFalse(self.server.match_reservations)
+            self.assertIsNot(self.server.default_table.match, self.original)
+            self.assertFalse(self.server.default_table.match_reservations)
             self.assertFalse(self.server.economy.is_reserved(dependent.nick.decode()))
 
 

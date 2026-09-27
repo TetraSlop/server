@@ -194,7 +194,7 @@ class ComputerDiscoveryIntegration(unittest.IsolatedAsyncioTestCase):
             replies = await self.request(raw, packet(0x43, 7, 0, body))
             start = next(decode(p).sections["StartData"] for p in replies if b"@StartData=" in p)
             self.assertEqual(len(start["F"].split("|")), 25)
-            self.assertEqual(self.server.match.player_count, 3)
+            self.assertEqual(self.server.default_table.match.player_count, 3)
         finally:
             await profile.stop()
 

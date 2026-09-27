@@ -114,9 +114,9 @@ class OrdinaryChannelCaseTests(unittest.IsolatedAsyncioTestCase):
     async def test_first_lowercase_join_uses_advertised_table_for_observer(self):
         client = self.clients[1]
         peer = self.server.nicks[client.nick]
-        channel = self.server.table_channel
-        before = self.server.snapshot(), self.server.match.snapshot()
-        reservations = dict(self.server.match_reservations)
+        channel = self.server.default_table.table_channel
+        before = self.server.snapshot(), self.server.default_table.match.snapshot()
+        reservations = dict(self.server.default_table.match_reservations)
         await client.send(b"JOIN " + channel.lower())
         lines = await self.flush(1)
         self.assertEqual(lines[0], peer.prefix + b"JOIN :" + channel)
@@ -132,14 +132,16 @@ class OrdinaryChannelCaseTests(unittest.IsolatedAsyncioTestCase):
             b"NOTICE " + self.target + b" :" + packet(0x42, 1, body=f"@Chat=/NN={view.nn:016X}")
         )
         await self.flush(1)
-        self.assertIn(peer, self.server.spectator_admissions)
+        self.assertIn(peer, self.server.default_table.spectator_admissions)
         await client.send(b"PART " + channel.lower())
         self.assertEqual(await self.flush(1), [peer.prefix + b"PART " + channel])
-        self.assertNotIn(peer, self.server.spectator_admissions)
+        self.assertNotIn(peer, self.server.default_table.spectator_admissions)
         self.assertNotIn(channel, self.server.channels)
         self.assertNotIn(self.target, self.server.chat.groups)
-        self.assertEqual((self.server.snapshot(), self.server.match.snapshot()), before)
-        self.assertEqual(self.server.match_reservations, reservations)
+        self.assertEqual(
+            (self.server.snapshot(), self.server.default_table.match.snapshot()), before
+        )
+        self.assertEqual(self.server.default_table.match_reservations, reservations)
         self.assertFalse(peer.closed)
         self.assertFalse(self.server.economy.is_reserved(client.nick.decode()))
 

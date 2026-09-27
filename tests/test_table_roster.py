@@ -96,10 +96,10 @@ class RosterIntegration(unittest.IsolatedAsyncioTestCase):
         return out
 
     async def table(self, side, payload, table=None):
-        return await self.send(side, (table or self.server).room.table_id, payload)
+        return await self.send(side, (table or self.server.default_table).room.table_id, payload)
 
     async def enter(self, side, table=None, token=b"DE", ready=False):
-        table = table or self.server
+        table = table or self.server.default_table
         view = self.server.economy.account_view(self.clients[side].nick.decode())
         payload = presence(table.room.room_id, view.nn, view.player_id, view.name, token)
         if ready:
@@ -122,7 +122,7 @@ class RosterIntegration(unittest.IsolatedAsyncioTestCase):
         ]
 
     def assert_rosters(self, out, counts, table=None):
-        source = service_nick((table or self.server).table_raw)
+        source = service_nick((table or self.server.default_table).table_raw)
         self.assertEqual([[int(f["Num"]) for s, f in rows] for rows in self.rosters(out)], counts)
         for rows in self.rosters(out):
             for s, fields in rows:
@@ -156,7 +156,7 @@ class RosterIntegration(unittest.IsolatedAsyncioTestCase):
             await self.table(side, packet(1, body="@Req="))
         for side in (0, 1, 2):
             await self.table(side, packet(65, 8, body="@GameOK="))
-        self.assertEqual(self.server.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.phase, "selection")
 
     async def test_explicit_retry_waits_for_fresh_presence_and_refreshes_same_roster(self):
         for side in (0, 1):
@@ -165,31 +165,31 @@ class RosterIntegration(unittest.IsolatedAsyncioTestCase):
         await self.table(0, packet(20, body=NATIVE_SETTINGS))
         await self.enter(1, token=b"PD", ready=True)
         self.assert_rosters(await self.admit(1), [[], [], [], []])
-        self.assertNotIn(self.peers[1], self.server.table_roster.ready)
+        self.assertNotIn(self.peers[1], self.server.default_table.table_roster.ready)
         self.assert_rosters(await self.enter(1, token=b"PD", ready=True), [[], [2], [], []])
         self.assert_rosters(await self.enter(1, token=b"PD", ready=True), [[], [], [], []])
 
     async def test_presence_before_admission_or_from_unseated_member_cannot_enable_roster(self):
         await self.enter(0, ready=True)
         self.assert_rosters(await self.enter(0, token=b"PD", ready=True), [[], [], [], []])
-        self.assertFalse(self.server.match.players)
+        self.assertFalse(self.server.default_table.match.players)
         self.assert_rosters(await self.admit(0), [[], [], [], []])
         await self.enter(1)
         await self.admit(1)
         self.assert_rosters(await self.enter(1, token=b"PD", ready=True), [[], [2], [], []])
-        self.assertNotIn(self.peers[0], self.server.table_roster.ready)
+        self.assertNotIn(self.peers[0], self.server.default_table.table_roster.ready)
         self.assert_rosters(
             await self.table(0, packet(20, body=NATIVE_SETTINGS)), [[2], [], [], []]
         )
         await self.enter(2)
         self.assert_rosters(await self.enter(2, token=b"PD", ready=True), [[], [], [], []])
-        self.assertEqual(len(self.server.match.players), 2)
+        self.assertEqual(len(self.server.default_table.match.players), 2)
         bad = presence(self.server.room.room_id, 999, 3, token=b"PD")
         with self.assertRaises(ValueError):
             await services.dispatch(
                 self.peers[2], service_nick(self.server.room.room_id ^ GAME_KEY), bad
             )
-        self.assertEqual(self.server.table_roster.ready, set(self.peers[:2]))
+        self.assertEqual(self.server.default_table.table_roster.ready, set(self.peers[:2]))
 
     async def test_shared_room_roster_notices_use_only_the_members_actual_table(self):
         tables = self.server.ordinary_tables[1:]
@@ -210,13 +210,13 @@ class RosterIntegration(unittest.IsolatedAsyncioTestCase):
             await self.enter(3, tables[1], b"PD", True), [[], [], [], [2]], tables[1]
         )
         self.assertEqual([len(t.table_roster.ready) for t in tables], [2, 2])
-        self.assertFalse(self.server.table_roster.ready)
+        self.assertFalse(self.server.default_table.table_roster.ready)
 
     async def test_last_seat_race_rejects_without_disconnect_then_allows_retry(self):
         for side in (0, 1, 2):
             await self.admit(side)
-        before = self.server.match.snapshot()
-        tokens = dict(self.server.match_reservations)
+        before = self.server.default_table.match.snapshot()
+        tokens = dict(self.server.default_table.match_reservations)
         state = self.server.economy.snapshot()
         requests = [
             (packet(65, 1, body="@GameEN="), "GameEA"),
@@ -230,15 +230,15 @@ class RosterIntegration(unittest.IsolatedAsyncioTestCase):
                 decode(out[3][0][1]).sections,
                 {section: {"EN": "-32871" if section == "GameECA" else "-32870"}},
             )
-            self.assertEqual(self.server.match.snapshot(), before)
-            self.assertEqual(self.server.match_reservations, tokens)
+            self.assertEqual(self.server.default_table.match.snapshot(), before)
+            self.assertEqual(self.server.default_table.match_reservations, tokens)
             self.assertEqual(self.server.economy.snapshot(), state)
             self.assertFalse(self.server.economy.is_reserved(self.clients[3].nick.decode()))
         identity = self.server.economy.account_view(self.clients[1].nick.decode()).nn
         await self.table(0, packet(65, 5, body=f"@GameQT=/ID={identity:016X}"))
         out = await self.admit(3)
         self.assertEqual(decode(out[3][-1][1]).sections, {"GameEA": {"EN": "2"}})
-        self.assertEqual(len(self.server.match.players), 3)
+        self.assertEqual(len(self.server.default_table.match.players), 3)
         self.assertTrue(self.server.economy.is_reserved(self.clients[3].nick.decode()))
 
     async def test_busy_match_rejection_preserves_active_players_and_authenticated_identity(self):
@@ -247,8 +247,8 @@ class RosterIntegration(unittest.IsolatedAsyncioTestCase):
             await self.table(side, packet(1, body="@Req="))
         for side in (0, 1, 2):
             await self.table(side, packet(65, 8, body="@GameOK="))
-        before = self.server.match.snapshot()
-        tokens = dict(self.server.match_reservations)
+        before = self.server.default_table.match.snapshot()
+        tokens = dict(self.server.default_table.match_reservations)
         for request, section in (
             (packet(65, 1, body="@GameEN="), "GameEA"),
             (packet(1, body="@Req="), "PLAYACK"),
@@ -259,17 +259,19 @@ class RosterIntegration(unittest.IsolatedAsyncioTestCase):
                 decode(out[3][0][1]).sections,
                 {section: {"EN": "-32869" if section == "PLAYACK" else "-32871"}},
             )
-            self.assertEqual(self.server.match.snapshot(), before)
-            self.assertEqual(self.server.match_reservations, tokens)
+            self.assertEqual(self.server.default_table.match.snapshot(), before)
+            self.assertEqual(self.server.default_table.match_reservations, tokens)
         for body in ("@GameEN=/NN=0000000000000000", "@GameEN=/HID=2147483648"):
             with self.assertRaises(ValueError):
-                await self.server.dispatch_table(self.peers[3], packet(65, 1, body=body))
-        self.assertEqual(self.server.match.snapshot(), before)
+                await self.server.default_table.dispatch_table(
+                    self.peers[3], packet(65, 1, body=body)
+                )
+        self.assertEqual(self.server.default_table.match.snapshot(), before)
 
     async def test_concurrent_requests_for_last_seat_have_one_winner_and_no_disconnect(self):
         for side in (0, 1):
             await self.admit(side)
-        target = service_nick(self.server.table_raw)
+        target = service_nick(self.server.default_table.table_raw)
         request = b"NOTICE " + target + b" :" + packet(65, 1, body="@GameEN=")
         await asyncio.gather(*(self.clients[side].send(request) for side in (2, 3)))
         out = await self.drain(2)
@@ -277,9 +279,10 @@ class RosterIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sorted(answers), ["-32870", "2"])
         winner = 2 + answers.index("2")
         loser = 5 - winner
-        self.assertEqual(len(self.server.match.players), 3)
+        self.assertEqual(len(self.server.default_table.match.players), 3)
         self.assertEqual(
-            set(self.server.match_reservations), {self.peers[0], self.peers[1], self.peers[winner]}
+            set(self.server.default_table.match_reservations),
+            {self.peers[0], self.peers[1], self.peers[winner]},
         )
         self.assertFalse(self.server.economy.is_reserved(self.clients[loser].nick.decode()))
         self.assertFalse(self.peers[loser].closed)

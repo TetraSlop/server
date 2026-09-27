@@ -30,13 +30,17 @@ class SpectatorReentryTests(unittest.IsolatedAsyncioTestCase):
 
     async def reentry(self, *, part=False, completion="cancel"):
         await self.admit_watch()
-        table = self.server
-        peer = table.nicks[self.clients[1].nick]
+        table = self.server.default_table
+        peer = self.server.nicks[self.clients[1].nick]
         original = peer.send
         blocked, cancelled, retire = asyncio.Event(), asyncio.Event(), asyncio.Event()
         new_blocked, release_new = asyncio.Event(), asyncio.Event()
         old_completed = asyncio.Event()
-        before = table.match.snapshot(), dict(table.match_reservations), table.economy.snapshot()
+        before = (
+            table.match.snapshot(),
+            dict(table.match_reservations),
+            self.server.economy.snapshot(),
+        )
 
         async def controlled(message):
             if b"@WatchInfo=" in message:
@@ -76,7 +80,7 @@ class SpectatorReentryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(old_task, table.spectator_tasks)
                 if part:
                     await self.clients[1].join(TABLE_CHANNEL)
-                view = table.economy.account_view(peer.nick.decode())
+                view = self.server.economy.account_view(peer.nick.decode())
                 await self.clients[1].send(
                     b"NOTICE " + self.target + b" :" + packet(1, body=native_identity(view, "Req"))
                 )
@@ -103,9 +107,13 @@ class SpectatorReentryTests(unittest.IsolatedAsyncioTestCase):
                 await self.observer_barrier()
                 self.assertIn(peer, table.spectator_admissions)
                 self.assertFalse(peer.closed)
-                self.assertFalse(table.nicks[self.clients[0].nick].closed)
+                self.assertFalse(self.server.nicks[self.clients[0].nick].closed)
                 self.assertEqual(
-                    (table.match.snapshot(), table.match_reservations, table.economy.snapshot()),
+                    (
+                        table.match.snapshot(),
+                        table.match_reservations,
+                        self.server.economy.snapshot(),
+                    ),
                     before,
                 )
             finally:
@@ -126,18 +134,23 @@ class SpectatorReentryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_current_writer_failure_closes_only_observer(self):
         await self.admit_watch()
-        table = self.server
-        peer = table.nicks[self.clients[1].nick]
-        before = table.match.snapshot(), dict(table.match_reservations), table.economy.snapshot()
+        table = self.server.default_table
+        peer = self.server.nicks[self.clients[1].nick]
+        before = (
+            table.match.snapshot(),
+            dict(table.match_reservations),
+            self.server.economy.snapshot(),
+        )
         with patch.object(peer, "send", side_effect=OSError("current observer writer failed")):
             await self.request_watch()
             self.assertEqual(await self.clients[1].read(), b"")
         self.assertTrue(peer.closed)
         self.assertNotIn(peer, table.spectator_admissions)
         self.assertNotIn(peer, table.spectator_senders)
-        self.assertFalse(table.nicks[self.clients[0].nick].closed)
+        self.assertFalse(self.server.nicks[self.clients[0].nick].closed)
         self.assertEqual(
-            (table.match.snapshot(), table.match_reservations, table.economy.snapshot()), before
+            (table.match.snapshot(), table.match_reservations, self.server.economy.snapshot()),
+            before,
         )
 
 

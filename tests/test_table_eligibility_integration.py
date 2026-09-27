@@ -19,9 +19,9 @@ class TableEligibilityIntegrationTests(unittest.IsolatedAsyncioTestCase):
     def admission_state(self):
         return (
             self.server.snapshot(),
-            self.server.match.snapshot(),
-            self.server.match.rng.state,
-            dict(self.server.match_reservations),
+            self.server.default_table.match.snapshot(),
+            self.server.default_table.match.rng.state,
+            dict(self.server.default_table.match_reservations),
             self.server.room.snapshot(),
             self.server.room.sequence,
             self.path.read_bytes(),
@@ -38,7 +38,7 @@ class TableEligibilityIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decode(replies[0][0]).sections["GameEA"]["EN"], "1")
         settings = NATIVE_SETTINGS.replace("/lu=100/ll=0", f"/lu={points + 1}/ll={points + 1}")
         await self.send(0, packet(0x14, body=settings))
-        self.assertTrue(self.server.match.settings_applied)
+        self.assertTrue(self.server.default_table.match.settings_applied)
         before = self.admission_state()
 
         for request, section, answer, error in (
@@ -51,7 +51,7 @@ class TableEligibilityIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(replies[1]), 1)
                 self.assertEqual(decode(replies[1][0]).sections, {answer: {"EN": error}})
                 self.assertEqual(self.admission_state(), before)
-                self.assertNotIn(guest_peer, self.server.match_reservations)
+                self.assertNotIn(guest_peer, self.server.default_table.match_reservations)
                 self.assertFalse(self.server.economy.is_reserved(self.keys[1]))
 
         # The same authenticated connection can join when both inclusive
@@ -60,8 +60,8 @@ class TableEligibilityIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.send(0, packet(0x14, body=settings))
         replies = await self.send(1, packet(0x41, 1, 1, native_identity(guest, "GameEN")))
         self.assertEqual(decode(replies[1][0]).sections["GameEA"]["EN"], "2")
-        self.assertEqual(len(self.server.match.players), 2)
-        self.assertIn(guest_peer, self.server.match_reservations)
+        self.assertEqual(len(self.server.default_table.match.players), 2)
+        self.assertIn(guest_peer, self.server.default_table.match_reservations)
         self.assertTrue(self.server.economy.is_reserved(self.keys[1]))
 
         replies = await self.send(1, packet(1, body=native_identity(guest, "Req")))

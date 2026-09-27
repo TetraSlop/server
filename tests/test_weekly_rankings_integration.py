@@ -119,7 +119,7 @@ class WeeklyRankingIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.request(
                 TABLE_RAW, packet(67, 17, 0, f"@Continue=/Ans={answer}/PR=0/Conf=0")
             )
-        self.assertEqual(self.server.match.phase, "finished")
+        self.assertEqual(self.server.default_table.match.phase, "finished")
         return before, self.stats()
 
     async def test_committed_rounds_roll_on_monday_and_issued_files_stay_immutable(self):

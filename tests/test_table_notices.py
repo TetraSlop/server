@@ -55,30 +55,30 @@ class TableNoticeIntegration(unittest.IsolatedAsyncioTestCase):
         await self.send(0, packet(20, body=NATIVE_SETTINGS))
         await self.send(0, packet(65, 10, body="@GameReady="))
         await self.send(0, packet(1, body="@Req="))
-        m = self.server.match
+        m = self.server.default_table.match
         before = self.server.economy.snapshot()
         replies = await self.send(0, packet(32, body="@ExitCh="))
         fail = packet(65, 16, body="@GameWa=/Error=-1")
         self.assertEqual(replies, [[], [fail], [fail], []])
         self.assertEqual(m.phase, "finished")
-        self.assertFalse(self.server.match_reservations)
+        self.assertFalse(self.server.default_table.match_reservations)
         self.assertEqual(self.server.economy.snapshot(), before)
         self.assertEqual(await self.send(0, packet(32, body="@ExitCh=")), [[], [], [], []])
         self.assertTrue(all(not p.closed for p in self.server.sessions))
 
     async def test_viewer_notices_and_nonmember_exit_have_no_success_reply_or_seat(self):
         await self.admit(0)
-        m = self.server.match
+        m = self.server.default_table.match
         peer = self.server.nicks[self.clients[0].nick]
         before = m.snapshot()
-        tokens = dict(self.server.match_reservations)
+        tokens = dict(self.server.default_table.match_reservations)
         self.assertEqual(await self.send(0, packet(65, 17, body="@Viewer=/IN=0")), [[], [], [], []])
         self.assertEqual(m.viewer_peers, {peer})
         self.assertEqual(await self.send(3, packet(65, 17, body="@Viewer=/IN=0")), [[], [], [], []])
         self.assertEqual(await self.send(3, packet(32, body="@ExitCh=")), [[], [], [], []])
         self.assertEqual(m.viewer_peers, {peer})
         self.assertEqual(m.snapshot(), before)
-        self.assertEqual(self.server.match_reservations, tokens)
+        self.assertEqual(self.server.default_table.match_reservations, tokens)
         self.assertEqual(
             await self.send(0, packet(65, 17, body="@Viewer=/OUT=0")), [[], [], [], []]
         )

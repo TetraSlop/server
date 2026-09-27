@@ -208,7 +208,7 @@ class FlexibleSeatNetwork(unittest.IsolatedAsyncioTestCase):
             await self.send(side, packet(65, 1, body=f"@GameEN=/NN={player_id(c.nick):016X}"))
         await self.send(0, packet(20, body=NATIVE_SETTINGS.replace("/bm=0", "/bm=200")))
         await self.send(0, packet(65, 10, body="@GameReady="))
-        self.assertEqual(self.server.match.player_count, self.player_count)
+        self.assertEqual(self.server.default_table.match.player_count, self.player_count)
         for side in range(self.player_count):
             await self.send(side, packet(1, body="@Req="))
         for side in range(self.player_count):
@@ -225,7 +225,7 @@ class FlexibleSeatNetwork(unittest.IsolatedAsyncioTestCase):
                 )
             for side in range(self.player_count):
                 await self.send(side, packet(67, 17, side, "@Continue=/Ans=1/PR=0/Conf=0"))
-            self.assertEqual(self.server.match.player_count, self.player_count)
+            self.assertEqual(self.server.default_table.match.player_count, self.player_count)
         restored = Server(state_path=self.path, account_count=3, rating_mode="local-history")
         try:
             for key in self.keys:
@@ -274,7 +274,7 @@ class FlexibleSeatAdmissionRace(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(reply.sections[section], {"Join": "0", "Mem": "0"})
             await late.send(b"PING :still-open")
             self.assertEqual(await late.read(), b"PONG still-open")
-            self.assertEqual(len(self.server.match.players), 2)
+            self.assertEqual(len(self.server.default_table.match.players), 2)
             self.assertFalse(self.server.economy.is_reserved(late.nick.decode()))
         finally:
             await late.close()

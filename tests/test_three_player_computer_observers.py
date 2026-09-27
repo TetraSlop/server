@@ -49,7 +49,7 @@ class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
         await self.player(packet(0x41, 0x12, body=native_identity(view, "GameENC")))
         await self.player(packet(1, body=native_identity(view, "Req")))
         await self.player(packet(0x43, 6, 3, "@ComGame=/Rule=0|0|0|0|2|0|0|1/Com=1|30"))
-        self.assertEqual(self.server.match.phase, "selection")
+        self.assertEqual(self.server.default_table.match.phase, "selection")
         self.observer_accounts = {
             client.nick.decode(): self.server.snapshot()["accounts"][client.nick.decode()]
             for client in self.clients[1:]
@@ -100,7 +100,7 @@ class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
         return info
 
     async def advance(self):
-        match = self.server.match
+        match = self.server.default_table.match
         await self.player(packet(0x43, 9, match.sequence, "@TurnData=/Ans=0"))
         if match.phase == "turn" and match.active == 0:
             await self.player(
@@ -129,7 +129,7 @@ class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
         await early.join(TABLE_CHANNEL)
         await late.join(TABLE_CHANNEL)
         self.assertIn(b"JOIN :" + TABLE_CHANNEL, await early.read())
-        match = self.server.match
+        match = self.server.default_table.match
         before = match.snapshot()
         await self.watch(early, joined=True)
         boot = await self.read_watch(early)
@@ -187,7 +187,9 @@ class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(self.server.economy.is_busy(key))
             self.assertEqual(self.server.snapshot()["accounts"][key], self.observer_accounts[key])
             self.assertEqual(saved["accounts"][key], self.observer_accounts[key])
-        self.assertEqual(set(self.server.match_reservations), {self.server.nicks[human.nick]})
+        self.assertEqual(
+            set(self.server.default_table.match_reservations), {self.server.nicks[human.nick]}
+        )
         await late.send(b"NOTICE " + self.target + b" :" + packet(0x43, 9, 15, "@TurnData=/Ans=0"))
         self.assertEqual(await late.read(), b"")
         for client in (human, early):
