@@ -47,6 +47,14 @@ silently saving a receipt that omitted progress. The current network adapter
 already passes tuples; this corrects the service API, not a demonstrated client
 exploit.
 
+Progress updates are also prepared in an isolated EventHost before publication.
+A later participant's existing update ID can conflict even after membership and
+step limits have validated. Such a failure now leaves all participants and the
+result receipt unchanged, including when calling EventResults directly. A fresh
+result ID can then complete and replay after restart. The network adapter's
+outer transaction already protects durable state; this closes the corresponding
+in-memory service boundary without changing event policy.
+
 Configuration uses raw41-bit service IDs and explicit table channels. Event
 table IDs cannot collide with accounts or existing event/standard routes.
 Three-human event tables require `--accounts 3`; ordinary table mode can remain

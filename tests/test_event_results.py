@@ -101,6 +101,35 @@ class EventResultTests(unittest.TestCase):
         self.assertEqual(self.journal.snapshot(), receipts)
         self.assertEqual(self.economy.snapshot(), before)
 
+    def test_conflicting_last_progress_receipt_does_not_partly_apply_result(self):
+        outcome = EventRoundOutcome((1, 2, 3), (6, 5, 4), (0, 2, 4), False)
+        # A trusted progress update already used this ID with different facts.
+        self.host.update_progress("2", "festival", "conflict", steps_delta=2)
+        before = self.host.snapshot(), self.journal.snapshot(), self.economy.snapshot()
+        with self.assertRaisesRegex(ValueError, "progress ID replay has different facts"):
+            self.journal.record(
+                self.host, "festival", "conflict", outcome, ("0", "1", "2"), "rounds"
+            )
+        self.assertEqual(
+            (self.host.snapshot(), self.journal.snapshot(), self.economy.snapshot()), before
+        )
+        # The failed ID does not poison a valid later result or its replay.
+        self.assertTrue(
+            self.journal.record(
+                self.host, "festival", "fresh", outcome, ("0", "1", "2"), "rounds"
+            )
+        )
+        self.assertEqual(
+            tuple(self.host.member(str(i), "festival").steps for i in range(3)), (1, 1, 3)
+        )
+        saved = self.host.snapshot(), self.journal.snapshot()
+        host = EventHost.restore(self.economy, (self.cfg,), saved[0], clock=lambda: 200)
+        journal = EventResults.restore(saved[1])
+        self.assertFalse(
+            journal.record(host, "festival", "fresh", outcome, ("0", "1", "2"), "rounds")
+        )
+        self.assertEqual((host.snapshot(), journal.snapshot()), saved)
+
     def test_account_iterator_validates_every_participant_before_progress(self):
         self.economy.provision("3", nn=game_id(4), player_id=4, name=b"Nonmember")
         outcome = EventRoundOutcome((1, 2), (7, 3), (1, 3), False)

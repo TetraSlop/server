@@ -19,6 +19,21 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- EventResults now prepares all progress updates before publishing any member
+  changes. A final participant's conflicting existing progress receipt could
+  previously leave earlier participants advanced in a direct service call,
+  despite no completed result receipt. The existing network transaction already
+  protected durable state. The new regression fails before the fix and checks
+  unchanged accounts/journals plus valid retry and exact restart afterward.
+  Twenty focused result/transaction checks pass in 0.073 seconds. Independent
+  review found no regression. A separate event claim/membership audit passes
+  30 existing tests and six combined partial-claim/cap/exclusion/restart cases,
+  finding no additional defect; no duplicate tests were added. See VALIDATION.md
+  and research/EVENT_ADAPTER_NOTES.md.
+  Three encrypted round/progress/save-failure tests pass in 13.286 seconds.
+  Collection finds 1,119 cases; Ruff/whitespace pass. The rebuilt 85-entry wheel
+  passes clean installation, entry points, administration/recovery and temporary
+  listeners, with all 80 runtime files byte-matching source.
 - VS. Rating source research (`ade40fb`) recovers the original offline random
   component generator and its separate presentation rule: first result order
   draws two rand%1000 components; other orders draw -(rand%1500),0. The original

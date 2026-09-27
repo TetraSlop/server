@@ -88,8 +88,11 @@ class EventResults:
                 raise ValueError("event progress is outside the supported member state")
             if delta:
                 updates.append((key, delta))
-        for key, delta in updates:
-            host.update_progress(key, row["event"], row["id"], steps_delta=delta)
+        if updates:
+            staged = host.stage_state(host.economy)
+            for key, delta in updates:
+                staged.update_progress(key, row["event"], row["id"], steps_delta=delta)
+            host.publish_state(staged)
         self._rows[row["id"]] = row
         return True
 

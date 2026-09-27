@@ -1,5 +1,39 @@
 # Packaging and transaction validation
 
+## Event progress publication and claim recovery, 2026-09-27
+
+The direct EventResults API could partly advance earlier participants when a
+later participant's existing progress ID had conflicting facts. Membership and
+step limits were prevalidated, but update receipts were checked while applying
+changes. Progress now stages through EventHost and publishes only after every
+update succeeds. The production adapter already stages its outer transaction;
+this is an in-memory API correction, not a demonstrated saved-state loss.
+
+- The new last-participant conflict regression fails before the fix:
+  `results/event-progress-conflict-before.log`. It then passes with exact
+  account/journal preservation, valid retry and replay after restore.
+- All 20 result and claim-transaction checks pass in 0.073 seconds:
+  `results/event-progress-conflict-focused.log`.
+- Three encrypted integration checks pass in 13.286 seconds: complete two-human
+  and three-human rounds, explicit wins progress, and withheld result/progress
+  after a failed save. Log: `results/event-progress-conflict-encrypted.log`.
+- Independent review found no issue with staged journal ownership, immutable
+  member/admission values or outer persistence ordering.
+- A separate 30-test event claim/membership selection passes in 8.174 seconds:
+  exact names are in `results/event-claims-persistence-audit-tests.log`.
+  Six additional in-memory recovery combinations pass, covering mixed grants
+  across nine-card batches, queued grants, capped money, excluded/re-enabled
+  members after event end and IDs scoped to accounts/events. Results are in
+  `results/event-claims-persistence-audit-matrix.log`. No further defect or
+  duplicate tests resulted from that audit.
+
+Collection finds 1,119 cases without import errors; Ruff and whitespace checks
+pass. These focused runs do not claim a new whole-suite, PostgreSQL or native UI
+pass. The rebuilt 85-entry wheel passes clean dependency-free installation,
+entry points, JSON administration/recovery and temporary listeners; all 80
+runtime files byte-match source. Logs: `results/event-progress-wheel-{build,check}.log`.
+SHA256: `9d379180bf260de1534951169b30a6e1037273f281f831788f165bf73605ea46`.
+
 ## VS. Rating producer and neutral hosted controls, 2026-09-27
 
 Original probe `ade40fb` passes 93 cases: 72 complete offline result/presentation
