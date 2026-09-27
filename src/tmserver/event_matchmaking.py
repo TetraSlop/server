@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, replace
 
 from tmserver import native_special_rules as special
 from tmserver.admission_identity import validate_admission
-from tmserver.economy_service import collection_points
+from tmserver.card_catalog import collection_points
 from tmserver.event_matches import (
     EventMatchRound,
     EventParticipant,

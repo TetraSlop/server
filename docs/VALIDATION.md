@@ -1,5 +1,39 @@
 # Packaging and transaction validation
 
+## Card catalogue ownership, 2026-09-27
+
+Card catalogue loading/generation, sale arithmetic and collection points now
+live in `card_catalog`, independent of account and shop handling. `EconomyError`
+has one shared definition in `economy_errors`; existing economy imports remain
+exact aliases. Production catalogue consumers import the owning module directly.
+
+`Catalog`, `collection_points`, `_ARROW_COUNTS` and `EconomyError` are
+AST-identical to baseline `035bc8b`, as is the remaining `EconomyService` class.
+Five fresh-process checks pass for current-source imports, packaged/explicit-path
+resource loading, match construction without importing the account service,
+false-valued injected catalogue identity and compatibility exports. Evidence:
+`results/card-catalog-extraction-audit.py` and `.log`.
+
+All **63 focused tests pass**: 61 catalogue, economy, shop-offer, opponent-batch,
+match, CPU and admission cases in 0.468 seconds, plus two encrypted CPU
+prize/rematch/reconfiguration cases in 5.178 seconds. The first selection
+includes 2,186 frozen original-client generation/selection/sale vectors. Logs:
+`results/card-catalog-focused-tests.log` and
+`results/catalog-extraction-rounds.log`.
+
+Collection remains 1,154 tests with no import errors. Ruff and whitespace checks
+pass. The rebuilt 89-entry wheel passes clean dependency-free installation,
+entry points, JSON administration/recovery and temporary listeners. All 84
+runtime files byte-match source. Evidence:
+`results/catalog-extraction-wheel-{build,check}.log` and
+`results/catalog-extraction-wheel-result.json`.
+SHA256: `92f220e42ba1648aa8d796055b0f2c67431f1d0031b975192c08ff4ab1b10bdd`.
+
+Runtime Python is 20,692 physical lines in 81 files, an 11-line increase from
+module/import boundaries. This removes a dependency and a mixed responsibility,
+not a large quantity of code. The complete suite result below precedes this
+extraction; it was not repeated. No PostgreSQL instance or native client ran.
+
 ## Explicit ordinary-table ownership, 2026-09-27
 
 `Server` no longer inherits `OrdinaryTable`. Its `default_table` is an explicit

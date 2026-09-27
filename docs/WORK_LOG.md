@@ -20,6 +20,17 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Separated decoded card catalogue/generation, sale arithmetic and collection
+  points from account/shop handling into `card_catalog`. Match construction and
+  admission no longer import the account service for those operations. Shared
+  errors and old economy imports retain exact object identity. All moved
+  definitions and the remaining EconomyService class match baseline `035bc8b`
+  by AST comparison; five isolated import/resource/injection checks pass.
+  All 63 focused tests pass, including 2,186 original-client vectors and encrypted
+  CPU rounds/rematches. Clean wheel checks pass; all 84 runtime files match
+  source. Collection remains 1,154 tests. Runtime is 20,692 lines (+11); this is
+  clearer ownership, not a line-count reduction. The preceding full suite was
+  not repeated for this unchanged algorithm extraction. See VALIDATION.md.
 - Removed the server/default-table inheritance relationship. Every ordinary
   table now has the same concrete owner, including `server.default_table`.
   Route maps, callbacks and disconnect ownership retain table identity; shared

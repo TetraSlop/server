@@ -11,11 +11,11 @@ import struct
 from copy import copy
 from dataclasses import dataclass, replace
 
+from tmserver.card_catalog import collection_points
 from tmserver.economy_service import (
     MAX_MONEY,
     Card,
     EconomyError,
-    collection_points,
     named,
     parse_named,
 )

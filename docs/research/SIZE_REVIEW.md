@@ -1,5 +1,17 @@
 # Server size and structure review
 
+## Catalogue ownership checkpoint, 2026-09-27
+
+Card generation, sale arithmetic and collection points now live in `card_catalog`
+instead of the account/shop service. Match setup and admission import that module
+directly. The move preserves the algorithms and existing economy imports; shared
+errors have one definition. The runtime package is **20,692 physical Python
+lines in 81 files**, 11 more than the preceding checkpoint and 155 fewer than
+the original `844b6cf` size review. Module boundaries improve readability here;
+they do not reduce the amount of behavior implemented. All 63 scoped tests,
+five import/resource checks and clean wheel checks pass; see
+[validation](../VALIDATION.md).
+
 ## Table ownership checkpoint, 2026-09-27
 
 The default table is now an explicit `OrdinaryTable`, just like additional
@@ -16,10 +28,10 @@ explicitly, including their assignment and fault-injection sites. Two new tests
 cover automatic auction expiry, shutdown and failed persistence.
 
 The complete portable suite passes 1,095 tests with 59 optional PostgreSQL
-skips and no failures; see [validation](../VALIDATION.md). The remaining bounded
-readability candidate is separating card catalogue/generation from account and
-shop handling. It would relocate roughly 140 lines and remove a match-to-shop
-dependency, not materially reduce total size. A follow-up source audit found no
+skips and no failures; see [validation](../VALIDATION.md). The next bounded
+readability candidate was separating card catalogue/generation from account and
+shop handling, now completed above. It relocated roughly 140 lines and removed
+a match-to-shop dependency without reducing total size. A follow-up audit found no
 large safe block of remaining duplication; similar validators and settlement
 branches often encode different domains or commit boundaries.
 

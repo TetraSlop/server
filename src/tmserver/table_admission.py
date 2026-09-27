@@ -1,6 +1,6 @@
 """Native entry restrictions and compatible nonfatal rejection replies."""
 
-from tmserver.economy_service import collection_points
+from tmserver.card_catalog import collection_points
 from tmserver.match_service import packet
 
 

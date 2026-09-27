@@ -12,7 +12,8 @@ from copy import copy
 from dataclasses import dataclass, replace
 
 from tmserver.auction_economy import AuctionError, Listing
-from tmserver.economy_service import Card, EconomyError, collection_points, named, parse_named
+from tmserver.card_catalog import collection_points
+from tmserver.economy_service import Card, EconomyError, named, parse_named
 from tmserver.inventory_edits import apply_card_edits, parse_edit_records
 from tmserver.tm_protocol import Command, encode, parse
 

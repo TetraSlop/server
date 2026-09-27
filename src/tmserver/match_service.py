@@ -16,6 +16,7 @@ from typing import Callable, Hashable
 
 from tmserver import native_special_rules as special
 from tmserver.admission_identity import validate_admission
+from tmserver.card_catalog import Catalog
 from tmserver.cards import Card as CardValue
 from tmserver.cards import card_values
 from tmserver.match_prizes import (
@@ -321,8 +322,6 @@ class MatchService:
         self.rng = CRTLCG(seed)
         self.draw = draw if draw is not None else self.rng
         if catalog is None:
-            from tmserver.economy_service import Catalog
-
             catalog = Catalog()
         self.catalog = catalog
         self.baselines = tuple(

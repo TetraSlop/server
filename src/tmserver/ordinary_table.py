@@ -4,7 +4,7 @@ import asyncio
 import uuid
 
 from tmserver.admission_identity import validate_admission
-from tmserver.economy_service import collection_points
+from tmserver.card_catalog import collection_points
 from tmserver.identities import GAME_KEY, player_id, service_nick
 from tmserver.match_departures import MatchDepartures
 from tmserver.match_service import MatchService

@@ -22,6 +22,14 @@ keep thin adapters for their different validation domains and wire encodings;
 `Card.from_card` converts through the receiving constructor. Economy imports
 continue to expose the shared value for compatibility.
 
+`card_catalog` owns decoded card data, card generation, prices and collection
+points. Matches and admission rules import it directly without depending on
+account/shop handling. `economy_errors` defines the shared rejection type;
+`economy_service` re-exports it and the catalogue API for existing callers.
+Catalogue construction loads packaged data or an explicit JSON path; matches
+also accept an injected catalogue. Neither operation creates accounts, loads
+saves or runs a service.
+
 `inventory_edits` parses numbered card records, matches owned copies in stable
 order and produces edited inventories without mutating its input. Shop, prize,
 event, auction, trade and result services retain header/seat validation, numeric

@@ -11,7 +11,8 @@ import re
 from copy import copy
 from dataclasses import asdict, dataclass, replace
 
-from tmserver.economy_service import MAX_MONEY, Card, EconomyError, collection_points
+from tmserver.card_catalog import collection_points
+from tmserver.economy_service import MAX_MONEY, Card, EconomyError
 
 INCREMENTS = (20, 50, 100, 200, 500, 1000)
 MAX_EXHIBITS = 30

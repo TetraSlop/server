@@ -9,7 +9,8 @@ client; Dead/Quit alone cannot undo an already displayed M4 reconciliation.
 import re
 from dataclasses import dataclass, field, replace
 
-from tmserver.economy_service import EconomyError, collection_points, named, parse_named
+from tmserver.card_catalog import collection_points
+from tmserver.economy_service import EconomyError, named, parse_named
 from tmserver.inventory_edits import apply_card_edits, parse_edit_records
 from tmserver.inventory_edits import match_owned as owned_indices
 
