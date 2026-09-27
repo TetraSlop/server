@@ -14,8 +14,9 @@ import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 
-from tmserver.database_schema import SERVICE_NAMES, WRITER_LOCK
-from tmserver.postgres_store import ACCOUNT_FIELDS, PostgresStateStore, database_engine
+from tmserver.database_schema import WRITER_LOCK
+from tmserver.postgres_store import PostgresStateStore, database_engine
+from tmserver.snapshot_validation import validate_snapshot
 
 
 def upgrade(url):
@@ -32,37 +33,6 @@ def upgrade(url):
             command.upgrade(config, "head")
     finally:
         engine.dispose()
-
-
-def validate_snapshot(snapshot, *, event_configs=()):
-    """Use the domain's restore validators without running startup recovery."""
-    from tmserver.auction_economy import AuctionEconomy
-    from tmserver.character_profiles import CharacterProfiles
-    from tmserver.economy_service import EconomyService
-    from tmserver.event_cards import EventCardService
-    from tmserver.event_results import EventResults
-    from tmserver.event_service import EventHost
-    from tmserver.match_economy import MatchEconomy
-    from tmserver.prize_service import PrizeService
-    from tmserver.rating_policy import RatingPolicy
-    from tmserver.result_rewards import ResultRewardService
-
-    if set(snapshot) - (SERVICE_NAMES | {"version", "accounts"}):
-        raise ValueError("unknown snapshot sections; refusing to discard them")
-    for account in snapshot["accounts"].values():
-        if set(account) != ACCOUNT_FIELDS:
-            raise ValueError("unsupported account fields")
-    economy = EconomyService.restore(snapshot)
-    auctions = AuctionEconomy.restore(economy, snapshot.get("auction"))
-    PrizeService.restore(economy, snapshot.get("prize"))
-    ResultRewardService.restore(economy, auctions, snapshot.get("result_rewards"))
-    MatchEconomy.restore(economy, snapshot.get("match_economy"))
-    RatingPolicy(economy, snapshot=snapshot.get("ratings"))
-    CharacterProfiles.restore(economy, snapshot.get("character_profiles"))
-    events = EventHost.restore(economy, event_configs, snapshot.get("events"))
-    EventCardService.restore(economy, events, snapshot.get("event_cards"))
-    EventResults.restore(snapshot.get("event_results"))
-    return economy
 
 
 def import_json(store, path, *, event_configs=()):

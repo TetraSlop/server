@@ -8,6 +8,8 @@ ordering, [database setup](DATABASE.md) for persistence, and
 [load testing](LOAD_TESTING.md) for repeatable measurements.
 The optional [weekly rankings](WEEKLY_RANKINGS.md) record future local match
 rewards and prior-week ratings using an explicit UTC calendar policy.
+[Offline administration](ADMIN.md) provides account lookup, prize awards and
+event grants or eligibility through the existing transaction boundaries.
 
 [Persistence design](PERSISTENCE_DESIGN.md) explains the current data model.
 [Historical research notes](research/README.md) retain the original protocol

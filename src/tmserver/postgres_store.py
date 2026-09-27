@@ -22,20 +22,7 @@ from tmserver.database_schema import (
     service_state,
     state_meta,
 )
-
-ACCOUNT_FIELDS = frozenset(
-    {
-        "nn",
-        "player_id",
-        "name_hex",
-        "guild",
-        "balance",
-        "cards",
-        "deck_names",
-        "template_hex",
-        "last_session",
-    }
-)
+from tmserver.snapshot_validation import ACCOUNT_FIELDS
 
 
 def database_engine(url):

@@ -103,6 +103,24 @@ for later review and continue independent work.
 - Whole portable checkpoint at source commit db62eeb passed:952 tests in791.0
   seconds,896 passed and56 optional external PostgreSQL tests skipped. Output:
   results/overnight-complete-suite.log. No failures or native game launches.
+- Event TABLE-channel PART now checks exact participant or observer table
+  ownership. A stale leave cannot clear a newer observer, participant or
+  unassigned selection. All3 new encrypted regressions fail on the old handler;
+  the final47-test event batch passes. Committed as f43215a.
+- JSON lifetime writer lease is shared by normal standalone/Play services and
+  admin. It covers load/recovery through both shutdowns and preserves existing
+  short commit/Play locks. Ten new tests and30 existing checks pass; separate
+  process exclusion, canonical aliases and failures are covered. Commit5676f9c.
+- Offline admin provides exact saved-account lookup, queued Prize Center awards,
+  explicit event grants and eligibility. It requires a selected existing save
+  or database and matching saved event configurations, runs no recovery or
+  listeners, and reuses existing claim transactions. Domain snapshot validation
+  was extracted so JSON remains stdlib-only; database public aliases remain.
+  All97 related tests pass in21.94 seconds using the repository environment.
+- Final82-entry wheel passes clean no-deps installation, actual temporary JSON
+  award command and both listeners. Logs:results/overnight-admin-wheel-{build,check}.log.
+  Local editable install refreshed; tmserver-admin --help works. Collection981
+  tests has no import errors. PostgreSQL admin execution is not claimed.
 
 Whole portable regression checkpoint completed:903 tests in798.6 seconds,
 846 passed,56 optional PostgreSQL tests skipped, and one login timeout in the
@@ -113,23 +131,14 @@ checks pass. No native visual validation is claimed by these tests.
 
 ## In progress
 
-- Full checkpoint finished; source freeze lifted. Agent texture_upscaling owns
-  irc_session.py, optional event_matchmaking.py accessor and new
-  test_event_table_part.py for exact event TABLE-channel PART ownership.
-  Unassigned selection has no table, so it must survive any table PART.
-- New operator workflow: current prize awards and event grants/eligibility
-  require Python snippets. Agent texture_load_trace owns new admin.py,
-  snapshot_validation.py, test_admin.py, docs/ADMIN.md plus database.py validator
-  extraction and pyproject entrypoint. Explicit target required; no live save
-  defaults, account provisioning, native launch, automatic retail award policy,
-  recovery or weekly rollover. Use existing validators and claim transactions.
-- Agent browser_port_options owns state_store.writer_lease(path), run_server.py
-  integration and test_writer_lease.py. Normal services and admin share a
-  separate stable JSON lifetime lock before load/recovery through shutdown;
-  local_play's existing .play.lock and short commit lock stay unchanged.
-- Coordinate/review these disjoint changes, run focused meaningful checks,
-  then rebuild and check the final wheel. Last usage90% consumed; verify fresh
-  usage before further substantial work. No reset credits are authorized.
+- All assigned implementation and validation work is complete; agents are idle.
+  No active exec sessions remain from the full suite, wheel or editable install.
+  The latest full run is952 cases; post-checkpoint follow-ups passed their scoped
+  tests and final package check, not a new complete981-case run.
+- Before further substantial work check current allowance. Last observed93%
+  used; reset remains1791063720. Continue only concrete, bounded improvements
+  that can be completed and validated within remaining allowance. No reset
+  credits, purchases or continuation into a replenished allowance are authorized.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
   results/overnight-timeout-recheck.log. Both runs completed. No active test
   sessions from that checkpoint remain.

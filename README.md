@@ -37,6 +37,9 @@ scratch launcher still uses its earlier save.
 Use `--help` for rooms, event configuration, human tables, prizes and ratings.
 Optional [weekly rankings](docs/WEEKLY_RANKINGS.md) record future local play with
 `--ratings local-history --weekly-rankings`.
+For saved-account lookup, queued prizes and event grants or eligibility, use
+[offline administration](docs/ADMIN.md). `tmserver-admin` requires an explicit
+save target and refuses to share it with a running packaged server.
 
 For PostgreSQL, set `TM_DATABASE_URL`, run `tmserver-db upgrade`, then `tmserver`.
 An explicit `--state` chooses JSON instead. Database tests require a disposable

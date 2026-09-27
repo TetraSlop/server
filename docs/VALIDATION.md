@@ -1,5 +1,31 @@
 # Packaging and transaction validation
 
+## Server iteration checkpoint, 2026-09-27
+
+The complete portable suite at source commit `db62eeb` passes: **952 tests in
+790.990 seconds, 896 passed and 56 optional PostgreSQL tests skipped**. Output is
+preserved locally in `results/overnight-complete-suite.log`. This includes the
+new weekly rankings, auction registration history, multiplayer cancellation,
+event-room departure, and earlier protocol/recovery fixes in
+[the work log](WORK_LOG.md). The run uses temporary saves and headless clients.
+
+The 80-entry wheel also passes a clean dependency-free install, console/module
+entry points and startup of both services on temporary ports. PostgreSQL and
+native game-screen validation were not repeated in this checkpoint.
+
+After that full run, the exact event-table departure fix passes3 new encrypted
+regressions and44 surrounding event tests. All3 regressions fail against the old
+handler. The operator commands, shared JSON lifetime lease and extracted snapshot
+validator pass97 related tests in21.94 seconds, including all16 new admin tests
+and10 lease tests. Collection now finds981 cases without import errors; the full
+981-case suite has not been repeated after these scoped follow-ups.
+
+The final82-entry wheel passes a fresh dependency-free install and an actual
+temporary JSON award through `tmserver-admin`, as well as both service listeners.
+The local editable environment was refreshed to expose the new command.
+Actual PostgreSQL administration and native reward-screen observation remain
+separate checks; no real save or game window was used for this validation.
+
 ## Integrated local launch, 2026-09-27
 
 The packaged server now owns the native clients' lifetime through `Play.cmd` /

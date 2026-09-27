@@ -17,6 +17,12 @@ file in the same directory, flush it, then atomically replace the save. Failed
 writes clean up their own temporary file and require a fresh server. This is
 protection for a local save, not a shared network-file or multi-server backend.
 
+The packaged JSON server and offline admin commands additionally share a
+`<save-name>.writer.lock` lifetime lease, acquired before loading/recovering the
+save and retained through shutdown. Leave this sidecar in place too. Direct
+low-level store users retain the commit checks above and must take
+`writer_lease(path)` themselves when they need exclusive lifetime ownership.
+
 ## Setup
 
 Use Python 3.13 and PostgreSQL 16 or newer. From the server directory, install
@@ -110,8 +116,9 @@ Interrupted matches retain the established behavior: refund unsettled stakes,
 preserve completed results, and recover unclaimed cards through Returned Cards.
 Boards, sockets and in-flight trade consent are not resumed.
 
-For trusted local award administration, use the same transaction boundary as
-the protocol handler:
+Use [offline administration](ADMIN.md) to queue awards or event grants without
+editing Python or JSON. For embedded administration, use the same transaction
+boundary as the protocol handler:
 
 ```python
 from tmserver.claim_transactions import prize_transaction

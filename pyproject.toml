@@ -18,6 +18,7 @@ dev = ["ruff==0.16.4", "build>=1.2,<2"]
 tmserver = "tmserver.run_server:main"
 tmserver-db = "tmserver.database:cli"
 tmserver-play = "tmserver.local_play:main"
+tmserver-admin = "tmserver.admin:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]

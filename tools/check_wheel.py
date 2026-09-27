@@ -51,6 +51,26 @@ def main():
         run(str(cli), "--help")
         play_cli = scripts / ("tmserver-play.exe" if os.name == "nt" else "tmserver-play")
         run(str(play_cli), "--help")
+        admin_cli = scripts / ("tmserver-admin.exe" if os.name == "nt" else "tmserver-admin")
+        run(str(admin_cli), "--help")
+        run(
+            str(python), "-c",
+            "from tmserver.economy_service import EconomyService\n"
+            "from tmserver.state_store import JsonStateStore\n"
+            "economy = EconomyService(seed=1)\n"
+            "economy.provision('wheel', nn=1, player_id=1, name=b'Wheel')\n"
+            "JsonStateStore('admin.json').save(economy.snapshot())\n",
+        )
+        admin_state = root / "admin.json"
+        original_accounts = json.loads(admin_state.read_text())["accounts"]
+        assert "wheel" in run(str(admin_cli), "--state", str(admin_state), "accounts")
+        run(
+            str(admin_cli), "--state", str(admin_state), "prize-award",
+            "--account-key", "wheel", "--id", "wheel-check", "--top30", "3",
+        )
+        awarded = json.loads(admin_state.read_text())
+        assert awarded["accounts"] == original_accounts
+        assert awarded["prize"]["accounts"]["wheel"]["pending"]["top30"] == 3
         accounts = run(str(cli), "--list-accounts")
         assert len(accounts.strip().splitlines()) == 2, accounts
         ready = run(
@@ -76,6 +96,7 @@ def main():
                     "runtime_dependencies": [],
                     "console_entrypoint": True,
                     "module_entrypoint": True,
+                    "json_admin_award": True,
                     "services_started_on_ephemeral_ports": True,
                 }
             )
