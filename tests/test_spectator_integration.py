@@ -7,8 +7,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests.test_admission_identity import native_identity
+from tests.test_match_service import NATIVE_SETTINGS
 from tests.test_server import Client
-from tmserver.identities import TABLE_RAW, player_id, service_nick
+from tmserver.identities import TABLE_RAW, service_nick
 from tmserver.match_service import decode, packet
 from tmserver.room_service import TABLE_CHANNEL
 from tmserver.server import ACCOUNTS, Server
@@ -31,13 +32,16 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await client.open(self.port, account=nick)
             self.assertIn(b" 422 ", await client.read())
         self.target = service_nick(TABLE_RAW)
-        await self.player(packet(1, body=f"@Req=/NN={player_id(self.clients[0].nick):016X}"))
-        if hasattr(self, "observation_rule"):
-            from tests.test_match_service import NATIVE_SETTINGS
-
-            await self.player(
-                packet(20, body=NATIVE_SETTINGS.replace("/in=0", f"/in={self.observation_rule}"))
-            )
+        view = self.server.economy.account_view(self.clients[0].nick.decode())
+        observation = getattr(self, "observation_rule", 0)
+        # Captured ordinary CPU startup applies settings before GameReady/Req;
+        # PLAYACK then carries the rules that GameOK accepts.
+        await self.player(packet(0x41, 1, body=native_identity(view, "GameEN")))
+        await self.player(packet(20, body=NATIVE_SETTINGS.replace("/in=0", f"/in={observation}")))
+        await self.player(packet(0x41, 10, body="@GameReady="))
+        replies = await self.player(packet(1, body=native_identity(view, "Req")))
+        playack = next(decode(reply) for reply in replies if decode(reply).primary == 2)
+        self.assertEqual(playack.sections["Tab"]["in"], str(observation))
         await self.player(packet(0x41, 8, body="@GameOK="))
         cards = self.server.economy.inventory(self.clients[0].nick.decode())[:5]
         body = "@CardSelect=/C=5" + "".join(
