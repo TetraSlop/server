@@ -67,6 +67,15 @@ compact16 bytes; sale/local-index/state bookkeeping bytes are evidence only,
 since they are not fields of the server Card. Draw counts, a digest of every
 supplied draw and final CRT state are checked independently.
 
+The fixture's `image_sha256` is
+`422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879`:
+the reconstructed, RVA-indexed `TM_emulated_mapped.dll` code image loaded by the
+established `economy_vectors.Machine`/`Generator` Unicorn harness. This is separate
+from `native_opponents.DECODED_SHA256`,
+`356040c4c76d790db4a22447de7ef4eadba89ab99c6599df4988b2124772a7a3`,
+which hashes the decompressed PlPrm.BIN data asset. `SOURCE_SHA256` hashes that
+asset's encoded input. Neither asset checksum identifies the executable image.
+
 This fixes a demonstrated ordering difference in the previous two-NPC helper:
 seed57/NPC1+30 used210 draws when it generated and selected each NPC in turn;
 the original two-pool-then-selection composition uses214 and different hands.
