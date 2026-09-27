@@ -19,6 +19,22 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Event configuration now rejects boards with insufficient placement space
+  before publishing tables or reserving players. Previously JSON accepted such
+  boards and matchmaking disconnected the selected players when the engine
+  rejected them. Shared native tile classification preserves placeable F3/4/5
+  effects; dimensions, non-CBC tiles and unsigned seeds are validated centrally
+  in EventTableConfig, which also freezes caller-supplied boards. Four new
+  regressions reproduce 25 failing subcases before the fix, then pass alongside
+  all 33 configuration/round/coordinator checks. Exact-capacity two-human,
+  three-human and synthetic CPU rounds complete. Independent review found no
+  further constraint mismatch. A separate cancellation audit passed 23 existing
+  tests and 14 in-memory phase combinations without finding stranded tokens or
+  cross-table interference; no duplicate tests were added. See VALIDATION.md
+  and research/EVENT_CONFIGURATION.md. No new historical policy is claimed.
+  Collection finds 1,118 cases with no import errors; Ruff/whitespace pass.
+  The rebuilt 85-entry wheel passes clean install, entry-point, administration,
+  recovery and temporary listener checks; all 80 runtime files match source.
 - Rematch follow-up found no atomicity or stranded-player defect. Two new
   encrypted regressions (`909bef5`) cover four complete rounds: a prize loser
   left with four cards, and a player unable to fund a doubled stake, each in

@@ -131,17 +131,8 @@ def parse_event_setup(document):
             values["cpu_cards"] = tuple(cards)
         if "start_fields" in values:
             fields = values["start_fields"]
-            if not isinstance(fields, list) or any(
-                type(x) is not int or not 0 <= x < 18 for x in fields
-            ):
-                raise ValueError("event boards require original non-CBC tile values")
-            if len(fields) != (25 if values.get("player_count", 2) == 3 else 16):
-                raise ValueError("event board has wrong dimensions")
-            values["start_fields"] = tuple(fields)
-        if "seed" in values and (
-            type(values["seed"]) is not int or not 0 <= values["seed"] <= 0xFFFFFFFF
-        ):
-            raise ValueError("event seed must be an unsigned32-bit integer")
+            if not isinstance(fields, list):
+                raise ValueError("event board must be an array")
         tables.append(EventTableConfig(**values))
     if len({c.table_id for c in tables}) != len(tables):
         raise ValueError("duplicate configured event table")

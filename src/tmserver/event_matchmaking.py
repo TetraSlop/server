@@ -12,6 +12,7 @@ import time
 import uuid
 from dataclasses import dataclass, field, replace
 
+from tmserver import native_special_rules as special
 from tmserver.admission_identity import validate_admission
 from tmserver.economy_service import collection_points
 from tmserver.event_matches import (
@@ -65,6 +66,18 @@ class EventTableConfig:
             raise EventError("unsupported event turn limit")
         if type(self.departure_rule) is not int or not 0 <= self.departure_rule <= 2:
             raise EventError("unsupported event departure rule")
+        if type(self.seed) is not int or not 0 <= self.seed <= 0xFFFFFFFF:
+            raise EventError("event seed must be an unsigned32-bit integer")
+        if self.start_fields is not None:
+            board = special.start_board(self.start_fields)
+            size = (self.player_count + 2) ** 2
+            if len(board.fields) != size:
+                raise EventError("event board has wrong dimensions")
+            if 18 in board.fields:
+                raise EventError("event boards require original non-CBC tile values")
+            if board.blocks > size - 5 * self.player_count:
+                raise EventError("event board must leave five placement cells per player")
+            object.__setattr__(self, "start_fields", board.fields)
 
 
 @dataclass

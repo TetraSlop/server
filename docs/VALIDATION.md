@@ -1,5 +1,37 @@
 # Packaging and transaction validation
 
+## Event board startup validation, 2026-09-27
+
+Over-blocked event boards previously passed JSON parsing and room publication,
+then failed when matchmaking built the round, releasing and disconnecting the
+selected players. EventTableConfig now validates board dimensions, native tile
+domains, the existing non-CBC restriction and five available placements per
+seat. Native start_board classifies capacity, so placeable F3/4/5 effects are
+retained. Seed semantics are shared with JSON, and mutable input boards are
+copied to an immutable tuple before publication.
+
+- Four new configuration regressions reproduce 25 failing subcases before the
+  fix: `results/event-board-config-before.log`.
+- All 33 configuration, event round and coordinator checks pass in 0.120 seconds:
+  `results/event-board-config-focused.log`. These include completed two-human,
+  three-human and synthetic CPU rounds at the exact placement limit, caller
+  mutation after configuration, both unsigned seed endpoints and placeable
+  special tiles.
+- Independent review found no missing supported engine constraint. A separate
+  lifecycle audit passed 23 existing tests in 29.229 seconds and 14 additional
+  in-memory cancellation cases. Refreshed reservation tokens are released,
+  neighboring active tables are unchanged and repeated cleanup is inert. No
+  new defect or duplicate test was added from that audit.
+- Collection finds 1,118 tests with zero import errors. Ruff and whitespace
+  checks pass. This is focused validation, not a complete-suite, PostgreSQL or
+  rendered native run.
+
+The rebuilt 85-entry wheel passes dependency-free clean installation, console
+and module entry points, JSON administration/recovery and temporary game/profile
+listeners. All 80 runtime files byte-match source. Logs:
+`results/event-board-wheel-{build,check}.log`. Wheel SHA256:
+`7e6c2e334ffa81fb59c1a831c80d96a63160e59c7d70481f9ca3e4951e9ad037`.
+
 ## Rematch eligibility and recovery follow-up, 2026-09-27
 
 No runtime defect was found. The new encrypted regressions in `909bef5` preserve

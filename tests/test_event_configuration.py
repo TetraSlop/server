@@ -6,9 +6,13 @@ from dataclasses import replace
 
 from tmserver.economy_service import EconomyService
 from tmserver.event_configuration import parse_event_configs, parse_event_setup
+from tmserver.event_matches import EventMatchRound, EventParticipant
+from tmserver.event_matchmaking import EventTableConfig
 from tmserver.event_rooms import EventRooms
 from tmserver.event_service import EventHost, PrizeDisplay, event_data
 from tmserver.identities import game_id
+
+from tests.test_event_matches import CARDS, finish
 
 DOCUMENT = {
     "events": [
@@ -38,11 +42,93 @@ DOCUMENT = {
 
 
 class EventConfigurationTests(unittest.TestCase):
+    def test_unplayable_boards_fail_during_configuration(self):
+        for players in (2, 3):
+            size = (players + 2) ** 2
+            # Blocks, arrow tiles and spinners all consume placement cells.
+            for tile in (1, 2, 6, 8, 9, 16, 17):
+                blocked = size - 5 * players + 1
+                fields = [tile] * blocked + [0] * (size - blocked)
+                document = copy.deepcopy(DOCUMENT)
+                document["events"][0]["match_enabled"] = True
+                document["tables"] = [
+                    dict(
+                        event_id="festival",
+                        table_raw=4099,
+                        channel="#EVTABLE001",
+                        player_count=players,
+                        start_fields=fields,
+                    )
+                ]
+                with (
+                    self.subTest(players=players, tile=tile),
+                    self.assertRaisesRegex(ValueError, "five placement cells per player"),
+                ):
+                    parse_event_setup(document)
+
+    def test_direct_table_configuration_checks_board_and_seed_domains(self):
+        table = EventTableConfig("festival", game_id(4099), b"#EVTABLE001")
+        for fields in ([0] * 25, [0] * 15, [18] + [0] * 15, [True] + [0] * 15):
+            with self.subTest(fields=fields), self.assertRaises(ValueError):
+                replace(table, start_fields=fields)
+        for seed in (-1, 0x100000000, True, 1.5):
+            with self.subTest(seed=seed), self.assertRaises(ValueError):
+                replace(table, seed=seed)
+
+    def test_exact_capacity_boards_are_frozen_and_complete_rounds(self):
+        for players, cpu in ((2, False), (3, False), (2, True)):
+            with self.subTest(players=players, cpu=cpu):
+                blocked = (players + 2) ** 2 - 5 * players
+                fields = [1] * blocked + [0] * (5 * players)
+                original = tuple(fields)
+                table = EventTableConfig(
+                    "festival",
+                    game_id(4099),
+                    b"#EVTABLE001",
+                    player_count=players,
+                    cpu_cards=CARDS if cpu else None,
+                    start_fields=fields,
+                    seed=0xFFFFFFFF,
+                )
+                fields[:] = [1] * len(fields)
+                self.assertEqual(table.start_fields, original)
+                participants = tuple(
+                    EventParticipant(str(i), i + 1, f"Player{i}".encode(), game_id(i + 1), CARDS)
+                    for i in range(1 if cpu else players)
+                )
+                round = EventMatchRound(
+                    participants,
+                    cpu_cards=table.cpu_cards,
+                    start_fields=table.start_fields,
+                    seed=table.seed,
+                )
+                round.begin()
+                finish(round)
+                self.assertEqual(round.sequence, 5 * players)
+                self.assertEqual(sum(round.outcome.scores), 5 * players)
+                self.assertFalse(round.outcome.aborted)
+
+    def test_placeable_effect_tiles_do_not_reduce_board_capacity(self):
+        for players in (2, 3):
+            blocked = (players + 2) ** 2 - 5 * players
+            for effect in (3, 4, 5):
+                with self.subTest(players=players, effect=effect):
+                    fields = (1,) * blocked + (effect,) * (5 * players)
+                    table = EventTableConfig(
+                        "festival",
+                        game_id(4099),
+                        b"#EVTABLE001",
+                        player_count=players,
+                        start_fields=fields,
+                        seed=0,
+                    )
+                    self.assertEqual(table.start_fields, fields)
+
     def test_distinct_tables_can_share_one_enabled_event(self):
         item = copy.deepcopy(DOCUMENT)
         item["events"][0]["match_enabled"] = True
         item["tables"] = [
-            dict(event_id="festival", table_raw=4099 + i, channel=f"#EVTABLE00{i+1}")
+            dict(event_id="festival", table_raw=4099 + i, channel=f"#EVTABLE00{i + 1}")
             for i in range(2)
         ]
         _, tables, _ = parse_event_setup(item)

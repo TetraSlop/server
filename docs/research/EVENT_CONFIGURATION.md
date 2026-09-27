@@ -42,6 +42,15 @@ the owned collection locally before EQuit and remain unchanged by event play.
 See `events.example.json` for a two-human fixture. Set `--accounts 3` when a
 configured event needs three humans.
 
+Explicit boards must leave five placement cells per seat: at most six occupied
+tiles on a 16-cell board or ten on a 25-cell board. F3/4/5 effect tiles remain
+placeable and do not consume this allowance. F18/CBC remains unsupported for
+event play. Board and seed checks run when constructing `EventTableConfig`,
+including JSON loading, before the table can be advertised or players reserved.
+The validated board is frozen so later changes to a caller's list cannot make
+an accepted table unplayable. This enforces the existing round engine's limits;
+it introduces no historical board distribution or event reward policy.
+
 Multiple table entries may name the same event_id. Selected players are grouped
 into free configured tables in configuration order. Proposals carry each actual
 table number and identity; rounds, deadlines, consent, observers, result journals
