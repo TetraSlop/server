@@ -91,6 +91,36 @@ is claimed by these tests.
   local results, no invented backfill or retail schedule/rookie policy. Agent
   browser_port_options is assessing small durable integration and tests.
 
+## Next after the regression checkpoint
+
+Implement optional weekly rankings as explicit local policy, requiring
+local-history ratings. Use Monday00:00 UTC weeks and future recorded play only.
+RR1 sums committed `(new reward_sum - old reward_sum) & 0xffffffff`; this excludes
+stake refunds and unrelated shop/auction money. RR3 freezes the preceding
+week's last recorded ratings. Leave RR4 empty without proven rookie inputs;
+no automatic awards or reconstructed past weeks.
+
+Compose a small RankingPeriods value inside RatingPolicy. Existing v1 snapshots
+remain exact when no periods exist; initialized weekly state uses strict v2
+`{version, history, periods}`. Disabled runs preserve v2 without projecting or
+updating it. No new top-level journal or PostgreSQL schema migration is needed.
+Old binaries will reject v2; document that deliberate format upgrade.
+
+Record inside RatingPolicy.commit_growth using validated existing quotes and
+old/new PracticeStats, preparing all state before economy commit and publishing
+only after success. Reuse existing quote receipts/replay protection, avoiding
+another lifetime receipt ledger. Existing MatchState staging/persistence can
+remain unchanged if period changes replace owned values. A live provider keeps
+RankingService projections current without changing issued immutable files.
+
+Advance weeks transactionally before startup/ranking query/metadata reads and
+within result commits. No timer is needed. Skipped weeks produce an empty
+immediately preceding week; backward-period writes must not rewrite history.
+Test v1/v2 restore/import, disabled preservation, boundaries/skipped weeks,
+replay after rollover/restart, invalid final participants, failures before save,
+refunds/wrap, CPU/human results, caps/ties and immutable files. This design is
+not implemented yet; avoid starting edits until the active full suite finishes.
+
 Continue by reviewing active fixes, running their relevant checks, updating this
 log and committing locally. The thread heartbeat may resume this work; it is
 limited to the current allowance ending at reset timestamp1791063720, with no
