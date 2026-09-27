@@ -1,6 +1,22 @@
 # Packaging and transaction validation
 
-## Server iteration checkpoint, 2026-09-27
+## Final server checkpoint, 2026-09-27
+
+The complete suite at commit `fd56461` finished **988 tests in 842.506 seconds:
+929 passed, 59 optional PostgreSQL cases skipped, and no failures**. This uses
+the final production code from `77cf376`. The 59 database cases also passed
+separately against a new isolated PostgreSQL 16.15 host, as detailed below.
+
+Output is preserved locally in `results/overnight-final-complete-suite.log`.
+The run uses disposable saves and headless peers. Local Play's messages about
+game windows come from its mocked launcher tests; no native game was launched.
+The final wheel and repository-wide Ruff checks pass, all temporary database
+resources were removed, and the working tree is clean at this checkpoint.
+
+Native presentation checks and historical hosted reward-policy equivalence
+remain separate from this validation.
+
+## Earlier overnight checkpoints
 
 The complete portable suite at source commit `db62eeb` passes: **952 tests in
 790.990 seconds, 896 passed and 56 optional PostgreSQL tests skipped**. Output is
@@ -40,8 +56,8 @@ encrypted first/final-voter deck updates, stakes, ownership, reload, unrelated
 profile changes and save failures. Those 42 cases also pass after replacing
 the private accepted-result tuples with immutable named records. Another 38
 CPU, three-player, wager, prize and ranking cases passed against the privacy
-fix before that representation-only change. Collection now finds 988 tests
-without import errors; a new complete 988-case run is not claimed.
+fix before that representation-only change. Collection finds 988 tests without
+import errors; the final complete run is recorded above.
 
 After those final production changes, the rebuilt 82-entry wheel again passes
 a clean install without optional dependencies, the actual JSON admin award

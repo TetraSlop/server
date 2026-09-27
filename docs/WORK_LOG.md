@@ -141,19 +141,24 @@ for later review and continue independent work.
   admin award command, entry points and both service listeners. Logs are
   results/overnight-final-wheel-{build,check}.log. No optional runtime dependency
   was needed.
+- Final complete suite at fd56461: 988 tests in 842.506 seconds, with 929 passed,
+  59 optional PostgreSQL cases skipped and no failures. The 59 PostgreSQL cases
+  passed separately as recorded above. Log: results/overnight-final-complete-suite.log.
+  The final source, including the immutable result context, is covered by this
+  complete run. Launcher output mentioning game windows comes from mock tests.
 
-Whole portable regression checkpoint completed:903 tests in798.6 seconds,
+Earlier portable regression run:903 tests in798.6 seconds,
 846 passed,56 optional PostgreSQL tests skipped, and one login timeout in the
 test client's three-second hang guard. The same test passed alone. The guard is
 now ten seconds;34 affected event/server/prize tests pass after that test-only
 change. Production deadlines are unchanged. Repository-wide Ruff and whitespace
 checks pass. No native visual validation is claimed by these tests.
 
-## In progress
+## Current checkpoint
 
 - All assigned implementation and temporary PostgreSQL cleanup are complete.
-  Agents are idle. Root is running the complete current portable suite with
-  TM_TEST_DATABASE_URL absent; output is results/overnight-final-complete-suite.log.
+  Agents are idle and no exec sessions remain active. The complete current
+  portable suite finished successfully with TM_TEST_DATABASE_URL absent.
   Latest production commit is 77cf376; subsequent changes add tests and records.
 - The transport/profile audit found no new actionable defect. Isolated encrypted
   probes rejected truncated bodies, incorrect extents and bad checksums without
@@ -162,16 +167,18 @@ checks pass. No native visual validation is claimed by these tests.
 - Final admin and shop/trade audits found no new concrete defect in owner
   selection, journal preservation, cancellation, re-entry, shared B2 routing or
   delayed edits. No speculative retry policy was added.
-- The latest full run is 952 cases; post-checkpoint follow-ups passed their scoped
-  tests and package checks, not a new complete 988-case run. Collection now finds
-  988 tests with no import errors (including 59 optional PostgreSQL cases).
-- Before further substantial work check current allowance. Last observed 98%
+- A final synthetic ranking audit confirms fresh hide-name settings after weekly
+  rollover, immutable issued files, account-isolated reads/deletes and no files
+  retained after restart. Existing file privacy policy remains unchanged.
+- The latest complete run and collection both contain 988 cases, including
+  59 optional PostgreSQL cases. No import errors or test failures remain.
+- Before further substantial work check current allowance. Last observed 99%
   used; reset remains 1791063720. Continue only concrete, bounded improvements
   that can be completed and validated within remaining allowance. No reset
   credits, purchases or continuation into a replenished allowance are authorized.
 - The recurring heartbeat is paused to avoid starting more work after this
-  allowance expires. The current active turn is finishing the final suite and
-  checkpoint; no reset credit or purchase has been used.
+  allowance expires. The final suite and checkpoint are complete; no reset
+  credit or purchase has been used.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
   results/overnight-timeout-recheck.log. Both runs completed. No active test
   sessions from that checkpoint remain.
@@ -204,9 +211,8 @@ immediately preceding week; backward-period writes must not rewrite history.
 Test v1/v2 restore/import, disabled preservation, boundaries/skipped weeks,
 replay after rollover/restart, invalid final participants, failures before save,
 refunds/wrap, CPU/human results, caps/ties and immutable files. Implementation
-and the 40-test combined focused check are complete. The subsequent complete
-952-case portable run passed; real PostgreSQL administration is being checked
-separately as described above.
+and the 40-test combined focused check are complete. Subsequent complete
+portable runs and the real PostgreSQL administration checks passed, as above.
 
 Continue by reviewing active fixes, running their relevant checks, updating this
 log and committing locally. The thread heartbeat may resume this work; it is
