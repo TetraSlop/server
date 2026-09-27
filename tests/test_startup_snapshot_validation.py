@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 from tmserver import local_play
+from tmserver.character_profiles import CharacterProfiles
 from tmserver.economy_service import EconomyService
 from tmserver.match_economy import MatchEconomy
 from tmserver.server import Server
@@ -56,6 +57,20 @@ class StartupSnapshotValidationTests(unittest.IsolatedAsyncioTestCase):
             self.addAsyncCleanup(game.stop)
         self.assertEqual(self.path.read_bytes(), original)
         self.assertEqual(JsonStateStore(self.path).load()["accounts"]["a"]["balance"], 900)
+
+    async def test_unsafe_profile_float_rejects_before_recovery_without_rewriting_save(self):
+        profiles = CharacterProfiles(self.economy)
+        profiles.handle("a", b"GTM0P<CR>\x070x0000000000000001\x061\x07")
+        saved = dict(self.interrupted(), character_profiles=profiles.snapshot())
+        for value in ("0" * 128, "1" + "0" * 39):
+            saved["character_profiles"]["records"]["a"][12] = value
+            original = self.seed(saved)
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "profile float"):
+                    game = Server(state_path=self.path)
+                    self.addAsyncCleanup(game.stop)
+                self.assertEqual(self.path.read_bytes(), original)
+                self.assertEqual(JsonStateStore(self.path).load()["accounts"]["a"]["balance"], 900)
 
     async def test_unknown_account_field_rejects_even_without_pending_recovery(self):
         for recovering in (False, True):

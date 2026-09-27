@@ -1,6 +1,7 @@
 """Generic profile partial updates, original71-field parser and socket save."""
 
 import asyncio
+import copy
 import sys
 import tempfile
 import unittest
@@ -125,6 +126,69 @@ class CharacterProfileTests(unittest.TestCase):
                 "alice",
                 request(b"GR", extras=(Command(b"NO", b"6\x061"), Command(b"NO", b"6\x063"))),
             )
+
+    def test_numeric_selector_aliases_cannot_overwrite_an_earlier_privacy_update(self):
+        for registered in (False, True):
+            if registered:
+                self.service.handle("alice", request(b"CR", extras=settings()))
+            before = self.service.snapshot(), self.economy.snapshot()
+            for token in (b"CR", b"GR"):
+                for selector in (b"6", b"14"):
+                    for first, second in ((selector, b"0" + selector), (b"0" + selector, selector)):
+                        with self.subTest(registered=registered, token=token, first=first):
+                            extras = (
+                                Command(b"AN", b"Uncommitted"),
+                                Command(b"NO", first + b"\x061"),
+                                Command(b"NO", second + b"\x063"),
+                            )
+                            with self.assertRaisesRegex(ValueError, "duplicate profile"):
+                                self.service.handle("alice", request(token, extras=extras))
+                            self.assertEqual(
+                                (self.service.snapshot(), self.economy.snapshot()), before
+                            )
+        # A single decimal alias remains valid, and6/14 are distinct fields.
+        self.service.handle(
+            "alice",
+            request(b"GR", extras=(Command(b"NO", b"006\x061"), Command(b"NO", b"014\x063"))),
+        )
+        restored = CharacterProfiles.restore(self.economy, self.service.snapshot())
+        self.assertEqual((restored.records["alice"][47], restored.records["alice"][55]), ("1", "3"))
+
+    def test_restore_rejects_unsafe_float_text_without_changing_input_or_accounts(self):
+        self.service.handle("alice", request(b"CR"))
+        economy = self.economy.snapshot()
+        for index in range(12, 16):
+            for value in ("0" * 128, "1" + "0" * 39, "-1" + "0" * 39):
+                saved = self.service.snapshot()
+                saved["records"]["alice"][index] = value
+                before = copy.deepcopy(saved)
+                with self.subTest(index=index, value=value):
+                    with self.assertRaisesRegex(ValueError, "profile float"):
+                        CharacterProfiles.restore(self.economy, saved)
+                    self.assertEqual(saved, before)
+                    self.assertEqual(self.economy.snapshot(), economy)
+
+    def test_restore_preserves_safe_float_spelling_in_public_responses(self):
+        self.service.handle("alice", request(b"CR"))
+        for index in range(12, 16):
+            for value in (
+                "0" * 127,
+                "-" + "0" * 126,
+                "340282346638528859811704183484516925440",
+                "-340282346638528859811704183484516925440",
+                "-12.50",
+                "0." + "0" * 44 + "1",  # Rounds to a float32 subnormal.
+                "0." + "0" * 100 + "1",  # Underflows to zero without overflow.
+            ):
+                saved = self.service.snapshot()
+                saved["records"]["alice"][index] = value
+                with self.subTest(index=index, value=value):
+                    restored = CharacterProfiles.restore(self.economy, saved)
+                    self.assertEqual(restored.snapshot(), saved)
+                    reply = restored.handle("bob", request(b"PG"))[0]
+                    self.assertEqual(
+                        parse(reply[5:])[0].payload.split(b"\x06")[index], value.encode()
+                    )
 
 
 class CharacterProfileIntegrationTests(unittest.IsolatedAsyncioTestCase):

@@ -6,6 +6,7 @@ local policy from PROFILE_CONTRACT.md, not a historical database reconstruction.
 """
 
 import re
+import struct
 from copy import copy
 
 from tmserver.resources import read_json
@@ -116,7 +117,7 @@ class CharacterProfiles:
         seen = set()
         for command in commands[1:]:
             token, value = command.token, command.payload
-            unique = (token, value.split(b"\x06", 1)[0]) if token == b"NO" else (token, None)
+            unique = (token, decimal(value.split(b"\x06", 1)[0], 255) if token == b"NO" else None)
             if unique in seen:
                 raise ValueError("duplicate profile update field")
             seen.add(unique)
@@ -188,8 +189,13 @@ class CharacterProfiles:
                     if re.fullmatch(rb"0x[0-9A-Fa-f]{16}", raw) is None:
                         raise ValueError("invalid stored profile identity")
                 elif kind == "decimal-f32":
-                    if re.fullmatch(rb"-?[0-9]+(?:\.[0-9]+)?", raw) is None:
+                    # Native parsing uses a 128-byte terminated buffer, then stores float32.
+                    if len(raw) > 127 or re.fullmatch(rb"-?[0-9]+(?:\.[0-9]+)?", raw) is None:
                         raise ValueError("invalid stored profile float")
+                    try:
+                        struct.pack("<f", float(raw))
+                    except OverflowError as exc:
+                        raise ValueError("stored profile float overflows float32") from exc
                 else:
                     decimal(raw, (1 << int(kind[len("decimal-u") :])) - 1)
             if not result._owned(key, (int(values[0], 16), int(values[1]))):
