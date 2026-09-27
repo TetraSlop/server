@@ -97,7 +97,7 @@ class CustomEventBoard(unittest.IsolatedAsyncioTestCase):
     complete = events.EventMatchIntegrationTests.complete
 
     async def test_configured_three_player_event_layout_round_and_restart(self):
-        self.table = replace(self.table, start_fields=LAYOUTS[0])
+        self.table = replace(self.table, player_count=3, start_fields=LAYOUTS[0])
         await self.complete(3, "none")
         for box in self.inbox:
             starts = [decode(p).sections["StartData"] for _, p in box if b"@StartData=" in p]
