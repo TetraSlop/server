@@ -31,5 +31,11 @@ updates, saved-name overrides and cold restore. A real encrypted connection
 exercises PG/CR/GR before and after restart and verifies the entire native
 account record remains unchanged. Tests use temporary saves only.
 
+The adapter persists only changed records. Public/default reads, unknown-profile
+responses, rejected foreign edits and identical retries acknowledge without
+writing an unchanged journal. Changed edits still save before publication and
+acknowledgement. Two transaction regressions reproduced the unnecessary writes;
+the profile/transaction/delete/storage-failure batch passes18 tests.
+
 Sources: PROFILE_CONTRACT.md and PROFILE_FIELD_SEMANTICS.md. Native editing and
 the choice of locator aliases need user observation; no desktop was controlled.

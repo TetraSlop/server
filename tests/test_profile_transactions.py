@@ -53,6 +53,35 @@ class ProfileTransactionTests(unittest.TestCase):
         self.assertEqual(parse(reply[5:])[0].token, b"PO")
         self.assertIn(view.name, reply)
 
+    def test_profile_reads_and_rejected_edits_do_not_write_to_storage(self):
+        other = self.server.ensure_account(self.nicks[1])
+        view = self.server.economy.account_view(self.key)
+        before = self.server.snapshot()
+        requests = (
+            (profile_request(b"PG", view.nn), b"PO"),
+            (profile_request(b"PG", 999999), b"PM"),
+            (profile_request(b"CR", view.nn, extras=(Command(b"AN", b"Other"),)), b"NS"),
+            (profile_request(b"GR", view.nn, extras=(Command(b"AN", b"Other"),)), b"GG"),
+        )
+        with patch.object(self.server, "persist_changes") as save:
+            for request, token in requests:
+                with self.subTest(token=token):
+                    reply = character_profile_request(self.server, other, request)[0]
+                    self.assertEqual(parse(reply[5:])[0].token, token)
+                    save.assert_not_called()
+        self.assertEqual(self.server.snapshot(), before)
+
+    def test_identical_profile_retry_acknowledges_without_another_write(self):
+        view = self.server.economy.account_view(self.key)
+        request = profile_request(b"CR", view.nn, extras=(Command(b"AN", b"Alias"),))
+        with patch.object(self.server, "persist_changes") as save:
+            first = character_profile_request(self.server, self.key, request)
+            save.assert_called_once()
+            before = self.server.snapshot()
+            self.assertEqual(character_profile_request(self.server, self.key, request), first)
+            save.assert_called_once()
+        self.assertEqual(self.server.snapshot(), before)
+
     def test_failed_options_save_keeps_bytes_and_current_reservation(self):
         token = self.server.economy.reserve_match(self.key)
         view = token.account
