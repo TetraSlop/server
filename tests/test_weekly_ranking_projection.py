@@ -27,6 +27,26 @@ def scores(ranking, category):
 
 
 class WeeklyRankingProjectionTests(unittest.TestCase):
+    def test_live_weekly_dates_are_hidden_without_changing_restored_periods(self):
+        service = economy()
+        policy = RatingPolicy(service, mode="local-history", weekly=True, clock=lambda: MONDAY)
+        commit(policy, result(service, policy, rewards={"first": 25, "second": 0}))
+        before = service.snapshot(), policy.snapshot()
+        for enabled in (True, False):
+            restored = RatingPolicy(
+                service, mode="local-history", weekly=enabled, snapshot=before[1],
+            )
+            ranking = RankingService(service, rating_policy=restored, update_time=MONDAY + WEEK)
+            with self.subTest(weekly=enabled):
+                self.assertEqual(
+                    struct.unpack_from("<I", ranking.metadata(), 12)[0],
+                    0 if enabled else MONDAY + WEEK,
+                )
+                self.assertEqual(restored.periods.update_time, MONDAY)
+                self.assertEqual((service.snapshot(), restored.snapshot()), before)
+                if enabled:
+                    self.assertEqual(scores(ranking, 1), [(1, 25), (2, 0)])
+
     def test_provider_overlays_only_recorded_scores_and_retains_privacy_and_qualification(self):
         service = economy()
         policy = RatingPolicy(service, mode="local-history", weekly=True, clock=lambda: MONDAY)
@@ -59,7 +79,7 @@ class WeeklyRankingProjectionTests(unittest.TestCase):
         self.assertEqual([identity for identity, _ in scores(ranking, 2)], [2])
         self.assertEqual(ranking.records(3), b"")
         self.assertEqual(ranking.records(4), b"")
-        self.assertEqual(struct.unpack("<7I", ranking.metadata()), (0, 3, 2, MONDAY, 0, 0, 0))
+        self.assertEqual(struct.unpack("<7I", ranking.metadata()), (0, 3, 2, 0, 0, 0, 0))
         self.assertEqual((service.snapshot(), policy.snapshot()), before)
 
     def test_last_week_rating_stays_frozen_when_current_order_reverses(self):
@@ -89,7 +109,7 @@ class WeeklyRankingProjectionTests(unittest.TestCase):
         self.assertEqual(scores(ranking, 3), previous)
         self.assertEqual(scores(ranking, 1), [(2, 4), (1, 2)])
         self.assertEqual(
-            struct.unpack("<7I", ranking.metadata()), (0, 2, 2, MONDAY + WEEK, 0, 2, 0)
+            struct.unpack("<7I", ranking.metadata()), (0, 2, 2, 0, 0, 2, 0)
         )
 
     def test_full_account_pool_caps_rows_but_preserves_denominators_and_identity_ties(self):
@@ -122,7 +142,7 @@ class WeeklyRankingProjectionTests(unittest.TestCase):
         self.assertEqual(scores(ranking, 1), expected_money[:100])
         self.assertEqual(
             struct.unpack("<7I", ranking.metadata()),
-            (0, MAX_ACCOUNTS, MAX_ACCOUNTS, MONDAY, 0, 0, 0),
+            (0, MAX_ACCOUNTS, MAX_ACCOUNTS, 0, 0, 0, 0),
         )
         now[0] += WEEK
         policy.advance_week()
@@ -131,7 +151,7 @@ class WeeklyRankingProjectionTests(unittest.TestCase):
         self.assertEqual(ranking.records(4), b"")
         self.assertEqual(
             struct.unpack("<7I", ranking.metadata()),
-            (0, MAX_ACCOUNTS, 0, MONDAY + WEEK, 0, MAX_ACCOUNTS, 0),
+            (0, MAX_ACCOUNTS, 0, 0, 0, MAX_ACCOUNTS, 0),
         )
 
 

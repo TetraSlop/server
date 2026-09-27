@@ -136,7 +136,7 @@ class WeeklyRankingIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.read_file(empty_path), b"")
         self.assertFalse(self.server.advance_rankings())
         metadata = struct.unpack("<7I", await self.read_file(METADATA_PATH))
-        self.assertEqual((metadata[2], metadata[5], metadata[6]), (1, 0, 0))
+        self.assertEqual((metadata[2], metadata[3], metadata[5], metadata[6]), (1, 0, 0, 0))
 
         previous = self.server.ratings.snapshot()
         original = self.server.persist_changes
@@ -161,7 +161,7 @@ class WeeklyRankingIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.saved_ratings(), self.server.ratings.snapshot())
         metadata = struct.unpack("<7I", await self.read_file(METADATA_PATH))
         self.assertEqual((metadata[2], metadata[3], metadata[5], metadata[6]),
-                         (0, MONDAY + WEEK, 1, 0))
+                         (0, 0, 1, 0))
 
     async def test_metadata_read_restart_and_skipped_weeks_clear_stale_previous(self):
         await self.start()
@@ -172,6 +172,7 @@ class WeeklyRankingIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assert_single_score((await self.ranking(3))[1], 3, after.rating)
         await self.restart()
         self.assertEqual(self.server.ratings.snapshot(), rolled)
+        self.assertEqual(struct.unpack_from("<I", await self.read_file(METADATA_PATH), 12)[0], 0)
         self.assert_single_score((await self.ranking(3))[1], 3, after.rating)
         self.now = MONDAY + 3 * WEEK
         self.assertTrue(self.server.advance_rankings())

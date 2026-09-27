@@ -206,8 +206,11 @@ class RankingService:
 
     def metadata(self):
         entries = self._entries()
+        # Native dates share one anchor for a closed tally and the next update.
+        # Live weekly totals cannot use it truthfully; zero hides those labels.
+        # The policy's saved period start and manually supplied dates stay intact.
         update_time = (
-            self.rating_policy.weekly_history()[1]
+            0
             if self.rating_policy is not None and self.rating_policy.weekly
             else self.update_time
         )
