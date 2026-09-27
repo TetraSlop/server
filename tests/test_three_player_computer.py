@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from tmserver import native_special_rules as special
 from tmserver.match_service import BoardCard, MatchError, MatchService, decode, packet
-from tmserver.native_opponents import opponent, prepare_opponent
+from tmserver.native_opponents import opponent, prepare_opponents
 from tmserver.native_rules import CRTLCG
 
 from tests.test_match_service import CARDS, ack, put, select
@@ -78,10 +78,7 @@ class ThreePlayerComputerTests(unittest.TestCase):
             with self.subTest(npcs=vector["npc_ids"]):
                 service = menu(npc_nickname_id=0x888, second_npc_nickname_id=0x999)
                 expected_rng = CRTLCG(service.rng.state)
-                expected = [
-                    prepare_opponent(npc, service.catalog, expected_rng)
-                    for npc in vector["npc_ids"]
-                ]
+                expected = prepare_opponents(vector["npc_ids"], service.catalog, expected_rng)
                 _, primary, subtype, argument, reserved = vector["builder_args"]
                 self.assertEqual(
                     (primary, subtype, argument, reserved), (67, 6, len(expected) + 1, 0)

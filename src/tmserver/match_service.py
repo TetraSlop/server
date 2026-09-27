@@ -26,7 +26,7 @@ from tmserver.match_prizes import (
 from tmserver.native_ai import Personality, choose_move, choose_target
 from tmserver.native_board_generation import generate_board
 from tmserver.native_departure_rules import next_turn, result_ranking, result_slots
-from tmserver.native_opponents import OPPONENTS, OpponentError, opponent, prepare_opponent
+from tmserver.native_opponents import OPPONENTS, OpponentError, opponent, prepare_opponents
 from tmserver.native_rules import CRTLCG, GrowthBaseline, calculate_battle, grow_card
 from tmserver.result_stats import PracticeStats
 from tmserver.table_metadata import TableMetadataError, table_info
@@ -1246,10 +1246,10 @@ class MatchService:
     def _prepare_npcs(self, npc_ids):
         players = []
         cid = 2
-        for npc_id, nickname in zip(
-            npc_ids, (self.npc_nickname_id, self.second_npc_nickname_id), strict=False
+        prepared_opponents = prepare_opponents(npc_ids, self.catalog, self.draw)
+        for prepared, nickname in zip(
+            prepared_opponents, (self.npc_nickname_id, self.second_npc_nickname_id), strict=False
         ):
-            prepared = prepare_opponent(npc_id, self.catalog, self.draw)
             cards = tuple(
                 Card(*(getattr(c, n) for n in Card.__dataclass_fields__)) for c in prepared.hand
             )
@@ -1264,7 +1264,7 @@ class MatchService:
                 nickname,
                 rating=prepared.opponent.rating,
                 result_stats=PracticeStats(rating=prepared.opponent.rating),
-                npc_id=npc_id,
+                npc_id=prepared.opponent.npc_id,
                 ai_personality=prepared.opponent.personality,
             )
             self._choose_cards(p, cards)

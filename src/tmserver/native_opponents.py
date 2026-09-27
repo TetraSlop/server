@@ -83,14 +83,24 @@ def opponent(npc_id):
     return OPPONENTS[npc_id - 1]
 
 
-def prepare_opponent(npc_id, catalog, raw_rng, guild=0):
-    """Original local menu pool10 then selection5; first pool card is retained.
+def prepare_opponents(npc_ids, catalog, raw_rng, guild=0):
+    """Generate every NPC pool before choosing hands, as in the local menu.
 
-    100EC17C..1A2 creates ten fresh cards;100D9E57..9F58 selects pool0
-     first, then four random remaining indices without replacement. Immediate
-     scheduling skips only the selection controller's optional failed-frame polls.
+    100EC14F..1C0 generates ten cards for each selected NPC, then the later
+    100D9DE0 chooser takes pool0 and four random remaining cards per seat.
+    These isolated stages run consecutively here. Intervening client scene,
+    board-generation and optional frame-poll RNG draws are not reproduced;
+    historical hosted scheduling remains unknown.
     """
-    selected = opponent(npc_id)
+    try:
+        npc_ids = tuple(npc_ids)
+    except TypeError as exc:
+        raise OpponentError("one or two named NPC selectors are required") from exc
+    if not 1 <= len(npc_ids) <= 2:
+        raise OpponentError("one or two named NPC selectors are required")
+    selected = tuple(opponent(npc_id) for npc_id in npc_ids)
+    if len(set(npc_ids)) != len(npc_ids):
+        raise OpponentError("named NPC selectors must be distinct")
     if type(guild) is not int or guild not in range(4):
         raise OpponentError("guild/filter must be0..3")
 
@@ -100,8 +110,19 @@ def prepare_opponent(npc_id, catalog, raw_rng, guild=0):
             raise OpponentError("CRT draw must be0..32767")
         return value
 
-    pool = [catalog.generate(catalog.select(selected.pack, guild, draw), draw) for _ in range(10)]
-    hand = [pool.pop(0)]
-    for _ in range(4):
-        hand.append(pool.pop(draw() % len(pool)))
-    return PreparedOpponent(selected, tuple(hand), tuple(pool))
+    pools = [
+        [catalog.generate(catalog.select(npc.pack, guild, draw), draw) for _ in range(10)]
+        for npc in selected
+    ]
+    prepared = []
+    for npc, pool in zip(selected, pools, strict=True):
+        hand = [pool.pop(0)]
+        for _ in range(4):
+            hand.append(pool.pop(draw() % len(pool)))
+        prepared.append(PreparedOpponent(npc, tuple(hand), tuple(pool)))
+    return tuple(prepared)
+
+
+def prepare_opponent(npc_id, catalog, raw_rng, guild=0):
+    """Single-NPC form, retaining the original pool10 then selection5 stream."""
+    return prepare_opponents((npc_id,), catalog, raw_rng, guild)[0]

@@ -33,24 +33,53 @@ The native selector also checks the same threshold at100EC74F..100EC76E before
 accepting a click; the hosted server currently retains its existing1..30 ID
 validation and does not add a separate collection-point admission policy.
 
-`prepare_opponent(id,catalog,raw_rng,guild=0)` runs the local normal-menu policy:
-100EC17C..100EC1A2 generates ten cards from the NPC's pack;100D9DE0's local
-selection retains pool index0 first and then chooses four random remaining
-indices without replacement. It returns immutable selected5 and unused5 tuples.
+`prepare_opponents(ids,catalog,raw_rng,guild=0)` runs the recovered local
+normal-menu stages:100EC14F..100EC1C0 generates ten cards from each selected
+NPC's pack before any hand selection;100D9DE0's local chooser then retains pool
+index0 and chooses four random remaining indices without replacement for each
+seat. It returns immutable selected5 and unused5 tuples per NPC.
+`prepare_opponent(id,...)` delegates a single-element batch and retains its
+previous exact single-NPC behavior. IDs, distinctness, batch size1/2 and guild
+are validated before generation consumes any randomness.
 The opening/demo constructor uses a different selection route, so this is not
 labeled a universal NPC hand algorithm. Network mode skips the local chooser;
 using its exact port as the hosted deck policy is an explicit local choice.
 Guild/filter0 and regenerating the ten-card pool on each rematch are likewise
-hosted choices, not recovered historical server distribution. For two NPCs the
-service calls this helper in seat order, finishing pool generation and selection
-for one NPC before the next. The original local menu generates both pools before
-its later hand-selection controller; no identical hosted RNG schedule is claimed.
+hosted choices, not recovered historical server distribution. Pool construction
+and forced hand selection run consecutively on the server. Intervening original
+scene or board-generation draws and optional failed-frame selection polls are
+not reproduced by this isolated-stage composition. No identical complete offline
+match stream or historical hosted RNG schedule is claimed.
 
 Six module tests verify all asset records,90 original setup executions,
 120 complete original ten-card-loop plus five-card-selection executions, and
 10 full original incoming message executions. Each complete generated hand and
 all consumed raw RNG draws agree. Original card art lookup is substituted;
 the actual compact generation, pool removal and card import execute.
+
+The combined fixture `tests/fixtures/native_opponent_batches.json` adds eight
+original instruction cases: two single-NPC cases and six two-NPC cases, multiple
+CRT seeds and all four guild filters. It executes the complete selected-NPC
+pool loop100EC12D..100EC1C2, followed by local100D9DE0(1) with no intervening
+scene calls. Both original hands and both unused pools agree in every server
+Card field, including stats, points, arrows and deck. The fixture retains raw
+compact16 bytes; sale/local-index/state bookkeeping bytes are evidence only,
+since they are not fields of the server Card. Draw counts, a digest of every
+supplied draw and final CRT state are checked independently.
+
+This fixes a demonstrated ordering difference in the previous two-NPC helper:
+seed57/NPC1+30 used210 draws when it generated and selected each NPC in turn;
+the original two-pool-then-selection composition uses214 and different hands.
+The original chooser exits immediately when P+EA is nonzero (100D9DE0..100D9DEB),
+so this establishes local-reference behavior rather than retail server deck policy.
+The one-NPC stage order and output are unchanged.
+
+`research/build_npc_batch_fixture.py --research-dir <external-research-directory>
+--output tests/fixtures/native_opponent_batches.json` reproduces the fixture using
+the existing external Unicorn harness and decoded image/assets. It writes only
+the specified output. Ordinary portable tests consume the frozen fixture and
+require neither original assets nor Unicorn. The fixture does not prove where
+all other scene/board RNG draws occur between the two original stages.
 
 ## Original menu wire contract
 
