@@ -154,7 +154,7 @@ class Server(OrdinaryTable):
             self.economy, None if saved is None else saved.get("character_profiles")
         )
         self.table_preferences = TablePreferences(self.economy)
-        self.ranking = RankingService(self.economy)
+        self.ranking = RankingService(self.economy, rating_policy=self.ratings)
         event_configs = tuple(event_configs)
         if any(
             (identity ^ GAME_KEY) > 0x1FFFFFFFFFF

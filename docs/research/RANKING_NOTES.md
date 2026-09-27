@@ -89,6 +89,23 @@ whole projection when it sees C2==0. Top30 is locally capped at30; other result
 lists at100. These eligibility, cap and tie-order choices are explicit local
 policy, not recovered retail-server algorithms.
 
+When the server explicitly enables `local-history` ratings, it supplies the
+live `RatingPolicy` to `RankingService`. Rating categories then sort ascending:
+the recovered offline ring gives a first two-player winner198 and loser201.
+Prize-money categories retain descending order. Current-rating eligibility
+requires at least one committed local result whose ring rating and sequence
+still match the saved profile. Fresh rating0 accounts, quote-only enrollment
+and stale rings after playing with ratings disabled are unranked. This does not
+reset profiles or fabricate historical data. Supplied historical rating scores
+must use the selected rating scale; their existing explicit eligibility rules
+remain in force. Preserved mode keeps its previous ordering and eligibility.
+
+The September27 regression reproduces loser201 ahead of winner198 before this
+fix. Five local-policy ranking tests cover enrollment, commits, ties, history,
+money order, immutable results, restart, explicit disqualification and stale
+rings. Combined ranking/rating suites pass36 cases, including encrypted two-
+and three-player rounds/rematches plus server reload.
+
 `RankingHistory` is a frozen optional record supplied by the integration:
 
 ```python

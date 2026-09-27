@@ -4,7 +4,8 @@ Wire: GTM0R RR(category),PI(owner,directory,version,selector) -> RF,LN / RG.
 Files: E8-byte ranking rows; b/g/TM0RkData is seven little-endian DWORDs.
 Sources: ../protocol_map/{AUCTION_RANK_CONTRACT,FILE_COVERAGE,RESULT_REWARD_SEQUENCE}.
 
-Local policy: committed synthetic accounts; score descending with stable
+Local policy: committed synthetic accounts; score descending unless the
+optional local-history rating policy is enabled (lower rating wins). Stable
 identity/key ties. Current rating and total prize money come from canonical
 profile fields30/50. Historical categories stay empty until explicit history
 is supplied. No historical aggregation, eligibility, reset or award is invented.
@@ -118,8 +119,12 @@ class RankingService:
     returns RG(-8809), never silently evicts an unread result.
     """
 
-    def __init__(self, economy, *, historical_stats=None, update_time=0, max_snapshots=64):
+    def __init__(
+        self, economy, *, rating_policy=None, historical_stats=None, update_time=0,
+        max_snapshots=64,
+    ):
         self.economy = economy
+        self.rating_policy = rating_policy
         self.update_time = _uint(update_time, 32, "update_time")
         if type(max_snapshots) is not int or not 1 <= max_snapshots <= 1024:
             raise RankingError("max_snapshots must be1..1024 per account")
@@ -143,6 +148,8 @@ class RankingService:
             profile = self.economy.profile_bytes(key)
             history = self.history.get(key, RankingHistory())
             history = replace(history, anonymous=history.anonymous or bool(profile[0xB6]))
+            if self.rating_policy is not None and not self.rating_policy.is_ranked(key):
+                history = replace(history, qualified=False)
             entries.append(
                 _Entry(
                     key,
@@ -156,8 +163,7 @@ class RankingService:
             )
         return entries
 
-    @staticmethod
-    def _eligible(entries, rank_id):
+    def _eligible(self, entries, rank_id):
         if rank_id not in RANK_IDS:
             raise RankingError("unknown ranking ID")
         candidates = [
@@ -167,8 +173,16 @@ class RankingService:
             and (rank_id != 2 or entry.history.qualified)
             and (rank_id != 4 or entry.history.rookie)
         ]
+        local_rating = (
+            rank_id in (2, 3, 4)
+            and self.rating_policy is not None
+            and self.rating_policy.enabled
+        )
+        direction = 1 if local_rating else -1
         candidates.sort(
-            key=lambda entry: (-entry.score(rank_id), entry.identity, entry.character_id, entry.key)
+            key=lambda entry: (
+                direction * entry.score(rank_id), entry.identity, entry.character_id, entry.key,
+            )
         )
         return candidates
 

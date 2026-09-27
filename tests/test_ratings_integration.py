@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ from tests import test_match_wagers_integration as wagers
 from tests.test_server import Client
 from tmserver.local_rating_history import HistoryState, classify_result
 from tmserver.match_service import decode, packet
+from tmserver.ranking_service import RECORD_SIZE
 from tmserver.result_stats import PracticeStats
 from tmserver.server import Server
 
@@ -62,8 +64,14 @@ class RatingIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((values[2], values[4]), (state.rating, state.sequence))
             self.assertEqual(result.sections[f"No{seat}"]["T"], f"0|0|{stats.vs_player_games}")
             self.assertEqual(match.players[seat].rating, state.rating)
+        rows = self.server.ranking.records(2)
+        ratings = [struct.unpack_from("<I", rows, i + 0xA0)[0]
+                   for i in range(0, len(rows), RECORD_SIZE)]
+        self.assertEqual(len(ratings), self.player_count)
+        self.assertEqual(ratings, sorted(ratings))
 
     async def test_paid_card_prize_rounds_rating_rematch_and_restart(self):
+        self.assertEqual(self.server.ranking.records(2), b"")
         await self.admit()
         expected = [HistoryState() for _ in self.keys]
         for _ in range(2):
@@ -85,6 +93,7 @@ class RatingIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         try:
             self.assertEqual(restored.ratings.snapshot(), self.server.ratings.snapshot())
+            self.assertEqual(restored.ranking.records(2), self.server.ranking.records(2))
             for seat, key in enumerate(self.keys):
                 stats = PracticeStats.from_profile(restored.economy.profile_bytes(key))
                 self.assertEqual((stats.rating, stats.sequence), (expected[seat].rating, 2))

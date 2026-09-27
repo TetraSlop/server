@@ -22,3 +22,10 @@ Pre-result rating inputs are retained separately from the updated player D2
 values for money-ledger consistency. Five encrypted integration tests pass:
 paid/card-prize2/3-player rounds and rematches, CPU payouts, restart and failed
 result saves. Failure withholds ResultData and restores the old profile/history.
+
+The ranking adapter follows the selected policy: local-history ratings sort
+with lower values first. `is_ranked(key)` requires a committed result and a
+ring matching the current profile rating/sequence; enrollment alone is not a
+rank. Preserve mode retains its previous eligibility. Ranking reads do not
+enroll accounts or alter profiles. See RANKING_NOTES.md for ordering, explicit
+historical inputs and regression coverage.

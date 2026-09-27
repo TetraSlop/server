@@ -56,6 +56,24 @@ class RatingPolicy:
         # previously saved history merely because this run disables the policy.
         return {"version": 1, "history": self.history.snapshot()}
 
+    def is_ranked(self, key):
+        """Local rankings require a committed result matching the saved profile.
+
+        Enrollment alone preserves the old scalar rating. It cannot establish
+        a rank under the local ring policy; neither can a stale saved ring after
+        playing with that policy disabled. Preserved mode retains its old rules.
+        """
+        if not self.enabled:
+            return True
+        if not self.history.enrolled(key):
+            return False
+        state = self.history.state(key)
+        stats = PracticeStats.from_profile(self.economy.profile_bytes(key))
+        return (
+            state.revision > 0
+            and (state.rating, state.sequence) == (stats.rating, stats.sequence)
+        )
+
     def quote(self, match_id, seats, scores, *, departed_seats=()):
         """Return human-seat→RatingQuote, or None under preserved default.
 
