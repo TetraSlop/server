@@ -387,6 +387,7 @@ class OrdinaryTable:
 
     async def dispatch_table(self, session, payload):
         aborted_peers = ()
+        chat_updates = []
         async with self.match_lock:
             if self.host.storage_failed is not None:
                 raise OSError("state storage failed")
@@ -643,8 +644,8 @@ class OrdinaryTable:
                 raise
             if responses is None:
                 return False
-            # A pre-start host kick releases only the removed account. No round
-            # escrow exists before the start handshake; other seats stay bound.
+            # Lobby exits/kicks release only the removed account and table chat.
+            # Detach before delivery; other seats and chat groups stay bound.
             for old_player in old_players:
                 removed = old_player.peer
                 if removed is not None and not any(p.peer is removed for p in match.players):
@@ -652,6 +653,7 @@ class OrdinaryTable:
                     if token is not None:
                         self.host.economy.release_match(token)
                     self.host.result_rewards.release_context(removed.nick.decode("ascii"))
+                    chat_updates.extend(self.host.chat.leave(removed, service_nick(self.table_raw)))
             if msg.primary == 0x41 and msg.subtype in (1, 0x12):
                 self.table_roster.admission(session)
             if match.settings_revision != revision:
@@ -665,6 +667,7 @@ class OrdinaryTable:
                 "match_service", session=session.id, replies=len(responses), state=match.snapshot()
             )
             self.schedule_match_work(match)
+        await self.host.chat_updates(chat_updates)
         if aborted_peers:
             # Session.close can reset a table and await notifications. Never run
             # it under match_lock or close a peer that has since rebound.
