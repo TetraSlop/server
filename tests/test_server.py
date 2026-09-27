@@ -69,8 +69,10 @@ class Client:
         digest = hashlib.md5(challenge + password).hexdigest().encode()
         await self.send(b"NICK " + account + b":" + digest + b":test")
 
-    async def read(self):
-        raw = await asyncio.wait_for(self.reader.readline(), 3)
+    async def read(self, *, timeout=10):
+        # A hang guard, not a protocol deadline: legacy key setup can exceed
+        # three seconds under load. Timing regressions use explicit deadlines.
+        raw = await asyncio.wait_for(self.reader.readline(), timeout)
         if not raw:
             return b""
         plain = wire.crypt64(self.cipher, self.iv, raw) if self.cipher else raw
