@@ -11,6 +11,14 @@ scratch launchers are not the packaged entry points.
 
 ## Native checks requiring the user
 
+- Full 16-byte character names need a loader/native bounds review. Original
+  DE/PD serialization scans beyond that fixed name field into following
+  metadata, and the room receiver copies 16 bytes without a terminator while
+  reporting -8404. Synthetic server-wire admission and bounded table/event
+  labels work, but do not establish native sender or rendered safety for these
+  names. Preserve canonical identity; do not trim guessed metadata suffixes.
+  See [original source evidence](ROOM_NAME_PROVENANCE.md). No native change was
+  made; ordinary names up to 15 bytes pass the original sender/receiver controls.
 - Custom fixed CPU rooms: the hosted Computer menu always sends departure
   rule gs0, so room configuration now requires gs0 whenever a fixed room has
   a CPU table. Unlike human fixed rooms, Computer's rule editor stays editable

@@ -19,6 +19,26 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- IRC channel capitalization no longer creates duplicate memberships or misses
+  departure cleanup (`f9e0235`). Known rooms/tables/services retain their exact
+  advertised spelling; generic channels reuse their first spelling. ASCII
+  letter folding is local compatibility policy, with punctuation kept distinct.
+  Three encrypted regressions fail before and pass after, including event
+  selection release and ordinary observer admission/exit. Fifteen existing
+  controls and nine advertised-channel spelling checks pass.
+- Room DE/PD now authenticates the full canonical character name before
+  publishing roster changes (`327c56f`), alongside nickname/character identity.
+  Four forged-name subcases fail before the fix; two new encrypted tests pass
+  after, including names differing only in their sixteenth byte and complete
+  server snapshot/delta/save checks. Forty-one existing controls and the
+  unchanged captured native startup replay pass. Source research `624bdba`
+  passes 23 original cases proving CN is separate from the handle HN. It also
+  exposes an existing native 16-byte name terminator/metadata limitation,
+  recorded in research/ROOM_NAME_PROVENANCE.md and DEFERRED_REVIEW.md; synthetic
+  16-byte server tests do not establish native sender/display safety. Collection
+  finds 1,135 tests without import errors; Ruff/whitespace pass. The rebuilt
+  wheel passes clean installation, entry points, administration/recovery and
+  temporary listeners, with all 80 runtime files byte-matching source.
 - Event table completion, cancellation and explicit observer ExitCh now detach
   exact table chat membership before reuse (`26e162c`). The coordinator emits
   a transient release fact consumed under the adapter lock; roster notices use

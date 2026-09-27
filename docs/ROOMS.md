@@ -115,6 +115,18 @@ also cover directory discovery, CPU entry, fixed human settings and game start.
 These checks do not render the native menus; that remains on the
 [native checklist](NATIVE_TEST_CHECKLIST.md).
 
+## Room and channel identity
+
+JOIN, PART and channel messages accept ASCII capitalization differences while
+keeping each configured channel's advertised spelling. Repeating a join with
+different capitalization still uses one membership. Punctuation remains distinct;
+this is local compatibility behavior, not a recovered historical IRC case policy.
+
+Room presence uses the authenticated character name, separately from a handle
+alias. Entry and updates with another name are rejected before publication.
+Full 16-byte names have an existing native sender/receiver limitation despite
+server-wire support; see [the source evidence](research/ROOM_NAME_PROVENANCE.md).
+
 ## Table entry limits
 
 The server checks a new participant's saved inventory and money before claiming

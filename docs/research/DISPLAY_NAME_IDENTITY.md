@@ -6,6 +6,11 @@ first 15 printable bytes for these messages preserves their original string
 contract while leaving canonical account names and numeric identities intact.
 This does not establish safe support for 16 data bytes in those wire fields.
 
+This projection covers table/event labels. A later [room-name source probe](ROOM_NAME_PROVENANCE.md)
+found a separate native DE/PD limitation: a full 16-byte name lacks a terminator
+and can run into adjacent metadata during serialization. Synthetic server-wire
+support for that length does not establish native room sender/display safety.
+
 Distinct full account names can share the same displayed prefix. The traced
 receivers continue distinguishing them by character ID or nickname identity;
 they do not use that prefix to select the local account, seat or event progress.

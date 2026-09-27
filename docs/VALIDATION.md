@@ -1,5 +1,56 @@
 # Packaging and transaction validation
 
+## Channel case aliases and authenticated room names, 2026-09-27
+
+Commit `f9e0235` resolves JOIN, PART and channel relay aliases to advertised
+room/table/service spellings, or the first spelling of an existing generic
+channel. Previously case changes could create separate memberships, block
+relay, reject ordinary observer admission or miss event selection cleanup.
+This is an ASCII-only local compatibility rule; no IRC punctuation equivalence
+or historical transport case policy is claimed. Original table-cache lookup
+is byte-sensitive, so advertised spelling remains intact.
+
+- Three encrypted regressions fail before (2.824 seconds) and pass after
+  (3.230 seconds): `results/irc-channel-case-{before,focused}.log`.
+- Fifteen existing channel/chat/event PART/observer/departure controls pass in
+  25.727 seconds: `results/irc-channel-case-controls.log`.
+- Nine advertised ordinary/event room/table/E/F/D channel spellings and
+  distinct punctuation pairs pass: `results/irc-channel-case-spellings.log`.
+  Independent runtime review found no additional issue.
+
+Commit `327c56f` supplies the canonical account name to the shared room DE/PD
+validator. The complete fixed-width field is checked before any room mutation;
+an invalid sender follows the existing identity-rejection/connection-cleanup
+path. No invented acknowledgement is added. Four encrypted forged-name
+subcases (ordinary/event, DE/PD) fail before the fix:
+`results/room-presence-names-before.log`. The two new tests pass in 4.912 seconds,
+including canonical 16-byte synthetic wire names in live deltas and PTL
+snapshots, unchanged durable accounts/save bytes, and a surviving witness:
+`results/room-presence-names-after.log`. The forgeries differ only at byte 16,
+ensuring authentication does not use shortened display names.
+
+Forty-one room/service/event/profile/full-name controls pass in 57.058 seconds:
+`results/room-presence-names-controls.log`. The unchanged recorded native
+room/table/chat/selection commands still reach the first turn over a fresh
+encrypted connection (one test, 1.150 seconds):
+`results/room-presence-native-replay.log`.
+
+Original research `624bdba` passes 23 sender/receiver/constructor/cache cases:
+`results/room-name-provenance-original.json`. DE/PD names come from CN, distinct
+from HN. A full 16-byte name can bleed into following metadata during native
+serialization; the receiver reports -8404 and retains an unterminated field.
+That existing native limitation is documented in `research/ROOM_NAME_PROVENANCE.md`
+and deferred for loader/native review. The server's synthetic 16-byte support
+is not evidence of safe native sender or rendered behavior; no suffix trimming
+or identity weakening was introduced to mask the client issue.
+
+Collection finds 1,135 tests without import errors; Ruff/whitespace pass. The
+85-entry wheel passes clean dependency-free installation, both entry points,
+JSON administration/recovery and temporary listeners. All 80 runtime files
+byte-match source. Logs: `results/channel-presence-wheel-{build,check}.log`.
+SHA256: `2121209fe84bced8137d4593210cfdd81ff96b7290f098d2b5b2956f4ae1920e`.
+These focused checks do not claim a fresh whole-suite, PostgreSQL or native UI run.
+
 ## Event table chat and native entry-denial cleanup, 2026-09-27
 
 Commit `26e162c` clears exact table chat memberships on participant release and
