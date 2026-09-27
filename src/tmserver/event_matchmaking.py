@@ -280,14 +280,30 @@ class EventMatchmaking:
     def _admission_expired(self, event_id, deadline):
         return self.clock() >= deadline or self.host._now() >= self.host.config(event_id).end
 
+    def _expire_waiting_entry(self, e):
+        """Return expiry deliveries, or None when this entry is not due."""
+        if e.epoch is not None:
+            r = self._round(e.event_id, e.epoch)
+            if (
+                r is not None
+                and r.phase in ("proposal", "backoff", "admission")
+                and self._admission_expired(e.event_id, r.deadline)
+            ):
+                return self.cancel(e.event_id, r.epoch)
+            return None
+        if not self._admission_expired(e.event_id, e.deadline):
+            return None
+        del self._entries[e.peer]
+        self.economy.release_match(e.reservation)
+        if e.peer not in self._closures:
+            self._closures.append(e.peer)
+        return []
+
     def poll(self):
         out = list(self._initial)
-        for peer, e in tuple(self._entries.items()):
-            if e.epoch is None and self._admission_expired(e.event_id, e.deadline):
-                del self._entries[peer]
-                self.economy.release_match(e.reservation)
-                if peer not in self._closures:
-                    self._closures.append(peer)
+        for e in tuple(self._entries.values()):
+            if e.epoch is None:
+                self._expire_waiting_entry(e)
         for table_id, c in self.configs.items():
             event_id = c.event_id
             r = self._rounds.get(table_id)
@@ -482,6 +498,11 @@ class EventMatchmaking:
             raise EventError("no current event selection session")
         if e.key != key or e.event_id != event_id or msg.argument != e.session:
             raise EventError("event selection session mismatch")
+        # Init-route traffic bypasses table control. It must expire the same
+        # waiting admission before saving decks, replaying Select or closing it.
+        expired = self._expire_waiting_entry(e)
+        if expired is not None:
+            return expired
         if msg.subtype == 0x22:
             return self._decks(key, msg, e)
         if msg.subtype == 7:
