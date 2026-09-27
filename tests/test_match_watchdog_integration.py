@@ -89,6 +89,24 @@ class WatchdogIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((failure.reason, failure.sequence), ("turn_ack", 0))
         self.assert_released(old)
 
+    async def test_expiry_before_queued_final_departure_clears_room_state(self):
+        self.server.departures.enabled = True
+        self.server.allow_departures = True
+        self.server.reset_match()
+        await self.turn()
+        old = self.server.match
+        self.now = 120
+        async with self.server.match_lock:
+            expiry = asyncio.create_task(self.server.check_match_timeout())
+            await asyncio.sleep(0)
+            await self.peer.close()
+            departure = self.server.departures.task
+            self.assertIsNotNone(departure)
+            self.assertIs(self.server.match, old)
+        self.assertEqual((await expiry).reason, "turn_ack")
+        await departure
+        self.assert_released(old)
+
     async def test_start_handshake_expiry_releases_without_debit_or_profile_change(self):
         await self.server.dispatch_table(self.peer, packet(65, 1, body="@GameEN="))
         await self.server.dispatch_table(self.peer, packet(20, body=SETTINGS))

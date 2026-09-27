@@ -148,6 +148,13 @@ class OrdinaryTable:
         self.queue_spectator((), self.match)
         self.watchdog.observe(self.match, self.match)
 
+    def reset_table_updates(self, match):
+        """Release one match generation and clear its published room state."""
+        if match is not self.match:
+            return []
+        self.reset_match()
+        return self.room.set_table(0, 0, 0) + self.room.clear_npcs()
+
     def match_tokens(self, match):
         return {
             seat: self.match_reservations[p.peer]
@@ -650,8 +657,7 @@ class OrdinaryTable:
                 await peer.close()
         if self.match is match:
             async with self.match_lock:
-                if self.match is match:
-                    self.reset_match()
+                await self.publish_room(self.reset_table_updates(match))
         return timeout
 
     async def run_match_watchdog(self):
@@ -750,6 +756,8 @@ class OrdinaryTable:
             for player in list(match.players):
                 if player.peer is not None:
                     await player.peer.close()
+            async with self.match_lock:
+                await self.publish_room(self.reset_table_updates(match))
         finally:
             if self.match_task is asyncio.current_task():
                 self.match_task = None
@@ -760,8 +768,7 @@ class OrdinaryTable:
             if reservation is not None:
                 self.host.economy.release_match(reservation)
             return []
-        self.reset_match()
-        return self.room.set_table(0, 0, 0) + self.room.clear_npcs()
+        return self.reset_table_updates(self.match)
 
     async def release_table(self, peer):
         self.detach_spectator(peer)

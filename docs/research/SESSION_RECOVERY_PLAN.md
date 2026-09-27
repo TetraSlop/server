@@ -131,6 +131,16 @@ No self-GetAway, speculative Change, forced placement, automatic pass or
 unsolicited Continue is emitted. Existing ordinary Continue leave still needs
 header>1 and local Ans3, as shown in the original result fixtures.
 
+Ordinary-table abort cleanup also covers a timeout or failed combat continuation
+that overlaps the final participant's queued departure. The transport can already
+be detached before the timeout acquires `match_lock`; closing it again does not
+reset the table. An epoch-checked fallback now releases the match, clears only
+that table's room metadata and CPU roster, and publishes the resulting TD/PC
+updates through the existing room delivery queue. A stale departure or cleanup
+cannot clear a replacement match. The same helper covers departure-processing
+failure and ordinary table release, retaining the existing account transaction
+and room publication boundaries.
+
 ## Validation and remaining limits
 
 ```
@@ -143,6 +153,12 @@ The integrated tests expire selection/ack/decision, confirm reservation and
 table release, re-admit the same account, and execute stale/cancelled worker
 entry against a newer table without mutation. They use actual server logical
 state with fake transport and no elapsed sleep.
+
+`tests.test_table_abort_cleanup` and the queued-final-departure watchdog test
+reproduce the overlapping cleanup without a listener or native client. They
+verify contiguous observer removal updates, empty PTL state, table-scoped CPU
+removal, unchanged durable inventory, same-room sibling reservations, and a
+replacement match surviving late cleanup from the old epoch.
 
 Native connection-error presentation, retry UI and post-timeout relaunch remain
 unverified. Fresh account admission works at the server boundary; transparent

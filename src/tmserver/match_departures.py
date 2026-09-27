@@ -79,10 +79,7 @@ class MatchDepartures:
                         and (match, p.peer) not in self.pending
                     ]
                     if not remaining:
-                        table.reset_match()
-                        await table.publish_room(
-                            table.room.set_table(0, 0, 0) + table.room.clear_npcs()
-                        )
+                        await table.publish_room(table.reset_table_updates(match))
                     else:
                         player = next(p for p in match.players if p.peer is peer)
                         replies = [] if player.departed else match.depart(peer)
@@ -98,8 +95,8 @@ class MatchDepartures:
             for peer in peers:
                 if not peer.closed:
                     await peer.close()
-            if table.match is match:
-                table.reset_match()
+            async with table.match_lock:
+                await table.publish_room(table.reset_table_updates(match))
         finally:
             self.task = None
             self.pending = {key for key in self.pending if key in self.queue}
