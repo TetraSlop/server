@@ -81,6 +81,11 @@ for later review and continue independent work.
   preserve v2 data. All40 combined state/policy/projection/encrypted/startup/Play
   tests pass in29.6 seconds. New v2 snapshots also pass the database import
   validator in memory. Real PostgreSQL execution has not been repeated here.
+- Auction registration: seller/bidder history recorded at guild0 now remains
+  reloadable after ordinary Init80 registration. Restore permits only unchanged
+  guild or the supported0-to-registered transition; historical rows are never
+  rewritten and immutable identity checks remain. Three new regressions and
+  the64-test auction/profile/claim batch pass, including encrypted restart.
 
 Whole portable regression checkpoint completed:903 tests in798.6 seconds,
 846 passed,56 optional PostgreSQL tests skipped, and one login timeout in the
@@ -99,8 +104,14 @@ checks pass. No native visual validation is claimed by these tests.
   connected human counterpart after the match is finished/reservations released.
   It owns ordinary_table.py and test_departure_integration.py for minimal cleanup
   and encrypted regressions. Supported practice departures must remain intact.
-- Agent texture_upscaling is auditing login/rebind/shutdown read-only. Agent
-  texture_load_trace is auditing durable claim/replay routing read-only.
+- Agent texture_upscaling reproduced stale PART of an old event channel
+  cancelling a newer event selection. It owns irc_session.py and new
+  tests/test_event_room_part.py for channel-scoped cleanup, retaining global
+  socket-close cleanup.
+- Auction guild-history fix is complete and checked; texture_load_trace is idle.
+- After these three targeted fixes settle, freeze source for the complete
+  portable suite and wheel build/check; do not start further source edits
+  during that checkpoint.
 - Prior full-suite output:results/overnight-suite.log; affected34-test rerun:
   results/overnight-timeout-recheck.log. Both runs completed. No active test
   sessions from that checkpoint remain.

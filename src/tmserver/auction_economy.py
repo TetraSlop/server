@@ -507,12 +507,14 @@ class AuctionEconomy:
                     return None
                 value = Actor(**{**data, "name": bytes.fromhex(data["name"])})
                 view = economy.account_view(value.key)
-                if (value.nn, value.player_id, value.name, value.guild) != (
+                _uint(value.guild, 3)
+                # Init80 can register guild0 once. Preserve that earlier actor;
+                # a saved registered guild must still equal the current guild.
+                if (value.nn, value.player_id, value.name) != (
                     view.nn,
                     view.player_id,
                     view.name,
-                    view.guild,
-                ):
+                ) or value.guild not in (0, view.guild):
                     raise AuctionError("auction actor does not match its account")
                 _uint(value.rating)
                 _uint(value.points, 65535)

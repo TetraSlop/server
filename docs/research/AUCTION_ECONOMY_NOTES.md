@@ -36,3 +36,19 @@ Native payment arithmetic clamps at99,999,999. The local ledger emits only the a
 `test_auction_economy.py`: **22 tests**, including eight fresh original-x86 comparisons of both money child commits and both card child commits (`101348F0`, `10135920`, `10134F00`, `10135410`). UI/transport/refresh plumbing is stubbed; original arithmetic, destructive card move and Get emission execute. The tests cover two-bidder escrow conservation, self-raise refund, expiry/reoffers, stale bids, forged descriptors, busy accounts, empty ordered stages, disconnect before/after Get, money-before-send recovery, residual cap credit, overflow rejection/discard, deck/options preservation, batches exceeding30, concurrent pending additions, snapshot corruption and legacy saves.
 
 Combined auction/economy/trade/match-economy/result checks: **100 passed**. The inherited external binary reader emits a ResourceWarning; no external code was edited. No native game, GUI or historical service was launched. Full historical auction policy, timestamp epoch, fee behavior and unused fields remain outside what the original client proves.
+
+### Registration after an auction
+
+Auction actors retain the guild they had when listing or bidding. An account
+may subsequently register from guild0 into guild1..3 through Init80. Restore
+accepts that one-way transition while retaining the historical record; an
+already registered actor must still match the current guild. Account key, NN,
+character ID and name remain authenticated, and saved guilds must be integers
+in0..3. Comparing the old guild directly with the current one previously made
+an otherwise valid acknowledged registration impossible to reload.
+
+Three new regressions cover all guild choices, historical seller/current bidder/
+bid history, impossible transitions and forged identities. The encrypted case
+lists and bids before registration, reloads after each Init80 acknowledgement,
+then raises the bid and reloads mixed historical guild values. The focused
+auction/profile/claim batch passes64 tests without launching the native game.
