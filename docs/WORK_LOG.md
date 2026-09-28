@@ -2,10 +2,12 @@
 
 ## Current scope
 
-Recurring automation is paused at the user's request. The latest user-requested
-multi-agent sweep produced [ROADMAP.md](ROADMAP.md), with no runtime edits.
-It records confirmed spectator isolation, room replay and profile reply-budget
-defects, followed by packaging/test guardrails and bounded readability work.
+Recurring automation remains paused. After the read-only multi-agent review,
+the user authorized implementation of [ROADMAP.md](ROADMAP.md) and requested
+an admin panel. The first pass fixes R1/R2 protocol boundaries, implements R4
+rating preflight and R7 shared claim queries, and adds R3 validation tooling.
+The [admin panel plan](ADMIN_PANEL_PLAN.md) starts with a read-only interface over
+those queries, followed by shared audited actions. No HTTP listener is added yet.
 
 Keep runtime modules and tests under their feature owners. Shared models and
 packet codecs have explicit modules; service behavior, durable transaction
@@ -29,6 +31,23 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Roadmap implementation: spectator bootstrap codec errors now evict/reject only
+  the observer; a real encrypted three-player CBC round and a fault-injected event
+  round continue through completion. Complete service replies include their GTM0
+  prefix in the 469-byte budget; one NOTICE builder preserves native sender
+  extraction and validates route widths. Room deltas validate before membership,
+  sequence or replay changes; profile edits/restores validate all legal locator
+  sizes. R4 rejects stale rating history before recovery/listeners, naming affected
+  accounts. R7 exposes detached account/claim data for the CLI and future panel,
+  including partial claims and handoff/recovery deduplication. R3 adds exact-source
+  wheel checks, fresh staging builds, collection/import checks, explicit test lanes
+  and CI. The full portable suite passes 1,155 tests in 998.142s with no skips;
+  one tooling diagnostic added afterward passes separately. Collection is 1,215
+  unique IDs; lint, whitespace and exact-source installed-wheel checks pass.
+  PostgreSQL's 59 tests remain unrun because Docker's engine is stopped; native
+  acceptance remains user-operated. See VALIDATION.md for evidence and the wheel
+  hash. R6's next extractions were scoped without changing runtime during this
+  correctness checkpoint, including the shop editor's shared trade/event use.
 - Handler cleanup now retires profile writer/task registrations and game accept
   tasks even when transport close is cancelled or raises. Original cancellation
   and error propagation is preserved. Seven new tests exercise real handler

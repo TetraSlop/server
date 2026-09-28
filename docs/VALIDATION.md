@@ -1,5 +1,50 @@
 # Packaging and transaction validation
 
+## First roadmap implementation, 2026-09-27
+
+The R1/R2/R4/R7 runtime changes address the review's reproduced failures without
+changing reward policy, save formats, named-game packet limits or default
+spectator availability. Three agents implemented/reviewed independent portions;
+the main agent integrated the shared reply boundary and admin-panel plan.
+
+- R1: four new regressions fail before the fix and pass afterward. All 57 observer
+  checks pass, including a real encrypted three-player CBC round with 17 visible
+  cards and a rejected watcher. The event continuation test injects the codec
+  failure explicitly: event configuration does not support CBC.
+- R2: eight new boundary tests cover full service framing, nickname constraints,
+  room rollback/replay and profile locator projections. Encrypted profile restart
+  and room replay checks pass. A 37-test run includes these plus auction and
+  ranking controls. Independent review confirms reply preflight stays before
+  escrow, room publication and profile persistence.
+- R4/R7: 76 distinct focused checks pass, including encrypted rated play/restart,
+  read-only startup rejection, partial collection, claim ownership and legacy
+  absent/null journals. Startup preflight runs before recovery or any save.
+- R3: 14 tooling tests pass. Deliberately stale, missing/changed and duplicate
+  package entries fail validation. A fresh staging build and clean installed
+  wheel pass entry points, temporary listeners, JSON administration/recovery and
+  model/codec import isolation. All 114 runtime files match source across 119
+  archive entries. SHA256:
+  `59633a0e4dc9fdc379762b3aaa5f842dc6022c46b257ba2997793c3cdfbccf0e`.
+
+The full portable run passes **1,155 tests in 998.142 seconds**, with zero failures,
+errors or skips (`results/roadmap-portable.log`). Final test discovery contains
+1,215 unique IDs. One tooling diagnostic regression was added after that run
+began and passes separately in the 14-test tooling run. The remaining 59 tests
+belong to the explicitly selected PostgreSQL lane. Lint and whitespace checks
+pass. Runtime changes are committed through `a161947`.
+
+The actual PostgreSQL lane exits with a concrete Docker engine connection error
+before starting database tests; PostgreSQL coverage is **unrun**, not a successful
+skipped lane. CI is configured but has not run remotely; no push was made. Native
+client acceptance remains user-operated and was not performed. The admin panel
+has a documented design and shared read queries, without a web UI yet.
+
+Evidence: `results/r1-{baseline,event-baseline,fixed,spectators}.log`,
+`results/roadmap-r4-r7-{focused,final-unit}.log`,
+`results/r3-{tooling-tests,clean-build,installed-wheel,postgres-lane}.log`, and
+`results/r3-stale-wheel-rejection.json`. Final rebuilt wheel and clean-install
+checks are in `results/roadmap-final-{build,wheel}.log`.
+
 ## Interrupted connection cleanup, 2026-09-27
 
 Profile shutdown could cancel a handler already waiting for transport closure

@@ -6,6 +6,15 @@ agent checked the findings and combined the priorities below. This was a code
 review with bounded synthetic reproductions, not a native-client acceptance run.
 No runtime fixes were made during this sweep. Recurring automation remains paused.
 
+Implementation was subsequently authorized. R1/R2/R4/R7 are implemented with
+focused regressions; R3 tooling and CI are implemented and the installed wheel
+passes exact-source verification. The full portable suite passes 1,155 tests
+with no skips; the additional tooling diagnostic passes separately. Live
+PostgreSQL validation remains unavailable
+while Docker's engine is stopped. See [VALIDATION.md](VALIDATION.md) for the latest
+combined result. R5 native acceptance, R6 structural cleanup and R8 decisions
+remain separate work; R9 is planned with its shared-query foundation in place.
+
 The next work should fix the reproduced observer and reply-construction failures,
 then make verification repeatable before continuing structural changes. Keep
 Python, feature ownership, explicit transaction coordinators and SQLAlchemy Core.
@@ -41,6 +50,7 @@ coverage; **L** needs protocol research or a product decision.
 | R6 | P2 | Long handlers and shop behavior have smaller, explicit responsibilities. | M per change | R1–R4 and a verified baseline |
 | R7 | P2 | Offline inspection shows all assets still waiting to be claimed. | S | Existing journal read APIs |
 | R8 | Deferred | Rating migration and spectator synchronization have explicit policies/protocols. | M–L | Decisions or original-client evidence |
+| R9 | Planned feature | An authenticated admin panel shares account/claim queries and audited actions with the CLI. | M per checkpoint | R1/R2, R3 verification and R7 queries |
 
 ## R1 — Isolate spectator bootstrap failures
 
@@ -186,16 +196,27 @@ protocol tests do not mark this candidate accepted.
 adequate. The remaining reading cost is concentrated in long stateful methods:
 
 - [game/match.py](../src/tmserver/game/match.py): 1,999 lines; `handle` is 263.
-  Extract admission/lobby handling into named private methods while keeping one
-  owner for match state. Preserve `None` (another service) versus `[]` (handled).
+  Extract two private helpers in the same class: table messages (viewer/exit,
+  admission validation, Req, settings and discovery) and lobby controls (entry,
+  roster, start/acceptance, departure/kick). Keep decode, seat lookup and departed
+  guards in `handle`, before routing non-gameplay messages to those helpers.
+  Preserve `None` (another service) versus `[]` (handled), validation order and
+  one owner for match state. This can make `handle` roughly 115 lines without
+  introducing dispatch sentinels or a wrapper for every branch.
 - [rooms/table.py](../src/tmserver/rooms/table.py): 905 lines;
   `dispatch_table` is 294. In a separate change, extract query/observer branches,
   preserving lock boundaries and owner checks after awaited delivery.
-- [economy/service.py](../src/tmserver/economy/service.py): 1,120 lines. Its
-  `_init`, `handle` and `_edit` contain 139 function lines of ordinary shop
-  behavior. Move that cohesive behavior behind the existing `Commerce.shop`
-  transaction entry point; leave accounts, reservations and settlement with
-  their current owners.
+- [economy/service.py](../src/tmserver/economy/service.py): 1,120 lines at review.
+  Its `_init`, `handle` and `_edit` contain 139 function lines, but `_edit` also
+  serves delayed trade/event deck edits. Extract shop behavior into a stateless
+  `economy/shop.py` handler over the selected staged account, parsed message,
+  catalogue, offers and draw function. Keep family recognition, parsing and
+  account/reservation checks in EconomyService and preserve `Commerce.shop`'s
+  staging/save boundary. Shared inventory validation belongs beside the models;
+  delayed deck edits should use the existing edit codecs directly. Pass the
+  staged draw function per operation: caching a callback to the original owner
+  would break RNG rollback. No account owner should depend on shop behavior for
+  a non-shop operation.
 
 **Done when:** existing native fixtures, admission/CPU/rematch/observer/departure
 and shop replay/rollback controls retain replies, ordering and saved state.
@@ -236,8 +257,17 @@ collects rewards or writes storage, and accepts absent/null optional journals.
   listeners use loopback and synthetic local accounts. Browser work, language
   rewrites, backups and performance projects remain outside this roadmap pass.
 
+## R9 — Add an operator admin panel
+
+Requested after this review. Follow [ADMIN_PANEL_PLAN.md](ADMIN_PANEL_PLAN.md):
+start with server/account/room status and outstanding claims, using the same
+read projections as offline administration. Add existing grant/progress actions
+through shared transactions and audit receipts after the read-only panel passes.
+Use an optional FastAPI/Jinja2 interface attached to the running server's state
+owner. The panel must not open another writer on the active save.
+
 R1 and R2 can proceed as separate fixes while R3's tooling work runs independently.
 The first checkpoint is reproduced failures turned into passing regressions,
 an exact-source package and a fresh test baseline. Then run R5 while completing
 R4; start the first bounded R6 extraction after R4 is complete. R7 can run
-independently of match refactoring.
+independently of match refactoring and supplies the first R9 checkpoint.
