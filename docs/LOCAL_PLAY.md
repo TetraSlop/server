@@ -124,6 +124,36 @@ game processes are not reused or stopped. Free ports are passed directly to the
 loader, so the old fixed profile port can remain occupied. No administrator
 launch is requested; the loader retains its `asInvoker` manifest.
 
+## Portable or custom layouts
+
+The launcher can use a prepared loader outside its checkout build directory.
+`--loader` selects the executable and `--loader-config` selects its configuration.
+`--loader-dir` sets the child process working directory. These are independent
+options; overriding a file does not change that working directory. Supplied
+relative paths resolve from the directory where the command is invoked.
+
+For a prepared bundle with the server package available to `python/python.exe`,
+the loader and its configuration under `client/`, and the room example under
+`server/examples/`, run this from the bundle root:
+
+```powershell
+.\python\python.exe -B -m tmserver.cli.play `
+  --project-dir .\server --loader-dir .\client `
+  --loader .\client\tmloader.exe --loader-config .\client\tmloader.ini `
+  --state .\user\server.json --check
+```
+
+The check starts no game or services. Remove `--check` to play once setup passes.
+The explicit save goes under `user/`; session logs remain under
+`server/var/sessions/`. Session metadata records the selected executable,
+configuration and working directory. Paths containing spaces are supported;
+quote each such argument in the shell.
+
+Omitting these options preserves the checkout defaults: the sibling `tmloader`
+working directory, its `build/RelWithDebInfo/tmloader.exe` executable and its
+`tmloader.ini`. The existing `Play.cmd` and `Check Setup.cmd` keep working as before.
+These options select prepared files; they do not copy game assets or install Python.
+
 ## Recreate the setup
 
 Build `tmloader` using its README, and install `tmserver` into its `.venv` using

@@ -20,7 +20,18 @@ from tmserver.storage.json import JsonStateStore
 def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-dir", type=Path, default=Path.cwd())
-    parser.add_argument("--loader-dir", type=Path, help="sibling tmloader checkout by default")
+    parser.add_argument(
+        "--loader-dir", type=Path,
+        help="loader working directory; default: sibling tmloader checkout",
+    )
+    parser.add_argument(
+        "--loader", type=Path,
+        help="loader executable; default: LOADER_DIR/build/RelWithDebInfo/tmloader.exe",
+    )
+    parser.add_argument(
+        "--loader-config", dest="config", type=Path,
+        help="loader configuration; default: LOADER_DIR/tmloader.ini",
+    )
     parser.add_argument("--state", type=Path, help="default: PROJECT/var/local_state.json")
     parser.add_argument("--clients", type=int, choices=(1, 2, 3), default=1)
     parser.add_argument(
@@ -43,8 +54,8 @@ def arguments(argv=None):
     args.project_dir = args.project_dir.resolve()
     args.loader_dir = (args.loader_dir or args.project_dir.parent / "tmloader").resolve()
     args.state = (args.state or args.project_dir / "var/local_state.json").resolve()
-    args.loader = args.loader_dir / "build/RelWithDebInfo/tmloader.exe"
-    args.config = args.loader_dir / "tmloader.ini"
+    args.loader = (args.loader or args.loader_dir / "build/RelWithDebInfo/tmloader.exe").resolve()
+    args.config = (args.config or args.loader_dir / "tmloader.ini").resolve()
     return args
 
 
@@ -201,6 +212,8 @@ async def run(args):
                 "accounts": list(NAMES[: args.clients]),
                 "state": str(args.state),
                 "loader": str(args.loader),
+                "loader_config": str(args.config),
+                "loader_dir": str(args.loader_dir),
                 "rewards": args.rewards,
                 "ratings": args.ratings,
                 "weekly_rankings": args.weekly_rankings,

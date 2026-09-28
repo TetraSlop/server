@@ -31,6 +31,100 @@ class LocalPlayTests(unittest.IsolatedAsyncioTestCase):
         )
         self.args = local_play.arguments(["--project-dir", str(self.root), "--clients", "3"])
 
+    def portable_args(self, *options):
+        project = self.root / "portable bundle/server"
+        client = self.root / "portable bundle/client"
+        (project / "examples").mkdir(parents=True)
+        client.mkdir()
+        shutil.copyfile(
+            ROOT / "examples/auto_rooms.example.json",
+            project / "examples/auto_rooms.example.json",
+        )
+        (client / "tmloader.exe").touch()  # Never executed; spawn is replaced in every test.
+        (client / "tmloader.ini").write_text("[fixture]\n", encoding="utf8")
+        return local_play.arguments([
+            "--project-dir", str(project), "--loader-dir", str(client),
+            "--loader", str(client / "tmloader.exe"),
+            "--loader-config", str(client / "tmloader.ini"),
+            "--state", str(project.parent / "user/server.json"), *options,
+        ])
+
+    def test_checkout_defaults_and_independent_loader_overrides(self):
+        expected = self.root.parent / "tmloader"
+        self.assertEqual(self.args.loader_dir, expected)
+        self.assertEqual(self.args.loader, expected / "build/RelWithDebInfo/tmloader.exe")
+        self.assertEqual(self.args.config, expected / "tmloader.ini")
+        self.assertEqual(self.args.state, self.root / "var/local_state.json")
+        for options, loader, config in (
+            (["--loader-dir", "custom-client"],
+             "custom-client/build/RelWithDebInfo/tmloader.exe", "custom-client/tmloader.ini"),
+            (["--loader", "client.exe"], "client.exe", expected / "tmloader.ini"),
+            (["--loader-config", "client.ini"],
+             expected / "build/RelWithDebInfo/tmloader.exe", "client.ini"),
+        ):
+            with self.subTest(options=options):
+                args = local_play.arguments(["--project-dir", str(self.root), *options])
+                self.assertEqual(args.loader, Path(loader).resolve())
+                self.assertEqual(args.config, Path(config).resolve())
+
+    async def test_portable_preflight_uses_explicit_executable_config_and_directory(self):
+        args = self.portable_args("--check")
+        child = AsyncMock(returncode=0)
+        child.communicate.return_value = (b"valid fixture", None)
+        with (
+            patch.object(local_play.asyncio, "create_subprocess_exec",
+                         AsyncMock(return_value=child)) as spawn,
+            patch.object(local_play, "running_services") as services,
+        ):
+            self.assertEqual(await local_play.run(args), 0)
+            services.assert_not_called()
+        self.assertEqual(spawn.call_args.args, (
+            str(args.loader), "--config", str(args.config), "--check",
+        ))
+        self.assertEqual(spawn.call_args.kwargs["cwd"], args.loader_dir)
+        self.assertFalse(args.state.parent.exists())
+        self.assertFalse((args.project_dir / "var").exists())
+
+    async def test_missing_explicit_loader_is_rejected_without_falling_back(self):
+        args = self.portable_args()
+        args.loader = args.loader_dir / "missing.exe"
+        with patch.object(local_play.asyncio, "create_subprocess_exec", AsyncMock()) as spawn:
+            with self.assertRaisesRegex(ValueError, "missing.exe"):
+                await local_play.preflight(args)
+            spawn.assert_not_called()
+        self.assertFalse(args.state.parent.exists())
+
+    async def test_portable_layout_runs_headless_peer_with_explicit_save_and_logs(self):
+        args = self.portable_args()
+        actual_spawn = asyncio.create_subprocess_exec
+        commands = []
+
+        async def spawn(*command, **options):
+            commands.append((command, options["cwd"]))
+            options["cwd"] = ROOT
+            return await actual_spawn(
+                sys.executable, "-B", "-m", "tests.support.local_play_peer", *command[1:], **options
+            )
+
+        with (
+            patch.object(local_play, "preflight", AsyncMock()),
+            patch.object(local_play.asyncio, "create_subprocess_exec", spawn),
+        ):
+            self.assertEqual(await local_play.run(args), 0)
+        self.assertEqual(len(commands), 1)
+        command, cwd = commands[0]
+        self.assertEqual(command[:3], (str(args.loader), "--config", str(args.config)))
+        self.assertEqual(cwd, args.loader_dir)
+        self.assertEqual(len(json.loads(args.state.read_text())["accounts"]), 1)
+        self.assertFalse((args.project_dir / "var/local_state.json").exists())
+        session = next((args.project_dir / "var/sessions").iterdir())
+        metadata = json.loads((session / "session.json").read_text())
+        self.assertEqual(metadata["state"], str(args.state))
+        self.assertEqual(metadata["loader"], str(args.loader))
+        self.assertEqual(metadata["loader_config"], str(args.config))
+        self.assertEqual(metadata["loader_dir"], str(args.loader_dir))
+        self.assertEqual(json.loads((session / "exits.json").read_text()), [0])
+
     async def test_three_owned_headless_peers_authenticate_both_services_save_and_exit(self):
         actual_spawn = asyncio.create_subprocess_exec
         commands = []
