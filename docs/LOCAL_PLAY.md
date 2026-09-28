@@ -8,8 +8,10 @@ prepared. Start with **`tmserver/Play.cmd`**, rather than the earlier shortcut.
 
 Double-click `Play.cmd`. It checks the loader's files and DLL hashes, starts the
 packaged game/profile services on free loopback ports, and opens one native game
-window. Enter **Local Room**, select an empty table, then choose **Computer**
-for CPU play. Keep the launcher console open while playing. Close the
+window. Enter **Local Room**, select an empty table, then choose **COM Opponent**
+(Computer) for CPU play, before choosing the human **Join** action. Quick Play
+and the other rooms only allow human opponents, so their COM option is disabled.
+Keep the launcher console open while playing. Close the
 game window normally to stop the session and both services.
 
 The Computer menu can select one or two distinct NPC opponents. Two opponents

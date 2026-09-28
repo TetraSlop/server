@@ -652,14 +652,7 @@ class OrdinaryTable:
                 return False
             # Lobby exits/kicks release only the removed account and table chat.
             # Detach before delivery; other seats and chat groups stay bound.
-            for old_player in old_players:
-                removed = old_player.peer
-                if removed is not None and not any(p.peer is removed for p in match.players):
-                    token = self.match_reservations.pop(removed, None)
-                    if token is not None:
-                        self.host.economy.release_match(token)
-                    self.host.result_rewards.release_context(removed.nick.decode("ascii"))
-                    chat_updates.extend(self.host.chat.leave(removed, service_nick(self.table_raw)))
+            chat_updates.extend(self.release_removed_players(match, old_players))
             if msg.primary == 0x41 and msg.subtype in (1, 0x12):
                 self.table_roster.admission(session)
             if match.settings_revision != revision:
@@ -682,6 +675,18 @@ class OrdinaryTable:
                 if self.match is match:
                     await self.publish_room(self.reset_table_updates(match))
         return True
+
+    def release_removed_players(self, match, old_players):
+        updates = []
+        for player in old_players:
+            peer = player.peer
+            if peer is not None and not any(p.peer is peer for p in match.players):
+                token = self.match_reservations.pop(peer, None)
+                if token is not None:
+                    self.host.economy.release_match(token)
+                self.host.result_rewards.release_context(peer.nick.decode("ascii"))
+                updates.extend(self.host.chat.leave(peer, service_nick(self.table_raw)))
+        return updates
 
     async def roster_presence(self, session, room_id):
         """Accepted room PD is the guest's native post-GameEA barrier."""
@@ -845,6 +850,19 @@ class OrdinaryTable:
 
     async def release_table(self, peer):
         self.detach_spectator(peer)
+        chat_updates = None
+        async with self.match_lock:
+            match = self.match
+            if match.lobby_departure_supported() and any(p.peer is peer for p in match.players):
+                old_players = list(match.players)
+                # PART has no GameExit acknowledgement; remaining seats receive
+                # the same roster and host election as an explicit lobby exit.
+                responses = match.leave_lobby_member(peer, None)
+                chat_updates = self.release_removed_players(match, old_players)
+                await self.publish_match(match, responses, admitting=True)
+        if chat_updates is not None:
+            await self.host.chat_updates(chat_updates)
+            return
         if self.departures.request(peer):
             return
         match = self.match
