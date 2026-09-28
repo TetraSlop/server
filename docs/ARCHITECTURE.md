@@ -18,6 +18,7 @@ change the wire protocol, saved-state format or service lifetime.
 | Ordinary room rules and table lifecycle | [rooms/config.py](../src/tmserver/rooms/config.py), [rooms/table.py](../src/tmserver/rooms/table.py), [rooms/service.py](../src/tmserver/rooms/service.py) |
 | Event configuration and matchmaking | [events/config.py](../src/tmserver/events/config.py), [events/adapter.py](../src/tmserver/events/adapter.py), [events/matchmaking.py](../src/tmserver/events/matchmaking.py) |
 | Accounts, purchases, trade and rewards | [economy/service.py](../src/tmserver/economy/service.py), [economy/](../src/tmserver/economy/) |
+| Auction records, protocol and escrow | [economy/auctions/](../src/tmserver/economy/auctions/), [economy/claim_transactions.py](../src/tmserver/economy/claim_transactions.py) |
 | Profile files and saved player settings | [profiles/service.py](../src/tmserver/profiles/service.py), [profiles/characters.py](../src/tmserver/profiles/characters.py), [profiles/preferences.py](../src/tmserver/profiles/preferences.py) |
 | Ratings, statistics and ranking files | [rankings/policy.py](../src/tmserver/rankings/policy.py), [rankings/stats.py](../src/tmserver/rankings/stats.py), [rankings/service.py](../src/tmserver/rankings/service.py) |
 | Save, validate or recover durable state | [storage/json.py](../src/tmserver/storage/json.py), [storage/postgres.py](../src/tmserver/storage/postgres.py), [storage/validation.py](../src/tmserver/storage/validation.py), [storage/recovery.py](../src/tmserver/storage/recovery.py) |
@@ -67,6 +68,20 @@ alone does not require another module. The existing focused algorithm, policy,
 configuration and ledger files remain useful units. This convention separates
 shared concerns in the large services without adding empty layers to every
 small feature.
+
+When a feature needs several substantial modules, give it a package with the
+same internal names. For example, `economy/auctions/` contains `models.py` for
+shared records, `packets.py` for native files and replies, `service.py` for
+requests and connection-local state, and `ledger.py` for escrow and settlement.
+Tests mirror that package under `tests/economy/auctions/`. A small cohesive
+feature can stay in a single file until that separation helps readers.
+
+Cross-feature commits stay in the transaction coordinator. An auction purchase
+changes both account balances and the auction journal, so
+`economy/claim_transactions.py` saves both through one storage call. SQL edits
+stay in the shared backend; splitting them into independent feature saves would
+break that atomic boundary. Packet encoders can consume model values without
+importing the ledger, service or storage backend.
 
 Use this order for a durable request: **decode → stage → change → save → publish
 → reply**. SQL and database row conversion belong in `storage/postgres.py`;

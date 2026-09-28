@@ -1,6 +1,6 @@
 """Preview startup refunds and returned cards using independent restored state."""
 
-from tmserver.economy.auction_ledger import AuctionEconomy
+from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.service import EconomyService
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.economy.result_rewards import ResultRewardService

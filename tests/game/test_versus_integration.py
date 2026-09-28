@@ -242,7 +242,7 @@ class CBCRewardIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await restored.stop()
 
     async def test_crash_before_continue_recovers_earned_card_through_real_collection(self):
-        from tests.economy.test_auction_service import collection_request
+        from tests.economy.auctions.test_auction_service import collection_request
         from tmserver.economy.packets import named, parse_named
 
         finals = await self.cbc_round()

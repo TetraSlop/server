@@ -12,8 +12,9 @@ from collections import deque
 from contextlib import contextmanager
 from pathlib import Path
 
-from tmserver.economy.auction_ledger import AuctionEconomy, AuctionError
-from tmserver.economy.auctions import AuctionService
+from tmserver.economy.auctions.ledger import AuctionEconomy
+from tmserver.economy.auctions.models import AuctionError
+from tmserver.economy.auctions.service import AuctionService
 from tmserver.profiles.characters import CharacterProfiles
 from tmserver.network.chat import ChatService
 from tmserver.economy.claim_transactions import auction_transaction

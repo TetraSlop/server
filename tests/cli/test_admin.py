@@ -15,7 +15,7 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.events.test_event_configuration import DOCUMENT
 from tmserver.cli import admin
-from tmserver.economy.auction_ledger import AuctionEconomy
+from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.models import MAX_MONEY
 from tmserver.economy.service import EconomyService
 from tmserver.economy.packets import named, parse_named

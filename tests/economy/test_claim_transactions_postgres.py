@@ -3,11 +3,11 @@
 import unittest
 from unittest.mock import patch
 
-from tests.economy import test_auction_prize_integration as auctions
+from tests.economy.auctions import test_auction_prize_integration as auctions
 from tests.events import test_event_integration as events
 from tests.storage import test_postgres_protocol as protocol
 from tests.network import test_services_integration as services
-from tests.economy.test_auction_service import exhibit_request
+from tests.economy.auctions.test_auction_service import exhibit_request
 from tests.economy.test_claim_transactions import ClaimFixture
 from tests.events.test_event_rooms import config
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture

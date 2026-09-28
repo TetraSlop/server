@@ -1,5 +1,43 @@
 # Packaging and transaction validation
 
+## Auction feature layout, 2026-09-27
+
+The auction feature now uses `economy/auctions/{models,packets,service,ledger}.py`.
+Shared records and packet builders have direct owners, while private collection
+editors remain next to their operations. Cross-feature transactions still save
+accounts and the auction journal together; SQL/save formats and local policies
+are unchanged. Four auction test modules now live in `tests/economy/auctions/`.
+
+Independent review against `b5e00b5` preserves the exact AST and canonical global
+dependencies of all **30 original definitions**, including the complete ledger
+and service classes. All 19 changed consumer/test files preserve non-import
+behavior, and 49 changed import bindings preserve aliases and scope. There are
+no eager cycles across 108 runtime modules or stale references across 298 active
+Python files. Four fresh import checks load models and packets without the
+ledger, service or database. Evidence:
+`results/auction-layout-independent-ast.json` and
+`results/auction-layout-independent-imports.json`.
+
+The first discovery check caught four module-alias imports in tests that still
+used their former paths; these were updated. Final discovery preserves all
+**1,170 test IDs**, accounting only for the four explicit module moves, with no
+import errors (`results/auction-layout-collection.json`). The final focused run
+passes **137 tests in 52.376 seconds**, including native auction fixture vectors,
+escrow conservation, failed-save rollback, partial collection delivery, inventory
+edits, admin changes, maintenance and encrypted versus/reload flows. Log:
+`results/auction-layout-final-tests.log`. Lint passes. This scoped extraction did
+not repeat the full suite or run live PostgreSQL or native UI checks.
+
+The wheel was built from a fresh source directory after checking for stale
+modules in the previous build cache. The final **116-entry wheel** contains all
+111 current runtime files byte-for-byte, no former auction modules and the
+current README metadata. Clean-install checks cover console/module entry points,
+temporary listeners, JSON administration/recovery and auction model/codec import
+isolation. SHA256:
+`86b91c2da660e03eeb06482b2151d41dc13ffeb8ea86387ed5168295e2d226a7`.
+Evidence: `results/auction-layout-wheel-result.json` and
+`results/auction-layout-wheel-{build,check}.log`.
+
 ## Room, ranking and profile boundaries, 2026-09-27
 
 Shared event-table configuration and deliveries now live in `events.models`;

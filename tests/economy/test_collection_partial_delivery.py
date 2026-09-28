@@ -9,7 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from tests.economy.test_auction_service import bid_request, collection_request, exhibit_request
+from tests.economy.auctions.test_auction_service import bid_request, collection_request, exhibit_request
 from tests.events.test_event_rooms import config
 from tests.network.test_server import Client
 from tmserver.economy.claim_transactions import (

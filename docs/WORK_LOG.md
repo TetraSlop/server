@@ -22,8 +22,29 @@ saves, push upstream, add backups or pursue performance work. Use temporary
 fixtures for tests. Record decisions needing user input or native observation
 for later review and continue independent work.
 
+## Queued engineering follow-up
+
+A read-only durability audit reproduced an `AdminState` reuse issue: eligibility
+edits 0 → -1 → 0 through the same object leave disk at -1 because its saved-journal
+comparison baseline stays at construction time. The CLI constructs a fresh
+object per command, so this is an object-reuse defect. Advance that baseline
+only after a successful save, with a repeated-edit and failed-save regression.
+Evidence: `results/admin-reuse-audit.json`. This remains separate from the layout
+change. The parallel profile account/owner audit found no defect in 20 controls.
+
 ## Completed and checked — 2026-09-27
 
+- Applied the same feature layout to auctions: shared records in models,
+  field/file encoders in packets, connection-local behavior in service and
+  escrow/settlement in ledger. Tests mirror the package; callers import the
+  owning modules directly. Cross-feature account/journal commits and SQL stay
+  behind their existing transaction/storage boundaries. Independent review
+  preserves all 30 original definitions and consumer behavior, with no stale
+  imports or eager cycles. All 137 focused tests pass in 52.376s; the same 1,170
+  tests collect after explicit module moves. Lint and the clean 116-entry wheel
+  pass, with all 111 runtime files matching source. The wheel was built in a
+  fresh source directory to exclude old build-cache modules. No full-suite,
+  live PostgreSQL or native UI run. See ARCHITECTURE.md and VALIDATION.md.
 - Continued the shared model/codec convention through rooms, rankings and
   profiles. Event table configuration no longer imports matchmaking; ranking
   periods no longer import the ranking service; profile startup uses room

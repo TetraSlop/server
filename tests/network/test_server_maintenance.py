@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from tests.economy.test_auction_service import bid_request, exhibit_request
+from tests.economy.auctions.test_auction_service import bid_request, exhibit_request
 from tmserver.economy.claim_transactions import auction_transaction
 from tmserver.rooms.config import OrdinaryRoomConfig
 from tmserver.network.server import Server

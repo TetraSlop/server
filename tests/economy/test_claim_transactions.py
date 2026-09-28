@@ -4,7 +4,7 @@ import unittest
 from dataclasses import replace
 from unittest.mock import patch
 
-from tests.economy.test_auction_service import bid_request, collection_request, exhibit_request
+from tests.economy.auctions.test_auction_service import bid_request, collection_request, exhibit_request
 from tests.events.test_event_rooms import config
 from tmserver.economy.claim_transactions import (
     auction_transaction,

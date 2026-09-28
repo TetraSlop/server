@@ -5,7 +5,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from tests.economy import test_auction_service as auctions
+from tests.economy.auctions import test_auction_service as auctions
 from tests.economy import test_economy_service as shops
 from tests.events import test_event_cards as events
 from tests.economy import test_prize_service as prizes

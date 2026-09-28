@@ -8,7 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import ClassVar
 
-from tests.economy import test_auction_prize_integration as auctions
+from tests.economy.auctions import test_auction_prize_integration as auctions
 from tests.events import test_event_integration as events
 from tests.economy import test_match_prizes_integration as prizes
 from tests.economy import test_match_wagers_integration as wagers

@@ -8,7 +8,7 @@ Journals are still saved as complete documents. No context may span an await.
 from contextlib import contextmanager
 from dataclasses import dataclass
 
-from tmserver.economy.auction_ledger import AuctionEconomy
+from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.service import EconomyService
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.rankings.policy import RatingPolicy

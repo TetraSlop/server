@@ -33,7 +33,7 @@ def validate_snapshot_fields(snapshot):
 
 def validate_snapshot(snapshot, *, event_configs=()):
     """Use the domain's restore validators without running startup recovery."""
-    from tmserver.economy.auction_ledger import AuctionEconomy
+    from tmserver.economy.auctions.ledger import AuctionEconomy
     from tmserver.profiles.characters import CharacterProfiles
     from tmserver.economy.service import EconomyService
     from tmserver.events.cards import EventCardService

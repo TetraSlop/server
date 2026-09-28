@@ -6,7 +6,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from tmserver.economy.auction_ledger import AuctionEconomy
+from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.cards.model import Card
 from tmserver.cards.catalog import Catalog
 from tmserver.economy.errors import EconomyError

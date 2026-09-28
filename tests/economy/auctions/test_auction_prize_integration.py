@@ -9,15 +9,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests import ROOT
-from tests.economy.test_auction_service import (
-    bid_request,
-    collection_request,
-    exhibit_request,
-    request,
-)
+from tests.economy.auctions.test_auction_service import bid_request, collection_request, exhibit_request, request
 from tests.profiles.test_profile_accounts import delete_request, file_request, transact
 from tests.network.test_server import Client
-from tmserver.economy.auctions import EXHIBIT_PATH, PENDING_PATHS, listing_record
+from tmserver.economy.auctions.packets import EXHIBIT_PATH, PENDING_PATHS, listing_record
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import ROOM_RAW, SHOP_RAW, service_nick
 from tmserver.profiles.service import ProfileServer

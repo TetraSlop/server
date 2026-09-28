@@ -6,7 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from tests import FIXTURES
-from tmserver.economy.auction_ledger import AuctionEconomy
+from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.models import MAX_MONEY
 from tmserver.economy.service import EconomyService
 from tmserver.cards.model import Card

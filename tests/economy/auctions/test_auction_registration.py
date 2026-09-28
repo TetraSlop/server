@@ -8,11 +8,12 @@ import unittest
 from pathlib import Path
 
 from tests import ROOT
-from tests.economy import test_auction_prize_integration as exchange_tests
-from tests.economy.test_auction_service import bid_request, exhibit_request
+from tests.economy.auctions import test_auction_prize_integration as exchange_tests
+from tests.economy.auctions.test_auction_service import bid_request, exhibit_request
 from tests.profiles.test_new_profile import request as registration_request
 from tests.network.test_server import Client
-from tmserver.economy.auction_ledger import AuctionEconomy, AuctionError
+from tmserver.economy.auctions.ledger import AuctionEconomy
+from tmserver.economy.auctions.models import AuctionError
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import player_id
 from tmserver.network.server import Server

@@ -87,6 +87,8 @@ in feature `models.py` modules; `packets.py` owns wire encoding and parsing.
 Services own behavior and transaction modules
 coordinate durable changes. SQL stays in `storage/`, behind the same contract
 as JSON. Import models and codecs directly from their owners.
+Larger subfeatures follow the same convention in their own package, such as
+`economy/auctions/{models,packets,service,ledger}.py`, with matching test folders.
 
 Python imports now use
 these package paths, for example `tmserver.network.server.Server` and

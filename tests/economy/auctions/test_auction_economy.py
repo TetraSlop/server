@@ -8,7 +8,8 @@ from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 
-from tmserver.economy.auction_ledger import AuctionEconomy, AuctionError
+from tmserver.economy.auctions.ledger import AuctionEconomy
+from tmserver.economy.auctions.models import AuctionError
 from tmserver.economy.models import MAX_MONEY
 from tmserver.economy.service import EconomyService
 from tmserver.cards.model import Card

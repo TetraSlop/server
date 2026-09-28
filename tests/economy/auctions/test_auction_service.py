@@ -7,13 +7,12 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from tmserver.economy.auction_ledger import AuctionEconomy
-from tmserver.economy.auctions import (
+from tmserver.economy.auctions.ledger import AuctionEconomy
+from tmserver.economy.auctions.packets import (
     BID_PATH,
     EXHIBIT_PATH,
     METADATA_PATH,
     PENDING_PATHS,
-    AuctionService,
     actor_record,
     actor_wire,
     bid_record,
@@ -21,6 +20,7 @@ from tmserver.economy.auctions import (
     listing_record,
     listing_reply,
 )
+from tmserver.economy.auctions.service import AuctionService
 from tmserver.economy.models import MAX_MONEY
 from tmserver.economy.service import EconomyService
 from tmserver.economy.errors import EconomyError
