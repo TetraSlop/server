@@ -1,5 +1,27 @@
 # Packaging and transaction validation
 
+## Repeated admin save tracking, 2026-09-27
+
+`AdminState.persist_changes()` compared each journal to its construction-time
+snapshot. With one reused state, eligibility 0 → -1 → 0 reported success and
+published the final 0 in memory while the saved journal remained at -1. The CLI
+normally constructs a fresh state per invocation, so this affected object reuse.
+
+The comparison now tracks the last acknowledged save. Its baseline advances
+after `save_changes` succeeds; the existing claim coordinators then publish
+accounts and service state. Independent review confirms that journal snapshots
+have detached mutable containers, and that unchanged journals continue to
+preserve their original absence/null representation.
+
+Two new tests produce **three failures** against `eb0c65c`, covering reversion
+and retry. They pass after the fix, along with the scoped admin, claim transaction,
+JSON store and journal-field controls: **62 tests in 5.103 seconds**. Failure
+injection rejects before the backend is entered, proving that a failed save
+does not advance comparison state or publish a staged edit. It does not authorize
+reuse of a backend that has entered its failed state. Logs:
+`results/admin-reuse-before.log` and `results/admin-reuse-final-tests.log`.
+No save format or reward policy changed; no native UI or live database run.
+
 ## Auction feature layout, 2026-09-27
 
 The auction feature now uses `economy/auctions/{models,packets,service,ledger}.py`.

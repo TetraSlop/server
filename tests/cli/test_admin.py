@@ -318,6 +318,43 @@ class AdminTests(unittest.TestCase):
                 self.execute(*argv)
             self.assertEqual(self.load(), before)
 
+    def test_reused_admin_persists_reversions_and_preserves_unrelated_journals(self):
+        configs = self.enable_events()
+        original = self.load()
+        original.update(prize=None, event_results=None)
+        self.seed(original)
+        store = JsonStateStore(self.path)
+        state = admin.AdminState(store, store.load(), configs)
+        previous = 0
+        for value in (-1, -1, 0, 0, -1):
+            with self.subTest(value=value, previous=previous):
+                args = admin.arguments(self.argv(*self.eligibility(value)))
+                result = state.apply(args)
+                self.assertEqual(result["status"], "unchanged" if value == previous else "updated")
+                expected = copy.deepcopy(original)
+                expected["events"]["events"][0]["members"][0]["eligibility"] = value
+                self.assertEqual(self.load(), expected)
+                self.assertEqual(state.events.member("alice", "festival").eligibility, value)
+            previous = value
+
+    def test_reused_admin_failed_save_does_not_advance_comparison_or_publish(self):
+        configs = self.enable_events()
+        store = JsonStateStore(self.path)
+        state = admin.AdminState(store, store.load(), configs)
+        excluded = admin.arguments(self.argv(*self.eligibility(-1)))
+        included = admin.arguments(self.argv(*self.eligibility(0)))
+        state.apply(excluded)
+        saved = self.path.read_bytes()
+        # Reject before entering the backend; it has not failed or committed.
+        with patch.object(store, "save_changes", side_effect=OSError("rejected before save")):
+            with self.assertRaisesRegex(OSError, "rejected before save"):
+                state.apply(included)
+        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(state.events.member("alice", "festival").eligibility, -1)
+        self.assertEqual(state.apply(included)["status"], "updated")
+        self.assertEqual(self.load()["events"], state.events.snapshot())
+        self.assertEqual(state.events.member("alice", "festival").eligibility, 0)
+
     def test_explicit_progress_replays_exactly_and_preserves_rewards_and_accounts(self):
         self.enable_events()
         self.execute(*self.prize())

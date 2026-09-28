@@ -92,7 +92,7 @@ class AdminState:
             self.economy, self.events, snapshot.get("event_cards")
         )
         self.event_results = EventResults.restore(snapshot.get("event_results"))
-        self.initial = {
+        self.saved_journals = {
             name: getattr(self, name).snapshot()
             for name in ("prize", "events", "event_cards", "event_results")
         }
@@ -100,8 +100,11 @@ class AdminState:
     def persist_changes(self, accounts, journals):
         # Keep original unrelated journal payloads, including absence/null in
         # older saves. The ordinary claim contexts may supply empty defaults.
-        changed = {name: value for name, value in journals.items() if value != self.initial[name]}
+        changed = {
+            name: value for name, value in journals.items() if value != self.saved_journals[name]
+        }
         self.store.save_changes(accounts, changed)
+        self.saved_journals.update(changed)
 
     def apply(self, args):
         if args.command == "recovery":

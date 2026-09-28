@@ -22,18 +22,17 @@ saves, push upstream, add backups or pursue performance work. Use temporary
 fixtures for tests. Record decisions needing user input or native observation
 for later review and continue independent work.
 
-## Queued engineering follow-up
-
-A read-only durability audit reproduced an `AdminState` reuse issue: eligibility
-edits 0 → -1 → 0 through the same object leave disk at -1 because its saved-journal
-comparison baseline stays at construction time. The CLI constructs a fresh
-object per command, so this is an object-reuse defect. Advance that baseline
-only after a successful save, with a repeated-edit and failed-save regression.
-Evidence: `results/admin-reuse-audit.json`. This remains separate from the layout
-change. The parallel profile account/owner audit found no defect in 20 controls.
-
 ## Completed and checked — 2026-09-27
 
+- Fixed repeated admin edits through one AdminState: the journal comparison
+  baseline now advances after successful storage, so eligibility 0 → -1 → 0
+  saves the final 0. Failed saves still leave memory and comparison state intact;
+  unrelated absent/null journals remain unchanged. Two new tests reproduce
+  three failures before the fix; all 62 focused admin/claim/JSON/journal tests
+  pass in 5.103s. Independent review confirms snapshot ownership and save-before-
+  publication ordering. Ordinary CLI calls already constructed fresh states.
+  A separate profile account/owner audit found no defect in 20 controls. See
+  VALIDATION.md for scope and evidence.
 - Applied the same feature layout to auctions: shared records in models,
   field/file encoders in packets, connection-local behavior in service and
   escrow/settlement in ledger. Tests mirror the package; callers import the
