@@ -24,8 +24,9 @@ from tests.profiles.test_table_preferences import (
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import ROOM_RAW, SHOP_RAW, TABLE_RAW, player_id, service_nick
 from tmserver.game.packets import decode, packet
-from tmserver.profiles.service import ProfileServer, checked
-from tmserver.rooms.service import ROOM_CHANNEL, ROOM_ID, TABLE_CHANNEL, TABLE_ID
+from tmserver.profiles.service import ProfileServer
+from tmserver.profiles.packets import checked
+from tmserver.rooms.packets import ROOM_CHANNEL, ROOM_ID, TABLE_CHANNEL, TABLE_ID
 from tmserver.network.server import Server
 from tmserver.profiles.preferences import read_preferences
 from tmserver.protocol.commands import Command, encode, parse

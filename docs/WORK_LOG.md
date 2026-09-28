@@ -24,6 +24,17 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Continued the shared model/codec convention through rooms, rankings and
+  profiles. Event table configuration no longer imports matchmaking; ranking
+  periods no longer import the ranking service; profile startup uses room
+  packet encoders directly. Removed dead startup directory buffers that were
+  immediately overwritten. All 296 exposed startup records and 3,133 combined
+  profile/room codec comparisons match the baseline. Independent review
+  preserves 24 moved definitions and other behavior, with no eager import
+  cycles or stale references. The final 136 scoped tests pass in 96.913s;
+  collection remains 1,170. Lint, whitespace and clean-wheel checks pass, with
+  all 108 packaged runtime files matching source. No full-suite repeat, live
+  database or native UI run was made. See VALIDATION.md and ARCHITECTURE.md.
 - Separated shared models and packet codecs from the main game, economy and
   event services, and moved the backend-neutral save contract into storage/base.
   Consumers import definitions directly; PostgreSQL no longer imports JSON.

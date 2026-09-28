@@ -26,33 +26,14 @@ from tmserver.network.diagnostics import report_failure, write_record
 from tmserver.protocol.identities import player_id as game_player_id
 from tmserver.network.local_accounts import account_specs, display_name
 from tmserver.profiles.location import FileOwner
-from tmserver.rooms.service import directory_files
+from tmserver.profiles.packets import answer, checked, checksum
+from tmserver.rooms.packets import directory_files
 
 # These are the default two local fixtures. Keep the profile module
 # independent of server's import graph; never accept arbitrary production IDs.
 SYNTHETIC_ACCOUNTS = account_specs()
 DEFAULT_ACCOUNT = next(iter(SYNTHETIC_ACCOUNTS))
 MAX_CACHED_CIPHERS = 2  # Per account; the active IRC key is an extra candidate.
-
-
-def checksum(data):
-    whole = len(data) & ~3
-    value = sum(struct.unpack("<" + "I" * (whole // 4), data[:whole]))
-    if whole < len(data):
-        value += int.from_bytes(data[whole:], "little") << (8 * (4 - len(data[whole:])))
-    return value & 0xFFFFFFFF
-
-
-def checked(data):
-    return bytes(data) + struct.pack("<I", checksum(data))
-
-
-def answer(size=0, error=0, nonce=0):
-    data = bytearray(24)
-    data[0:2] = bytes((0x81, error))
-    struct.pack_into("<I", data, 4, size)
-    struct.pack_into("<I", data, 20, nonce)
-    return data
 
 
 class ProfileServer:
@@ -68,24 +49,6 @@ class ProfileServer:
         player = bytearray(0x3028)
         struct.pack_into("<I", player, 0, 300)
         player[0x3B] = 1  # Existing local test player: Warriors Guild (TM 0x1014c871).
-        # ZL consumer 0x1008d402: count +0x40, records +0x48, stride 0x40.
-        # EN chooses the English page; AAA are unrestricted filter values.
-        zones = bytearray(0x848)
-        struct.pack_into("<I", zones, 0x40, 1)
-        struct.pack_into("<II", zones, 0x48, 1, 1)
-        zones[0x54:0x59] = b"ENAAA"
-        zones[0x59:0x65] = b"Local Lobby\0"
-        # 0x10085c80 / 0x10085cf0 use record +0x2c for the zone IRC host.
-        zones[0x74:0x7E] = b"127.0.0.1\0"
-        # 0x1008e065: count +0x40, records +0x48 with stride 0xc8.
-        # +0x28 'A' follows the fixed-room branch; +0x2a is a 32-byte name.
-        rooms = bytearray(0xC848)
-        struct.pack_into("<I", rooms, 0x40, 1)
-        struct.pack_into("<Q", rooms, 0x48, 1)
-        rooms[0x48 + 0x28] = ord("A")
-        rooms[0x48 + 0x2A : 0x48 + 0x35] = b"Local Room*"
-        rooms[0x48 + 0x6D : 0x48 + 0x71] = b"AAAA"
-        self.files = {"b/g/ZL": bytes(zones), "b/g/RL000": bytes(rooms)}
         self.account_files = {}
         for key, (_, _, player_id) in self.accounts.items():
             fallback = bytearray(player)
@@ -94,7 +57,7 @@ class ProfileServer:
             fallback[0x10 : 0x10 + len(name)] = name
             self.account_files[key] = {"U/g/TM0DataFile": bytes(fallback)}
         self.game_server = game_server
-        self.files.update(directory_files())
+        self.files = directory_files()
         self.profile_ciphers = {key: [] for key in self.accounts}
         self.statuses = {}
         for key in self.accounts:

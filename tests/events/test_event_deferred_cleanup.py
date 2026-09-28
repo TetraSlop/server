@@ -10,7 +10,7 @@ from tests.events.test_event_rooms import config, presence
 from tests.network.test_session_recovery import ReadingReader, Writer
 from tmserver.protocol import wire
 from tmserver.economy.packets import named
-from tmserver.events.matchmaking import EventTableConfig
+from tmserver.events.models import EventTableConfig
 from tmserver.protocol.identities import GAME_KEY, SHOP_RAW, game_id, service_nick
 from tmserver.game.packets import packet
 from tmserver.network.server import Server, Session

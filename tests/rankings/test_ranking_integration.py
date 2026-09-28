@@ -11,8 +11,9 @@ from tests.profiles.test_profile_accounts import delete_request, file_request, t
 from tests.rankings.test_ranking_service import request
 from tests.network.test_server import Client
 from tmserver.protocol.identities import ROOM_RAW, player_id, service_nick
-from tmserver.profiles.service import ProfileServer, checksum
-from tmserver.rankings.service import RECORD_SIZE, RESULT_PATH
+from tmserver.profiles.service import ProfileServer
+from tmserver.profiles.packets import checksum
+from tmserver.rankings.packets import RECORD_SIZE, RESULT_PATH
 from tmserver.network.server import ACCOUNTS, Server
 from tmserver.protocol.commands import parse
 

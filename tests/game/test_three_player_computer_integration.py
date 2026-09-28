@@ -17,7 +17,7 @@ from tmserver.game.packets import decode, packet
 from tmserver.game.rules import CRTLCG
 from tmserver.game.special_rules import choose_special_move
 from tmserver.rankings.stats import PracticeStats
-from tmserver.rooms.service import ROOM_ID
+from tmserver.rooms.packets import ROOM_ID
 from tmserver.network.server import Server
 from tmserver.protocol.commands import Command, encode
 

@@ -14,7 +14,8 @@ from tmserver.events.models import EventConfig, EventError, EventListing
 from tmserver.events.service import EventHost
 from tmserver.events.packets import event_data
 from tmserver.protocol.identities import game_id
-from tmserver.rooms.service import RoomService, directory_files
+from tmserver.rooms.service import RoomService
+from tmserver.rooms.packets import directory_files
 from tmserver.protocol.commands import Command, encode, parse
 
 

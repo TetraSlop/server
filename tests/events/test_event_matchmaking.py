@@ -13,7 +13,8 @@ from tests.events.test_event_rooms import config, presence
 from tmserver.cards.catalog import Catalog
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
-from tmserver.events.matchmaking import EventMatchmaking, EventTableConfig
+from tmserver.events.matchmaking import EventMatchmaking
+from tmserver.events.models import EventTableConfig
 from tmserver.events.rooms import EventRooms
 from tmserver.events.models import EventError
 from tmserver.events.service import EventHost

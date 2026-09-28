@@ -22,7 +22,8 @@ from tmserver.rooms.config import (
     load_ordinary_rooms,
 )
 from tmserver.profiles.location import FileOwner
-from tmserver.profiles.service import ProfileServer, checked
+from tmserver.profiles.service import ProfileServer
+from tmserver.profiles.packets import checked
 from tmserver.rooms.rules import RoomRules
 from tmserver.network.server import Server
 from tests.network.test_server import Client

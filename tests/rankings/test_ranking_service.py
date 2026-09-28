@@ -8,15 +8,9 @@ from pathlib import Path
 from tmserver.economy.models import PROFILE_SIZE
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import game_id
-from tmserver.rankings.service import (
-    METADATA_PATH,
-    RECORD_SIZE,
-    RESULT_PATH,
-    UI_CATEGORIES,
-    RankingError,
-    RankingHistory,
-    RankingService,
-)
+from tmserver.rankings.packets import METADATA_PATH, RECORD_SIZE, RESULT_PATH, UI_CATEGORIES
+from tmserver.rankings.models import RankingError, RankingHistory
+from tmserver.rankings.service import RankingService
 from tmserver.protocol.commands import Command, encode, parse
 
 

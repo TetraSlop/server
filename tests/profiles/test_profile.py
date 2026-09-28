@@ -11,7 +11,8 @@ from types import SimpleNamespace
 from tests import ROOT
 from tmserver.protocol import wire
 from tmserver.protocol.identities import SHOP_RAW, game_id
-from tmserver.profiles.service import ProfileServer, answer, checked, checksum
+from tmserver.profiles.service import ProfileServer
+from tmserver.profiles.packets import answer, checked, checksum
 from tmserver.network.dispatch import teach_dv_answer
 
 

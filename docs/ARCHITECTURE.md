@@ -35,7 +35,8 @@ in `game.packets` and `economy.packets`, whose accepted dialects differ;
 `protocol.commands` owns the separate BEL-delimited command format. Profiles,
 chat, rooms and events import codecs directly from their owners. Those codecs
 can be used without loading the match or shop service. `events.packets` owns
-the event file encodings.
+event file encodings, `rooms.packets` directory/roster records,
+`rankings.packets` ranking rows, and `profiles.packets` profile response framing.
 
 The old flat Python module names have moved, with no compatibility namespace.
 For example, import `Server` from `tmserver.network.server` and `MatchService`
@@ -75,10 +76,12 @@ native packets and SQL rows have different validation and representation needs;
 their conversions stay explicit. No generic CRUD service or inferred packet
 serializer is required.
 
-The current split covers the main match, account and event services. Some
-smaller existing modules still combine a cohesive model and its operations,
-such as ranking history and event table configuration; move a definition when
-another caller needs its value without the service, following the same rule.
+Ranking periods import `RankingHistory` from `rankings.models`. Event
+configuration imports `EventTableConfig` from `events.models`, without loading
+matchmaking or the match service. Profile startup imports room directory bytes
+from `rooms.packets`; it does not construct a room service. Its initial directory
+files come directly from that encoder, with no discarded duplicate records.
+Private coordinator entries and rounds remain beside their state machines.
 
 ## Protocol and shared values
 

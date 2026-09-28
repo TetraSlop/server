@@ -43,7 +43,8 @@ from tmserver.rooms.config import configure_rooms
 from tmserver.rooms.config import directory_files as ordinary_directory_files
 from tmserver.rooms.table import OrdinaryTable
 from tmserver.economy.prize_center import PrizeService
-from tmserver.rankings.service import METADATA_PATH, RankingService
+from tmserver.rankings.packets import METADATA_PATH
+from tmserver.rankings.service import RankingService
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.rooms.service import RoomService

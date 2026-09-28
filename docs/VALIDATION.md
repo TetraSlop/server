@@ -1,5 +1,49 @@
 # Packaging and transaction validation
 
+## Room, ranking and profile boundaries, 2026-09-27
+
+Shared event-table configuration and deliveries now live in `events.models`;
+ranking history lives in `rankings.models`. Room directories/roster records,
+ranking rows and profile framing have dedicated packet modules. Consumers use
+those owners directly: event configuration no longer loads matchmaking, weekly
+periods no longer load the ranking service, and profile startup no longer loads
+the room service. Private coordinator and ranking-entry records stay local.
+
+Profile startup previously built ZL/RL records, then unconditionally replaced
+both with `directory_files()`. It now uses that encoder directly. An isolated
+comparison with a coherent `dd92a6b` archive preserves all **296 exposed
+directory/account/status records (2,047,596 bytes)** across default and
+2/3/8/128-account configurations. All **2,611 profile codec cases** agree on
+return values or exception type/message; all **522 room codec cases** also
+match. Evidence: `results/profile-bootstrap-equivalence.json` and
+`results/room-packets-equivalence.json`.
+
+Independent review confirms all 24 moved definitions and their dependencies,
+87 migrated consumer imports, and retained non-import behavior across 54
+runtime/test/probe files. The only behavior-body edit is removal of those dead
+profile initialization statements. There are no eager cycles across 105 runtime
+modules or stale moved-symbol references across 294 active Python files.
+Fresh-process imports verify configuration/period/codec isolation, including
+combined and reverse import order. Evidence:
+`results/small-boundary-independent-{ast,import}-review.json`.
+
+The final scoped run passes **136 tests in 96.913 seconds**, covering encrypted
+profile operations, rooms, events, rankings and service integration. Log:
+`results/small-boundaries-final-tests.log`. Earlier extraction controls also
+pass (98 ranking, 34 event, 29 room tests); these overlap the final run and must
+not be summed as distinct coverage. Collection remains 1,170 tests with no
+import errors. Lint and whitespace checks pass. The preceding full suite was
+not repeated for these focused extractions; no live PostgreSQL or native UI
+run was made.
+
+The clean 113-entry wheel passes entry points, administration/recovery,
+temporary listeners and extended model/codec import isolation checks. All 108
+runtime files match source; packaged metadata includes the current README.
+SHA256: `4d1302755fc9be9e9f476f466a1dc7f322333f63194983c84e8ed18f79af95c8`.
+Evidence: `results/small-boundaries-wheel-result.json` and
+`results/small-boundaries-wheel-{build,check}.log`.
+Protocol bytes, local policies and save formats are preserved.
+
 ## Models, packets and storage boundaries, 2026-09-27
 
 The main game, economy and event features now separate shared models and packet

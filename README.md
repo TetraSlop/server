@@ -82,9 +82,9 @@ random database. See [persistence](docs/PERSISTENCE_DESIGN.md).
 | `data` | Immutable packaged protocol tables and their resource reader. |
 
 The [architecture guide](docs/ARCHITECTURE.md) identifies the files to change for
-each responsibility and explains ownership across them. Within the main match,
-economy and event features, `models.py` owns shared dataclasses and `packets.py`
-owns wire encoding and parsing; services own behavior and transaction modules
+each responsibility and explains ownership across them. Shared dataclasses live
+in feature `models.py` modules; `packets.py` owns wire encoding and parsing.
+Services own behavior and transaction modules
 coordinate durable changes. SQL stays in `storage/`, behind the same contract
 as JSON. Import models and codecs directly from their owners.
 

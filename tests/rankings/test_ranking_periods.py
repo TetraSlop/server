@@ -6,7 +6,7 @@ import unittest
 from datetime import UTC, datetime
 
 from tmserver.rankings.periods import RankingPeriodError, RankingPeriods
-from tmserver.rankings.service import RankingHistory
+from tmserver.rankings.models import RankingHistory
 
 MONDAY = int(datetime(2026, 9, 21, tzinfo=UTC).timestamp())
 WEEK = 604800

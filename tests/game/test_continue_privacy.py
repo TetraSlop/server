@@ -12,7 +12,8 @@ from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import TABLE_RAW
 from tmserver.game.errors import MatchError
 from tmserver.game.packets import packet
-from tmserver.rankings.service import RECORD_SIZE, RankingService
+from tmserver.rankings.packets import RECORD_SIZE
+from tmserver.rankings.service import RankingService
 from tmserver.network.server import Server
 
 

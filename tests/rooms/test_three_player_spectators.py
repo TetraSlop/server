@@ -19,7 +19,7 @@ from tmserver.game.match import MatchService
 from tmserver.game.packets import decode, packet
 from tmserver.game.special_rules import Cell
 from tmserver.profiles.service import ProfileServer
-from tmserver.rooms.service import TABLE_CHANNEL
+from tmserver.rooms.packets import TABLE_CHANNEL
 from tmserver.cli.serve import arguments
 from tmserver.network.server import Server
 from tmserver.rooms.spectators import SpectatorService, bootstrap

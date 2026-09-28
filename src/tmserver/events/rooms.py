@@ -9,16 +9,9 @@ from dataclasses import dataclass
 
 from tmserver.events.models import EventError
 from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, SHOP_RAW, TABLE_RAW, TRADE_RAW, game_id
-from tmserver.rooms.service import (
-    ROOM_CHANNEL,
-    TABLE_CHANNEL,
-    TRADE_CHANNEL,
-    RoomService,
-    alphahex,
-)
-from tmserver.rooms.service import (
-    directory_files as base_directory_files,
-)
+from tmserver.rooms.packets import ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL, alphahex
+from tmserver.rooms.service import RoomService
+from tmserver.rooms.packets import directory_files as base_directory_files
 from tmserver.protocol.commands import Command
 
 _DEFAULT_REGION = b"Local Lobby"

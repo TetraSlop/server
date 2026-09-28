@@ -12,7 +12,6 @@ import time
 import uuid
 from dataclasses import dataclass, field, replace
 
-from tmserver.game import special_rules as special
 from tmserver.protocol.admission import validate_admission
 from tmserver.cards.catalog import collection_points
 from tmserver.events.matches import (
@@ -21,64 +20,11 @@ from tmserver.events.matches import (
     event_session_init,
     event_session_quit,
 )
-from tmserver.events.models import EventError
+from tmserver.events.models import EventDelivery, EventError, EventTableConfig
 from tmserver.game.models import Card
 from tmserver.game.packets import decode, numbers, packet
 from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.protocol.table import channel_exit, viewer_state
-
-
-@dataclass(frozen=True)
-class EventDelivery:
-    peer: object
-    source: int
-    payload: bytes
-
-
-@dataclass(frozen=True)
-class EventTableConfig:
-    event_id: str
-    table_id: int
-    channel: bytes
-    player_count: int = 2
-    cpu_cards: tuple | None = None
-    turn_limit: int = 2
-    departure_rule: int = 1
-    seed: int = 1
-    start_fields: tuple | None = None
-
-    def __post_init__(self):
-        if self.player_count not in (2, 3) or type(self.player_count) is not int:
-            raise EventError("event table needs two/three seats")
-        if self.cpu_cards is not None and (self.player_count != 2 or len(self.cpu_cards) != 5):
-            raise EventError("synthetic event CPU needs one human and five CPU cards")
-        if self.cpu_cards is not None:
-            checked = []
-            for card in self.cpu_cards:
-                try:
-                    values = tuple(getattr(card, k) for k in Card.__dataclass_fields__)
-                except AttributeError as exc:
-                    raise EventError("invalid event CPU card") from exc
-                if any(type(v) is not int for v in values):
-                    raise EventError("event CPU card fields must be integers")
-                checked.append(Card(*values))
-            object.__setattr__(self, "cpu_cards", tuple(checked))
-        if type(self.turn_limit) is not int or not 0 <= self.turn_limit <= 5:
-            raise EventError("unsupported event turn limit")
-        if type(self.departure_rule) is not int or not 0 <= self.departure_rule <= 2:
-            raise EventError("unsupported event departure rule")
-        if type(self.seed) is not int or not 0 <= self.seed <= 0xFFFFFFFF:
-            raise EventError("event seed must be an unsigned32-bit integer")
-        if self.start_fields is not None:
-            board = special.start_board(self.start_fields)
-            size = (self.player_count + 2) ** 2
-            if len(board.fields) != size:
-                raise EventError("event board has wrong dimensions")
-            if 18 in board.fields:
-                raise EventError("event boards require original non-CBC tile values")
-            if board.blocks > size - 5 * self.player_count:
-                raise EventError("event board must leave five placement cells per player")
-            object.__setattr__(self, "start_fields", board.fields)
 
 
 @dataclass

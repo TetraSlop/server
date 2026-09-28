@@ -9,7 +9,7 @@ from pathlib import Path
 
 from tests import FIXTURES
 from tests.profiles import test_profile as profile_tests
-from tmserver.profiles.service import checked
+from tmserver.profiles.packets import checked
 
 
 class ProfileEnumerationTests(unittest.IsolatedAsyncioTestCase):

@@ -13,7 +13,7 @@ from tmserver.protocol.identities import TABLE_RAW, player_id
 from tmserver.game.packets import decode, packet
 from tmserver.game.opponents import OPPONENTS
 from tmserver.rankings.stats import PracticeStats
-from tmserver.rooms.service import TABLE_CHANNEL
+from tmserver.rooms.packets import TABLE_CHANNEL
 from tmserver.network.server import Server
 
 

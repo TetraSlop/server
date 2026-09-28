@@ -27,7 +27,8 @@ def probe(research_dir, repo):
     from event_contract_vectors import EventVM, PLAYER
     from room_contract_vectors import CTX, INPUT, PLAYERS, PTL
     from room_native_transition_vectors import Room
-    from tmserver.rooms.service import ROOM_ID, RoomService, player_record
+    from tmserver.rooms.packets import ROOM_ID, player_record
+    from tmserver.rooms.service import RoomService
     from tmserver.protocol.commands import Command, encode, parse
     from unicorn import UC_HOOK_MEM_READ
     from unicorn.x86_const import UC_X86_REG_ESP, UC_X86_REG_EIP

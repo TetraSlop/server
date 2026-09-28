@@ -14,7 +14,8 @@ from tmserver.events.models import EventConfig, EventListing
 from tmserver.events.packets import event_data
 from tmserver.protocol.identities import game_id
 from tmserver.profiles.location import FileOwner
-from tmserver.profiles.service import ProfileServer, checked
+from tmserver.profiles.service import ProfileServer
+from tmserver.profiles.packets import checked
 from tmserver.network.server import Server
 
 

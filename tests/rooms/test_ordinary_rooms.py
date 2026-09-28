@@ -25,7 +25,8 @@ from tmserver.protocol.identities import (
 from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import OrdinaryRoomConfig, directory_files, load_ordinary_rooms
 from tmserver.profiles.location import FileOwner
-from tmserver.profiles.service import ProfileServer, checked
+from tmserver.profiles.service import ProfileServer
+from tmserver.profiles.packets import checked
 from tmserver.network.server import Server
 from tmserver.protocol.commands import parse
 

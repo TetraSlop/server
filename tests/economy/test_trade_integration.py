@@ -13,7 +13,8 @@ from tests.economy.test_trade_router import entry_request, metadata
 from tests.economy.test_trade_service import data, offer
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import TRADE_RAW, game_id, player_id, service_nick
-from tmserver.profiles.service import ProfileServer, checked
+from tmserver.profiles.service import ProfileServer
+from tmserver.profiles.packets import checked
 from tmserver.network.server import ACCOUNTS, Server
 
 

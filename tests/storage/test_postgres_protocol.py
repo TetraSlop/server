@@ -21,7 +21,8 @@ from tests.network.test_server import Client
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, player_id, service_nick
 from tmserver.game.packets import packet
-from tmserver.profiles.service import ProfileServer, checked
+from tmserver.profiles.service import ProfileServer
+from tmserver.profiles.packets import checked
 from tmserver.network.server import Server
 
 

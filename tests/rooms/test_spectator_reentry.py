@@ -7,7 +7,7 @@ from unittest.mock import patch
 from tests.rooms import test_spectator_integration as base
 from tests.protocol.test_admission_identity import native_identity
 from tmserver.game.packets import decode, packet
-from tmserver.rooms.service import TABLE_CHANNEL
+from tmserver.rooms.packets import TABLE_CHANNEL
 
 
 class SpectatorReentryTests(unittest.IsolatedAsyncioTestCase):

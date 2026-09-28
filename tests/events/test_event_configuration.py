@@ -7,7 +7,7 @@ from dataclasses import replace
 from tmserver.economy.service import EconomyService
 from tmserver.events.config import parse_event_configs, parse_event_setup
 from tmserver.events.matches import EventMatchRound, EventParticipant
-from tmserver.events.matchmaking import EventTableConfig
+from tmserver.events.models import EventTableConfig
 from tmserver.events.rooms import EventRooms
 from tmserver.events.service import EventHost
 from tmserver.events.models import PrizeDisplay

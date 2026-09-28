@@ -8,7 +8,7 @@ from tests.rooms import test_departure_integration as departures
 from tests.network.test_server import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.game.packets import decode, packet
-from tmserver.rooms.service import TABLE_CHANNEL
+from tmserver.rooms.packets import TABLE_CHANNEL
 from tmserver.rooms.spectators import SpectatorService
 
 

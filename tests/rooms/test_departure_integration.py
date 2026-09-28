@@ -9,7 +9,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.events.test_event_rooms import config, presence
 from tests.network.test_server import Client
-from tmserver.events.matchmaking import EventTableConfig
+from tmserver.events.models import EventTableConfig
 from tmserver.protocol.identities import (
     GAME_KEY,
     SHOP_RAW,
@@ -21,7 +21,7 @@ from tmserver.protocol.identities import (
 from tmserver.game.packets import decode, packet
 from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.rooms.config import OrdinaryRoomConfig
-from tmserver.rooms.service import TABLE_CHANNEL
+from tmserver.rooms.packets import TABLE_CHANNEL
 from tmserver.network.server import Server
 
 

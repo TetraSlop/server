@@ -5,7 +5,9 @@ import unittest
 from tests.rankings.test_rating_policy import economy, prepare
 from tests.rankings.test_ranking_service import request
 from tmserver.economy.service import EconomyService
-from tmserver.rankings.service import RECORD_SIZE, RankingHistory, RankingService
+from tmserver.rankings.packets import RECORD_SIZE
+from tmserver.rankings.models import RankingHistory
+from tmserver.rankings.service import RankingService
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.protocol.commands import parse
 

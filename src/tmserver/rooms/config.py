@@ -16,7 +16,8 @@ from tmserver.protocol.identities import (
     service_nick,
 )
 from tmserver.rooms.table import OrdinaryTable
-from tmserver.rooms.service import ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL, RoomService, alphahex
+from tmserver.rooms.packets import ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL, alphahex
+from tmserver.rooms.service import RoomService
 from tmserver.rooms.rules import RoomRules
 from tmserver.rooms.spectators import SpectatorService
 

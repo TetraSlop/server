@@ -11,7 +11,8 @@ from tests.rooms.test_ordinary_rooms import EXTRA
 from tests.profiles.test_profile_accounts import KEYS, file_request, transact
 from tests.network.test_session_recovery import Writer
 from tmserver.game.packets import packet
-from tmserver.profiles.service import ProfileServer, checked
+from tmserver.profiles.service import ProfileServer
+from tmserver.profiles.packets import checked
 from tmserver.network.server import Server, Session
 
 

@@ -12,7 +12,7 @@ from tests.game.test_match_service import NATIVE_SETTINGS
 from tests.network.test_server import Client
 from tmserver.protocol.identities import TABLE_RAW, service_nick
 from tmserver.game.packets import decode, packet
-from tmserver.rooms.service import TABLE_CHANNEL
+from tmserver.rooms.packets import TABLE_CHANNEL
 from tmserver.network.server import ACCOUNTS, Server
 from tmserver.rooms.spectators import SpectatorService
 

@@ -8,7 +8,8 @@ from types import SimpleNamespace
 
 from tests import ROOT
 from tests.profiles.test_profile_accounts import delete_request, file_request
-from tmserver.profiles.service import ProfileServer, checked
+from tmserver.profiles.service import ProfileServer
+from tmserver.profiles.packets import checked
 
 
 class ProfileDeleteTests(unittest.TestCase):

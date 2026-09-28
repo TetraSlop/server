@@ -7,7 +7,7 @@ from pathlib import Path
 from tests.rooms import test_spectator_integration as base
 from tmserver.protocol.identities import player_id
 from tmserver.game.packets import decode, packet
-from tmserver.rooms.service import TABLE_CHANNEL
+from tmserver.rooms.packets import TABLE_CHANNEL
 
 
 class ObserveDisabledIntegration(unittest.IsolatedAsyncioTestCase):

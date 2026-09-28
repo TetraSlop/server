@@ -7,7 +7,9 @@ from tests.rankings.test_rating_policy import economy
 from tests.rankings.test_weekly_rating_policy import MONDAY, WEEK, commit, result
 from tmserver.economy.service import EconomyService
 from tmserver.network.local_accounts import MAX_ACCOUNTS
-from tmserver.rankings.service import RECORD_SIZE, SCORE_OFFSETS, RankingHistory, RankingService
+from tmserver.rankings.packets import RECORD_SIZE, SCORE_OFFSETS
+from tmserver.rankings.models import RankingHistory
+from tmserver.rankings.service import RankingService
 from tmserver.rankings.policy import RatingPolicy
 
 

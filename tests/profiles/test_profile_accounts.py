@@ -12,13 +12,8 @@ from tests import ROOT
 from tmserver.protocol import wire
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import player_id
-from tmserver.profiles.service import (
-    MAX_CACHED_CIPHERS,
-    SYNTHETIC_ACCOUNTS,
-    ProfileServer,
-    checked,
-    checksum,
-)
+from tmserver.profiles.service import MAX_CACHED_CIPHERS, SYNTHETIC_ACCOUNTS, ProfileServer
+from tmserver.profiles.packets import checked, checksum
 
 KEYS = tuple(SYNTHETIC_ACCOUNTS)
 

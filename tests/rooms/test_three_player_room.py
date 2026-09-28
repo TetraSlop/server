@@ -6,7 +6,8 @@ import unittest
 from pathlib import Path
 
 from tests.rooms.test_room_service import presence
-from tmserver.rooms.service import RoomService, directory_files
+from tmserver.rooms.service import RoomService
+from tmserver.rooms.packets import directory_files
 from tmserver.protocol.commands import parse
 
 

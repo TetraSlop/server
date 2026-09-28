@@ -4,15 +4,15 @@ from types import SimpleNamespace
 
 from tmserver.protocol.identities import ROOM_RAW, game_id, player_id, service_nick
 from tmserver.game.models import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
-from tmserver.rooms.service import (
+from tmserver.rooms.packets import (
     ROOM_CHANNEL,
     ROOM_ID,
     TABLE_CHANNEL,
     TABLE_ID,
-    RoomService,
     directory_files,
     player_record,
 )
+from tmserver.rooms.service import RoomService
 from tmserver.protocol.commands import Command, encode, parse
 
 

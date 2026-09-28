@@ -8,7 +8,7 @@ next rollover. First enablement records only subsequent play in that week.
 
 from collections.abc import Mapping
 
-from tmserver.rankings.service import RankingHistory
+from tmserver.rankings.models import RankingHistory
 
 POLICY = "local-utc-week-v1"
 WEEK = 7 * 24 * 60 * 60

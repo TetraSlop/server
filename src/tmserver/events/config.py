@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from tmserver.events.matchmaking import EventTableConfig
+from tmserver.events.models import EventTableConfig
 from tmserver.events.models import EventConfig, EventListing, PrizeDisplay
 from tmserver.events.packets import event_data
 from tmserver.protocol.identities import game_id

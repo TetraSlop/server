@@ -18,55 +18,15 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 
 from tmserver.protocol.commands import Command, encode, parse
+from tmserver.rankings.models import RankingError, RankingHistory, _uint
+from tmserver.rankings.packets import (
+    METADATA_PATH,
+    RECORD_SIZE,
+    RESULT_PATH,
+    encode_record,
+)
 
-RECORD_SIZE = 0xE8
-METADATA_PATH = "b/g/TM0RkData"
-RESULT_PATH = "U/g/TM0_RANKLIST"
 RANK_IDS = (0, 1, 2, 3, 4)
-SCORE_OFFSETS = {0: 0x94, 1: 0x9C, 2: 0xA0, 3: 0xA4, 4: 0xA4}
-PREVIOUS_OFFSETS = {0: 0xC6, 1: 0xC7, 2: 0xC5, 3: 0xC4, 4: 0xC3}
-UI_CATEGORIES = {0: 4, 1: 5, 2: 0, 3: 1, 4: 2}
-
-
-class RankingError(ValueError):
-    """Malformed or unauthorized local request; no partial snapshot is stored."""
-
-
-def _uint(value, bits, name):
-    if type(value) is not int or not 0 <= value < (1 << bits):
-        raise RankingError(f"{name} must be uint{bits}")
-    return value
-
-
-@dataclass(frozen=True)
-class RankingHistory:
-    """Optional explicit data, not computed from current profile by this module.
-
-    Previous positions are in RR order0..4. Zero means unavailable. Positive
-    values1..127 are the original signed-byte representable display range.
-    """
-
-    weekly_prize: int | None = None
-    last_week_rating: int | None = None
-    rookie: bool = False
-    anonymous: bool = False
-    qualified: bool = True
-    previous_ranks: tuple[int, ...] = (0, 0, 0, 0, 0)
-
-    def __post_init__(self):
-        for name in ("weekly_prize", "last_week_rating"):
-            value = getattr(self, name)
-            if value is not None:
-                _uint(value, 32, name)
-        for name in ("rookie", "anonymous", "qualified"):
-            if type(getattr(self, name)) is not bool:
-                raise RankingError(f"{name} must be boolean")
-        if (
-            not isinstance(self.previous_ranks, tuple)
-            or len(self.previous_ranks) != 5
-            or any(type(value) is not int or not 0 <= value <= 127 for value in self.previous_ranks)
-        ):
-            raise RankingError("previous_ranks requires five integers0..127 in RR order")
 
 
 @dataclass(frozen=True)
@@ -87,24 +47,6 @@ class _Entry:
             self.history.last_week_rating,
             self.history.last_week_rating,
         )[rank_id]
-
-
-def encode_record(entry):
-    """Only fields consumed by the audited rank UI are populated; rest zero."""
-    output = bytearray(RECORD_SIZE)
-    # Original101752F7 copies until NUL, even though the source name field is16.
-    # Keep a guaranteed terminator; this display-only form does not rename saves.
-    output[:16] = entry.name[:15].ljust(16, b"\0")
-    struct.pack_into("<QI", output, 0x10, entry.identity, entry.character_id)
-    struct.pack_into("<I", output, 0x94, entry.total_prize)
-    struct.pack_into("<I", output, 0x9C, entry.history.weekly_prize or 0)
-    struct.pack_into("<I", output, 0xA0, entry.rating)
-    struct.pack_into("<I", output, 0xA4, entry.history.last_week_rating or 0)
-    output[0xC0] = int(entry.history.anonymous)
-    output[0xC2] = int(entry.history.qualified)
-    for rank_id, offset in PREVIOUS_OFFSETS.items():
-        output[offset] = entry.history.previous_ranks[rank_id]
-    return bytes(output)
 
 
 class RankingService:

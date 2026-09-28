@@ -31,13 +31,9 @@ def run(research_dir, repo, *, legacy_baseline=False):
     from probe import PATHS
     from tmserver.economy.service import EconomyService
     from tmserver.economy.models import PROFILE_SIZE
-    from tmserver.rankings.service import (
-        RankingHistory,
-        RankingService,
-        RECORD_SIZE,
-        SCORE_OFFSETS,
-        UI_CATEGORIES,
-    )
+    from tmserver.rankings.models import RankingHistory
+    from tmserver.rankings.service import RankingService
+    from tmserver.rankings.packets import RECORD_SIZE, SCORE_OFFSETS, UI_CATEGORIES
     from tmserver.rankings.policy import RatingPolicy
     from tmserver.rankings.stats import PracticeStats
 
