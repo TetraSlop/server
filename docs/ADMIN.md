@@ -51,6 +51,25 @@ unclaimed card and money totals. After partial collection, these totals exclude
 what was already accepted or credited. A missing Prize Center award is `null`;
 an account with no event memberships has an empty event list.
 
+The same summary also includes outstanding claims, separately from owned assets:
+
+- `auction_claims` contains remaining payment/refund amounts, won/returned card
+  counts, and individual receipts with stable IDs and card records. Partially
+  credited receipts retain their ID and report only the remaining money.
+- `event_claims` identifies each unclaimed grant by event and grant ID, with its
+  remaining card and money counts. Fully collected grants are omitted.
+- `pending_result` describes the unaccepted result reward ID, seat and extra
+  card count, or is `null`. A restored result is recovery-only; this does not
+  imply that the original game can resume it.
+- `match_rounds` lists the account's unfinished rounds, including escrowed money
+  and earned cards not yet handed to result collection. Completed payouts are
+  already in the account balance. Cards handed to `pending_result`, or recovered
+  into Returned Cards, are not counted again here.
+
+An empty claim list does not mean an active auction has expired. Inspection
+never advances auction time. The shared `tmserver.admin.queries.account_summary`
+function produces the same detached read model without a CLI or web dependency.
+
 Supply the matching `--events` configuration when the save contains events.
 The same command accepts `--database-url`. Like other offline commands, it needs
 exclusive writer ownership, so stop the server first. Reading the summary does

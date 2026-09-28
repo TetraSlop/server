@@ -170,6 +170,10 @@ class AdminTests(unittest.TestCase):
             self.assertEqual(result["prize_points"], 0)
             self.assertIsNone(result["pending_prize"])
             self.assertEqual(result["events"], [])
+            self.assertEqual(result["event_claims"], [])
+            self.assertEqual(result["auction_claims"]["receipts"], [])
+            self.assertIsNone(result["pending_result"])
+            self.assertEqual(result["match_rounds"], [])
             for key in ("Same Name", "ALICE", "missing"):
                 with self.assertRaises(ValueError):
                     self.execute("account", "--account-key", key)
@@ -210,6 +214,9 @@ class AdminTests(unittest.TestCase):
             self.assertEqual(result["pending_prize"]["id"], "award-1")
             self.assertEqual(result["pending_prize"]["top30"], 500)
             self.assertEqual(result["prize_points"], 0)
+            self.assertEqual(result["event_claims"], [
+                dict(event_id="festival", id="batch", **pending)
+            ])
             self.assertEqual(
                 result["events"],
                 [
@@ -225,6 +232,7 @@ class AdminTests(unittest.TestCase):
             other = self.execute("account", "--account-key", "bob")
             self.assertIsNone(other["pending_prize"])
             self.assertEqual(other["events"], [])
+            self.assertEqual(other["event_claims"], [])
         self.assertEqual(self.path.read_bytes(), before)
 
     def test_prize_bounds_use_domain_validation_before_any_save(self):

@@ -5,7 +5,11 @@ import json
 from contextlib import ExitStack
 from pathlib import Path
 
+from tmserver.admin.queries import account_summary
+from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.claim_transactions import event_transaction, prize_transaction
+from tmserver.economy.match_ledger import MatchEconomy
+from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.cards.model import Card
 from tmserver.events.cards import EventCardService
 from tmserver.events.config import load_event_setup
@@ -92,6 +96,11 @@ class AdminState:
             self.economy, self.events, snapshot.get("event_cards")
         )
         self.event_results = EventResults.restore(snapshot.get("event_results"))
+        self.auction_ledger = AuctionEconomy.restore(self.economy, snapshot.get("auction"))
+        self.match_economy = MatchEconomy.restore(self.economy, snapshot.get("match_economy"))
+        self.result_rewards = ResultRewardService.restore(
+            self.economy, self.auction_ledger, snapshot.get("result_rewards")
+        )
         self.saved_journals = {
             name: getattr(self, name).snapshot()
             for name in ("prize", "events", "event_cards", "event_results")
@@ -161,32 +170,7 @@ class AdminState:
 
     def account_summary(self, key):
         """Describe saved claims without admitting, collecting or recovering them."""
-        account = self.economy.account_view(key)
-        events = []
-        for event_id in sorted(self.events.configs):
-            member = self.events.member(key, event_id)
-            if member is not None:
-                events.append(
-                    dict(
-                        event_id=event_id,
-                        eligibility=member.eligibility,
-                        steps=member.steps,
-                        completed_missions=member.completed_missions,
-                        pending=self.event_cards.pending(key, event_id),
-                    )
-                )
-        prize = self.prize.snapshot()["accounts"].get(key, {})
-        return dict(
-            account_key=key,
-            player_id=account.player_id,
-            name=account.name.decode("latin1"),
-            guild=account.guild,
-            balance=account.balance,
-            card_count=len(account.cards),
-            prize_points=self.economy.prize_points(key),
-            pending_prize=prize.get("pending"),
-            events=events,
-        )
+        return account_summary(self, key)
 
     def card(self, values):
         model, attack, kind, physical, magical, arrows = values

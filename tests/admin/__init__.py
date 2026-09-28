@@ -1,0 +1,1 @@
+"""Shared administration read models."""
