@@ -1,5 +1,34 @@
 # Packaging and transaction validation
 
+## Interrupted connection cleanup, 2026-09-27
+
+Profile shutdown could cancel a handler already waiting for transport closure
+and skip removal from its task/writer sets. Unexpected close errors did the
+same. Game accept tasks could likewise remain registered if `Session.close()`
+was cancelled or raised. These registrations now retire in unconditional
+`finally` blocks. Cancellation and original exception handling remain intact;
+the transport/session cleanup operations themselves are unchanged.
+
+Seven new tests use real handlers and EOF readers with controlled writer-close
+barriers. Five regressions fail against `eb0c65c`; two normal/handled-error
+controls already pass. They cover profile `stop()` during cleanup, game handler
+cancellation and close/acknowledgement errors. The reviewed suite passes **67
+tests in 16.712 seconds**, including logging failures, session recovery, encrypted
+server/profile traffic, enumeration/shutdown and storage-failure isolation.
+Evidence: `results/handler-cleanup-baseline.log`,
+`results/handler-cleanup-final.log` and
+`results/handler-cleanup-reviewed-tests.log`.
+
+Together with the separate admin suite below, **129 distinct focused tests**
+pass. Collection is 1,179 tests without import errors; lint and whitespace pass.
+The full suite, live PostgreSQL and native UI were not rerun. A fresh-source
+116-entry wheel passes clean installation, entry points, temporary listeners,
+JSON admin/recovery and model/codec isolation. All 111 runtime files match source,
+with no extra modules and current README metadata. SHA256:
+`1bd1bd1b096e86af6786e5682d8f3289583efb7cff5735787d5a9630cbf63b4b`.
+Evidence: `results/lifecycle-wheel-result.json` and
+`results/lifecycle-wheel-{build,check}.log`.
+
 ## Repeated admin save tracking, 2026-09-27
 
 `AdminState.persist_changes()` compared each journal to its construction-time

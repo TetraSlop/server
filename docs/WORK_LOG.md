@@ -24,6 +24,15 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Handler cleanup now retires profile writer/task registrations and game accept
+  tasks even when transport close is cancelled or raises. Original cancellation
+  and error propagation is preserved. Seven new tests exercise real handler
+  cleanup behind transport barriers; five fail on the earlier runtime and two
+  controls retain existing behavior. All 67 reviewed network/profile/storage-
+  failure checks pass in 16.712s. Together with the separate 62 admin checks,
+  there are 129 distinct focused passes. Collection is 1,179; lint, whitespace
+  and clean-wheel checks pass. The 116-entry wheel matches all 111 runtime files.
+  No full-suite, native UI or live PostgreSQL run. See VALIDATION.md.
 - Fixed repeated admin edits through one AdminState: the journal comparison
   baseline now advances after successful storage, so eligibility 0 → -1 → 0
   saves the final 0. Failed saves still leave memory and comparison state intact;

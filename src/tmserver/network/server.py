@@ -528,8 +528,10 @@ class Server:
         ) as error:
             self.log("connection_error", session=session.id, reason=str(error))
         finally:
-            await session.close()
-            self.tasks.discard(task)
+            try:
+                await session.close()
+            finally:
+                self.tasks.discard(task)
 
     async def stop(self):
         if self.listener:

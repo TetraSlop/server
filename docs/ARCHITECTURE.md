@@ -147,6 +147,11 @@ Tables in the same room share only the intended room membership and listing
 state. Match callbacks remain bound to their table. Tests and diagnostic callers
 use `server.default_table.match` (and the corresponding table methods) explicitly.
 
+Game and profile handlers release their task registrations even if transport
+cleanup is cancelled or raises. Profile handlers also release their writer
+registrations, which bound admission. The cleanup guard does not suppress
+cancellation or change which close errors propagate.
+
 Connection reads recheck closure before processing buffered input. Timeouts,
 worker failures and table departure share a peer cleanup operation that rechecks
 the current owner before closing. An earlier close can release the old table and

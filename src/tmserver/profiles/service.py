@@ -313,10 +313,12 @@ class ProfileServer:
         except (ValueError, asyncio.IncompleteReadError, TimeoutError, OSError) as exc:
             self.log("connection_error", error=str(exc))
         finally:
-            writer.close()
             try:
-                await writer.wait_closed()
-            except ConnectionError:
-                pass
-            self.writers.discard(writer)
-            self.tasks.discard(task)
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except ConnectionError:
+                    pass
+            finally:
+                self.writers.discard(writer)
+                self.tasks.discard(task)
