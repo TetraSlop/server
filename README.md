@@ -22,15 +22,30 @@ Python 3.13 or newer:
 
 ```powershell
 python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev,postgres]"
-.venv/Scripts/python -m unittest discover -s tests -t .
+.venv/Scripts/python -m pip install -e ".[dev]"
+.venv/Scripts/python -m tools.check_collection
+.venv/Scripts/python -m tools.check_tests portable
 .venv/Scripts/ruff check src tests tools
-.venv/Scripts/python -m build --wheel
+.venv/Scripts/python -m tools.build_wheel
 .venv/Scripts/python -m tools.check_wheel dist/tmserver-0.1.0-py3-none-any.whl
 ```
 
 On Linux, use `.venv/bin/python` and `.venv/bin/ruff` instead. PostgreSQL is
 optional; a JSON installation has no third-party runtime dependencies.
+
+The portable lane runs without a database. It checks source import boundaries,
+rejects duplicate test IDs and fails on unexpected skips. Its only allowed skip
+is the administrator's optional PostgreSQL import compatibility check when those
+dependencies are absent. Wheel verification checks the exact current package
+manifest and bytes before installing into a fresh environment; the build helper
+uses a fresh staging directory so old `build/` files cannot leak into releases.
+
+To run the PostgreSQL lane, install `".[dev,postgres]"` and start a Docker daemon,
+then run `python -m tools.check_tests postgres`. It creates a temporary PostgreSQL
+16 container with a random password and loopback port, runs every database test
+with no skips allowed, and removes the container and its data afterward. Neither
+lane inherits `TM_DATABASE_URL` or `TM_TEST_DATABASE_URL`. CI runs the portable
+lane on Windows and Linux, and the PostgreSQL lane on Linux.
 
 ```powershell
 .venv/Scripts/tmserver --list-accounts
@@ -97,7 +112,7 @@ compatibility shims; custom Python integrations must update their imports.
 The `tmserver`, `tmserver-db`, `tmserver-play` and `tmserver-admin` commands,
 `python -m tmserver`, and `Play.cmd` remain the supported entry points.
 
-Build a wheel with `python -m build`. Runtime data and migrations are included;
+Build a wheel with `python -m tools.build_wheel`. Runtime data and migrations are included;
 tests, research scripts, client binaries, captures and live saves are excluded.
 Historical online reward policies and full native UI parity remain unproved.
 

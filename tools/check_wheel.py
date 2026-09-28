@@ -6,8 +6,9 @@ import os
 import subprocess
 import tempfile
 import venv
-import zipfile
 from pathlib import Path
+
+from tools.package import ROOT, verify_wheel
 
 
 def main():
@@ -15,20 +16,7 @@ def main():
     parser.add_argument("wheel", type=Path)
     args = parser.parse_args()
     wheel = args.wheel.resolve(strict=True)
-    with zipfile.ZipFile(wheel) as archive:
-        names = archive.namelist()
-        required = {
-            "tmserver/data/economy_catalog.json",
-            "tmserver/data/profile_contract.json",
-            "tmserver/data/lobby_commands.tsv",
-            "tmserver/storage/migrations/env.py",
-        }
-        if not required.issubset(names):
-            raise ValueError("wheel is missing runtime data or migrations")
-        if not any(name.startswith("tmserver/storage/migrations/versions/") for name in names):
-            raise ValueError("wheel is missing migration revisions")
-        if any(name.split("/")[0] in {"tests", "research", "results", "tools"} for name in names):
-            raise ValueError("development files leaked into the wheel")
+    manifest = verify_wheel(wheel)
     with tempfile.TemporaryDirectory(prefix="tm-wheel-") as folder:
         root = Path(folder)
         environment = root / "environment"
@@ -38,7 +26,7 @@ def main():
         env = {
             key: value
             for key, value in os.environ.items()
-            if key not in {"PYTHONPATH", "TM_DATABASE_URL"}
+            if key not in {"PYTHONPATH", "TM_DATABASE_URL", "TM_TEST_DATABASE_URL"}
         }
 
         def run(*command):
@@ -47,40 +35,7 @@ def main():
             ).stdout
 
         run(str(python), "-m", "pip", "install", "--no-index", "--no-deps", str(wheel))
-        run(
-            str(python), "-c",
-            "import sys\n"
-            "from tmserver.game.models import Card\n"
-            "from tmserver.game.packets import packet, decode\n"
-            "from tmserver.economy.packets import named, parse_named\n"
-            "from tmserver.economy.auctions.models import Actor, Listing\n"
-            "from tmserver.economy.auctions.packets import actor_record, listing_record\n"
-            "from tmserver.events.packets import event_list\n"
-            "from tmserver.events.config import parse_event_configs\n"
-            "from tmserver.rankings.models import RankingHistory\n"
-            "from tmserver.rankings.periods import RankingPeriods\n"
-            "from tmserver.rooms.packets import directory_files\n"
-            "from tmserver.profiles.packets import answer, checked, checksum\n"
-            "from tmserver.storage.base import StateStore\n"
-            "card = Card(1, 50, 0, 40, 30, 1, 0)\n"
-            "assert Card.parse(card.full()) == card\n"
-            "actor = Actor('wheel', 1, 1, b'Wheel', 0, 0, 0)\n"
-            "listing = Listing(1, actor, card, 100, 20, 1, 0, 100, 3700, ())\n"
-            "assert len(actor_record(actor)) == 0x38 and len(listing_record(listing)) == 0xC0\n"
-            "assert decode(packet(0x43)).primary == 0x43\n"
-            "assert parse_named(named(0xB0, 0, 1, '@Init=')) == (0xB0, 0, 1, {'Init': {}})\n"
-            "assert len(event_list()) == 0x2C08\n"
-            "assert set(directory_files()) == {'b/g/ZL', 'b/g/RL000'}\n"
-            "assert len(answer()) == 24 and checksum(b'') == 0 and checked(b'') == bytes(4)\n"
-            "assert RankingHistory().previous_ranks == (0, 0, 0, 0, 0)\n"
-            "assert not set(sys.modules).intersection({\n"
-            "    'tmserver.game.match', 'tmserver.economy.service', 'tmserver.events.service',\n"
-            "    'tmserver.events.matchmaking', 'tmserver.events.matches',\n"
-            "    'tmserver.economy.auctions.service', 'tmserver.economy.auctions.ledger',\n"
-            "    'tmserver.rankings.service', 'tmserver.rooms.service', 'tmserver.profiles.service',\n"
-            "    'tmserver.storage.json', 'tmserver.storage.postgres', 'sqlalchemy',\n"
-            "})\n",
-        )
+        run(str(python), "-I", str(ROOT / "tools" / "check_imports.py"))
         cli = scripts / ("tmserver.exe" if os.name == "nt" else "tmserver")
         run(str(cli), "--help")
         play_cli = scripts / ("tmserver-play.exe" if os.name == "nt" else "tmserver-play")
@@ -136,7 +91,7 @@ def main():
             json.dumps(
                 {
                     "wheel": wheel.name,
-                    "files": len(names),
+                    **manifest,
                     "clean_install": True,
                     "runtime_dependencies": [],
                     "console_entrypoint": True,

@@ -1,5 +1,6 @@
-"""Fail early on test import errors without starting the full suite."""
+"""Fail early on test import errors and duplicate IDs without running tests."""
 
+from collections import Counter
 import unittest
 
 
@@ -11,10 +12,21 @@ def cases(suite):
             yield item
 
 
-if __name__ == "__main__":
+def validate_collection(suite, errors=()):
+    ids = [test.id() for test in cases(suite)]
+    duplicates = sorted(key for key, count in Counter(ids).items() if count > 1)
+    if errors or duplicates:
+        raise ValueError(f"test collection failed: import_errors={list(errors)}, duplicate_ids={duplicates}")
+    if not ids:
+        raise ValueError("test collection is empty")
+    return len(ids)
+
+
+def main():
     loader = unittest.TestLoader()
     suite = loader.discover("tests", top_level_dir=".")
-    for error in loader.errors:
-        print(error)
-    print(f"Collected {suite.countTestCases()} tests; {len(loader.errors)} import errors")
-    raise SystemExit(bool(loader.errors))
+    print(f"Collected {validate_collection(suite, loader.errors)} unique tests; no import errors")
+
+
+if __name__ == "__main__":
+    main()
