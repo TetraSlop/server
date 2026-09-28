@@ -19,8 +19,8 @@ def build(research_dir):
     sys.path.insert(0, str(research_dir / "protocol_map"))
     from room_contract_vectors import Machine, table
     from table_admission_vectors import AdmissionVM
-    from tmserver.match_service import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
-    from tmserver.table_metadata import table_info
+    from tmserver.game.match import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
+    from tmserver.rooms.metadata import table_info
     from unicorn.x86_const import UC_X86_REG_EBP, UC_X86_REG_EDI, UC_X86_REG_ESI
 
     specs = [

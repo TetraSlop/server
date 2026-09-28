@@ -29,16 +29,16 @@ def run(research_dir, repo, *, legacy_baseline=False):
     from auction_rank_vectors import Machine, SCENE
     from profile_semantics_vectors import CoreVM
     from probe import PATHS
-    from tmserver.economy_service import EconomyService, PROFILE_SIZE
-    from tmserver.ranking_service import (
+    from tmserver.economy.service import EconomyService, PROFILE_SIZE
+    from tmserver.rankings.service import (
         RankingHistory,
         RankingService,
         RECORD_SIZE,
         SCORE_OFFSETS,
         UI_CATEGORIES,
     )
-    from tmserver.rating_policy import RatingPolicy
-    from tmserver.result_stats import PracticeStats
+    from tmserver.rankings.policy import RatingPolicy
+    from tmserver.rankings.stats import PracticeStats
 
     assert hashlib.sha256(Path(PATHS["core"]).read_bytes()).hexdigest() == CORE_SHA256
 

@@ -1,0 +1,1 @@
+"""Economy tests and fixtures."""

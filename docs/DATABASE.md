@@ -79,6 +79,9 @@ the server to be stopped. Keep the database store context open until the server
 has completed shutdown, including any final table cleanup:
 
 ```python
+from tmserver.network.server import Server
+from tmserver.storage.postgres import PostgresStateStore
+
 with PostgresStateStore(url) as store:
     game = Server(store=store)
     try:
@@ -121,7 +124,7 @@ editing Python or JSON. For embedded administration, use the same transaction
 boundary as the protocol handler:
 
 ```python
-from tmserver.claim_transactions import prize_transaction
+from tmserver.economy.claim_transactions import prize_transaction
 
 with prize_transaction(game, account_key) as prize:
     prize.grant_award(account_key, "local-award-001", top30=500)

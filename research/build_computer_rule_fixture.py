@@ -19,8 +19,8 @@ def build(research_dir):
     sys.path.insert(0, str(ROOT / "src"))
     sys.path.insert(0, str(research_dir / "protocol_map"))
     from table_admission_vectors import AdmissionVM
-    from tmserver.match_service import MatchError, MatchService, packet
-    from tmserver.room_rules import RoomRules
+    from tmserver.game.match import MatchError, MatchService, packet
+    from tmserver.rooms.rules import RoomRules
     from unicorn.x86_const import (
         UC_X86_REG_EBP,
         UC_X86_REG_ECX,

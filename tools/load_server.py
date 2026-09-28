@@ -9,11 +9,11 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from tmserver.economy_service import EconomyService
-from tmserver.identities import player_id
-from tmserver.local_accounts import display_name
-from tmserver.server import Server
-from tmserver.state_store import JsonStateStore
+from tmserver.economy.service import EconomyService
+from tmserver.protocol.identities import player_id
+from tmserver.network.local_accounts import display_name
+from tmserver.network.server import Server
+from tmserver.storage.json import JsonStateStore
 
 
 def distribution(values):
@@ -61,8 +61,8 @@ def temporary_store(backend, directory):
     if backend != "postgres":
         yield JsonStateStore(directory / "state.json") if backend == "json" else None
         return
-    from tmserver.database import upgrade
-    from tmserver.postgres_store import PostgresStateStore, database_engine
+    from tmserver.storage.database import upgrade
+    from tmserver.storage.postgres import PostgresStateStore, database_engine
 
     # Deliberately separate from TM_DATABASE_URL. Only this random database is
     # touched; the supplied URL's database is used for administration alone.

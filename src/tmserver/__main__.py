@@ -1,3 +1,3 @@
-from .run_server import main
+from .cli.serve import main
 
 main()

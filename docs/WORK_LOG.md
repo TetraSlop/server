@@ -2,8 +2,10 @@
 
 ## Current scope
 
-Prioritize the user's approved runtime consolidation pass before adding feature
-breadth: readable Python, fewer repeated implementations and measured changes.
+The requested feature-based directory layout is complete and verified. Keep
+runtime modules and tests under their feature owners, with explicit imports and
+lightweight package initializers. Continue readable Python consolidation and
+evidence-backed behavior gaps when iterating further.
 Continue the standing instruction to work without checking credits.
 Do not query usage limits or use a displayed percentage as a stopping condition.
 Do not redeem reset credits or purchase credits. This supersedes the earlier
@@ -20,6 +22,18 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Reorganized all 77 flat runtime modules into 12 feature packages and moved
+  156 test modules plus the local-play peer helper into matching directories.
+  Updated imports, launchers, package data, active probes, tools and navigation.
+  Runtime algorithms and the exact 1,170-test discovery set are preserved.
+  The complete suite passes in 904.834 seconds: 1,111 passed, 59 PostgreSQL
+  tests skipped, zero failures/errors. Source hashes stayed unchanged and all
+  loaded server modules came from this checkout. Independent import review,
+  lint, migration discovery and clean-wheel checks pass; all 96 runtime files
+  in the wheel match source, with no stale flat modules. Existing console
+  commands remain available; Python imports use the new feature paths.
+  No native UI or live PostgreSQL run was performed. See ARCHITECTURE.md and
+  VALIDATION.md.
 - Queued event cancellation, deferred observer closure and failed-driver cleanup
   now share a final current-owner check before closing released connections.
   Nine reentry cases fail on the preceding runtime; eleven new tests cover those

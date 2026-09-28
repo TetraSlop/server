@@ -23,9 +23,9 @@ def probe(research_dir):
     from event_contract_vectors import EM, VIEW, EventVM
     from incoming_gameplay_vectors import ReceiveVM
     from table_admission_vectors import PLAYER, AdmissionVM
-    from tmserver.economy_service import EconomyService
-    from tmserver.event_service import EventConfig, EventHost, EventListing, event_data
-    from tmserver.match_service import MatchService
+    from tmserver.economy.service import EconomyService
+    from tmserver.events.service import EventConfig, EventHost, EventListing, event_data
+    from tmserver.game.match import MatchService
     from unicorn.x86_const import UC_X86_REG_EDX
 
     rows = []

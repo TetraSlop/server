@@ -1,5 +1,12 @@
 # Tetra Master local server experiment
 
+This is an archived experiment overview. Commands, flat module names, scratch
+paths and validation counts below describe the recorded stages of development.
+For current setup and package paths, use the [project README](../../README.md)
+and [architecture guide](../ARCHITECTURE.md). Current operating instructions are
+in [local play](../LOCAL_PLAY.md), [database setup](../DATABASE.md) and
+[offline administration](../ADMIN.md).
+
 The original PC client completed a full ten-placement practice match and returned
 to the room. The user confirmed success; archived traffic is in
 `native_runs/20260926_user_cpu_complete/`. The native shop welcome screen also
@@ -43,8 +50,8 @@ Ports 51241 and 51220 bind to 127.0.0.1. Logs are `local_game.log`,
 An optional PostgreSQL backend now stores accounts, ordered cards and all durable
 service journals in one transaction. It uses SQLAlchemy Core and Alembic, keeps
 game rules independent of storage, and enforces one server writer. Import/export
-preserves existing saves and native profile bytes. See [DATABASE.md](DATABASE.md)
-for setup and [PERSISTENCE_DESIGN.md](PERSISTENCE_DESIGN.md) for the boundaries.
+preserves existing saves and native profile bytes. See [DATABASE.md](../DATABASE.md)
+for setup and [PERSISTENCE_DESIGN.md](../PERSISTENCE_DESIGN.md) for the boundaries.
 The combined game launcher uses JSON by default; `--database` explicitly selects
 the configured PostgreSQL database.
 

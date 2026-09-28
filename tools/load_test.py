@@ -18,13 +18,13 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from tests.test_options_service import VALUES
-from tests.test_options_service import request as options_request
-from tests.test_server import Client
-from tmserver import pol_wire as wire
-from tmserver.economy_service import named, parse_named
-from tmserver.identities import SHOP_RAW, service_nick
-from tmserver.local_accounts import MAX_ACCOUNTS
+from tests.profiles.test_options_service import VALUES
+from tests.profiles.test_options_service import request as options_request
+from tests.network.test_server import Client
+from tmserver.protocol import wire
+from tmserver.economy.service import named, parse_named
+from tmserver.protocol.identities import SHOP_RAW, service_nick
+from tmserver.network.local_accounts import MAX_ACCOUNTS
 from tools.load_server import distribution
 
 

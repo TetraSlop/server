@@ -14,7 +14,7 @@ and custom scripts that do not acquire the lease must also be stopped.
 Every invocation requires an explicit `--state PATH` or `--database-url URL`.
 There is no default save, automatic database selection, or account creation.
 An absent save/database state is rejected. Install the updated package to get
-the command, or use `python -m tmserver.admin` from the configured source checkout.
+the command, or use `python -m tmserver.cli.admin` from the configured source checkout.
 
 ## Select the saved account
 

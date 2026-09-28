@@ -1,5 +1,50 @@
 # Packaging and transaction validation
 
+## Feature package layout, 2026-09-27
+
+Moved the 77 flat runtime modules into `cards`, `cli`, `data`, `economy`,
+`events`, `game`, `network`, `profiles`, `protocol`, `rankings`, `rooms` and
+`storage`. Only `__init__.py` and `__main__.py` remain as root Python modules.
+The 156 test modules now use matching feature directories; the local-play peer
+helper lives in `tests/support`. Shared test locations preserve fixture paths,
+temporary-state locations and subprocess working directories.
+
+Imports, patch targets, diagnostic logger names, console entry points,
+`Play.cmd`, active research probes and wheel checks use the new paths. The
+editable installation was refreshed. Console command names and
+`python -m tmserver` are unchanged; old flat Python module imports have moved
+without forwarding shims. Package initializers remain free of service imports.
+Database code and its migrations moved together under `storage`.
+
+All 77 moved runtime modules retain their non-import ASTs from `7eb34c7`.
+Independent review verified the mapped import origins, aliases and scopes,
+including lazy imports. All 157 moved test/helper modules match after only
+the recorded import and path transformations. Discovery preserves the exact
+multiset of 1,170 baseline test IDs under their new module names. Fixtures,
+packaged JSON/TSV data and the frozen initial migration are unchanged.
+Evidence: `results/test-layout-{discovery,validation}.json` and
+`results/runtime-layout-moves.json`.
+
+The complete portable suite ran **1,170 tests in 904.834 seconds: 1,111 passed,
+59 PostgreSQL tests skipped, zero failures or errors**. The run verified unchanged
+source hashes and that loaded server modules came from this checkout.
+Evidence: `results/package-layout-full.log` and
+`results/package-layout-full-result.json`. The earlier 134 path-sensitive
+controls also passed; they overlap the full suite and are not an additional
+coverage count. Lint and staged whitespace checks pass.
+
+The clean 101-entry wheel passes installation, command/module entry points,
+JSON administration/recovery and temporary listeners. All 96 packaged runtime
+files match source; no old flat module files remain. Alembic discovers the
+unchanged `0001_state` head at the new migration location. Wheel SHA256:
+`91ff48042df0af3b83f38a6029274fcefdc172e8a7e85108a7bb84d3715c65d2`.
+Evidence: `results/package-layout-wheel-result.json` and
+`results/package-layout-wheel-{build,check}.log`.
+
+No native game UI or live PostgreSQL run was performed for this reorganization.
+Protocol, gameplay policy and save formats are unchanged. Historical research
+records retain their original paths; current navigation is in ARCHITECTURE.md.
+
 ## Retired event cleanup ownership, 2026-09-27
 
 Three event cleanup paths could close a connection after a new service took

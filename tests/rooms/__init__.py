@@ -1,0 +1,1 @@
+"""Rooms tests and fixtures."""

@@ -21,8 +21,8 @@ def build(research_dir):
     from directory_ui_vectors import RL, digits
     from room_contract_vectors import CTX, PTL, Machine as TableMachine, info, table
     from table_admission_vectors import AdmissionVM
-    from tmserver.ordinary_rooms import load_ordinary_rooms
-    from tmserver.server import Server
+    from tmserver.rooms.config import load_ordinary_rooms
+    from tmserver.network.server import Server
     from unicorn.x86_const import (
         UC_X86_REG_EBP,
         UC_X86_REG_ECX,

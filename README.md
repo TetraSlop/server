@@ -56,14 +56,38 @@ random database. See [persistence](docs/PERSISTENCE_DESIGN.md).
 
 ## Layout
 
-- `src/tmserver/`: server, game rules, protocol handlers, persistence and packaged data.
-- `tests/`: portable unit and encrypted integration tests, with frozen fixtures.
+- [src/tmserver/](src/tmserver/): feature packages listed below.
+- [tests/](tests/): unit and encrypted integration tests grouped by the same
+  features; shared frozen inputs stay in `tests/fixtures/`.
 - `examples/`: optional room, shop and event configurations.
-- `docs/`: current architecture, persistence and load-test instructions.
+- [docs/](docs/README.md): current architecture, persistence and operating instructions.
 - `docs/research/`: historical protocol and implementation notes.
 - `research/`: original-client validation sources and migration provenance.
 - `tools/`: repeatable development and load-test commands.
 - `results/` and `var/`: ignored generated output and local state.
+
+| Package | Responsibility |
+| --- | --- |
+| `cli` | Server, local-play and offline-admin entry points. |
+| `network` | Server ownership, connections, dispatch, chat and diagnostics. |
+| `protocol` | Encryption, command envelopes, identities and table controls. |
+| `cards` | Shared card values, catalogue and inventory edits. |
+| `game` | Match phases, computer opponents and recovered game algorithms. |
+| `rooms` | Ordinary room configuration, tables, admission and spectators. |
+| `events` | Configured event rooms, matchmaking, results and card grants. |
+| `economy` | Accounts, shop, trade, auctions, prizes and transaction boundaries. |
+| `profiles` | Profile transport, character records, options and saved preferences. |
+| `rankings` | Result statistics, ratings and optional weekly projections. |
+| `storage` | JSON/PostgreSQL stores, validation, recovery and database migrations. |
+| `data` | Immutable packaged protocol tables and their resource reader. |
+
+The [architecture guide](docs/ARCHITECTURE.md) identifies the files to change for
+each responsibility and explains ownership across them. Python imports now use
+these package paths, for example `tmserver.network.server.Server` and
+`tmserver.game.match.MatchService`. The former flat module paths have no
+compatibility shims; custom Python integrations must update their imports.
+The `tmserver`, `tmserver-db`, `tmserver-play` and `tmserver-admin` commands,
+`python -m tmserver`, and `Play.cmd` remain the supported entry points.
 
 Build a wheel with `python -m build`. Runtime data and migrations are included;
 tests, research scripts, client binaries, captures and live saves are excluded.

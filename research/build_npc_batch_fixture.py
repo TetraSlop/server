@@ -35,9 +35,9 @@ def build(research_dir):
         UC_X86_REG_ESI,
         UC_X86_REG_ESP,
     )
-    from tmserver.economy_service import Catalog
-    from tmserver.native_opponents import prepare_opponents
-    from tmserver.native_rules import CRTLCG
+    from tmserver.economy.service import Catalog
+    from tmserver.game.opponents import prepare_opponents
+    from tmserver.game.rules import CRTLCG
 
     class Stream:
         def __init__(self, seed):

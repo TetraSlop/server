@@ -21,11 +21,11 @@ def main():
             "tmserver/data/economy_catalog.json",
             "tmserver/data/profile_contract.json",
             "tmserver/data/lobby_commands.tsv",
-            "tmserver/migrations/env.py",
+            "tmserver/storage/migrations/env.py",
         }
         if not required.issubset(names):
             raise ValueError("wheel is missing runtime data or migrations")
-        if not any(name.startswith("tmserver/migrations/versions/") for name in names):
+        if not any(name.startswith("tmserver/storage/migrations/versions/") for name in names):
             raise ValueError("wheel is missing migration revisions")
         if any(name.split("/")[0] in {"tests", "research", "results", "tools"} for name in names):
             raise ValueError("development files leaked into the wheel")
@@ -55,8 +55,8 @@ def main():
         run(str(admin_cli), "--help")
         run(
             str(python), "-c",
-            "from tmserver.economy_service import EconomyService\n"
-            "from tmserver.state_store import JsonStateStore\n"
+            "from tmserver.economy.service import EconomyService\n"
+            "from tmserver.storage.json import JsonStateStore\n"
             "economy = EconomyService(seed=1)\n"
             "economy.provision('wheel', nn=1, player_id=1, name=b'Wheel')\n"
             "JsonStateStore('admin.json').save(economy.snapshot())\n",
