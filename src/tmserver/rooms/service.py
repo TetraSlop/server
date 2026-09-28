@@ -18,7 +18,7 @@ from tmserver.rooms.packets import (
     player_record,
     table_info,
 )
-from tmserver.protocol.commands import Command, encode, parse
+from tmserver.protocol.commands import Command, encode_service, parse
 
 class RoomService:
     def __init__(
@@ -191,8 +191,6 @@ class RoomService:
             slot.table_metadata,
         ):
             return []
-        slot.table_state, slot.table_count, slot.table_owner = state, count, owner
-        slot.table_metadata = metadata
         fields = (
             slot.table_channel,
             b"0",
@@ -203,6 +201,8 @@ class RoomService:
             metadata,
         )
         update = self.delta(Command(b"TD", b"\x06".join(fields)))
+        slot.table_state, slot.table_count, slot.table_owner = state, count, owner
+        slot.table_metadata = metadata
         return [(peer, update) for peer in self.members]
 
     def set_npc(self, payload, *, table_id=None):
@@ -218,9 +218,9 @@ class RoomService:
     def _publish_npc(self, payload, identity, record, table_id):
         if self.npcs.get(identity) == (identity, record):
             return []
+        update = self.delta(Command(b"PD", payload))
         self.npcs[identity] = identity, record
         self.npc_tables[identity] = table_id
-        update = self.delta(Command(b"PD", payload))
         return [(peer, update) for peer in self.members]
 
     def practice_opponent(self, peer, opponent, *, table_id=None):
@@ -283,9 +283,9 @@ class RoomService:
         return b"\x06".join(fields)
 
     def _remove_npc(self, identity):
+        update = self.delta(Command(b"PC", f"0x{identity:016X}".encode()))
         del self.npcs[identity]
         del self.npc_tables[identity]
-        update = self.delta(Command(b"PC", f"0x{identity:016X}".encode()))
         return [(peer, update) for peer in self.members]
 
     def clear_npcs(self, *, table_id=None):
@@ -299,15 +299,17 @@ class RoomService:
         return deliveries
 
     def delta(self, command):
+        reply = self.wrap_delta(self.sequence + 1, command)
         self.sequence += 1
         self.history[self.sequence] = command
         while len(self.history) > 256:
             self.history.popitem(last=False)
-        return self.wrap_delta(self.sequence, command)
+        return reply
 
     @staticmethod
     def wrap_delta(sequence, command):
-        return b"GTM0L" + encode(
+        return encode_service(
+            b"L",
             [
                 Command(b"DD", b"0"),
                 Command(b"DN", b"1"),
@@ -348,11 +350,11 @@ class RoomService:
             if peer in self.members and self.members[peer][0] != identity:
                 raise ValueError("room identity cannot change during admission")
             if peer not in self.members and len(self.members) >= 16:
-                return [(peer, b"GTM0L" + encode([Command(b"DF", b"-1")]))]
-            self.members[peer] = identity, record
+                return [(peer, encode_service(b"L", [Command(b"DF", b"-1")]))]
             update = self.delta(Command(b"PD", c.payload))
+            self.members[peer] = identity, record
             deliveries = (
-                [(peer, b"GTM0L" + encode([Command(b"DS", f"0x{self.room_id:016X}".encode())]))]
+                [(peer, encode_service(b"L", [Command(b"DS", f"0x{self.room_id:016X}".encode())]))]
                 if c.token == b"DE"
                 else []
             )
@@ -375,17 +377,18 @@ class RoomService:
             if sequence == self.sequence:
                 return []
             if sequence > self.sequence or sequence < self.sequence - len(self.history):
-                return [(peer, b"GTM0L" + encode([Command(b"DO", b"")]))]
+                return [(peer, encode_service(b"L", [Command(b"DO", b"")]))]
             return [
                 (peer, self.wrap_delta(s, cmd)) for s, cmd in self.history.items() if s > sequence
             ]
         return None
 
     def leave(self, peer):
-        old = self.members.pop(peer, None)
+        old = self.members.get(peer)
         if old is None:
             return []
         packet = self.delta(Command(b"PC", f"0x{old[0]:016X}".encode()))
+        del self.members[peer]
         return [(member, packet) for member in self.members]
 
 

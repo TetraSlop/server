@@ -99,6 +99,10 @@ launch still defaults to `--ratings preserve`, which keeps saved ratings and
 does not record local rating results. After enabling local-history, keep passing
 `--ratings local-history` for continued play; playing in preserve mode can leave
 the saved rating history inconsistent with subsequent profile progress.
+Re-enabling local-history now checks all enrolled accounts before starting the
+services or recovering interrupted rounds. A mismatch reports the account keys
+and stops startup without changing the save; it requires an explicit history
+migration, which is not yet provided. Preserve mode remains available.
 Each session's `session.json` records both selected options.
 
 ## Where everything lives

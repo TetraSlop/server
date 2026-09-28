@@ -10,7 +10,7 @@ import struct
 from copy import copy
 
 from tmserver.data.resources import read_json
-from tmserver.protocol.commands import Command, encode, parse
+from tmserver.protocol.commands import Command, encode_service, parse
 
 LAYOUT = tuple(read_json("profile_contract.json")["layout"]["wire_fields"])
 VISIBILITY = {b"FO": 8, b"VO": 40}
@@ -85,7 +85,15 @@ class CharacterProfiles:
 
     @staticmethod
     def _response(token, payload=b""):
-        return b"GTM0P" + encode([Command(token, payload)])
+        return encode_service(b"P", [Command(token, payload)])
+
+    def _validate_projections(self, key, fields):
+        # Both character aliases are legal reads. A short locator must not let
+        # an edit or restored record break a later full-width locator read.
+        self._response(b"PO", b"\x06".join(value.encode("latin1") for value in fields))
+        projected = list(fields)
+        projected[1] = str(self.economy.account_view(key).player_id)
+        self._response(b"PO", b"\x06".join(value.encode("latin1") for value in projected))
 
     def handle(self, key, payload):
         if not payload.startswith(b"GTM0P"):
@@ -107,7 +115,7 @@ class CharacterProfiles:
             return [self._response(b"PO", b"\x06".join(value.encode("latin1") for value in fields))]
         if not self._owned(key, address):
             return (
-                [b"GTM0P" + encode([Command(b"GG", b""), Command(b"PE", b"-8706")])]
+                [encode_service(b"P", [Command(b"GG", b""), Command(b"PE", b"-8706")])]
                 if first.token == b"GR"
                 else [self._response(b"NS", b"-8706")]
             )
@@ -153,7 +161,7 @@ class CharacterProfiles:
             else:
                 raise ValueError("unsupported partial profile update")
         # Validate the complete response before committing the partial update.
-        self._response(b"PO", b"\x06".join(value.encode("latin1") for value in fields))
+        self._validate_projections(key, fields)
         self.records[key] = tuple(fields)
         return [self._response(b"CS" if first.token == b"CR" else b"GK")]
 
@@ -200,6 +208,6 @@ class CharacterProfiles:
                     decimal(raw, (1 << int(kind[len("decimal-u") :])) - 1)
             if not result._owned(key, (int(values[0], 16), int(values[1]))):
                 raise ValueError("stored profile belongs to another account")
-            result._response(b"PO", b"\x06".join(v.encode("latin1") for v in values))
+            result._validate_projections(key, values)
             result.records[key] = tuple(values)
         return result

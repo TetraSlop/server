@@ -1,5 +1,7 @@
 """Ordered encrypted delivery adapter for configured original event matches."""
 
+from tmserver.protocol.messages import service_notice
+
 import asyncio
 import uuid
 from collections import deque
@@ -153,7 +155,7 @@ class EventAdapter:
                         source = service_nick(d.source ^ GAME_KEY)
                         await self.server.deliver(
                             d.peer,
-                            b":" + source + b"!p@local NOTICE " + d.peer.nick + b" :" + d.payload,
+                            service_notice(source, d.peer.nick, d.payload),
                         )
                     for peer in closures:
                         await self.close_released_peer(peer)

@@ -17,8 +17,7 @@ from tmserver.network import dispatch as services
 from tmserver.protocol import commands as tm_protocol
 from tmserver.network.chat import relay_text
 from tmserver.protocol.identities import service_nick
-
-MAX_LINE = 512
+from tmserver.protocol.messages import FRAME_OVERHEAD, MAX_LINE, MAX_SERVICE_PAYLOAD
 
 
 def split_message(message):
@@ -40,7 +39,7 @@ def names_replies(nick, channel, members):
     line = prefix
     for name in sorted(member.nick for member in members):
         entry = (b" " if line != prefix else b"") + name
-        if len(line) + len(entry) + 6 > MAX_LINE:
+        if len(line) + len(entry) + FRAME_OVERHEAD > MAX_LINE:
             yield line
             line = prefix + name
         else:
@@ -66,7 +65,7 @@ class Session:
     async def send(self, message):
         if self.closed:
             return
-        if any(c in message for c in (b"\0", b"\r", b"\n")) or len(message) + 6 > MAX_LINE:
+        if any(c in message for c in (b"\0", b"\r", b"\n")) or len(message) + FRAME_OVERHEAD > MAX_LINE:
             raise ValueError("outbound line cannot be framed")
         async with self.send_lock:
             if self.closed or self.server.storage_failed is not None:
@@ -215,7 +214,7 @@ class Session:
             await self.part(args[0])
         elif verb in (b"PRIVMSG", b"NOTICE") and len(args) == 2:
             target, payload = args
-            if len(payload) > 469:
+            if len(payload) > MAX_SERVICE_PAYLOAD:
                 raise ValueError("Tetra Master send ceiling exceeded")
             if not target.startswith(b"#") and await services.dispatch(self, target, payload):
                 return

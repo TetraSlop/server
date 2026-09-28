@@ -17,7 +17,7 @@ import struct
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 
-from tmserver.protocol.commands import Command, encode, parse
+from tmserver.protocol.commands import Command, encode_service, parse
 from tmserver.rankings.models import RankingError, RankingHistory, _uint
 from tmserver.rankings.packets import (
     METADATA_PATH,
@@ -170,7 +170,7 @@ class RankingService:
 
     @staticmethod
     def _failure(error):
-        return [b"GTM0R" + encode([Command(b"RG", str(error).encode("ascii"))])]
+        return [encode_service(b"R", [Command(b"RG", str(error).encode("ascii"))])]
 
     def handle(self, account_key, payload):
         if not payload.startswith(b"GTM0R"):
@@ -205,7 +205,8 @@ class RankingService:
             return self._failure(-8809)
         data = self.records(rank_id)
         path = f"{RESULT_PATH}_{self._next_id:08X}"
-        response = b"GTM0R" + encode(
+        response = encode_service(
+            b"R",
             [
                 Command(b"RF", path.encode("ascii")),
                 Command(b"LN", str(len(data) // RECORD_SIZE).encode("ascii")),

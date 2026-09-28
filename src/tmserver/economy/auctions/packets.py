@@ -4,7 +4,7 @@ import re
 import struct
 
 from tmserver.economy.errors import EconomyError
-from tmserver.protocol.commands import Command, encode
+from tmserver.protocol.commands import Command, encode_service
 
 EXHIBIT_PATH = "U/g/TM0_EXHIBITLIST"
 BID_PATH = "U/g/TM0_BIDLIST"
@@ -149,4 +149,4 @@ def listing_reply(token, item):
         Command(b"CB", actor_wire(item.bidder)),
         Command(b"II", ACK.join(_decimal(v) for v in descriptor(item))),
     ]
-    return b"GTM0A" + encode(commands)
+    return encode_service(b"A", commands)

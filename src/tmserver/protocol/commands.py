@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass
 
 from tmserver.data.resources import read_text
+from tmserver.protocol.messages import service_payload
 
 COMMANDS = [
     (int(row["numeric_field"], 16), row["token"].encode("ascii"))
@@ -55,6 +56,13 @@ def encode(commands: list[Command]) -> bytes:
     if parse(data) != commands:
         raise ValueError("payload contains envelope delimiters")
     return data
+
+
+def encode_service(family: bytes, commands: list[Command]) -> bytes:
+    """Encode a BEL-family reply with its prefix inside the transport budget."""
+    if family not in (b"A", b"L", b"P", b"R"):
+        raise ValueError("unsupported BEL service family")
+    return service_payload(b"GTM0" + family + encode(commands))
 
 
 def inspect_service(data: bytes):

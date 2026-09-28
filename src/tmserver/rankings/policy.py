@@ -17,6 +17,12 @@ class RatingPolicyError(EconomyError):
     pass
 
 
+def _matches_profile(state, profile):
+    return state.sequence == profile.sequence and (
+        state.revision == 0 or state.rating == profile.rating
+    )
+
+
 class RatingPolicy:
     def __init__(self, economy, *, mode="preserve", snapshot=None, weekly=False, clock=time.time):
         if mode not in ("preserve", "local-history"):
@@ -73,6 +79,30 @@ class RatingPolicy:
     @property
     def weekly(self):
         return self._weekly
+
+    def validate_profiles(self):
+        """Reject stale local histories before startup recovery or admission.
+
+        Preserved mode and unenrolled accounts require no migration. A fresh
+        enrollment has not changed the existing scalar rating yet; only its
+        sequence must agree until the first local result commits.
+        """
+        if not self.enabled:
+            return
+        mismatched = [
+            key
+            for key in sorted(self.history.snapshot()["accounts"])
+            if not _matches_profile(
+                self.history.state(key),
+                PracticeStats.from_profile(self.economy.profile_bytes(key)),
+            )
+        ]
+        if mismatched:
+            raise RatingPolicyError(
+                "rating history/profile mismatch for accounts "
+                + ", ".join(mismatched)
+                + "; explicit migration is required"
+            )
 
     def snapshot(self):
         # Mode is an explicit startup choice; preserving ratings must not erase
@@ -147,11 +177,7 @@ class RatingPolicy:
                 if not staged.enrolled(key):
                     staged.enroll(key, sequence=previous.sequence)
                 current = staged.state(key)
-                if (
-                    current.sequence != previous.sequence
-                    or current.revision > 0
-                    and current.rating != previous.rating
-                ):
+                if not _matches_profile(current, previous):
                     raise RatingPolicyError(
                         "rating history/profile mismatch; explicit migration is required"
                     )

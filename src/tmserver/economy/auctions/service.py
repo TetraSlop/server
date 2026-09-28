@@ -30,7 +30,7 @@ from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_records
-from tmserver.protocol.commands import Command, encode, parse
+from tmserver.protocol.commands import Command, encode_service, parse
 
 
 @dataclass
@@ -120,7 +120,7 @@ class AuctionService:
 
     @staticmethod
     def _error(token, error):
-        return [b"GTM0A" + encode([Command(token, str(error).encode())])]
+        return [encode_service(b"A", [Command(token, str(error).encode())])]
 
     def _filters(self, commands):
         filters, seen = [], set()
@@ -194,7 +194,8 @@ class AuctionService:
         if len(rows) > 1000:
             return self._error(failure, -8621)
         path = f'{EXHIBIT_PATH if operation == b"SI" else BID_PATH}_{self._next_id:08X}'
-        response = b"GTM0A" + encode(
+        response = encode_service(
+            b"A",
             [
                 Command(b"SS" if operation == b"SI" else b"HS", path.encode()),
                 Command(b"SN", str(len(rows)).encode()),

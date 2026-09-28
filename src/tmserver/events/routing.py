@@ -1,5 +1,7 @@
 """Authenticated event room and F-card adapters; no event match success stub."""
 
+from tmserver.protocol.messages import service_notice
+
 from tmserver.economy.claim_transactions import event_transaction
 from tmserver.profiles.options import save_options
 from tmserver.rooms.routing import leave_other_rooms, validate_room_entry
@@ -70,6 +72,6 @@ async def dispatch_event(session, target, payload):
         return False
     for payload in replies:
         await server.deliver(
-            session, b":" + target + b"!p@local NOTICE " + session.nick + b" :" + payload
+            session, service_notice(target, session.nick, payload)
         )
     return True

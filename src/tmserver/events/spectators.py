@@ -1,5 +1,7 @@
 """Independent opt-in observer delivery for configured event tables."""
 
+from tmserver.protocol.messages import service_notice
+
 import asyncio
 from collections import deque
 
@@ -189,7 +191,7 @@ class EventSpectators:
                 target, engine, service, payload = self.queues[peer].popleft()
                 source = service_nick(target ^ GAME_KEY)
                 # Handle failures here: a retired write cannot close a new admission.
-                await peer.send(b":" + source + b"!p@local NOTICE " + peer.nick + b" :" + payload)
+                await peer.send(service_notice(source, peer.nick, payload))
                 if peer.closed:
                     break
                 if service is not None:

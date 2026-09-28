@@ -1,5 +1,7 @@
 """Independent ordinary-table runtime sharing the host account services."""
 
+from tmserver.protocol.messages import service_notice
+
 import asyncio
 import uuid
 
@@ -779,7 +781,7 @@ class OrdinaryTable:
                     continue
                 # Own failure cleanup so retired I/O cannot close a new admission.
                 source = service_nick(self.table_raw)
-                await peer.send(b":" + source + b"!p@local NOTICE " + peer.nick + b" :" + payload)
+                await peer.send(service_notice(source, peer.nick, payload))
                 if peer.closed:
                     return
                 if tracked:
@@ -883,7 +885,7 @@ class OrdinaryTable:
 
     async def deliver_table_packet(self, peer, payload):
         source = service_nick(self.table_raw)
-        message = b":" + source + b"!p@local NOTICE " + peer.nick + b" :" + payload
+        message = service_notice(source, peer.nick, payload)
         return await self.host.deliver(peer, message)
 
     async def publish_room(self, deliveries):

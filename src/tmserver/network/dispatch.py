@@ -4,6 +4,8 @@ Values describe our local dataset, not claimed historical retail values.
 Reply keys and pipe-separated elements come from TM 0x100812e0 and 0x100ab080.
 """
 
+from tmserver.protocol.messages import service_notice
+
 from dataclasses import dataclass
 
 from tmserver.economy.claim_transactions import auction_transaction, prize_transaction
@@ -42,13 +44,15 @@ def teach_dv_answer():
 
 
 async def dispatch(session, target, payload):
+    # Reject unframeable service routes before any handler can commit state.
+    service_notice(target, session.nick, b"")
     ordinary_table = session.server.ordinary_table_routes.get(target)
     ordinary_room = session.server.ordinary_room_routes.get(target)
     if payload[:7].upper() == b"GTM0G80":
         key = session.server.ensure_account(session.nick)
         with session.server.commerce.edit_account(key) as economy:
             answer = economy.initialize_profile(key, payload)
-        await session.send(b":" + target + b"!p@local NOTICE " + session.nick + b" :" + answer)
+        await session.send(service_notice(target, session.nick, answer))
         session.server.log("player_initialized", session=session.id, target=target.decode("ascii"))
         return True
     event_table = session.server.event_matches.routes.get(target)
@@ -66,7 +70,7 @@ async def dispatch(session, target, payload):
             with session.server.commerce.edit_account(key) as economy:
                 answer = save_options(economy, key, payload)
             await session.server.deliver(
-                session, b":" + target + b"!p@local NOTICE " + session.nick + b" :" + answer
+                session, service_notice(target, session.nick, answer)
             )
             return True
         return await session.server.event_matches.dispatch(session, event_table[1], payload)
@@ -80,7 +84,7 @@ async def dispatch(session, target, payload):
         if replies is not None:
             for answer in replies:
                 await session.send(
-                    b":" + target + b"!p@local NOTICE " + session.nick + b" :" + answer
+                    service_notice(target, session.nick, answer)
                 )
             return True
     if (
@@ -103,7 +107,7 @@ async def dispatch(session, target, payload):
             source = service_nick(SHOP_RAW)
             for answer in replies:
                 await session.send(
-                    b":" + source + b"!p@local NOTICE " + session.nick + b" :" + answer
+                    service_notice(source, session.nick, answer)
                 )
             return True
     if payload.startswith(b"GTM0P"):
@@ -121,7 +125,7 @@ async def dispatch(session, target, payload):
                 }
             for answer in replies:
                 await session.send(
-                    b":" + target + b"!p@local NOTICE " + session.nick + b" :" + answer
+                    service_notice(target, session.nick, answer)
                 )
             return True
     if payload.startswith(b"GTM0R"):
@@ -131,7 +135,7 @@ async def dispatch(session, target, payload):
         if replies is not None:
             for answer in replies:
                 await session.send(
-                    b":" + target + b"!p@local NOTICE " + session.nick + b" :" + answer
+                    service_notice(target, session.nick, answer)
                 )
             return True
     if (ordinary_table is not None or ordinary_room is not None) and payload.startswith(
@@ -152,7 +156,7 @@ async def dispatch(session, target, payload):
         key = session.server.ensure_account(session.nick)
         with session.server.commerce.edit_account(key) as economy:
             answer = save_options(economy, key, payload)
-        await session.send(b":" + target + b"!p@local NOTICE " + session.nick + b" :" + answer)
+        await session.send(service_notice(target, session.nick, answer))
         session.server.log("options_saved", session=session.id)
         return True
     if target == service_nick(TRADE_RAW):
@@ -172,7 +176,7 @@ async def dispatch(session, target, payload):
         if responses is not None:
             for answer in responses:
                 await session.send(
-                    b":" + target + b"!p@local NOTICE " + session.nick + b" :" + answer
+                    service_notice(target, session.nick, answer)
                 )
             session.server.log(
                 "shop_service",
@@ -221,7 +225,7 @@ async def dispatch(session, target, payload):
             return True
     if payload == b"GTM0GE1000000@TeachDV=":
         answer = teach_dv_answer()
-        await session.send(b":" + target + b"!p@local NOTICE " + session.nick + b" :" + answer)
+        await session.send(service_notice(target, session.nick, answer))
         session.server.log(
             "teach_dv_answer",
             session=session.id,

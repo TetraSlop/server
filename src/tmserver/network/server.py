@@ -6,6 +6,8 @@ is still under validation.
 Only synthetic accounts listed below are accepted. No production credentials.
 """
 
+from tmserver.protocol.messages import service_notice
+
 import asyncio
 import time
 from collections import deque
@@ -163,6 +165,7 @@ class Server:
             clock=ranking_clock,
             snapshot=None if saved is None else saved.get("ratings"),
         )
+        self.ratings.validate_profiles()
         self.character_profiles = CharacterProfiles.restore(
             self.economy, None if saved is None else saved.get("character_profiles")
         )
@@ -287,12 +290,7 @@ class Server:
             peer = delivery.peer
             try:
                 await peer.send(
-                    b":"
-                    + service_nick(TRADE_RAW)
-                    + b"!p@local NOTICE "
-                    + peer.nick
-                    + b" :"
-                    + delivery.payload
+                    service_notice(service_nick(TRADE_RAW), peer.nick, delivery.payload)
                 )
             except (OSError, asyncio.TimeoutError):
                 reloads.append(peer)
@@ -445,7 +443,7 @@ class Server:
                     for peer, payload in deliveries:
                         await self.deliver(
                             peer,
-                            b":" + source + b"!p@local NOTICE " + peer.nick + b" :" + payload,
+                            service_notice(source, peer.nick, payload),
                         )
                 except Exception as exc:
                     if not completed.done():
@@ -460,12 +458,7 @@ class Server:
         for delivery in deliveries:
             await self.deliver(
                 delivery.peer,
-                b":"
-                + delivery.group
-                + b"!p@local NOTICE "
-                + delivery.peer.nick
-                + b" :"
-                + delivery.payload,
+                service_notice(delivery.group, delivery.peer.nick, delivery.payload),
             )
 
     async def deliver(self, peer, message):
