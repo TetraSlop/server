@@ -2,6 +2,11 @@
 
 ## Current scope
 
+Recurring automation is paused at the user's request. The latest user-requested
+multi-agent sweep produced [ROADMAP.md](ROADMAP.md), with no runtime edits.
+It records confirmed spectator isolation, room replay and profile reply-budget
+defects, followed by packaging/test guardrails and bounded readability work.
+
 Keep runtime modules and tests under their feature owners. Shared models and
 packet codecs have explicit modules; service behavior, durable transaction
 coordination and SQL/file storage retain separate responsibilities. Import a

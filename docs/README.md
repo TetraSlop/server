@@ -23,4 +23,6 @@ Recovered rules are distinguished from local policy in
 
 ## Current iteration
 
+The [roadmap](ROADMAP.md) prioritizes the latest multi-agent code review's
+confirmed defects, validation gaps and bounded readability improvements.
 See [WORK_LOG.md](WORK_LOG.md) for active work, completed fixes and deferred review.
