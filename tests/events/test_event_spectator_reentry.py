@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from tests.events import test_event_spectators as base
 from tests.protocol.test_admission_identity import native_identity
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 
 
 class EventSpectatorReentryTests(unittest.IsolatedAsyncioTestCase):

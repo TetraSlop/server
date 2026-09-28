@@ -6,14 +6,10 @@ from unittest.mock import Mock, patch
 
 from tests.game.test_match_service import NATIVE_SETTINGS, select
 from tests.game.test_three_player_computer import finish, menu, unchanged_state
-from tmserver.game.match import (
-    DEFAULT_GAME_RULES,
-    DEFAULT_TABLE_RULES,
-    MatchError,
-    MatchService,
-    decode,
-    packet,
-)
+from tmserver.game.models import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
+from tmserver.game.errors import MatchError
+from tmserver.game.match import MatchService
+from tmserver.game.packets import decode, packet
 from tmserver.game.boards import generate_board
 from tmserver.rooms.rules import RoomRules
 

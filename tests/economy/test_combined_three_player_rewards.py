@@ -6,7 +6,7 @@ from collections import Counter
 from tests.economy import test_match_prizes_integration as prizes
 from tests.economy import test_match_wagers_integration as wager_tests
 from tests.economy import test_three_player_cbc as cbc
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 from tmserver.network.server import Server
 
 

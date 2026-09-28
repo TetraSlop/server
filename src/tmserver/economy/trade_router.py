@@ -6,7 +6,7 @@ before the service accepts TrEnt. No fabricated accept, timer or UI event.
 
 import re
 
-from tmserver.economy.service import parse_named
+from tmserver.economy.packets import parse_named
 from tmserver.protocol.identities import TRADE_RAW, game_id, player_id
 from tmserver.economy.trade import TradeError, fields, integer
 

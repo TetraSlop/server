@@ -35,7 +35,7 @@ def build(research_dir):
         UC_X86_REG_ESI,
         UC_X86_REG_ESP,
     )
-    from tmserver.economy.service import Catalog
+    from tmserver.cards.catalog import Catalog
     from tmserver.game.opponents import prepare_opponents
     from tmserver.game.rules import CRTLCG
 

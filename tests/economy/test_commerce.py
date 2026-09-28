@@ -9,7 +9,10 @@ from unittest.mock import Mock, patch
 from tests.economy import test_trade_service as trade_tests
 from tests.economy.test_trade_service import edits
 from tmserver.economy.commerce import Commerce
-from tmserver.economy.service import Catalog, EconomyError, EconomyService, named, parse_named
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.service import EconomyService
+from tmserver.economy.packets import named, parse_named
 from tmserver.storage.json import JsonStateStore
 from tmserver.economy.trade import TradeService
 

@@ -9,7 +9,12 @@ from dataclasses import replace
 from pathlib import Path
 
 from tmserver.economy.auction_ledger import AuctionEconomy, AuctionError
-from tmserver.economy.service import MAX_MONEY, Card, Catalog, EconomyError, EconomyService, named
+from tmserver.economy.models import MAX_MONEY
+from tmserver.economy.service import EconomyService
+from tmserver.cards.model import Card
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.packets import named
 
 
 class AuctionTests(unittest.TestCase):

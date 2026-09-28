@@ -11,7 +11,8 @@ from tests.economy import test_trade_integration as trades
 from tests.economy import test_trade_service as trade_domain
 from tests.network.test_server import Client
 from tests.economy.test_trade_service import card, data, edits, offer
-from tmserver.economy.service import Catalog, EconomyService
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import player_id
 from tmserver.network.server import ACCOUNTS, Server
 from tmserver.storage.json import JsonStateStore

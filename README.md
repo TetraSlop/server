@@ -82,7 +82,13 @@ random database. See [persistence](docs/PERSISTENCE_DESIGN.md).
 | `data` | Immutable packaged protocol tables and their resource reader. |
 
 The [architecture guide](docs/ARCHITECTURE.md) identifies the files to change for
-each responsibility and explains ownership across them. Python imports now use
+each responsibility and explains ownership across them. Within the main match,
+economy and event features, `models.py` owns shared dataclasses and `packets.py`
+owns wire encoding and parsing; services own behavior and transaction modules
+coordinate durable changes. SQL stays in `storage/`, behind the same contract
+as JSON. Import models and codecs directly from their owners.
+
+Python imports now use
 these package paths, for example `tmserver.network.server.Server` and
 `tmserver.game.match.MatchService`. The former flat module paths have no
 compatibility shims; custom Python integrations must update their imports.

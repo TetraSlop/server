@@ -12,7 +12,10 @@ from dataclasses import dataclass, replace
 
 from tmserver.game import special_rules as special
 from tmserver.cards.model import card_values
-from tmserver.game.match import Card, Delivery, MatchError, MatchService, decode, numbers, packet
+from tmserver.game.models import Card, Delivery
+from tmserver.game.errors import MatchError
+from tmserver.game.match import MatchService
+from tmserver.game.packets import decode, numbers, packet
 
 
 def _uint(value, maximum, label):

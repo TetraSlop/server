@@ -10,7 +10,9 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
-from tmserver.game.match import Delivery, MatchError, decode, packet
+from tmserver.game.models import Delivery
+from tmserver.game.errors import MatchError
+from tmserver.game.packets import decode, packet
 from tmserver.game.departure_rules import next_turn
 
 

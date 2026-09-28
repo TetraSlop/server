@@ -13,7 +13,7 @@ from tests.economy.test_match_prizes_integration import full
 from tests.network.test_server import Client
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, player_id, service_nick
 from tmserver.economy.match_ledger import offline_payout
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.game.rules import CRTLCG
 from tmserver.game.special_rules import choose_special_move
 from tmserver.rankings.stats import PracticeStats

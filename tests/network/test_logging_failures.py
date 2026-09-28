@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 from tests.rooms.test_ordinary_rooms import EXTRA
 from tests.profiles.test_profile_accounts import KEYS, file_request, transact
 from tests.network.test_session_recovery import Writer
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 from tmserver.profiles.service import ProfileServer, checked
 from tmserver.network.server import Server, Session
 

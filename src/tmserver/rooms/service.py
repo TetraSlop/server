@@ -9,7 +9,7 @@ import struct
 from collections import OrderedDict
 
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, TRADE_RAW, game_id
-from tmserver.game.match import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
+from tmserver.game.models import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
 from tmserver.rooms.rules import RoomRules
 from tmserver.rooms.metadata import table_info as encode_table_info
 from tmserver.protocol.commands import Command, encode, parse

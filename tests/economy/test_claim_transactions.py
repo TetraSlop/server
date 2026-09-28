@@ -11,7 +11,7 @@ from tmserver.economy.claim_transactions import (
     event_transaction,
     prize_transaction,
 )
-from tmserver.economy.service import named, parse_named
+from tmserver.economy.packets import named, parse_named
 from tmserver.events.matches import EventRoundOutcome
 from tmserver.network.server import Server
 

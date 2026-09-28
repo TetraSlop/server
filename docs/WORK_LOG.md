@@ -2,10 +2,12 @@
 
 ## Current scope
 
-The requested feature-based directory layout is complete and verified. Keep
-runtime modules and tests under their feature owners, with explicit imports and
-lightweight package initializers. Continue readable Python consolidation and
-evidence-backed behavior gaps when iterating further.
+Keep runtime modules and tests under their feature owners. Shared models and
+packet codecs have explicit modules; service behavior, durable transaction
+coordination and SQL/file storage retain separate responsibilities. Import a
+shared definition from its owner, keeping package initializers lightweight.
+Continue readable Python consolidation and evidence-backed behavior gaps when
+iterating further.
 Continue the standing instruction to work without checking credits.
 Do not query usage limits or use a displayed percentage as a stopping condition.
 Do not redeem reset credits or purchase credits. This supersedes the earlier
@@ -22,6 +24,19 @@ for later review and continue independent work.
 
 ## Completed and checked — 2026-09-27
 
+- Separated shared models and packet codecs from the main game, economy and
+  event services, and moved the backend-neutral save contract into storage/base.
+  Consumers import definitions directly; PostgreSQL no longer imports JSON.
+  Independent review preserves 59 moved definitions, retained service behavior
+  and all test IDs. All 1,859 before/after codec cases match. Fresh-process
+  imports find no eager cycles or unwanted service/database dependencies in
+  the new model/codec modules. The full suite passes in 935.393 seconds:
+  1,111 passed, 59 PostgreSQL tests skipped, zero failures/errors. The clean
+  wheel passes, with all 104 runtime files matching source. Documented the
+  models/packets/services/transactions/storage convention; small cohesive
+  operation-specific records remain local. SQL semantics, save formats and
+  gameplay policy are unchanged. No live database or native UI run was made.
+  See ARCHITECTURE.md and VALIDATION.md.
 - Reorganized all 77 flat runtime modules into 12 feature packages and moved
   156 test modules plus the local-play peer helper into matching directories.
   Updated imports, launchers, package data, active probes, tools and navigation.

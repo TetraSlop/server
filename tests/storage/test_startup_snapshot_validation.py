@@ -14,7 +14,8 @@ from tmserver.profiles.characters import CharacterProfiles
 from tmserver.economy.service import EconomyService
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.network.server import Server
-from tmserver.storage.json import SERVICE_NAMES, JsonStateStore
+from tmserver.storage.base import SERVICE_NAMES
+from tmserver.storage.json import JsonStateStore
 
 
 class StartupSnapshotValidationTests(unittest.IsolatedAsyncioTestCase):

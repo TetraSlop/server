@@ -7,7 +7,8 @@ from tests.protocol.test_admission_identity import native_identity
 from tests.events.test_event_rooms import presence
 from tests.rooms.test_room_rules import computer, settings
 from tests.network.test_session_recovery import Writer
-from tmserver.game.match import MatchError, decode, packet
+from tmserver.game.errors import MatchError
+from tmserver.game.packets import decode, packet
 from tmserver.game.boards import generate_board
 from tmserver.game.rules import CRTLCG
 from tmserver.game.special_rules import start_board

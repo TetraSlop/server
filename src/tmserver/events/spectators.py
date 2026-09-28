@@ -5,7 +5,7 @@ from collections import deque
 
 from tmserver.protocol.admission import validate_admission
 from tmserver.protocol.identities import GAME_KEY, service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.rooms.spectators import SpectatorError, SpectatorService
 from tmserver.protocol.table import channel_exit, viewer_state
 

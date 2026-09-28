@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 
 from tests import FIXTURES
-from tmserver.economy.service import Catalog
+from tmserver.cards.catalog import Catalog
 from tmserver.game.opponents import OpponentError, prepare_opponent, prepare_opponents
 from tmserver.game.rules import CRTLCG
 

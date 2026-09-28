@@ -1,7 +1,7 @@
 """Native entry restrictions and compatible nonfatal rejection replies."""
 
 from tmserver.cards.catalog import collection_points
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 
 
 def eligibility_failure(account, *, wager=0, point_bounds=None):

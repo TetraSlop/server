@@ -10,7 +10,8 @@ from unittest.mock import Mock, patch
 
 from tests.economy.test_match_transactions import TableFixture
 from tests.rankings.test_rating_policy import KEYS, economy, prepare
-from tmserver.economy.service import EconomyError, EconomyService
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.service import EconomyService
 from tmserver.rankings.policy import RatingPolicy, RatingPolicyError
 from tmserver.rankings.periods import RankingPeriods
 from tmserver.rankings.stats import PracticeStats

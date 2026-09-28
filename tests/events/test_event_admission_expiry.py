@@ -4,9 +4,10 @@ import unittest
 
 from tests.events import test_event_cards as card_tests
 from tests.events import test_event_matchmaking as match_tests
-from tmserver.economy.service import Catalog, parse_named
-from tmserver.events.service import EventError
-from tmserver.game.match import packet
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.packets import parse_named
+from tmserver.events.models import EventError
+from tmserver.game.packets import packet
 
 
 class EventAdmissionExpiryTests(unittest.TestCase):

@@ -7,7 +7,7 @@ only after authenticated DE succeeds, persist, then deliver D0 from that room.
 import struct
 from dataclasses import dataclass
 
-from tmserver.events.service import EventError
+from tmserver.events.models import EventError
 from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, SHOP_RAW, TABLE_RAW, TRADE_RAW, game_id
 from tmserver.rooms.service import (
     ROOM_CHANNEL,

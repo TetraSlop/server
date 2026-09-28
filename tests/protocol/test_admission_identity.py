@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 
 from tmserver.protocol.admission import validate_admission
-from tmserver.game.match import MatchService, packet
+from tmserver.game.match import MatchService
+from tmserver.game.packets import packet
 
 
 def native_identity(view, section, handle=0):

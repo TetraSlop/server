@@ -5,7 +5,8 @@ import sys
 import unittest
 from pathlib import Path
 
-from tmserver.economy.service import EconomyService, named
+from tmserver.economy.service import EconomyService
+from tmserver.economy.packets import named
 from tmserver.profiles.preferences import (
     GAME_FIELDS,
     TABLE_FIELDS,
@@ -154,7 +155,7 @@ class PreferenceTests(unittest.TestCase):
         entry = e.handle(
             "a", named(0xB0, 0, 0, "@ShReq=/NN=0000000000000001/HID=0/Dm=0/Vol=0/CN=41")
         )
-        from tmserver.economy.service import parse_named
+        from tmserver.economy.packets import parse_named
 
         session = int(parse_named(entry[1])[3]["Init"]["N"])
         e.handle("a", named(0xB2, 0x14, session, "@Buy=/No=1"))

@@ -9,10 +9,10 @@ from tests.rooms import test_table_release_rebind as release
 from tests.events.test_event_rooms import config
 from tests.network.test_session_recovery import Writer
 from tmserver.network import dispatch as services
-from tmserver.economy.service import named
+from tmserver.economy.packets import named
 from tmserver.events.matchmaking import EventTableConfig
 from tmserver.protocol.identities import SHOP_RAW, TABLE_RAW, game_id, service_nick
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 from tmserver.network.server import Server, Session
 
 

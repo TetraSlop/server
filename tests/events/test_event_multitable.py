@@ -9,9 +9,10 @@ from pathlib import Path
 from tests.events import test_event_matches_integration as base
 from tests.events.test_event_rooms import presence
 from tests.network.test_server import Client
-from tmserver.events.service import EventError
+from tmserver.events.models import EventError
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
-from tmserver.game.match import MatchError, decode, packet
+from tmserver.game.errors import MatchError
+from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
 from tmserver.rooms.spectators import SpectatorService
 

@@ -14,7 +14,9 @@ from tests.profiles.test_profile_accounts import file_request, transact
 from tests.network.test_server import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.network.local_accounts import account_specs
-from tmserver.game.match import Card, MatchService, decode, packet
+from tmserver.game.models import Card
+from tmserver.game.match import MatchService
+from tmserver.game.packets import decode, packet
 from tmserver.game.special_rules import Cell
 from tmserver.profiles.service import ProfileServer
 from tmserver.rooms.service import TABLE_CHANNEL

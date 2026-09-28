@@ -21,8 +21,9 @@ from tmserver.events.matches import (
     event_session_init,
     event_session_quit,
 )
-from tmserver.events.service import EventError
-from tmserver.game.match import Card, decode, numbers, packet
+from tmserver.events.models import EventError
+from tmserver.game.models import Card
+from tmserver.game.packets import decode, numbers, packet
 from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.protocol.table import channel_exit, viewer_state
 

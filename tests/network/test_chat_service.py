@@ -9,7 +9,7 @@ from tests.network.test_server import Client
 from tmserver.network.chat import ChatService, Member, relay_text, roster_pages
 from tmserver.protocol.identities import ROOM_RAW, player_id, service_nick
 from tmserver.network.local_accounts import MAX_ACCOUNTS
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.network.server import ACCOUNTS, Server
 from tmserver.storage.json import JsonStateStore
 

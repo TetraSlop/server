@@ -6,7 +6,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from tmserver.game.match import Card
+from tmserver.game.models import Card
 from tmserver.game.ai import Move, Personality
 from tmserver.game.departure_rules import DepartureError, next_turn, result_slots
 from tmserver.game.special_rules import (

@@ -1,6 +1,8 @@
 import unittest
 
-from tmserver.economy.service import EconomyError, EconomyService, named
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.service import EconomyService
+from tmserver.economy.packets import named
 from tmserver.profiles.options import save_options
 
 VALUES = {

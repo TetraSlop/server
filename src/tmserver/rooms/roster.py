@@ -1,6 +1,7 @@
 """Push ordinary-table membership only after the native admission cleanup."""
 
-from tmserver.game.match import Delivery, decode, packet
+from tmserver.game.models import Delivery
+from tmserver.game.packets import decode, packet
 
 
 class TableRoster:

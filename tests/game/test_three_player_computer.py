@@ -8,7 +8,10 @@ from unittest.mock import patch
 
 from tests import FIXTURES
 from tmserver.game import special_rules as special
-from tmserver.game.match import BoardCard, MatchError, MatchService, decode, packet
+from tmserver.game.models import BoardCard
+from tmserver.game.errors import MatchError
+from tmserver.game.match import MatchService
+from tmserver.game.packets import decode, packet
 from tmserver.game.opponents import opponent, prepare_opponents
 from tmserver.game.rules import CRTLCG
 

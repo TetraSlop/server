@@ -4,7 +4,8 @@ import asyncio
 import unittest
 
 from tests.network.test_session_recovery import Writer
-from tmserver.game.match import Card, packet
+from tmserver.game.models import Card
+from tmserver.game.packets import packet
 from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.network.server import ACCOUNTS, Server, Session
 

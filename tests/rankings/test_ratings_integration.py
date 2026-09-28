@@ -14,7 +14,7 @@ from tests.economy import test_match_prizes_integration as prizes
 from tests.economy import test_match_wagers_integration as wagers
 from tests.network.test_server import Client
 from tmserver.rankings.history import HistoryState, classify_result
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.rankings.service import RECORD_SIZE
 from tmserver.rankings.stats import PracticeStats
 from tmserver.network.server import Server

@@ -11,7 +11,9 @@ from tmserver.events.matches import (
     event_session_init,
     event_session_quit,
 )
-from tmserver.game.match import Card, MatchError, decode, packet
+from tmserver.game.models import Card
+from tmserver.game.errors import MatchError
+from tmserver.game.packets import decode, packet
 
 P = FIXTURES / "protocol"
 

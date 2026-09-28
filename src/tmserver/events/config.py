@@ -4,9 +4,10 @@ import json
 from pathlib import Path
 
 from tmserver.events.matchmaking import EventTableConfig
-from tmserver.events.service import EventConfig, EventListing, PrizeDisplay, event_data
+from tmserver.events.models import EventConfig, EventListing, PrizeDisplay
+from tmserver.events.packets import event_data
 from tmserver.protocol.identities import game_id
-from tmserver.game.match import Card
+from tmserver.game.models import Card
 
 
 def _fields(value, required, optional=()):

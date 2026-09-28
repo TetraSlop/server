@@ -13,7 +13,7 @@ from tmserver.game.prizes import (
     choose_computer_prize,
     poll_computer_prize,
 )
-from tmserver.game.match import Card
+from tmserver.game.models import Card
 
 
 def hands(owners, slots=(0, 1, 2, 3, 4)):

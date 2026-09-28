@@ -1,5 +1,64 @@
 # Packaging and transaction validation
 
+## Models, packets and storage boundaries, 2026-09-27
+
+The main game, economy and event features now separate shared models and packet
+codecs from their services. Runtime, tests, tools and active research probes
+import values from their owning modules. `storage/base.py` owns the shared
+StateStore contract and journal names; PostgreSQL, schema declarations and
+snapshot validation no longer import the JSON backend. SQL operations and
+transaction sequencing are unchanged.
+
+Independent review against `e1448cc` verified 59 moved definitions and the
+remaining behavior of all 32 changed existing runtime modules by non-import
+AST comparison. Four existing re-exported aliases, 380 retained import bindings
+and 113 moved-definition dependency origins resolve to their intended owners.
+All 126 changed test modules retain their non-import ASTs; discovery preserves
+the exact 1,170 test IDs. Evidence: `results/code-boundary-independent-review.json`
+and `results/code-boundaries-test-review.json`.
+
+An isolated before/after comparison exercises **1,859 codec cases with zero
+mismatches**: 836 game, 852 economy and 171 event cases. Encoded/file bytes,
+parsed values and exception types/messages agree. The corpus includes malformed
+headers, oversized bodies, ASCII/control characters, configured event files,
+opaque templates, configuration fingerprints and service records. Intentional
+match/economy dialect differences remain intact. Evidence:
+`results/packet-boundaries-equivalence.json`.
+
+Fresh-process checks import all 98 runtime library/package modules, including
+95 without site packages. All six new model/packet modules load without the
+match, shop or event services, the server, or SQL dependencies. EventConfig
+works with models-first and packets-first import order; its method-local codec
+imports retain validation without eager cycles. The eager dependency graph has
+no cycles. The installed-wheel check now exercises this model/codec isolation
+and representative packet/card round trips as well as normal entry points.
+
+Focused controls passed during extraction: 145 economy, 58 event and 74 storage
+tests. After canonicalizing consumers, 150 game/economy/event/preference tests
+also passed. These runs overlap and are not a combined distinct-test count.
+Logs: `results/economy-model-extraction-tests.log`,
+`results/event-boundaries-tests.log` and `results/storage-boundary-tests.log`.
+
+The final complete suite ran **1,170 tests in 935.393 seconds: 1,111 passed,
+59 PostgreSQL tests skipped, zero failures or errors**. Runtime/test/tool source
+hashes stayed unchanged throughout the run, and every loaded server module came
+from this checkout. Evidence: `results/code-boundaries-full.log` and
+`results/code-boundaries-full-result.json`. Lint, staged whitespace and current
+documentation links also pass.
+
+The clean 109-entry wheel passes the codec/model isolation check, entry points,
+JSON administration/recovery and temporary listeners. All 104 runtime files
+match source, and packaged project metadata includes the current README.
+SHA256: `8fc7cd469dfa329a69a83032be85bbf7c359dc068585708af6452cb56148f77b`.
+Evidence: `results/code-boundaries-wheel-result.json` and
+`results/code-boundaries-wheel-{build,check}.log`. Optional database imports
+were checked, but no live PostgreSQL or native game UI was run.
+
+This establishes the shared-code boundary in the large services. Smaller
+cohesive modules still keep operation-specific records near their operations;
+ARCHITECTURE.md documents when to extract those. No new runtime dependency,
+save schema, gameplay policy or native UI behavior is introduced.
+
 ## Feature package layout, 2026-09-27
 
 Moved the 77 flat runtime modules into `cards`, `cli`, `data`, `economy`,

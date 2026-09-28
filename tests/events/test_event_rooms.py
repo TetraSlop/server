@@ -6,9 +6,13 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from tmserver.economy.service import Catalog, EconomyService, parse_named
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.service import EconomyService
+from tmserver.economy.packets import parse_named
 from tmserver.events.rooms import EventRooms
-from tmserver.events.service import EventConfig, EventError, EventHost, EventListing, event_data
+from tmserver.events.models import EventConfig, EventError, EventListing
+from tmserver.events.service import EventHost
+from tmserver.events.packets import event_data
 from tmserver.protocol.identities import game_id
 from tmserver.rooms.service import RoomService, directory_files
 from tmserver.protocol.commands import Command, encode, parse

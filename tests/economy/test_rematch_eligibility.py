@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from tests.economy import test_match_prize_edges as prizes
 from tmserver.protocol.identities import TABLE_RAW, service_nick
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 from tmserver.network.server import Server
 
 

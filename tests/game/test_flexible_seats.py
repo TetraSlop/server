@@ -13,7 +13,9 @@ from tests.economy import test_match_prizes_integration as prizes
 from tests.game.test_match_service import NATIVE_SETTINGS, finish_arrowless_round, select
 from tests.network.test_server import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id
-from tmserver.game.match import MatchError, MatchService, decode, packet
+from tmserver.game.errors import MatchError
+from tmserver.game.match import MatchService
+from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import load_ordinary_rooms
 from tmserver.rankings.stats import PracticeStats
 from tmserver.cli.serve import arguments

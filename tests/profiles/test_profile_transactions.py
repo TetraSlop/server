@@ -6,7 +6,7 @@ from unittest.mock import patch
 from tests.profiles.test_character_profiles import request as profile_request
 from tests.profiles.test_options_service import request as options_request
 from tests.profiles.test_table_preferences import save as preferences_request
-from tmserver.economy.service import named
+from tmserver.economy.packets import named
 from tmserver.profiles.options import save_options
 from tmserver.profiles.transactions import character_profile_request
 from tmserver.network.server import Server

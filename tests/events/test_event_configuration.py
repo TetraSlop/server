@@ -9,7 +9,9 @@ from tmserver.events.config import parse_event_configs, parse_event_setup
 from tmserver.events.matches import EventMatchRound, EventParticipant
 from tmserver.events.matchmaking import EventTableConfig
 from tmserver.events.rooms import EventRooms
-from tmserver.events.service import EventHost, PrizeDisplay, event_data
+from tmserver.events.service import EventHost
+from tmserver.events.models import PrizeDisplay
+from tmserver.events.packets import event_data
 from tmserver.protocol.identities import game_id
 
 from tests.events.test_event_matches import CARDS, finish

@@ -22,7 +22,7 @@ from tests.profiles.test_options_service import VALUES
 from tests.profiles.test_options_service import request as options_request
 from tests.network.test_server import Client
 from tmserver.protocol import wire
-from tmserver.economy.service import named, parse_named
+from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, service_nick
 from tmserver.network.local_accounts import MAX_ACCOUNTS
 from tools.load_server import distribution

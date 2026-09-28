@@ -8,7 +8,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.network.test_server import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.rankings.stats import PracticeStats
 from tmserver.network.server import ACCOUNTS, Server
 
@@ -243,7 +243,7 @@ class CBCRewardIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_crash_before_continue_recovers_earned_card_through_real_collection(self):
         from tests.economy.test_auction_service import collection_request
-        from tmserver.economy.service import named, parse_named
+        from tmserver.economy.packets import named, parse_named
 
         finals = await self.cbc_round()
         crash_path = self.path.with_name("crash_copy.json")

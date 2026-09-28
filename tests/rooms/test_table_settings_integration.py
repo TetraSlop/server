@@ -5,7 +5,7 @@ import unittest
 from tests.game import test_versus_integration as versus
 from tests.game.test_match_service import NATIVE_SETTINGS
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 
 
 class TableSettingsIntegrationTests(unittest.IsolatedAsyncioTestCase):

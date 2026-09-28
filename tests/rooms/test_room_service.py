@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 
 from tmserver.protocol.identities import ROOM_RAW, game_id, player_id, service_nick
-from tmserver.game.match import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
+from tmserver.game.models import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
 from tmserver.rooms.service import (
     ROOM_CHANNEL,
     ROOM_ID,

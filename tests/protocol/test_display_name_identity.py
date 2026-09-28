@@ -14,9 +14,12 @@ from tests.events.test_event_rooms import config
 from tests.game.test_match_service import finish_arrowless_round, select
 from tests.network.test_server import Client
 from tmserver.economy.service import EconomyService
-from tmserver.events.service import EventError, EventHost
+from tmserver.events.models import EventError
+from tmserver.events.service import EventHost
 from tmserver.protocol.identities import player_id
-from tmserver.game.match import MatchError, MatchService, decode, packet
+from tmserver.game.errors import MatchError
+from tmserver.game.match import MatchService
+from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
 
 PREFIX = b"ABCDEFGHIJKLMNO"

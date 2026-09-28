@@ -9,7 +9,8 @@ from pathlib import Path
 from tmserver.cli import admin
 from tmserver.economy.auction_ledger import AuctionEconomy
 from tmserver.profiles.characters import CharacterProfiles
-from tmserver.economy.service import Catalog, EconomyService
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.service import EconomyService
 from tmserver.economy.prize_center import PrizeService
 from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.network.server import Server

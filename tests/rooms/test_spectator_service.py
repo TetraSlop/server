@@ -7,7 +7,9 @@ from dataclasses import replace
 from pathlib import Path
 
 from tests.game.test_match_service import CARDS, ack, put, select, service
-from tmserver.game.match import Card, Delivery, MatchService, decode, packet
+from tmserver.game.models import Card, Delivery
+from tmserver.game.match import MatchService
+from tmserver.game.packets import decode, packet
 from tmserver.game.special_rules import Cell, start_board
 from tmserver.rooms.spectators import SpectatorError, SpectatorService, bootstrap, snapshot_fields
 

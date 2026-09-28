@@ -3,7 +3,8 @@
 import unittest
 from dataclasses import dataclass
 
-from tmserver.economy.service import EconomyService, named
+from tmserver.economy.service import EconomyService
+from tmserver.economy.packets import named
 from tmserver.protocol.identities import player_id
 from tmserver.network.local_accounts import account_specs
 from tmserver.economy.trade_router import TradeRouter

@@ -13,7 +13,8 @@ from tests import FIXTURES, ROOT
 from tests.game import test_computer_menu_integration as computer
 from tests.profiles.test_profile_accounts import file_request, transact
 from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, TABLE_RAW
-from tmserver.game.match import DEFAULT_GAME_RULES, decode, packet
+from tmserver.game.models import DEFAULT_GAME_RULES
+from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import (
     OrdinaryRoomConfig,
     OrdinaryTableConfig,

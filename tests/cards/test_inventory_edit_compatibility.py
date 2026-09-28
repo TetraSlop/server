@@ -11,7 +11,10 @@ from tests.events import test_event_cards as events
 from tests.economy import test_prize_service as prizes
 from tests.economy import test_result_rewards as rewards
 from tests.economy import test_trade_service as trades
-from tmserver.economy.service import Catalog, EconomyError, EconomyService, named
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.service import EconomyService
+from tmserver.economy.packets import named
 
 
 ROUTES = ("shop", "prize", "event", "auction", "trade", "result")

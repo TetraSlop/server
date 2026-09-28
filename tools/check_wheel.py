@@ -47,6 +47,24 @@ def main():
             ).stdout
 
         run(str(python), "-m", "pip", "install", "--no-index", "--no-deps", str(wheel))
+        run(
+            str(python), "-c",
+            "import sys\n"
+            "from tmserver.game.models import Card\n"
+            "from tmserver.game.packets import packet, decode\n"
+            "from tmserver.economy.packets import named, parse_named\n"
+            "from tmserver.events.packets import event_list\n"
+            "from tmserver.storage.base import StateStore\n"
+            "card = Card(1, 50, 0, 40, 30, 1, 0)\n"
+            "assert Card.parse(card.full()) == card\n"
+            "assert decode(packet(0x43)).primary == 0x43\n"
+            "assert parse_named(named(0xB0, 0, 1, '@Init=')) == (0xB0, 0, 1, {'Init': {}})\n"
+            "assert len(event_list()) == 0x2C08\n"
+            "assert not set(sys.modules).intersection({\n"
+            "    'tmserver.game.match', 'tmserver.economy.service', 'tmserver.events.service',\n"
+            "    'tmserver.storage.json', 'tmserver.storage.postgres', 'sqlalchemy',\n"
+            "})\n",
+        )
         cli = scripts / ("tmserver.exe" if os.name == "nt" else "tmserver")
         run(str(cli), "--help")
         play_cli = scripts / ("tmserver-play.exe" if os.name == "nt" else "tmserver-play")

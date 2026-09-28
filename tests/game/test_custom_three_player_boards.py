@@ -7,7 +7,8 @@ from dataclasses import replace
 
 from tests.events import test_event_matches_integration as events
 from tests.game import test_generated_boards_integration as generated
-from tmserver.game.match import MatchService, decode, packet
+from tmserver.game.match import MatchService
+from tmserver.game.packets import decode, packet
 from tmserver.game.rules import CRTLCG
 from tmserver.game.special_rules import start_board
 from tmserver.cli.serve import arguments

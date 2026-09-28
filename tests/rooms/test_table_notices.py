@@ -7,7 +7,7 @@ from pathlib import Path
 from tests.events import test_event_matchmaking as event
 from tests.rooms import test_table_kick as lobby
 from tests.rooms.test_table_kick import make_table
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 
 
 class TableNoticeUnits(unittest.TestCase):

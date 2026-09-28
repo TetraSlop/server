@@ -12,7 +12,8 @@ from tests.events.test_event_configuration import DOCUMENT
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture
 from tmserver.cli import admin
 from tmserver.economy.claim_transactions import prize_transaction
-from tmserver.economy.service import EconomyService, named
+from tmserver.economy.service import EconomyService
+from tmserver.economy.packets import named
 from tmserver.events.config import parse_event_setup
 from tmserver.events.service import EventHost
 from tmserver.storage.postgres import PostgresStateStore

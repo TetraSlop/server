@@ -10,12 +10,16 @@ from types import SimpleNamespace
 from tests import FIXTURES
 from tests.events.test_event_matches import finish
 from tests.events.test_event_rooms import config, presence
-from tmserver.economy.service import Catalog, EconomyError, EconomyService
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.service import EconomyService
 from tmserver.events.matchmaking import EventMatchmaking, EventTableConfig
 from tmserver.events.rooms import EventRooms
-from tmserver.events.service import EventError, EventHost
+from tmserver.events.models import EventError
+from tmserver.events.service import EventHost
 from tmserver.protocol.identities import game_id
-from tmserver.game.match import Card, decode, packet
+from tmserver.game.models import Card
+from tmserver.game.packets import decode, packet
 from tmserver.protocol.commands import parse
 
 P = FIXTURES / "protocol"

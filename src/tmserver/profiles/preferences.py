@@ -119,7 +119,7 @@ def parse_save(payload):
     if not isinstance(payload, bytes) or payload[:7].upper() != b"GTM0G24":
         return None
     # Lazy import allows EconomyService's public method to call this module.
-    from tmserver.economy.service import parse_named
+    from tmserver.economy.packets import parse_named
 
     try:
         family, subtype, argument, sections = parse_named(payload)

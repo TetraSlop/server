@@ -12,13 +12,10 @@ from copy import copy
 from dataclasses import dataclass, replace
 
 from tmserver.cards.catalog import collection_points
-from tmserver.economy.service import (
-    MAX_MONEY,
-    Card,
-    EconomyError,
-    named,
-    parse_named,
-)
+from tmserver.economy.models import MAX_MONEY
+from tmserver.cards.model import Card
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_records
 
 

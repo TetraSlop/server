@@ -13,15 +13,12 @@ from dataclasses import replace
 from pathlib import Path
 
 from tests import FIXTURES
-from tmserver.economy.service import (
-    Card,
-    Catalog,
-    EconomyError,
-    EconomyService,
-    ExchangeReservation,
-    named,
-    parse_named,
-)
+from tmserver.cards.model import Card
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.service import EconomyService
+from tmserver.economy.models import ExchangeReservation
+from tmserver.economy.packets import named, parse_named
 from tmserver.economy.trade import TradeError, TradeService
 
 PM = FIXTURES / "protocol"

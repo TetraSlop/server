@@ -8,7 +8,7 @@ from tests.storage import test_postgres_protocol as protocol
 from tests.network import test_services_integration as shops
 from tests.economy import test_trade_integration as trades
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture, sa
-from tmserver.economy.service import named
+from tmserver.economy.packets import named
 from tmserver.protocol.identities import SHOP_RAW, TRADE_RAW, service_nick
 from tmserver.network.server import Server
 

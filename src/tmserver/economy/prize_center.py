@@ -11,7 +11,8 @@ import re
 from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, replace
 
-from tmserver.economy.service import EconomyError, named, parse_named
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_records
 
 

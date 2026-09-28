@@ -8,7 +8,7 @@ from tests.events import test_event_spectators as events
 from tests.rooms import test_spectator_integration as ordinary
 from tests.protocol.test_admission_identity import native_identity
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 
 
 class RoomServiceBoundaryTests(unittest.IsolatedAsyncioTestCase):

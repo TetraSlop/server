@@ -13,7 +13,7 @@ from tests.network.test_session_recovery import Writer
 from tmserver.network import dispatch as services
 from tmserver.events.matchmaking import EventTableConfig
 from tmserver.protocol.identities import GAME_KEY, SHOP_RAW, game_id, service_nick
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 from tmserver.rooms.config import OrdinaryTableConfig
 from tmserver.network.server import Server, Session
 from tmserver.rooms.spectators import SpectatorService

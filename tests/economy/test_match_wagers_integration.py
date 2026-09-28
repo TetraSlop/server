@@ -12,7 +12,7 @@ from tests.game.test_match_service import NATIVE_SETTINGS
 from tests.network.test_server import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id
 from tmserver.economy.match_ledger import offline_payout
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.rankings.stats import PracticeStats
 from tmserver.network.server import Server
 

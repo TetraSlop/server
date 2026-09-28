@@ -10,7 +10,8 @@ from tests.protocol.test_admission_identity import native_identity
 from tests.rooms.test_room_service import presence
 from tests.network.test_session_recovery import Writer
 from tmserver.protocol.identities import GAME_KEY, game_id
-from tmserver.game.match import Player, packet
+from tmserver.game.models import Player
+from tmserver.game.packets import packet
 from tmserver.rooms.service import RoomService
 from tmserver.network.server import Server, Session
 from tmserver.protocol.commands import parse

@@ -4,7 +4,7 @@ import unittest
 
 from tests.events import test_event_spectators as events
 from tmserver.protocol.identities import GAME_KEY, TABLE_RAW, service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 
 
 class EventChatCleanupTests(unittest.IsolatedAsyncioTestCase):

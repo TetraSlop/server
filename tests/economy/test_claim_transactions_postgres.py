@@ -12,7 +12,7 @@ from tests.economy.test_claim_transactions import ClaimFixture
 from tests.events.test_event_rooms import config
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture
 from tmserver.economy.claim_transactions import event_transaction, prize_transaction
-from tmserver.economy.service import named, parse_named
+from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, service_nick
 from tmserver.network.server import Server
 

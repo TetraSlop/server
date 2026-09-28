@@ -22,7 +22,7 @@ from tmserver.protocol.identities import (
     player_id,
     service_nick,
 )
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import OrdinaryRoomConfig, directory_files, load_ordinary_rooms
 from tmserver.profiles.location import FileOwner
 from tmserver.profiles.service import ProfileServer, checked

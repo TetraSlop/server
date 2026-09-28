@@ -5,7 +5,8 @@ import sys
 import unittest
 from pathlib import Path
 
-from tmserver.economy.service import PROFILE_SIZE, EconomyService
+from tmserver.economy.models import PROFILE_SIZE
+from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import game_id
 from tmserver.rankings.service import (
     METADATA_PATH,

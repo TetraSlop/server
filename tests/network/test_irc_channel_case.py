@@ -7,7 +7,7 @@ from tests.events import test_event_room_part as events
 from tests.rooms import test_spectator_integration as spectators
 from tests.protocol.test_admission_identity import native_identity
 from tmserver.protocol.identities import service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 
 
 class ChannelCaseTests(unittest.IsolatedAsyncioTestCase):

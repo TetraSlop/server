@@ -11,7 +11,7 @@ from tests.game import test_computer_menu_integration as computer
 from tests.economy.test_match_prizes_integration import full
 from tests.network.test_server import Client
 from tmserver.protocol.identities import TABLE_RAW
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
 
 

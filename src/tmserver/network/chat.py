@@ -7,7 +7,7 @@ from CHAT_SUPPLEMENT.md/CHAT_LIFECYCLE.md. Byte text is never slash-split.
 import re
 from dataclasses import dataclass
 
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 
 
 @dataclass(frozen=True)

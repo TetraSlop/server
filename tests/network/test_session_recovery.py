@@ -10,10 +10,10 @@ import unittest
 from unittest.mock import patch
 
 from tmserver.protocol import wire
-from tmserver.economy.service import named
+from tmserver.economy.packets import named
 from tmserver.events.matchmaking import EventDelivery
 from tmserver.protocol.identities import ROOM_RAW, SHOP_RAW, TABLE_RAW, game_id, service_nick
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 from tmserver.network.server import ACCOUNTS, Server, Session
 
 

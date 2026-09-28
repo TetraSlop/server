@@ -21,7 +21,7 @@ from tests.network.test_server import Client
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.economy.match_ledger import offline_payout
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.game.rules import CRTLCG
 from tmserver.rankings.stats import PracticeStats
 from tmserver.network.server import Server

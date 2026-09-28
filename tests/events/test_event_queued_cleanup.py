@@ -6,10 +6,10 @@ import unittest
 from tests.events.test_event_rooms import config, presence
 from tests.network.test_session_recovery import Writer
 from tests.rooms.test_table_abort_cleanup import BlockingWriter
-from tmserver.economy.service import named
+from tmserver.economy.packets import named
 from tmserver.events.matchmaking import EventTableConfig
 from tmserver.protocol.identities import SHOP_RAW, TABLE_RAW, game_id, service_nick
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 from tmserver.network.server import Server, Session
 
 

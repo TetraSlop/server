@@ -6,7 +6,9 @@ arithmetic is separately exercised by protocol_map/match_timeout_vectors.py.
 
 import unittest
 
-from tmserver.game.match import Card, MatchService, packet
+from tmserver.game.models import Card
+from tmserver.game.match import MatchService
+from tmserver.game.packets import packet
 from tmserver.rooms.watchdog import TURN_SECONDS, MatchWatchdog
 
 CARDS = tuple(Card(i, 50, 0, 40, 30, 1, 0) for i in range(5))

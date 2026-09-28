@@ -15,7 +15,7 @@ from tests.network.test_server import Client
 from tmserver.network import dispatch as services
 from tmserver.events.matchmaking import EventTableConfig
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import directory_files
 from tmserver.network.server import Server
 from tmserver.protocol.commands import Command, encode, parse

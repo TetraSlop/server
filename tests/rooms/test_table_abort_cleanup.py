@@ -9,8 +9,9 @@ from unittest.mock import patch
 from tests.events.test_event_rooms import presence
 from tests.rooms.test_match_watchdog_integration import SETTINGS
 from tests.network.test_session_recovery import Writer
-from tmserver.economy.service import named
-from tmserver.game.match import Card, packet
+from tmserver.economy.packets import named
+from tmserver.game.models import Card
+from tmserver.game.packets import packet
 from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.rooms.config import OrdinaryRoomConfig, OrdinaryTableConfig
 from tmserver.network.server import Server, Session

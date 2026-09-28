@@ -7,7 +7,7 @@ delivering ResultData. No socket, CLI, file write, or implicit profile reset.
 import time
 from copy import copy
 
-from tmserver.economy.service import EconomyError
+from tmserver.economy.errors import EconomyError
 from tmserver.rankings.history import LocalRatingHistory, RatingHistoryError
 from tmserver.rankings.periods import RankingPeriodError, RankingPeriods
 from tmserver.rankings.stats import PracticeStats

@@ -11,219 +11,40 @@ published table-service identity. No filesystem, networking, or timers live here
 """
 
 import re
-from dataclasses import dataclass, field
-from typing import Callable, Hashable
+from typing import Callable
 
-from tmserver.game import special_rules as special
-from tmserver.protocol.admission import validate_admission
 from tmserver.cards.catalog import Catalog
-from tmserver.cards.model import Card as CardValue
-from tmserver.cards.model import card_values
+from tmserver.game import special_rules as special
+from tmserver.game.ai import Personality, choose_move, choose_target
+from tmserver.game.boards import generate_board
+from tmserver.game.departure_rules import next_turn, result_ranking, result_slots
+from tmserver.game.errors import MatchError
+from tmserver.game.models import (
+    DEFAULT_GAME_RULES,
+    DEFAULT_TABLE_RULES,
+    BoardCard,
+    Card,
+    Delivery,
+    FinalCards,
+    FinalPrizes,
+    ObserverPlayer,
+    ObserverSnapshot,
+    Player,
+)
+from tmserver.game.opponents import OPPONENTS, OpponentError, opponent, prepare_opponents
+from tmserver.game.packets import decode, numbers, packet
 from tmserver.game.prizes import (
     PrizeCard,
     PrizeError,
     PrizeLedger,
-    PrizeSettlement,
     choose_computer_prize,
 )
-from tmserver.game.ai import Personality, choose_move, choose_target
-from tmserver.game.boards import generate_board
-from tmserver.game.departure_rules import next_turn, result_ranking, result_slots
-from tmserver.game.opponents import OPPONENTS, OpponentError, opponent, prepare_opponents
 from tmserver.game.rules import CRTLCG, GrowthBaseline, calculate_battle, grow_card
+from tmserver.protocol.admission import validate_admission
 from tmserver.rankings.stats import PracticeStats
-from tmserver.rooms.rules import RoomRules
 from tmserver.rooms.metadata import TableMetadataError, table_info
+from tmserver.rooms.rules import RoomRules
 
-
-class MatchError(ValueError):
-    """Rejected client input; the adapter should log it, not fabricate an ack."""
-
-
-@dataclass(frozen=True)
-class Card(CardValue):
-    def __post_init__(self):
-        if not 0 <= self.model < 250 or not 0 <= self.kind < 4:
-            raise MatchError("card model/type outside local catalogue domain")
-        if any(
-            not 0 <= x <= 255
-            for x in (self.attack, self.physical, self.magical, self.points, self.arrows, self.deck)
-        ):
-            raise MatchError("card field outside byte range")
-
-    def full(self):
-        return "|".join(map(str, card_values(self)))
-
-    def reduced(self):
-        return "|".join(map(str, super().reduced()))
-
-    @classmethod
-    def parse(cls, text):
-        values = numbers(text, 8)
-        return cls(*values)
-
-
-@dataclass(frozen=True)
-class Delivery:
-    peer: Hashable
-    payload: bytes
-
-
-@dataclass(frozen=True)
-class FinalCards:
-    """Immutable completed-round replacement, indexed by original selection slot."""
-
-    round_id: int
-    original: tuple[Card, ...]
-    updated: tuple[Card, ...]
-    stats: PracticeStats
-    extras: tuple[Card, ...] = ()
-
-
-@dataclass(frozen=True)
-class FinalPrizes:
-    """Completed ownership settlement; root must commit before confirmation."""
-
-    round_id: int
-    settlement: PrizeSettlement
-
-
-@dataclass
-class Player:
-    peer: Hashable | None
-    character_id: int
-    name: bytes
-    nickname_id: int
-    rating: int = 300
-    balance: int = 10000
-    points: int = 1
-    selected: tuple[Card, ...] = ()
-    hand: list[Card] = field(default_factory=list)
-    hand_slots: list[int] = field(default_factory=list)
-    updated: list[Card] = field(default_factory=list)
-    requested: bool = False
-    accepted: bool = False
-    identity_confirmed: bool = False
-    result_stats: PracticeStats = field(default_factory=PracticeStats)
-    collection_size: int = 0
-    departed: bool = False
-    substitute: int = 0
-    npc_id: int = 0
-    ai_personality: Personality | None = None
-
-
-@dataclass
-class BoardCard:
-    card: Card | None
-    owner: int
-    original_owner: int
-    original_slot: int | None = None
-    property: int = 0
-    modifier: int = 0
-    tile_id: int | None = None
-    direction: int = 0
-    tile_arrows: int = 0
-    base_owner: int | None = None
-
-
-@dataclass(frozen=True)
-class ObserverPlayer:
-    peer: Hashable | None
-    name: bytes
-    nickname_id: int
-    character_id: int
-    rating: int
-    points: int
-    hand: tuple[Card, ...]
-    hand_slots: tuple[int, ...]
-    selected: tuple[Card, ...]
-    departed: bool = False
-    substitute: int = 0
-    npc_id: int = 0
-
-    @property
-    def remaining(self):
-        return len(self.hand)
-
-
-@dataclass(frozen=True)
-class ObserverSnapshot:
-    phase: str
-    round_id: int
-    sequence: int
-    active: int
-    players: tuple[ObserverPlayer, ...]
-    game_rules: tuple[tuple[str, int], ...]
-    start_fields: tuple[int, ...]
-    board: tuple[special.Cell, ...]
-    scores: tuple[int, ...]
-    turn_packet: bytes | None
-    observation: int = 0
-
-
-@dataclass(frozen=True)
-class Packet:
-    primary: int
-    subtype: int
-    argument: int
-    sections: dict
-
-
-def numbers(text, count=None):
-    if not isinstance(text, str) or not re.fullmatch(r"-?[0-9]+(?:\|-?[0-9]+)*", text):
-        raise MatchError("expected decimal field")
-    parts = text.split("|")
-    if count is not None and len(parts) != count:
-        raise MatchError("incorrect numeric element count")
-    if any(len(p) > 11 for p in parts):
-        raise MatchError("oversized integer")
-    return [int(p) for p in parts]
-
-
-def packet(primary, subtype=0, argument=0, body=""):
-    if any(not 0 <= v <= 255 for v in (primary, subtype, argument)):
-        raise MatchError("header byte out of range")
-    raw = body.encode("ascii")
-    if len(raw) > 447 or any(c in raw for c in (0, 10, 13)):
-        raise MatchError("packet exceeds demonstrated single-body contract")
-    return f"GTM0G{primary:02X}00{subtype:02X}{argument:02X}".encode() + raw
-
-
-def decode(payload):
-    m = re.fullmatch(
-        rb"GTM0G([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([^\x00\r\n]*)",
-        payload,
-    )
-    if m is None:
-        return None
-    if len(m[5]) > 447:
-        raise MatchError("fragmented/oversized match request unsupported")
-    try:
-        text = m[5].decode("ascii")
-    except UnicodeDecodeError as e:
-        raise MatchError("match fields must be ASCII") from e
-    sections = {}
-    if text:
-        if not text.startswith("@"):
-            raise MatchError("section header required")
-        for item in text[1:].split("@"):
-            chunks = item.split("/")
-            name, equal, value = chunks[0].partition("=")
-            if not equal or value or name in sections:
-                raise MatchError("invalid/duplicate section")
-            fields = {}
-            for item in chunks[1:]:
-                key, equal, value = item.partition("=")
-                if not equal or not key or key in fields:
-                    raise MatchError("invalid/duplicate field")
-                fields[key] = value
-            sections[name] = fields
-    return Packet(int(m[1], 16), int(m[3], 16), int(m[4], 16), sections)
-
-
-RULES = "@Tet=/bm=0/du=0/st=0/cb=0/ca=0/gs=1/tl=2@Tab=/in=1/lu=99999/ll=0/au=300/al=100/co=4/pa=0"
-DEFAULT_GAME_RULES = dict(bm=0, du=0, st=0, cb=0, ca=0, gs=1, tl=2)
-DEFAULT_TABLE_RULES = {"in": 1, "lu": 99999, "ll": 0, "au": 300, "al": 100, "co": 4, "pa": 0}
 DIRECTIONS = ((0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1))
 
 

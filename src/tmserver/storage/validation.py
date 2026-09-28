@@ -1,6 +1,6 @@
 """Validate saved domain state without database dependencies or startup recovery."""
 
-from tmserver.storage.json import SERVICE_NAMES
+from tmserver.storage.base import SERVICE_NAMES
 
 ACCOUNT_FIELDS = frozenset(
     {

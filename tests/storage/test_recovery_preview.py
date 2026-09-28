@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from tests.economy import test_match_economy as fixture
 from tmserver.cli import admin
-from tmserver.economy.service import Catalog
+from tmserver.cards.catalog import Catalog
 from tmserver.storage.recovery import preview_recovery
 from tmserver.network.server import Server
 from tmserver.storage.json import JsonStateStore

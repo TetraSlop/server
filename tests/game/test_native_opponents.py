@@ -2,7 +2,7 @@
 
 import unittest
 
-from tmserver.economy.service import Catalog
+from tmserver.cards.catalog import Catalog
 from tmserver.game.opponents import OpponentError, opponent, prepare_opponent
 
 

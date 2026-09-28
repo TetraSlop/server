@@ -6,7 +6,8 @@ from dataclasses import replace
 
 from tests.rankings import test_rating_policy as rating_tests
 from tests.rankings.test_result_stats import SEEDED, economy
-from tmserver.economy.service import EconomyError, EconomyService
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.service import EconomyService
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.rankings.stats import PracticeStats, ResultStatsError
 

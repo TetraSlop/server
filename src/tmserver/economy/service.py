@@ -38,158 +38,28 @@ import struct
 from collections import Counter
 from contextlib import contextmanager
 from copy import copy, deepcopy
-from dataclasses import dataclass, replace
-from dataclasses import field as dataclass_field
+from dataclasses import replace
 
 from tmserver.cards.catalog import Catalog, collection_points
+from tmserver.cards.edits import apply_card_edits, parse_edit_records
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
-from tmserver.cards.edits import apply_card_edits, parse_edit_records
-from tmserver.rankings.stats import PracticeStats
+from tmserver.economy.models import (
+    MAX_CARDS,
+    MAX_MONEY,
+    PROFILE_SIZE,
+    AccountView,
+    AuctionReservation,
+    ExchangeReservation,
+    MatchReservation,
+    PrizeReservation,
+    _Account,
+    _Pending,
+    _State,
+)
+from tmserver.economy.packets import _hex, _int, _keys, named, parse_named
 from tmserver.economy.shop_offers import ShopOffers
-
-MAX_MONEY = 99_999_999
-MAX_CARDS = 1000
-PROFILE_SIZE = 0x3028
-SHOP_RAW = 0x300
-_HEADER = re.compile(rb"GTM0G([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})")
-_SECTION = re.compile(r"([A-Za-z][A-Za-z0-9]*|[0-9]+)=(.*)\Z")
-_FIELD = re.compile(r"([A-Za-z][A-Za-z0-9]*)=([^/@]*)\Z")
-
-
-def _int(text, minimum=0, maximum=0xFFFFFFFF):
-    if not isinstance(text, str) or not re.fullmatch(r"-?[0-9]{1,10}", text):
-        raise EconomyError("invalid decimal field")
-    number = int(text)
-    if not minimum <= number <= maximum:
-        raise EconomyError("number outside supported field width")
-    return number
-
-
-def _hex(text, maximum):
-    if len(text) % 2 or len(text) > maximum * 2 or not re.fullmatch(r"[0-9A-Fa-f]*", text):
-        raise EconomyError("invalid hexadecimal string")
-    value = bytes.fromhex(text)
-    if b"\0" in value:
-        raise EconomyError("embedded string terminator")
-    return value
-
-
-def _keys(fields, expected):
-    if set(fields) != set(expected):
-        raise EconomyError("unexpected or missing fields")
-
-
-def parse_named(payload):
-    """Strict, bounded named envelope parser, separate from the BEL protocol."""
-    match = _HEADER.match(payload)
-    if not match or len(payload) > 13 + 447:
-        raise EconomyError("invalid named envelope")
-    family, secondary, subtype, session = (int(x, 16) for x in match.groups())
-    if secondary != 0:
-        raise EconomyError("unsupported secondary envelope byte")
-    try:
-        body = payload[13:].decode("ascii")
-    except UnicodeDecodeError as exc:
-        raise EconomyError("non-ASCII named body") from exc
-    if not body.startswith("@") or any(ord(c) < 32 or ord(c) > 126 for c in body):
-        raise EconomyError("invalid named body")
-    sections = {}
-    for part in body[1:].split("@"):
-        parsed = _SECTION.fullmatch(part)
-        if not parsed or parsed[1] in sections:
-            raise EconomyError("invalid or repeated section")
-        name, tail = parsed.groups()
-        fields = {}
-        if tail:
-            if not tail.startswith("/"):
-                raise EconomyError("invalid section body")
-            for item in tail[1:].split("/"):
-                field_match = _FIELD.fullmatch(item)
-                if not field_match or field_match[1] in fields:
-                    raise EconomyError("invalid or repeated field")
-                fields[field_match[1]] = field_match[2]
-        sections[name] = fields
-    return family, subtype, session, sections
-
-
-def named(family, subtype, session, body):
-    encoded = body.encode("ascii")
-    if len(encoded) > 447 or any(x < 32 or x > 126 for x in encoded):
-        raise EconomyError("response exceeds native envelope capacity")
-    if any(not 0 <= x <= 255 for x in (family, subtype, session)):
-        raise EconomyError("invalid response header")
-    return f"GTM0G{family:02X}00{subtype:02X}{session:02X}".encode() + encoded
-
-
-@dataclass
-class _State:
-    balance: int
-    cards: list
-    names: dict = dataclass_field(default_factory=lambda: {1: b"Deck One", 2: b"Deck Two"})
-
-
-@dataclass
-class _Pending:
-    pack: int
-    reply: bytes
-    state: _State
-
-
-@dataclass
-class _Account:
-    nn: int
-    player_id: int
-    name: bytes
-    guild: int
-    template: bytes
-    committed: _State
-    session: int | None = None
-    last_session: int = 0
-    pending: _Pending | None = None
-    offers: ShopOffers | None = None
-
-
-@dataclass(frozen=True)
-class AccountView:
-    key: str
-    nn: int
-    player_id: int
-    name: bytes
-    guild: int
-    rating: int
-    balance: int
-    cards: tuple
-    deck_names: tuple
-
-
-@dataclass(frozen=True, eq=False)
-class ExchangeReservation:
-    """In-process capability; only the service that issued it can commit it."""
-
-    accounts: tuple[AccountView, AccountView]
-
-
-@dataclass(frozen=True, eq=False)
-class MatchReservation:
-    """Capability for one table member; refreshed after each committed round."""
-
-    account: AccountView
-
-
-@dataclass(frozen=True, eq=False)
-class AuctionReservation:
-    """Exclusive capability for a short escrow operation or collection session."""
-
-    account: AccountView
-
-
-@dataclass(frozen=True, eq=False)
-class PrizeReservation:
-    """Exclusive Prize Center capability, including its independent points."""
-
-    account: AccountView
-    points: int
+from tmserver.rankings.stats import PracticeStats
 
 
 class EconomyService:

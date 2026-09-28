@@ -14,9 +14,10 @@ from pathlib import Path
 
 from tests import FIXTURES, ROOT
 from tests.network.test_server import Client
-from tmserver.economy.service import PROFILE_SIZE, Card
+from tmserver.economy.models import PROFILE_SIZE
+from tmserver.cards.model import Card
 from tmserver.protocol.identities import player_id
-from tmserver.game.match import decode
+from tmserver.game.packets import decode
 from tmserver.network.server import Server
 
 FIXTURE = FIXTURES / "native_selection_replay.json"

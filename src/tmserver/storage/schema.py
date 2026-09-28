@@ -3,7 +3,7 @@
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
-from tmserver.storage.json import SERVICE_NAMES
+from tmserver.storage.base import SERVICE_NAMES
 
 SCHEMA_REVISION = "0001_state"
 WRITER_LOCK = 0x54455452414D4153

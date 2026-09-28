@@ -29,7 +29,8 @@ def run(research_dir, repo, *, legacy_baseline=False):
     from auction_rank_vectors import Machine, SCENE
     from profile_semantics_vectors import CoreVM
     from probe import PATHS
-    from tmserver.economy.service import EconomyService, PROFILE_SIZE
+    from tmserver.economy.service import EconomyService
+    from tmserver.economy.models import PROFILE_SIZE
     from tmserver.rankings.service import (
         RankingHistory,
         RankingService,

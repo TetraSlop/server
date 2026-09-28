@@ -97,8 +97,8 @@ class RulesAPITests(unittest.TestCase):
             CRTLCG(True)
 
     def test_existing_card_adapters(self):
-        from tmserver.economy.service import Card as EconomyCard
-        from tmserver.game.match import Card as MatchCard
+        from tmserver.cards.model import Card as EconomyCard
+        from tmserver.game.models import Card as MatchCard
 
         values = (5, 20, 1, 30, 40, 2, 129, 4)
         m, e = MatchCard(*values), EconomyCard(*values)

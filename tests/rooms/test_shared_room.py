@@ -13,7 +13,7 @@ from tests.events.test_event_rooms import presence as room_presence
 from tests.rooms.test_room_service import presence
 from tests.network.test_server import Client
 from tmserver.protocol.identities import GAME_KEY, game_id, player_id, service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import OrdinaryRoomConfig, OrdinaryTableConfig, directory_files
 from tmserver.rooms.service import RoomService
 from tmserver.network.server import Server

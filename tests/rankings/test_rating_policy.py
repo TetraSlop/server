@@ -4,7 +4,8 @@ import json
 import unittest
 from dataclasses import replace
 
-from tmserver.economy.service import EconomyError, EconomyService
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.service import EconomyService
 from tmserver.rankings.history import HistoryState, LocalRatingHistory
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.rankings.policy import RatingPolicy, RatingPolicyError

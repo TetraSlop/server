@@ -30,17 +30,55 @@ opponent algorithms live in `game`; explicit local reward and rating policies
 remain in their economy/ranking owners.
 
 These packages use direct imports and explicit object references. Their
-initializers do not aggregate or construct services. Shared packet helpers still
-live in `game.match` and `economy.service`, whose accepted dialects differ;
-`protocol.commands` owns the separate BEL-delimited command format. Grouping the
-files does not make those parsers interchangeable. The lazy import from
-`profiles.preferences.parse_save` to `economy.service.parse_named` preserves the
-existing account/preferences dependency without an import-time cycle.
+initializers do not aggregate or construct services. Shared packet helpers live
+in `game.packets` and `economy.packets`, whose accepted dialects differ;
+`protocol.commands` owns the separate BEL-delimited command format. Profiles,
+chat, rooms and events import codecs directly from their owners. Those codecs
+can be used without loading the match or shop service. `events.packets` owns
+the event file encodings.
 
 The old flat Python module names have moved, with no compatibility namespace.
 For example, import `Server` from `tmserver.network.server` and `MatchService`
 from `tmserver.game.match`. CLI names and `python -m tmserver` are unchanged;
 use the [README](../README.md) for installation and invocation.
+
+## Inside a feature
+
+Use the same boundaries when adding or changing substantial feature code:
+
+| Role | Contents | Examples |
+| --- | --- | --- |
+| Models | Shared dataclasses, state values, capabilities and field invariants. | [game/models.py](../src/tmserver/game/models.py), [economy/models.py](../src/tmserver/economy/models.py), [events/models.py](../src/tmserver/events/models.py) |
+| Packets | Parse requests, validate wire fields and encode replies or native files. | [game/packets.py](../src/tmserver/game/packets.py), [economy/packets.py](../src/tmserver/economy/packets.py), [events/packets.py](../src/tmserver/events/packets.py) |
+| Services | Feature behavior, permissions, state transitions and operation-specific staging. | `game/match.py`, `economy/service.py`, `events/service.py` |
+| Transactions | Coordinate the affected accounts/journals; save before publishing or replying. | `economy/commerce.py`, `economy/claim_transactions.py`, `economy/match_transactions.py`, `profiles/transactions.py` |
+| Storage | Implement the shared save contract using JSON or SQLAlchemy Core. | [storage/base.py](../src/tmserver/storage/base.py), `storage/json.py`, `storage/postgres.py`, `storage/schema.py` |
+
+Import a shared value or codec from its owner, not through a service that happens
+to use it. Models and codecs must be usable without constructing a service,
+opening storage or importing an optional database dependency. Model constructors
+can retain pure validation and value conversions: for example, a match card's
+numeric parsing and an event configuration's fingerprint. Event configuration
+uses local codec imports where needed to avoid an eager import cycle.
+
+Keep a private operation-specific record next to its operation; a dataclass
+alone does not require another module. The existing focused algorithm, policy,
+configuration and ledger files remain useful units. This convention separates
+shared concerns in the large services without adding empty layers to every
+small feature.
+
+Use this order for a durable request: **decode → stage → change → save → publish
+→ reply**. SQL and database row conversion belong in `storage/postgres.py`;
+table declarations belong in `storage/schema.py`. Feature transactions call the
+storage contract, and JSON implements the same contract. Domain dataclasses,
+native packets and SQL rows have different validation and representation needs;
+their conversions stay explicit. No generic CRUD service or inferred packet
+serializer is required.
+
+The current split covers the main match, account and event services. Some
+smaller existing modules still combine a cohesive model and its operations,
+such as ranking history and event table configuration; move a definition when
+another caller needs its value without the service, following the same rule.
 
 ## Protocol and shared values
 
@@ -57,13 +95,14 @@ model to keep synchronized with the protocol's native representations.
 
 `cards.model.Card` defines the eight stored card fields once. Native rules and matches
 keep thin adapters for their different validation domains and wire encodings;
-`Card.from_card` converts through the receiving constructor. Economy imports
-continue to expose the shared value for compatibility.
+`Card.from_card` converts through the receiving constructor. Match-specific card
+validation lives in `game.models.Card`; economy callers import the shared card
+value directly from `cards.model`.
 
 `cards.catalog` owns decoded card data, card generation, prices and collection
 points. Matches and admission rules import it directly without depending on
 account/shop handling. `economy.errors` defines the shared rejection type;
-`economy.service` also exposes it and the catalogue API to its callers.
+callers import the error and catalogue API from their respective owners.
 Catalogue construction loads packaged data or an explicit JSON path; matches
 also accept an injected catalogue. Neither operation creates accounts, loads
 saves or runs a service.
@@ -140,8 +179,10 @@ references remain stable, including table capabilities and cross-service reads.
 Single-account commits share token-type, identity and account-view checks; Prize
 Center also checks its independent points. Release checks only token type and
 identity so cleanup can discard a reservation whose account view is outdated.
-`StateStore` in `storage.json` defines the shared persistence boundary with four operations: load, full save,
+`StateStore` in `storage.base` defines the shared persistence boundary with four operations: load, full save,
 save selected accounts, and save selected accounts with named journals.
+Supported service-journal names also live in `storage.base`; PostgreSQL, schema
+declarations and snapshot validation do not import the JSON implementation.
 
 ## Tests and packaged resources
 

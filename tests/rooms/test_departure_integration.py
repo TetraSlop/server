@@ -18,7 +18,7 @@ from tmserver.protocol.identities import (
     player_id,
     service_nick,
 )
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.rooms.config import OrdinaryRoomConfig
 from tmserver.rooms.service import TABLE_CHANNEL

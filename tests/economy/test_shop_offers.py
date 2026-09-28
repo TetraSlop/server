@@ -11,7 +11,10 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.network import test_services_integration as services
 from tests.network.test_server import Client
-from tmserver.economy.service import Card, Catalog, EconomyService, named, parse_named
+from tmserver.cards.model import Card
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.service import EconomyService
+from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, service_nick
 from tmserver.network.server import Server
 from tmserver.economy.shop_offers import ShopOffers, load_shop_offers

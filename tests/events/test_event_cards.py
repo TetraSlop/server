@@ -8,17 +8,16 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from tmserver.economy.service import (
-    MAX_MONEY,
-    Card,
-    Catalog,
-    EconomyError,
-    EconomyService,
-    named,
-    parse_named,
-)
+from tmserver.economy.models import MAX_MONEY
+from tmserver.economy.service import EconomyService
+from tmserver.cards.model import Card
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.packets import named, parse_named
 from tmserver.events.cards import EventCardError, EventCardService
-from tmserver.events.service import EventConfig, EventHost, EventListing, event_data
+from tmserver.events.models import EventConfig, EventListing
+from tmserver.events.service import EventHost
+from tmserver.events.packets import event_data
 
 
 class EventCardTests(unittest.TestCase):

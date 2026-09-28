@@ -17,7 +17,8 @@ from tmserver.economy.claim_transactions import (
     event_transaction,
     prize_transaction,
 )
-from tmserver.economy.service import Card, named, parse_named
+from tmserver.cards.model import Card
+from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, service_nick
 from tmserver.network.server import Server
 

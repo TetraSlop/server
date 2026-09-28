@@ -12,7 +12,7 @@ from tests.events.test_event_rooms import config, presence
 from tests.network.test_server import Client
 from tmserver.events.matchmaking import EventTableConfig
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
 
 

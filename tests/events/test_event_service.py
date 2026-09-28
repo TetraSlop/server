@@ -8,22 +8,19 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from tmserver.economy.service import Catalog, EconomyService, named, parse_named
-from tmserver.events.service import (
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.service import EconomyService
+from tmserver.economy.packets import named, parse_named
+from tmserver.events.packets import (
     SIZES,
-    EventConfig,
-    EventDirectory,
-    EventError,
-    EventHost,
-    EventListing,
-    EventMember,
-    PrizeDisplay,
     announcement,
     event_data,
     event_list,
     event_members,
     time_reply,
 )
+from tmserver.events.models import EventConfig, EventError, EventListing, EventMember, PrizeDisplay
+from tmserver.events.service import EventDirectory, EventHost
 
 
 

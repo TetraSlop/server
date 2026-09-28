@@ -6,7 +6,7 @@ from contextlib import ExitStack
 from pathlib import Path
 
 from tmserver.economy.claim_transactions import event_transaction, prize_transaction
-from tmserver.economy.service import Card
+from tmserver.cards.model import Card
 from tmserver.events.cards import EventCardService
 from tmserver.events.config import load_event_setup
 from tmserver.events.results import EventResults

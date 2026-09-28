@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, patch
 from tests.protocol.test_admission_identity import native_identity
 from tests.game.test_match_service import NATIVE_SETTINGS
 from tests.network.test_session_recovery import Writer
-from tmserver.economy.service import Catalog, collection_points
+from tmserver.cards.catalog import Catalog, collection_points
 from tmserver.protocol.identities import player_id
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import OrdinaryRoomConfig
 from tmserver.rooms.rules import RoomRules
 from tmserver.network.server import Server, Session

@@ -12,10 +12,10 @@ import sqlalchemy as sa
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
+from tmserver.storage.base import SERVICE_NAMES
 from tmserver.storage.schema import (
     CARD_FIELDS,
     SCHEMA_REVISION,
-    SERVICE_NAMES,
     WRITER_LOCK,
     accounts,
     cards,

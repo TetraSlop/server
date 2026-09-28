@@ -16,7 +16,7 @@ from tests.profiles.test_profile_accounts import file_request, transact
 from tests.rankings.test_ranking_service import request as rank_request
 from tests.network.test_server import Client
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, player_id
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 from tmserver.profiles.service import ProfileServer, checksum
 from tmserver.rankings.service import METADATA_PATH, RECORD_SIZE, SCORE_OFFSETS
 from tmserver.rankings.stats import PracticeStats

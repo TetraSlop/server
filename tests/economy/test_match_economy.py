@@ -7,7 +7,11 @@ from pathlib import Path
 
 from tests import FIXTURES
 from tmserver.economy.auction_ledger import AuctionEconomy
-from tmserver.economy.service import MAX_MONEY, Card, Catalog, EconomyError, EconomyService
+from tmserver.economy.models import MAX_MONEY
+from tmserver.economy.service import EconomyService
+from tmserver.cards.model import Card
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.errors import EconomyError
 from tmserver.economy.match_ledger import (
     MatchEconomy,
     MatchEconomyError,
@@ -332,7 +336,7 @@ class MatchEconomyTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
 
     def test_card_like_full_serializers_do_not_change_settlement_identity(self):
-        from tmserver.game.match import Card as WireCard
+        from tmserver.game.models import Card as WireCard
 
         self.begin()
         self.result()

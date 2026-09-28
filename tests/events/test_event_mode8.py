@@ -11,7 +11,7 @@ from tests.events.test_event_configuration import DOCUMENT
 from tests.events.test_event_rooms import presence
 from tests.network.test_server import Client
 from tmserver.events.config import parse_event_setup
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
 
 

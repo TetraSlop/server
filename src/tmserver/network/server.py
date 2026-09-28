@@ -48,7 +48,8 @@ from tmserver.rankings.policy import RatingPolicy
 from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.rooms.service import RoomService
 from tmserver.storage.validation import validate_snapshot_fields
-from tmserver.storage.json import JsonStateStore, StateStore
+from tmserver.storage.base import StateStore
+from tmserver.storage.json import JsonStateStore
 from tmserver.profiles.preferences import TablePreferences
 from tmserver.economy.trade_router import TradeRouter
 from tmserver.economy.trade import TradeService

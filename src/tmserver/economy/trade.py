@@ -10,7 +10,8 @@ import re
 from dataclasses import dataclass, field, replace
 
 from tmserver.cards.catalog import collection_points
-from tmserver.economy.service import EconomyError, named, parse_named
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_records
 from tmserver.cards.edits import match_owned as owned_indices
 

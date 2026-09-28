@@ -2,7 +2,8 @@
 
 import re
 
-from tmserver.economy.service import EconomyError, named, parse_named
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.packets import named, parse_named
 
 
 def save_options(economy, key, payload):

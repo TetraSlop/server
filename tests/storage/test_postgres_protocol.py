@@ -18,9 +18,9 @@ from tests.profiles.test_options_service import request as options_request
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture, sa
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.network.test_server import Client
-from tmserver.economy.service import named, parse_named
+from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, player_id, service_nick
-from tmserver.game.match import packet
+from tmserver.game.packets import packet
 from tmserver.profiles.service import ProfileServer, checked
 from tmserver.network.server import Server
 
@@ -199,7 +199,8 @@ class PostgresEventTests(ProtocolFixture):
     enter_room = events.EventIntegrationTests.enter_room
 
     async def asyncSetUp(self):
-        from tmserver.events.service import EventConfig, EventListing, event_data
+        from tmserver.events.models import EventConfig, EventListing
+        from tmserver.events.packets import event_data
         from tmserver.protocol.identities import game_id
 
         config = EventConfig(

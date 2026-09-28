@@ -11,7 +11,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tests import ROOT
-from tmserver.economy.service import Card, EconomyError, EconomyService
+from tmserver.cards.model import Card
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.service import EconomyService
 from tmserver.game.rules import GrowthBaseline, grow_card
 from tmserver.profiles.service import SYNTHETIC_ACCOUNTS, ProfileServer
 from tmserver.rankings.stats import PracticeStats, ResultStatsError

@@ -16,7 +16,9 @@ from tests import ROOT
 from tests.events.test_event_configuration import DOCUMENT
 from tmserver.cli import admin
 from tmserver.economy.auction_ledger import AuctionEconomy
-from tmserver.economy.service import MAX_MONEY, EconomyService, named, parse_named
+from tmserver.economy.models import MAX_MONEY
+from tmserver.economy.service import EconomyService
+from tmserver.economy.packets import named, parse_named
 from tmserver.events.cards import EventCardService
 from tmserver.events.config import parse_event_setup
 from tmserver.events.service import EventHost
@@ -24,7 +26,8 @@ from tmserver.economy.prize_center import PrizeService
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.storage.validation import validate_snapshot
-from tmserver.storage.json import SERVICE_NAMES, JsonStateStore, writer_lease
+from tmserver.storage.base import SERVICE_NAMES
+from tmserver.storage.json import JsonStateStore, writer_lease
 
 
 class AdminTests(unittest.TestCase):

@@ -7,9 +7,11 @@ from unittest.mock import patch
 
 from tests.game import test_computer_menu_integration as computer
 from tests.game.test_match_service import finish_arrowless_round, service
-from tmserver.economy.service import EconomyError, EconomyService
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import TABLE_RAW
-from tmserver.game.match import MatchError, packet
+from tmserver.game.errors import MatchError
+from tmserver.game.packets import packet
 from tmserver.rankings.service import RECORD_SIZE, RankingService
 from tmserver.network.server import Server
 

@@ -11,18 +11,13 @@ from dataclasses import replace
 from pathlib import Path
 
 from tests import FIXTURES
-from tmserver.economy.service import (
-    MAX_MONEY,
-    PROFILE_SIZE,
-    Card,
-    Catalog,
-    EconomyError,
-    EconomyService,
-    ExchangeReservation,
-    collection_points,
-    named,
-    parse_named,
-)
+from tmserver.economy.models import MAX_MONEY, PROFILE_SIZE
+from tmserver.economy.service import EconomyService
+from tmserver.cards.model import Card
+from tmserver.cards.catalog import Catalog, collection_points
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.models import ExchangeReservation
+from tmserver.economy.packets import named, parse_named
 from tmserver.rankings.stats import PracticeStats
 
 PM = FIXTURES / "protocol"

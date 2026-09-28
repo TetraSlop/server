@@ -5,8 +5,8 @@ import unittest
 from tests.game import test_versus_integration as versus
 from tests.protocol.test_admission_identity import native_identity
 from tests.game.test_match_service import NATIVE_SETTINGS
-from tmserver.economy.service import collection_points
-from tmserver.game.match import decode, packet
+from tmserver.cards.catalog import collection_points
+from tmserver.game.packets import decode, packet
 
 
 class TableEligibilityIntegrationTests(unittest.IsolatedAsyncioTestCase):

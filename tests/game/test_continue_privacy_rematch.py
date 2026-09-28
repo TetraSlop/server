@@ -7,8 +7,8 @@ from unittest.mock import patch
 from tests.economy import test_match_prize_edges as edges
 from tests.economy import test_result_rewards as rewards
 from tests.economy.test_match_transactions import TableFixture
-from tmserver.economy.service import Catalog
-from tmserver.game.match import packet
+from tmserver.cards.catalog import Catalog
+from tmserver.game.packets import packet
 from tmserver.economy.match_transactions import match_transaction
 from tmserver.economy.result_rewards import ResultRewardError
 

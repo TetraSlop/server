@@ -23,7 +23,7 @@ def build(research_dir):
     from directory_ui_vectors import RL
     from room_contract_vectors import CTX, PTL, Machine as TableMachine
     from table_admission_vectors import AdmissionVM
-    from tmserver.game.match import decode
+    from tmserver.game.packets import decode
     from tmserver.rooms.config import load_ordinary_rooms
     from tmserver.network.server import Server
     from unicorn.x86_const import (

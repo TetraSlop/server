@@ -9,7 +9,7 @@ from tests.events.test_event_rooms import config, presence
 from tests.rooms.test_ordinary_rooms import EXTRA
 from tests.network.test_server import Client
 from tmserver.protocol.identities import GAME_KEY, service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
 from tmserver.protocol.commands import Command, encode
 

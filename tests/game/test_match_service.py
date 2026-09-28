@@ -6,7 +6,10 @@ import unittest
 from pathlib import Path
 
 from tests import FIXTURES
-from tmserver.game.match import BoardCard, Card, MatchError, MatchService, decode, packet
+from tmserver.game.models import BoardCard, Card
+from tmserver.game.errors import MatchError
+from tmserver.game.match import MatchService
+from tmserver.game.packets import decode, packet
 from tmserver.game.rules import CRTLCG, calculate_battle, grow_card
 from tmserver.rankings.stats import PracticeStats
 

@@ -11,7 +11,10 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.network.test_server import Client
-from tmserver.economy.service import PROFILE_SIZE, EconomyError, EconomyService, named
+from tmserver.economy.models import PROFILE_SIZE
+from tmserver.economy.service import EconomyService
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.packets import named
 from tmserver.protocol.identities import ROOM_RAW, SHOP_RAW, TABLE_RAW, player_id, service_nick
 from tmserver.profiles.service import ProfileServer
 from tmserver.rankings.stats import PracticeStats

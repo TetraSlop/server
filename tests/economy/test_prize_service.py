@@ -7,15 +7,12 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from tmserver.economy.service import (
-    PROFILE_SIZE,
-    Card,
-    Catalog,
-    EconomyError,
-    EconomyService,
-    named,
-    parse_named,
-)
+from tmserver.economy.models import PROFILE_SIZE
+from tmserver.economy.service import EconomyService
+from tmserver.cards.model import Card
+from tmserver.cards.catalog import Catalog
+from tmserver.economy.errors import EconomyError
+from tmserver.economy.packets import named, parse_named
 from tmserver.economy.prize_center import PrizeError, PrizeService
 
 

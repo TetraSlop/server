@@ -11,7 +11,7 @@ from tests.events.test_event_rooms import presence
 from tests.rooms.test_room_rules import settings
 from tests.network.test_server import Client
 from tmserver.protocol.identities import service_nick
-from tmserver.game.match import decode, packet
+from tmserver.game.packets import decode, packet
 from tmserver.game.boards import generate_board
 from tmserver.game.rules import CRTLCG
 from tmserver.rooms.config import OrdinaryRoomConfig, directory_files

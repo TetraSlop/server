@@ -12,7 +12,8 @@ from copy import copy, deepcopy
 from dataclasses import dataclass, field
 
 from tmserver.cards.model import Card, card_values
-from tmserver.economy.service import MAX_MONEY, EconomyError
+from tmserver.economy.models import MAX_MONEY
+from tmserver.economy.errors import EconomyError
 
 
 class MatchEconomyError(EconomyError):

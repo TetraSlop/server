@@ -14,8 +14,9 @@ from tests.events.test_event_rooms import presence
 from tests.profiles.test_profile_accounts import transact
 from tests.profiles.test_profile_location import request as file_request
 from tests.network.test_server import Client
-from tmserver.economy.service import named, parse_named
-from tmserver.events.service import EventConfig, EventListing, event_data
+from tmserver.economy.packets import named, parse_named
+from tmserver.events.models import EventConfig, EventListing
+from tmserver.events.packets import event_data
 from tmserver.protocol.identities import game_id
 from tmserver.profiles.service import ProfileServer
 from tmserver.network.server import Server

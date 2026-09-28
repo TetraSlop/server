@@ -8,7 +8,7 @@ from tmserver.economy.claim_transactions import event_transaction
 from tmserver.events.matchmaking import EventDelivery, EventMatchmaking
 from tmserver.events.spectators import EventSpectators
 from tmserver.protocol.identities import GAME_KEY, service_nick
-from tmserver.game.match import decode
+from tmserver.game.packets import decode
 from tmserver.rooms.routing import validate_room_entry
 
 

@@ -11,7 +11,7 @@ from tests.profiles.test_profile_accounts import transact as profile_request
 from tests.network.test_server import Client
 from tests.economy.test_trade_router import entry_request, metadata
 from tests.economy.test_trade_service import data, offer
-from tmserver.economy.service import named, parse_named
+from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import TRADE_RAW, game_id, player_id, service_nick
 from tmserver.profiles.service import ProfileServer, checked
 from tmserver.network.server import ACCOUNTS, Server

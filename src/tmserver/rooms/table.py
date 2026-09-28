@@ -8,8 +8,8 @@ from tmserver.cards.catalog import collection_points
 from tmserver.protocol.identities import GAME_KEY, player_id, service_nick
 from tmserver.rooms.departures import MatchDepartures
 from tmserver.game.match import MatchService
-from tmserver.game.match import decode as decode_match
-from tmserver.game.match import packet as match_packet
+from tmserver.game.packets import decode as decode_match
+from tmserver.game.packets import packet as match_packet
 from tmserver.economy.match_transactions import match_transaction
 from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.economy.result_rewards import ResultRewardError

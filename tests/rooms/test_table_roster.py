@@ -14,7 +14,8 @@ from tests.rooms.test_ordinary_rooms import EXTRA
 from tests.network.test_server import Client
 from tmserver.network import dispatch as services
 from tmserver.protocol.identities import GAME_KEY, service_nick
-from tmserver.game.match import MatchService, decode, packet
+from tmserver.game.match import MatchService
+from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import OrdinaryTableConfig
 from tmserver.network.server import Server
 from tmserver.rooms.roster import TableRoster
