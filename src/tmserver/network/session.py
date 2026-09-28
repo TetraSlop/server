@@ -16,7 +16,7 @@ from tmserver.protocol import wire
 from tmserver.network import dispatch as services
 from tmserver.protocol import commands as tm_protocol
 from tmserver.network.chat import relay_text
-from tmserver.protocol.identities import GAME_KEY, service_nick
+from tmserver.protocol.identities import service_nick
 from tmserver.protocol.messages import FRAME_OVERHEAD, MAX_LINE, MAX_SERVICE_PAYLOAD
 
 
@@ -325,18 +325,20 @@ class Session:
                 watching is not None and watching[0] == table_id
             ):
                 await events.disconnect(self)
-        ordinary_room = next(
-            (
-                table
-                for table in self.server.ordinary_room_routes.values()
-                if table.room.room_channel.upper() == channel.upper()
-            ),
-            None,
+        # Native table startup leaves room chat before Req/JOIN/PD. This PART
+        # must preserve the logical room roster and pending table admission.
+        group = (
+            service_nick(ordinary.table_raw)
+            if ordinary is not None
+            else next(
+                (
+                    nick
+                    for nick, table in self.server.ordinary_room_routes.items()
+                    if table.room.room_channel.upper() == channel.upper()
+                ),
+                None,
+            )
         )
-        group = service_nick(ordinary.table_raw) if ordinary is not None else None
-        if ordinary_room is not None:
-            await self.leave_ordinary_room(ordinary_room)
-            group = service_nick(ordinary_room.room.room_id ^ GAME_KEY)
         if group is None and event_table is not None:
             group = event_table[0]
         binding = self.server.event_rooms.room_for_channel(channel)
@@ -345,18 +347,6 @@ class Session:
             group = service_nick(binding.raw_owner)
         if group is not None:
             await self.server.chat_updates(self.server.chat.leave(self, group))
-
-    async def leave_ordinary_room(self, room_table):
-        # Native Back can PART only the room, without joining or quitting its
-        # table channel first. A late PART must not release a different room.
-        owner = self.server.table_for_peer(self)
-        if owner is not None and owner.room.room_root is room_table.room.room_root:
-            updates = self.server.chat.leave(self, service_nick(owner.table_raw))
-            await owner.release_table(self)
-            await self.server.chat_updates(updates)
-        if self.closed:
-            return
-        await room_table.publish_room(room_table.room.leave(self))
 
     async def leave_event_room(self, binding):
         events = self.server.event_matches

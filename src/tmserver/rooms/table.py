@@ -848,21 +848,42 @@ class OrdinaryTable:
             return []
         return self.reset_table_updates(self.match)
 
+    def can_leave_lobby(self, peer):
+        match = self.match
+        return (
+            match.phase == "lobby"
+            and not match.start_pending
+            and any(p.peer is peer for p in match.players)
+            and (
+                match.lobby_departure_supported()
+                or all(p.peer is None or p.peer is peer for p in match.players)
+            )
+        )
+
+    async def release_lobby(self, peer):
+        """Leave an idle seat while the caller holds match_lock."""
+        if not self.can_leave_lobby(peer):
+            raise ValueError("leave the current table before changing rooms")
+        match = self.match
+        if match.lobby_departure_supported():
+            old_players = list(match.players)
+            responses = match.leave_lobby_member(peer, None)
+            chat_updates = self.release_removed_players(match, old_players)
+            await self.publish_match(match, responses, admitting=True)
+        else:
+            chat_updates = self.host.chat.leave(peer, service_nick(self.table_raw))
+            await self.publish_room(self.reset_table_updates(match))
+        await self.host.chat_updates(chat_updates)
+
     async def release_table(self, peer):
         self.detach_spectator(peer)
-        chat_updates = None
         async with self.match_lock:
             match = self.match
             if match.lobby_departure_supported() and any(p.peer is peer for p in match.players):
-                old_players = list(match.players)
                 # PART has no GameExit acknowledgement; remaining seats receive
                 # the same roster and host election as an explicit lobby exit.
-                responses = match.leave_lobby_member(peer, None)
-                chat_updates = self.release_removed_players(match, old_players)
-                await self.publish_match(match, responses, admitting=True)
-        if chat_updates is not None:
-            await self.host.chat_updates(chat_updates)
-            return
+                await self.release_lobby(peer)
+                return
         if self.departures.request(peer):
             return
         match = self.match

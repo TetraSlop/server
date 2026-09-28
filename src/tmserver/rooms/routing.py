@@ -3,10 +3,13 @@
 from tmserver.protocol.identities import GAME_KEY, service_nick
 
 
-def validate_room_entry(server, peer, room):
+def validate_room_entry(server, peer, room, *, allow_lobby_exit=False):
+    previous = None
     owner = server.table_for_peer(peer)
     if owner is not None and owner.room.room_root is not room.room_root:
-        raise ValueError("leave the current table before changing rooms")
+        if not allow_lobby_exit or not owner.can_leave_lobby(peer):
+            raise ValueError("leave the current table before changing rooms")
+        previous = owner
     event_room = server.event_matches.coordinator.participant_room(peer)
     watching = server.event_matches.spectators.admissions.get(peer)
     if watching is not None:
@@ -14,6 +17,7 @@ def validate_room_entry(server, peer, room):
         event_room = binding.room_id
     if event_room is not None and event_room != room.room_id:
         raise ValueError("leave the current event selection/table before changing rooms")
+    return previous
 
 
 async def leave_other_rooms(server, peer, key, room):

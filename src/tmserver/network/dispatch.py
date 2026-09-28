@@ -7,6 +7,7 @@ Reply keys and pipe-separated elements come from TM 0x100812e0 and 0x100ab080.
 from tmserver.protocol.messages import service_notice
 
 from dataclasses import dataclass
+from contextlib import AsyncExitStack
 
 from tmserver.economy.claim_transactions import auction_transaction, prize_transaction
 from tmserver.events.routing import dispatch_event
@@ -69,9 +70,7 @@ async def dispatch(session, target, payload):
         if payload.startswith(b"GTM0G84"):
             with session.server.commerce.edit_account(key) as economy:
                 answer = save_options(economy, key, payload)
-            await session.server.deliver(
-                session, service_notice(target, session.nick, answer)
-            )
+            await session.server.deliver(session, service_notice(target, session.nick, answer))
             return True
         return await session.server.event_matches.dispatch(session, event_table[1], payload)
     if target in session.server.event_routes and await dispatch_event(session, target, payload):
@@ -83,9 +82,7 @@ async def dispatch(session, target, payload):
             replies = auction.handle(key, payload)
         if replies is not None:
             for answer in replies:
-                await session.send(
-                    service_notice(target, session.nick, answer)
-                )
+                await session.send(service_notice(target, session.nick, answer))
             return True
     if (
         ordinary_table is not None or ordinary_room is not None or target == service_nick(SHOP_RAW)
@@ -106,9 +103,7 @@ async def dispatch(session, target, payload):
         if replies is not None:
             source = service_nick(SHOP_RAW)
             for answer in replies:
-                await session.send(
-                    service_notice(source, session.nick, answer)
-                )
+                await session.send(service_notice(source, session.nick, answer))
             return True
     if payload.startswith(b"GTM0P"):
         key = session.server.ensure_account(session.nick)
@@ -124,9 +119,7 @@ async def dispatch(session, target, payload):
                     "server": target,
                 }
             for answer in replies:
-                await session.send(
-                    service_notice(target, session.nick, answer)
-                )
+                await session.send(service_notice(target, session.nick, answer))
             return True
     if payload.startswith(b"GTM0R"):
         key = session.server.ensure_account(session.nick)
@@ -134,9 +127,7 @@ async def dispatch(session, target, payload):
         replies = session.server.ranking.handle(key, payload)
         if replies is not None:
             for answer in replies:
-                await session.send(
-                    service_notice(target, session.nick, answer)
-                )
+                await session.send(service_notice(target, session.nick, answer))
             return True
     if (ordinary_table is not None or ordinary_room is not None) and payload.startswith(
         b"GTM0G420001"
@@ -175,9 +166,7 @@ async def dispatch(session, target, payload):
         responses = session.server.commerce.shop(key, payload)
         if responses is not None:
             for answer in responses:
-                await session.send(
-                    service_notice(target, session.nick, answer)
-                )
+                await session.send(service_notice(target, session.nick, answer))
             session.server.log(
                 "shop_service",
                 session=session.id,
@@ -193,36 +182,62 @@ async def dispatch(session, target, payload):
         account = session.server.economy.account_view(key)
         commands = parse(payload[5:]) if payload.startswith(b"GTM0L") else ()
         entering = len(commands) == 1 and commands[0].token == b"DE"
-        if entering:
-            validate_room_entry(session.server, session, ordinary_room.room)
-        was_member = session in ordinary_room.room.members
-        responses = ordinary_room.room.handle(
-            session,
-            payload,
-            authenticated_identity=(account.nn, account.player_id),
-            authenticated_name=account.name,
-        )
-        if responses is not None:
-            chat_updates = (
-                session.server.chat.leave(session, target)
-                if was_member and session not in ordinary_room.room.members
-                else []
+        async with AsyncExitStack() as entry:
+            previous = None
+            if entering:
+                owner = session.server.table_for_peer(session)
+                if owner is not None and owner.room.room_root is not ordinary_room.room.room_root:
+                    # Recheck after acquiring the lock: another player may have
+                    # started while this room-entry request was waiting.
+                    await entry.enter_async_context(owner.match_lock)
+                    if session.closed:
+                        return True
+                previous = validate_room_entry(
+                    session.server, session, ordinary_room.room, allow_lobby_exit=True
+                )
+            was_member = session in ordinary_room.room.members
+            responses = ordinary_room.room.handle(
+                session,
+                payload,
+                authenticated_identity=(account.nn, account.player_id),
+                authenticated_name=account.name,
             )
-            if entering and session in ordinary_room.room.members:
-                await leave_other_rooms(session.server, session, key, ordinary_room.room)
-            await ordinary_room.publish_room(responses)
-            await session.server.chat_updates(chat_updates)
-            if len(commands) == 1 and commands[0].token == b"PD":
-                table = session.server.table_for_peer(session)
-                if table is not None:
-                    await table.roster_presence(session, ordinary_room.room.room_id)
-            session.server.log(
-                "room_service",
-                session=session.id,
-                sequence=ordinary_room.room.sequence,
-                replies=len(responses),
-            )
-            return True
+            if responses is not None:
+                reply_count = len(responses)
+                chat_updates = (
+                    session.server.chat.leave(session, target)
+                    if was_member and session not in ordinary_room.room.members
+                    else []
+                )
+                if entering and session in ordinary_room.room.members:
+                    # Only a successful different-room DE confirms navigation.
+                    # Invalid/full destinations keep the old table reserved.
+                    if previous is not None:
+                        # Publish this destination sequence before waiting on
+                        # old-table notifications; newer destination PD updates
+                        # must not overtake its accepted DE.
+                        await ordinary_room.publish_room(responses)
+                        responses = []
+                        if session.closed:
+                            return True
+                        if session.server.table_for_peer(session) is previous:
+                            await previous.release_lobby(session)
+                            if session.closed:
+                                return True
+                    await leave_other_rooms(session.server, session, key, ordinary_room.room)
+                await ordinary_room.publish_room(responses)
+                await session.server.chat_updates(chat_updates)
+                if len(commands) == 1 and commands[0].token == b"PD":
+                    table = session.server.table_for_peer(session)
+                    if table is not None:
+                        await table.roster_presence(session, ordinary_room.room.room_id)
+                session.server.log(
+                    "room_service",
+                    session=session.id,
+                    sequence=ordinary_room.room.sequence,
+                    replies=reply_count,
+                )
+                return True
     if payload == b"GTM0GE1000000@TeachDV=":
         answer = teach_dv_answer()
         await session.send(service_notice(target, session.nick, answer))

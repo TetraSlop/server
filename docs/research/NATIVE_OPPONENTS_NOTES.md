@@ -92,7 +92,18 @@ all other scene/board RNG draws occur between the two original stages.
 
 ## Original menu wire contract
 
-The entry chain is code-addressed, not a graphics-driven native replay:
+The entry chain below is recovered from code. A native local session captured
+the transport order `GameENC -> GameECA -> PART room -> CheckJoinTable -> Req ->
+JOIN table -> room PD`. The room-channel PART changes chat membership only:
+the room roster, pending computer admission and account reservation must survive
+it. Clearing them changes Req into a legacy versus entry and rejects the next
+PD with "presence update requires room admission".
+
+`test_ordinary_room_part.py` replays that order over encrypted transport through
+ComList, NPC choice, card selection and the first turn. A successful DE into a
+different ordinary room may instead release an idle lobby seat; it must retain
+other waiting players and reject navigation during a start handshake or game.
+Full or invalid destination rooms must retain the previous admission.
 
 1. Alternate admission10095610 sends GameENC41/12 and requires GameECA41/13.
    It starts JOIN and sends primary01 Req at10095939 before JOIN completes.
