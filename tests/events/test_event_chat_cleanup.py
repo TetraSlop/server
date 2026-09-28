@@ -20,6 +20,7 @@ class EventChatCleanupTests(unittest.IsolatedAsyncioTestCase):
     play = events.EventSpectatorsIntegration.play
     observer_send = events.EventSpectatorsIntegration.observer_send
     read_watch = events.EventSpectatorsIntegration.read_watch
+    admit_watch = events.EventSpectatorsIntegration.admit_watch
     watch = events.EventSpectatorsIntegration.watch
 
     async def barrier(self, client):

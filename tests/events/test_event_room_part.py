@@ -24,6 +24,7 @@ class EventRoomPartTests(unittest.IsolatedAsyncioTestCase):
     admit = event_tests.EventMatchIntegrationTests.admit
     engine = event_tests.EventMatchIntegrationTests.engine
     watch = observer_tests.EventSpectatorsIntegration.watch
+    admit_watch = observer_tests.EventSpectatorsIntegration.admit_watch
     observer_send = observer_tests.EventSpectatorsIntegration.observer_send
     read_watch = observer_tests.EventSpectatorsIntegration.read_watch
 

@@ -266,7 +266,12 @@ class SpectatorService:
                 self._evict(peer, "round_replaced")
 
     def _attach(self, peer, state, snapshot):
-        messages = bootstrap(snapshot)  # Validate the entire bootstrap atomically.
+        try:
+            messages = bootstrap(snapshot)  # Validate the entire bootstrap atomically.
+        except MatchError as exc:
+            # Dense supported boards can exceed the native snapshot body cap.
+            # Reject this observer without interrupting participant publication.
+            raise SpectatorError(str(exc)) from exc
         state.waiting = False
         state.outstanding.extend(messages)
         state.bootstrapping = True

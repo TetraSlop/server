@@ -21,6 +21,7 @@ class EventSpectatorReentryTests(unittest.IsolatedAsyncioTestCase):
     engine = base.EventSpectatorsIntegration.engine
     observer_send = base.EventSpectatorsIntegration.observer_send
     read_watch = base.EventSpectatorsIntegration.read_watch
+    admit_watch = base.EventSpectatorsIntegration.admit_watch
     watch = base.EventSpectatorsIntegration.watch
 
     async def observer_barrier(self):

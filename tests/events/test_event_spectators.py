@@ -12,6 +12,7 @@ from tests.protocol.test_admission_identity import native_identity
 from tests.events.test_event_rooms import presence
 from tests.network.test_server import Client
 from tmserver.protocol.identities import GAME_KEY, service_nick
+from tmserver.game.errors import MatchError
 from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
 from tmserver.rooms.spectators import SpectatorService
@@ -92,7 +93,7 @@ class EventSpectatorsIntegration(unittest.IsolatedAsyncioTestCase):
                 return line.split(b" :", 1)[1]
         self.fail("observer response limit")
 
-    async def watch(self):
+    async def admit_watch(self):
         binding = self.server.event_rooms.rooms[0]
         view = self.observer_view
         await self.observer_send(
@@ -118,6 +119,9 @@ class EventSpectatorsIntegration(unittest.IsolatedAsyncioTestCase):
         admission = decode(await self.read_watch())
         self.assertEqual(admission.primary, 2)
         self.assertEqual(admission.sections["Tab"]["in"], "0")
+
+    async def watch(self):
+        await self.admit_watch()
         await self.observer_send(packet(0x43, 0x25, 0, "@Data=/Watch=0"))
         bootstrap = [await self.read_watch() for _ in range(3)]
         self.assertEqual([decode(p).subtype for p in bootstrap], [0x25, 0x26, 9])
@@ -165,6 +169,48 @@ class EventSpectatorsIntegration(unittest.IsolatedAsyncioTestCase):
 
     async def test_three_player_event_observer_full_round(self):
         await self.finish_and_check(3)
+
+    async def test_deferred_bootstrap_codec_failure_preserves_encrypted_event_round(self):
+        await self.start(3)
+        await self.admit()
+        await self.admit_watch()
+        engine = self.engine
+        before = [self.server.economy.profile_bytes(key) for key in self.keys]
+        spectators = self.server.event_matches.spectators
+        peer = self.server.nicks[self.observer.nick]
+        # Event configuration forbids CBC. Inject the shared codec failure at
+        # deferred attachment instead of creating an unsupported event board.
+        snapshot = engine.observer_snapshot()
+        with patch.object(
+            engine, "observer_snapshot", return_value=replace(snapshot, phase="battle")
+        ):
+            await self.observer_send(packet(0x43, 0x25, 0, "@Data=/Watch=0"))
+            await self.observer.send(b"PING :deferred-event-watch")
+            self.assertEqual(await self.observer.read(), b"PONG deferred-event-watch")
+        service = spectators.contexts[self.table.table_id][1]
+        self.assertTrue(service.active(peer))
+        with patch(
+            "tmserver.rooms.spectators.bootstrap",
+            side_effect=MatchError("injected snapshot encoding failure"),
+        ):
+            await self.send(0, self.table.table_id, packet(0x43, 9, 0, "@TurnData=/Ans=0"))
+            self.assertEqual(await self.observer.read(), b"")
+        self.assertFalse(service.active(peer))
+        self.assertNotIn(peer, spectators.admissions)
+        self.assertIsNone(self.server.event_matches.failure)
+        self.assertEqual(engine.phase, "turn")
+        self.assertTrue(all(self.server.economy.is_busy(key) for key in self.keys))
+        await self.play()
+        self.assertIs(self.engine, engine)
+        self.assertFalse(engine.outcome.aborted)
+        self.assertIsNone(self.server.event_matches.failure)
+        for side, key in enumerate(self.keys):
+            turns = [decode(p).argument for _, p in self.inbox[side] if b"@TurnData=" in p]
+            self.assertEqual(turns, list(range(15)))
+            self.assertEqual(sum(b"@EventResult=" in p for _, p in self.inbox[side]), 1)
+            self.assertFalse(self.server.nicks[self.clients[side].nick].closed)
+            self.assertEqual(self.server.economy.profile_bytes(key), before[side])
+        self.assertEqual(self.server.economy.profile_bytes(self.observer_key), self.observer_before)
 
     async def test_slow_observer_stream_does_not_hold_event_participant_lock(self):
         await self.start()
