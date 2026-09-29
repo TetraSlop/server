@@ -1,0 +1,114 @@
+{% extends "layout.html" %}
+{% macro grant_facts(record) %}
+  <dl class="row">
+    <dt class="col-sm-3">Account</dt><dd class="col-sm-9">{{ record.request.account_key }}</dd>
+    <dt class="col-sm-3">Event</dt><dd class="col-sm-9">{{ record.request.event_id }}</dd>
+    <dt class="col-sm-3">Grant reference</dt><dd class="col-sm-9">{{ record.request.grant_id }}</dd>
+    <dt class="col-sm-3">Money to collect</dt><dd class="col-sm-9">{{ record.request.money }}</dd>
+    <dt class="col-sm-3">Reason</dt><dd class="col-sm-9">{{ record.request.reason }}</dd>
+    <dt class="col-sm-3">Request ID</dt><dd class="col-sm-9">{{ record.request.request_id }}</dd>
+  </dl>
+  {% if record.cards %}
+  <div class="table-responsive"><table class="table">
+    <caption>Exact cards in this grant. Every card starts outside a deck.</caption>
+    <thead><tr><th>Card</th><th>Attack</th><th>Type</th><th>Physical defense</th><th>Magical defense</th><th>Arrows</th><th>Points</th></tr></thead>
+    <tbody>{% for card in record.cards %}<tr><td>{{ cards[card.model].name }}</td><td>{{ card.attack }}</td><td>{{ ('P', 'M', 'X', 'A')[card.kind] }}</td><td>{{ card.physical }}</td><td>{{ card.magical }}</td><td>{{ card.arrows }}</td><td>{{ card.points }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p>No cards in this grant.</p>{% endif %}
+{% endmacro %}
+{% block content %}
+<section class="card">
+  <div class="card-header"><h2 class="card-title">Queue an event grant</h2></div>
+  <div class="card-body">
+    <p>This queues money and cards for an existing event member to collect in the game. It does not add them to the player's balance or inventory now.</p>
+    {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+    {% if receipt %}
+      <div class="alert alert-success" role="status">Event grant queued and audit receipt saved.</div>
+      {{ grant_facts(receipt) }}
+      <p>Queued by {{ receipt.request.operator }} at {{ receipt.committed_at }}.</p>
+      <p>This receipt records the original grant, including after collection. Refreshing or retrying the same request does not queue another grant.</p>
+      <a class="btn btn-outline-primary" href="{{ url_for('admin:event-grants') }}">Prepare another grant</a>
+    {% elif failed_request_id %}
+      <p>Request ID: <strong>{{ failed_request_id }}</strong></p>
+      <p>Keep this page open. After the server restarts, sign in again in a separate tab, then return here to check the receipt or retry this exact request.</p>
+      <a class="btn btn-outline-primary mb-3" href="{{ url_for('admin:login') }}" target="_blank" rel="noopener">Sign in again after restart</a>
+      <a class="btn btn-outline-primary mb-3" href="{{ receipt_url }}" target="_blank" rel="noopener">Check this request's receipt after recovery</a>
+      <form id="event-grant-retry" method="post" action="{{ url_for('admin:event-grant-apply') }}">
+        {{ csrf_input(request) }}
+        <input type="hidden" name="command" value="{{ command_json }}">
+        <input type="hidden" name="digest" value="{{ digest }}">
+        <button class="btn btn-outline-primary" type="submit">Retry this same request after recovery</button>
+      </form>
+    {% elif preview %}
+      <h3>Review before queuing</h3>
+      {{ grant_facts(preview) }}
+      <p>Current event eligibility: {{ 'Eligible' if preview.eligibility >= 0 else 'Excluded' }}. Collection is {{ 'enabled' if preview.collection_enabled else 'disabled' }} for this event.</p>
+      {% if preview.eligibility < 0 %}<div class="alert alert-warning">The player is currently excluded from this event and cannot collect while excluded.</div>{% endif %}
+      {% if not preview.collection_enabled %}<div class="alert alert-warning">Collection is currently disabled. The grant stays queued until collection is enabled.</div>{% endif %}
+      <form method="post" action="{{ url_for('admin:event-grant-apply') }}">
+        {{ csrf_input(request) }}
+        <input type="hidden" name="command" value="{{ command_json }}">
+        <input type="hidden" name="digest" value="{{ preview.digest }}">
+        <button class="btn btn-primary" type="submit">Confirm and queue grant</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('admin:event-grants') }}">Cancel</a>
+      </form>
+    {% elif values %}
+      <p>New grants require an idle account registered for the selected event. Nothing is saved until you confirm the preview.</p>
+      <form method="post" action="{{ url_for('admin:event-grant-preview') }}">
+        {{ csrf_input(request) }}
+        <input type="hidden" name="request_id" value="{{ values.request_id }}">
+        <input type="hidden" name="row_count" value="{{ values.row_count }}">
+        <div class="row">
+          <div class="col-sm-6 mb-3">
+            <label class="form-label" for="account_key">Account</label>
+            <select class="form-select" id="account_key" name="account_key" required>
+              <option value="">Choose an account</option>
+              {% for account in accounts %}<option value="{{ account.id }}" {% if values.account_key == account.id %}selected{% endif %} {% if account.busy %}disabled{% endif %}>{{ account.name }} — {{ account.id }}{% if account.busy %} (in an activity){% endif %}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 mb-3">
+            <label class="form-label" for="event_id">Event</label>
+            <select class="form-select" id="event_id" name="event_id" required>
+              <option value="">Choose an event</option>
+              {% for event in events %}<option value="{{ event.id }}" {% if values.event_id == event.id %}selected{% endif %}>{{ event.name }} — {{ event.id }}{% if not event.enabled %} (collection disabled){% endif %}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-sm-8 mb-3"><label class="form-label" for="grant_id">Grant reference</label><input class="form-control" id="grant_id" name="grant_id" value="{{ values.grant_id }}" maxlength="128" required></div>
+          <div class="col-sm-4 mb-3"><label class="form-label" for="money">Money</label><input class="form-control" id="money" name="money" type="number" min="0" max="99999999" step="1" value="{{ values.money }}" required></div>
+        </div>
+        <h3>Cards</h3><p>Leave a whole row blank for no card. Fill every field in a row to include it. Points are calculated from the card's stats.</p>
+        {% for index in range(values.row_count) %}
+        <fieldset class="border rounded p-3 mb-3"><legend class="float-none w-auto px-2 fs-5">Card {{ index + 1 }}</legend>
+          <div class="row">
+            {% set field = 'card_' ~ index ~ '_model' %}
+            <div class="col-sm-6 mb-2"><label class="form-label" for="{{ field }}">Card name</label><select class="form-select" id="{{ field }}" name="{{ field }}"><option value="">No card</option>{% for card in cards %}<option value="{{ loop.index0 }}" {% if values.get(field, '') | string == loop.index0 | string %}selected{% endif %}>{{ card.name }}</option>{% endfor %}</select></div>
+            {% set field = 'card_' ~ index ~ '_kind' %}
+            <div class="col-sm-6 mb-2"><label class="form-label" for="{{ field }}">Type</label><select class="form-select" id="{{ field }}" name="{{ field }}"><option value="">Choose a type</option>{% for label in ['P — Physical', 'M — Magical', 'X', 'A'] %}<option value="{{ loop.index0 }}" {% if values.get(field, '') | string == loop.index0 | string %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+            {% for name, label in [('attack', 'Attack'), ('physical', 'Physical defense'), ('magical', 'Magical defense'), ('arrows', 'Arrow pattern (0–255)')] %}{% set field = 'card_' ~ index ~ '_' ~ name %}
+            <div class="col-sm-3 mb-2"><label class="form-label" for="{{ field }}">{{ label }}</label><input class="form-control" id="{{ field }}" name="{{ field }}" type="number" min="0" max="255" step="1" value="{{ values.get(field, '') }}"></div>
+            {% endfor %}
+          </div>
+        </fieldset>
+        {% endfor %}
+        {% if values.row_count < 30 %}<button class="btn btn-outline-secondary mb-3" type="submit" name="intent" value="add-card" formnovalidate>Add card row</button>{% endif %}
+        <div class="mb-3"><label class="form-label" for="reason">Reason</label><textarea class="form-control" id="reason" name="reason" maxlength="1000" required>{{ values.reason }}</textarea></div>
+        <button class="btn btn-primary" type="submit" name="intent" value="preview">Preview grant</button>
+      </form>
+    {% else %}
+      <a class="btn btn-outline-primary" href="{{ url_for('admin:event-grants') }}">Prepare a grant</a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+{% block script %}
+{{ super() }}
+{% if failed_request_id %}
+<script>
+  document.getElementById("event-grant-retry").addEventListener("submit", function () {
+    this.elements.csrftoken.value = Cookies.get("starlette_admin_csrftoken") || "";
+  });
+</script>
+{% endif %}
+{% endblock %}

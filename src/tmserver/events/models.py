@@ -5,25 +5,32 @@ import re
 import struct
 from dataclasses import dataclass
 
+from pydantic import ConfigDict
+from pydantic.dataclasses import dataclass as validated_dataclass
+
 from tmserver.economy.errors import EconomyError
 from tmserver.game import special_rules as special
 from tmserver.game.models import Card
+from tmserver.rooms.records import build_table_record
 
 
-@dataclass(frozen=True)
+_CONFIG = ConfigDict(strict=True, extra="forbid")
+
+
+@validated_dataclass(frozen=True, config=_CONFIG)
 class EventListing:
     key_region: bytes
     key_event: bytes
     description: bytes
     scalar: int = 0
-    flags: tuple = (0, 0, 0, 0)
+    flags: tuple[int, ...] = (0, 0, 0, 0)
     start: int = 0
     end: int = 0
 
 
-@dataclass(frozen=True)
+@validated_dataclass(frozen=True, config=_CONFIG)
 class PrizeDisplay:
-    cards: tuple = ()
+    cards: tuple[int, ...] = ()
     money: int = 0
     description: bytes = b""
 
@@ -41,7 +48,7 @@ class EventError(EconomyError):
     """Malformed or unauthorized event input; no success should be sent."""
 
 
-@dataclass(frozen=True)
+@validated_dataclass(frozen=True, config=_CONFIG)
 class EventConfig:
     """Trusted local configuration, not a reconstructed historical tournament.
 
@@ -125,12 +132,9 @@ class EventConfig:
         ):
             if not enabled:
                 continue
-            row = bytearray(0x68)
-            struct.pack_into("<Q", row, 0, identity)
-            row[0x18 : 0x18 + len(channel)] = channel
-            row[0x28:0x59] = prefix + b"A" * 48
-            # E discovery accepts DWORD+0C<8. Zero is a local fixture value.
-            rows.append(bytes(row))
+            rows.append(
+                build_table_record(identity=identity, channel=channel, metadata=prefix + b"A" * 48)
+            )
         return tuple(rows)
 
 
@@ -150,17 +154,17 @@ class EventDelivery:
     payload: bytes
 
 
-@dataclass(frozen=True)
+@validated_dataclass(frozen=True, config=_CONFIG)
 class EventTableConfig:
     event_id: str
     table_id: int
     channel: bytes
     player_count: int = 2
-    cpu_cards: tuple | None = None
+    cpu_cards: tuple | list | None = None
     turn_limit: int = 2
     departure_rule: int = 1
     seed: int = 1
-    start_fields: tuple | None = None
+    start_fields: tuple | list | None = None
 
     def __post_init__(self):
         if self.player_count not in (2, 3) or type(self.player_count) is not int:

@@ -19,6 +19,8 @@ from tmserver.rooms.packets import (
     table_info,
 )
 from tmserver.protocol.commands import Command, encode_service, parse
+from tmserver.rooms.records import build_table_record
+
 
 class RoomService:
     def __init__(
@@ -52,11 +54,13 @@ class RoomService:
             raise ValueError("table channel must fit its terminated sixteen-byte field")
         if service_records is None:
             # Original100156E5 selects the last D-prefix PTL service record.
-            trade = bytearray(0x68)
-            struct.pack_into("<Q", trade, 0, game_id(TRADE_RAW))
-            trade[0x18 : 0x18 + len(TRADE_CHANNEL)] = TRADE_CHANNEL
-            trade[0x28:0x59] = b"D" + b"A" * 48
-            service_records = (bytes(trade),)
+            service_records = (
+                build_table_record(
+                    identity=game_id(TRADE_RAW),
+                    channel=TRADE_CHANNEL,
+                    metadata=b"D" + b"A" * 48,
+                ),
+            )
         records = tuple(service_records)
         if len(records) + int(table_id is not None) > 128:
             raise ValueError("PTL exceeds the original live table array")
@@ -138,12 +142,12 @@ class RoomService:
     def table_record(self):
         if self.table_id is None:
             raise ValueError("this room has no ordinary playable table")
-        b = bytearray(0x68)
-        struct.pack_into("<QIIIB", b, 0, self.table_id, 0, 0, 0, self.table_state)
-        b[0x18 : 0x18 + len(self.table_channel)] = self.table_channel
-        metadata = self.table_metadata
-        b[0x28 : 0x28 + len(metadata)] = metadata
-        return bytes(b)
+        return build_table_record(
+            identity=self.table_id,
+            channel=self.table_channel,
+            metadata=self.table_metadata,
+            state=self.table_state,
+        )
 
     def snapshot(self):
         b = bytearray(0xC050)
@@ -315,7 +319,7 @@ class RoomService:
                 Command(b"DN", b"1"),
                 Command(b"DC", str(sequence).encode()),
                 command,
-            ]
+            ],
         )
 
     def handle(self, peer, payload, *, authenticated_identity=None, authenticated_name=None):

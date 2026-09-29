@@ -1,0 +1,89 @@
+{% extends "layout.html" %}
+{% macro award_facts(command) %}
+  <dt class="col-sm-3">Ranking points</dt><dd class="col-sm-9">{{ command.top30 }}</dd>
+  <dt class="col-sm-3">Lucky points</dt><dd class="col-sm-9">{{ command.lucky }}</dd>
+  <dt class="col-sm-3">Rookie points</dt><dd class="col-sm-9">{{ command.rookies }}</dd>
+  <dt class="col-sm-3">Lucky Card displays</dt><dd class="col-sm-9">{% for model in command.lucky_cards %}{{ 'None' if model == 65535 else cards[model].name }}{% if not loop.last %}, {% endif %}{% endfor %}</dd>
+{% endmacro %}
+{% block content %}
+<section class="card">
+  <div class="card-header"><h2 class="card-title">Queue a Prize Center award</h2></div>
+  <div class="card-body">
+    <p>This queues prize points for the player to claim in the Prize Center. It does not add money or inventory cards. Lucky Cards are display choices only.</p>
+    {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+    {% if receipt %}
+      <div class="alert alert-success" role="status">Award queued and audit receipt saved.</div>
+      <dl class="row">
+        <dt class="col-sm-3">Account</dt><dd class="col-sm-9">{{ receipt.request.account_key }}</dd>
+        <dt class="col-sm-3">Award reference</dt><dd class="col-sm-9">{{ receipt.request.award_id }}</dd>
+        {{ award_facts(receipt.request) }}
+        <dt class="col-sm-3">Request ID</dt><dd class="col-sm-9">{{ receipt.request.request_id }}</dd>
+        <dt class="col-sm-3">Operator</dt><dd class="col-sm-9">{{ receipt.request.operator }}</dd>
+        <dt class="col-sm-3">Reason</dt><dd class="col-sm-9">{{ receipt.request.reason }}</dd>
+        <dt class="col-sm-3">Saved at</dt><dd class="col-sm-9">{{ receipt.committed_at }}</dd>
+      </dl>
+      <p>Refreshing or retrying this same request does not queue another award. The receipt records the original action even after the player claims it.</p>
+      <a class="btn btn-outline-primary" href="{{ url_for('admin:prize-awards') }}">Prepare another award</a>
+    {% elif failed_request_id %}
+      <p>Request ID: <strong>{{ failed_request_id }}</strong></p>
+      <p>The receipt can tell you whether the award was saved before the connection failed.</p>
+      <a class="btn btn-outline-primary" href="{{ receipt_url }}">Check this request's receipt after recovery</a>
+    {% elif preview %}
+      <h3>Review before queuing</h3>
+      <dl class="row">
+        <dt class="col-sm-3">Account</dt><dd class="col-sm-9">{{ preview.request.account_key }}</dd>
+        <dt class="col-sm-3">Award reference</dt><dd class="col-sm-9">{{ preview.request.award_id }}</dd>
+        {{ award_facts(preview.request) }}
+        <dt class="col-sm-3">Current points</dt><dd class="col-sm-9">{{ preview.current_points }}</dd>
+        <dt class="col-sm-3">Points after redemption</dt><dd class="col-sm-9">{{ preview.points_on_redemption }} (maximum 99,999)</dd>
+        <dt class="col-sm-3">Reason</dt><dd class="col-sm-9">{{ preview.request.reason }}</dd>
+        <dt class="col-sm-3">Request ID</dt><dd class="col-sm-9">{{ preview.request.request_id }}</dd>
+      </dl>
+      <form method="post" action="{{ url_for('admin:prize-award-apply') }}">
+        {{ csrf_input(request) }}
+        <input type="hidden" name="command" value="{{ command_json }}">
+        <input type="hidden" name="digest" value="{{ preview.digest }}">
+        <button class="btn btn-primary" type="submit">Confirm and queue award</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('admin:prize-awards') }}">Cancel</a>
+      </form>
+    {% elif values %}
+      <p>New awards require an idle account. The next page previews the exact change before anything is saved.</p>
+      <form method="post" action="{{ url_for('admin:prize-award-preview') }}">
+        {{ csrf_input(request) }}
+        <input type="hidden" name="request_id" value="{{ values.request_id }}">
+        <div class="mb-3">
+          <label class="form-label" for="account_key">Account</label>
+          <select class="form-select" id="account_key" name="account_key" required>
+            <option value="">Choose an account</option>
+            {% for account in accounts %}<option value="{{ account.id }}" {% if values.account_key == account.id %}selected{% endif %} {% if account.busy %}disabled{% endif %}>{{ account.name }} — {{ account.id }}{% if account.busy %} (in an activity){% endif %}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="award_id">Award reference</label>
+          <input class="form-control" id="award_id" name="award_id" value="{{ values.award_id }}" maxlength="128" required>
+        </div>
+        <div class="row">
+          {% for field, label in [('top30', 'Ranking points'), ('lucky', 'Lucky points'), ('rookies', 'Rookie points')] %}
+          <div class="col-sm-4 mb-3"><label class="form-label" for="{{ field }}">{{ label }}</label><input class="form-control" id="{{ field }}" name="{{ field }}" type="number" min="0" max="65535" step="1" value="{{ values[field] }}" required></div>
+          {% endfor %}
+        </div>
+        <div class="row">
+          {% for index in range(1, 4) %}{% set field = 'lucky' ~ index %}
+          <div class="col-sm-4 mb-3">
+            <label class="form-label" for="{{ field }}">Lucky Card display {{ index }}</label>
+            <select class="form-select" id="{{ field }}" name="{{ field }}">
+              <option value="65535" {% if values[field] | int == 65535 %}selected{% endif %}>None</option>
+              {% for card in cards %}<option value="{{ loop.index0 }}" {% if values[field] | int == loop.index0 %}selected{% endif %}>{{ card.name }}</option>{% endfor %}
+            </select>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="mb-3"><label class="form-label" for="reason">Reason</label><textarea class="form-control" id="reason" name="reason" maxlength="1000" required>{{ values.reason }}</textarea></div>
+        <button class="btn btn-primary" type="submit">Preview award</button>
+      </form>
+    {% else %}
+      <a class="btn btn-outline-primary" href="{{ url_for('admin:prize-awards') }}">Prepare an award</a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

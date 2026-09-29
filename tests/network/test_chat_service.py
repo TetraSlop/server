@@ -1,16 +1,22 @@
 """Chat contracts exercised against original consumers and encrypted sessions."""
 
 import asyncio
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from tests.network.test_server import Client
+from tests.profiles.test_profile_accounts import file_request, transact
 from tmserver.network.chat import ChatService, Member, relay_text, roster_pages
 from tmserver.protocol.identities import ROOM_RAW, player_id, service_nick
 from tmserver.network.local_accounts import MAX_ACCOUNTS
 from tmserver.game.packets import decode, packet
 from tmserver.network.server import ACCOUNTS, Server
+from tmserver.profiles.packets import checked
+from tmserver.profiles.service import ProfileServer
+from tmserver.protocol.messages import FRAME_OVERHEAD, MAX_LINE
+from tmserver.protocol.wire import frame_line
 from tmserver.storage.json import JsonStateStore
 
 
@@ -91,15 +97,101 @@ class ChatTests(unittest.TestCase):
         entry = packet(0x42, 1, body="@Chat=/NN=0000000000000001")
         prefix = b"GTM0G42000800@Chat=/La=1/Dt=#CHAT#"
         valid_message = prefix + b"Alice\thello"
-        for name in (b"", b"A" * 17, b"A" * 15 + b"\x01", b"A" * 15 + b"\x7f", b"A" * 15 + b"\x82"):
+        controls = bytes(range(32)) + b"\x7f"
+        for name in (b"", b"A" * 17, *(b"A" * 15 + bytes((c,)) for c in controls)):
             with self.subTest(name=name):
                 with self.assertRaises(ValueError):
                     service.enter("peer", b"group", entry, identity=1, name=name)
                 self.assertEqual(service.groups, {})
                 with self.assertRaises(ValueError):
                     relay_text(valid_message, name, private=False)
-                with self.assertRaises(ValueError):
-                    relay_text(prefix + name + b"\thello", b"Alice", private=False)
+                # In raw text the first TAB is the name delimiter, and later
+                # TABs belong to the message. A canonical name cannot contain it.
+                if not name.endswith(b"\t"):
+                    with self.assertRaises(ValueError):
+                        relay_text(prefix + name + b"\thello", b"Alice", private=False)
+        for control in controls:
+            with self.subTest(control=control), self.assertRaises(ValueError):
+                roster_pages([Member("peer", 1, b"\x82\xa0" + bytes((control,)))], 1)
+
+    def test_original_non_ascii_name_bytes_survive_roster_and_text(self):
+        fixture = json.loads(
+            (Path(__file__).parents[1] / "fixtures/chat_native_names.json").read_text()
+        )
+        # Frozen original x86 intake/extraction; no font or transcoding claim.
+        roster = fixture["roster"]
+        identity = int(roster["identity_hex"], 16)
+        name = bytes.fromhex(roster["extracted_name_hex"])
+        self.assertEqual(
+            name, bytes.fromhex(fixture["presentation"]["cases"][0]["extracted_name_hex"])
+        )
+        service = ChatService()
+        entry = packet(0x42, 1, body=f"@Chat=/NN={identity:016X}")
+        replies = service.enter("peer", b"group", entry, identity=identity, name=name)
+        self.assertEqual(
+            replies[1].payload,
+            b"GTM0G" + roster["input_after_gtm0g"].encode("ascii"),
+        )
+        incoming = b"GTM0G42000800@Chat=/La=1/Dt=#CHAT#\x82\xa2\thello"
+        self.assertEqual(
+            relay_text(incoming, name, private=False),
+            b"GTM0G42000800@Chat=/La=1/Dt=#CHAT#\x82\xa0\thello",
+        )
+        with self.assertRaisesRegex(ValueError, "authenticated account"):
+            service.enter("spoof", b"group", entry, identity=identity + 1, name=name)
+        self.assertEqual(list(service.groups[b"group"]), ["peer"])
+
+    def test_original_byte_gate_keeps_existing_16_to_15_byte_truncation(self):
+        fixture = json.loads(
+            (Path(__file__).parents[1] / "fixtures/chat_native_names.json").read_text()
+        )
+        accepted, rejected = fixture["presentation"]["cases"][1:]
+        self.assertTrue(accepted["accepted"])
+        self.assertFalse(rejected["accepted"])
+        canonical = bytes.fromhex(rejected["input_name_hex"])
+        displayed = bytes.fromhex(accepted["extracted_name_hex"])
+        # Byte 15 is a lead byte. Preserve the established byte slice rather
+        # than inventing a Unicode boundary policy the original did not have.
+        self.assertEqual(canonical, b"A" * 14 + b"\x82\xa0")
+        self.assertEqual(displayed, b"A" * 14 + b"\x82")
+        incoming = b"GTM0G42000800@Chat=/La=1/Dt=#CHAT#" + canonical + b"\thello"
+        self.assertEqual(
+            relay_text(incoming, canonical, private=False),
+            b"GTM0G42000800@Chat=/La=1/Dt=#CHAT#" + displayed + b"\thello",
+        )
+        service = ChatService()
+        replies = service.enter(
+            "peer",
+            b"group",
+            packet(0x42, 1, body="@Chat=/NN=0000000000000001"),
+            identity=1,
+            name=canonical,
+        )
+        self.assertEqual(
+            bytes.fromhex(decode(replies[1].payload).sections["Chat"]["CN"]), displayed
+        )
+
+    def test_native_name_limits_and_reply_budget_count_bytes_without_transcoding(self):
+        name = b"\x82\xa0" * 7 + b"A"
+        prefix = b"@Chat=/La=1/Dt=#CHAT#"
+        text = b"x" * (447 - len(prefix + name + b"\t"))
+        incoming = b"GTM0G42000800" + prefix + b"X\t" + text
+        output = relay_text(incoming, name, private=False)
+        self.assertEqual(output, b"GTM0G42000800" + prefix + name + b"\t" + text)
+        self.assertEqual(len(output) - 13, 447)
+        line = b":UGITW5T4U!p@local NOTICE #LOCALROOM01 :" + output
+        self.assertLessEqual(len(line) + FRAME_OVERHEAD, MAX_LINE)
+        self.assertEqual(len(frame_line(line)), len(line) + FRAME_OVERHEAD)
+        with self.assertRaisesRegex(ValueError, "normalized chat exceeds"):
+            relay_text(incoming + b"x", name, private=False)
+        with self.assertRaises(ValueError):
+            roster_pages([Member("peer", 1, name + b"B")], 1)
+        canonical = b"\x82\xa0" + b"ABCDEFGHIJKLMN"
+        self.assertEqual(len(canonical), 16)
+        self.assertIn(
+            b"#CHAT#" + canonical[:15] + b"\t",
+            relay_text(b"GTM0G42000800" + prefix + canonical + b"\thi", canonical, private=False),
+        )
 
     def test_page_size_index_counter_and_empty_list(self):
         members = [Member(i, i + 1, ("Name" + str(i).zfill(11)).encode()) for i in range(80)]
@@ -216,12 +308,24 @@ class ChatAccountNameIntegrationTests(unittest.IsolatedAsyncioTestCase):
             replies.append(line)
         self.fail("chat response limit")
 
-    async def exercise_chat(self, server, port, nicks, names):
+    async def exercise_chat(self, server, port, nicks, names, *, profile_port=None):
         clients = [Client(), Client()]
         try:
             for client, nick in zip(clients, nicks, strict=True):
                 await client.open(port, account=nick)
                 self.assertIn(b" 422 ", await client.read())
+                if profile_port is not None:
+                    result = await transact(
+                        profile_port,
+                        nick.decode(),
+                        3,
+                        0,
+                        file_request(),
+                        context=(client.cipher, client.iv),
+                    )
+                    self.assertEqual(
+                        result, (0, checked(server.economy.profile_bytes(nick.decode())))
+                    )
                 entry = packet(0x42, 1, body=f"@Chat=/NN={player_id(nick):016X}")
                 await client.send(b"NOTICE " + service_nick(ROOM_RAW) + b" :" + entry)
                 replies = await self.flush(client)
@@ -264,6 +368,19 @@ class ChatAccountNameIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     + private.replace(b"SpoofedName1234X", names[1][:15])
                 ],
             )
+            if profile_port is not None:
+                for client, nick, name in zip(clients, nicks, names, strict=True):
+                    error, data = await transact(
+                        profile_port,
+                        nick.decode(),
+                        3,
+                        0,
+                        file_request(),
+                        context=(client.cipher, client.iv),
+                    )
+                    self.assertEqual(error, 0)
+                    self.assertEqual(data, checked(server.economy.profile_bytes(nick.decode())))
+                    self.assertEqual(data[0x10:0x20].rstrip(b"\0"), name)
         finally:
             for client in clients:
                 if hasattr(client, "writer"):
@@ -274,13 +391,25 @@ class ChatAccountNameIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(server.chat.groups, {})
 
     async def test_full_names_enter_and_relay_before_after_reconnect_and_restore(self):
+        await self.exercise_saved_names((b"ABCDEFGHIJKLMNOP", b"QRSTUVWXYZABCDEF"))
+
+    async def test_non_ascii_names_chat_and_encrypted_profile_survive_reconnect_and_restore(self):
+        await self.exercise_saved_names(
+            (b"\x82\xa0" * 7 + b"A", b"\x82\xa2" + b"ABCDEFGHIJKLMN"), check_profiles=True
+        )
+
+    async def exercise_saved_names(self, names, *, check_profiles=False):
         asyncio.get_running_loop().slow_callback_duration = 1
         nicks = list(ACCOUNTS)
-        names = (b"ABCDEFGHIJKLMNOP", b"QRSTUVWXYZABCDEF")
         with tempfile.TemporaryDirectory() as folder:
             state = Path(folder) / "state.json"
             for restored in (False, True):
                 server = Server(state_path=state)
+                profile = (
+                    ProfileServer(Path(folder) / "profile.jsonl", server)
+                    if check_profiles
+                    else None
+                )
                 try:
                     if not restored:
                         for index, (nick, name) in enumerate(zip(nicks, names, strict=True)):
@@ -293,9 +422,12 @@ class ChatAccountNameIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     saved = state.read_bytes()
                     native = {key: server.economy.profile_bytes(key) for key in server.account_keys}
                     port = await server.start(0)
+                    profile_port = await profile.start(0) if profile is not None else None
                     for reconnected in (False, True):
                         with self.subTest(restored=restored, reconnected=reconnected):
-                            await self.exercise_chat(server, port, nicks, names)
+                            await self.exercise_chat(
+                                server, port, nicks, names, profile_port=profile_port
+                            )
                             self.assertEqual(server.snapshot(), before)
                             self.assertEqual(state.read_bytes(), saved)
                             for nick, name in zip(nicks, names, strict=True):
@@ -304,6 +436,8 @@ class ChatAccountNameIntegrationTests(unittest.IsolatedAsyncioTestCase):
                                 self.assertEqual(server.economy.profile_bytes(key), native[key])
                     self.assertEqual(JsonStateStore(state).load()["accounts"], before["accounts"])
                 finally:
+                    if profile is not None:
+                        await profile.stop()
                     await server.stop()
 
 

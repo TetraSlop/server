@@ -10,6 +10,10 @@ change the wire protocol, saved-state format or service lifetime.
 | --- | --- |
 | Start the server or local client session | [cli/serve.py](../src/tmserver/cli/serve.py), [cli/play.py](../src/tmserver/cli/play.py) |
 | Inspect or modify an offline save | [cli/admin.py](../src/tmserver/cli/admin.py), [storage/database.py](../src/tmserver/storage/database.py) |
+| Inspect the running server | [admin/queries.py](../src/tmserver/admin/queries.py), [admin/views.py](../src/tmserver/admin/views.py), [admin/server.py](../src/tmserver/admin/server.py) |
+| Preview and commit an audited operator award | [admin/actions.py](../src/tmserver/admin/actions.py), [admin/audit.py](../src/tmserver/admin/audit.py), [admin/awards.py](../src/tmserver/admin/awards.py) |
+| Queue an audited event card or money grant | [admin/event_actions.py](../src/tmserver/admin/event_actions.py), [admin/audit.py](../src/tmserver/admin/audit.py) |
+| Correct event eligibility or progress | [admin/member_actions.py](../src/tmserver/admin/member_actions.py), [admin/event_members.py](../src/tmserver/admin/event_members.py) |
 | Shared services and connection lifetime | [network/server.py](../src/tmserver/network/server.py), [network/session.py](../src/tmserver/network/session.py) |
 | Route a service request or chat message | [network/dispatch.py](../src/tmserver/network/dispatch.py), [network/chat.py](../src/tmserver/network/chat.py) |
 | Decode wire frames, commands or identities | [protocol/](../src/tmserver/protocol/) |
@@ -18,6 +22,7 @@ change the wire protocol, saved-state format or service lifetime.
 | Ordinary room rules and table lifecycle | [rooms/config.py](../src/tmserver/rooms/config.py), [rooms/table.py](../src/tmserver/rooms/table.py), [rooms/service.py](../src/tmserver/rooms/service.py) |
 | Event configuration and matchmaking | [events/config.py](../src/tmserver/events/config.py), [events/adapter.py](../src/tmserver/events/adapter.py), [events/matchmaking.py](../src/tmserver/events/matchmaking.py) |
 | Accounts, purchases, trade and rewards | [economy/service.py](../src/tmserver/economy/service.py), [economy/](../src/tmserver/economy/) |
+| Durable login ownership and automatic accounts | [accounts/identities.py](../src/tmserver/accounts/identities.py), [accounts/provisioning.py](../src/tmserver/accounts/provisioning.py) |
 | Auction records, protocol and escrow | [economy/auctions/](../src/tmserver/economy/auctions/), [economy/claim_transactions.py](../src/tmserver/economy/claim_transactions.py) |
 | Profile files and saved player settings | [profiles/service.py](../src/tmserver/profiles/service.py), [profiles/characters.py](../src/tmserver/profiles/characters.py), [profiles/preferences.py](../src/tmserver/profiles/preferences.py) |
 | Ratings, statistics and ranking files | [rankings/policy.py](../src/tmserver/rankings/policy.py), [rankings/stats.py](../src/tmserver/rankings/stats.py), [rankings/service.py](../src/tmserver/rankings/service.py) |
@@ -30,6 +35,43 @@ listener is separate in `profiles.service`. Recovered combat, AI, board and
 opponent algorithms live in `game`; explicit local reward and rating policies
 remain in their economy/ranking owners.
 
+The optional Starlette Admin listener runs on the same event loop and borrows
+that host. Request-local detached projections are captured before rendering;
+the panel never opens storage or enrolls accounts. `cli.serve` stops HTTP first,
+then profiles and game, before releasing storage and an optional native rules
+context. The base installation never imports the web framework.
+
+The optional auth gateway verifies a provider identity before asking
+`accounts.provisioning` to allocate a native account. Account data and the
+Pydantic ownership journal commit together through the existing store. The
+registry restores without web dependencies; both raw listeners reject its owned
+accounts unless a trusted play-session access object authorizes the stream.
+Legacy pilot links import at startup. No loader-supplied name or identifier
+controls ownership, and tickets remain process-local capabilities.
+
+When explicitly enabled, `admin.actions` shares synchronous preview/commit logic
+between web forms and the offline CLI. Strict Pydantic requests and receipts live
+in `admin.audit`; award and audit publish only after one joint storage commit.
+`admin.event_actions` applies the same contract to event grants. It stages only
+the event-card and audit journals; account inventory, balance and event progress
+remain unchanged until normal collection. Restoration loads event grants before
+audit receipts so it can check their original facts even after collection.
+
+`game.backends.RulesBackend` describes the borrowed calculation dependency.
+The default calls the existing Python functions. A supplied backend calculates
+battles and ordinary two-player AI; the match owner retains random state,
+selection, turn order, rewards and all other transitions. Special and three-player
+AI continue through Python. Ordinary/event table constructors propagate the same
+backend reference. Only the caller closes it, after its services drain. An
+injected calculation failure aborts the affected round without retrying already
+consumed randomness through another backend.
+Optional `GrowthBackend` and `TargetBackend` capabilities let the native ABI 2
+bridge calculate growth and target choice. Older battle/move backends keep the
+Python defaults for those capabilities. Selection happens before invocation;
+an invoked operation never falls back after failure.
+Final card snapshots publish together after every player's growth succeeds.
+A late failure therefore cannot expose a partially completed result.
+
 These packages use direct imports and explicit object references. Their
 initializers do not aggregate or construct services. Shared packet helpers live
 in `game.packets` and `economy.packets`, whose accepted dialects differ;
@@ -38,6 +80,9 @@ chat, rooms and events import codecs directly from their owners. Those codecs
 can be used without loading the match or shop service. `events.packets` owns
 event file encodings, `rooms.packets` directory/roster records,
 `rankings.packets` ranking rows, and `profiles.packets` profile response framing.
+The room and zone directory layouts are Construct schemas in `rooms.records`,
+shared by default, ordinary and event room builders. Field widths, constants
+and padding are defined there once; callers supply the room's policy values.
 
 The old flat Python module names have moved, with no compatibility namespace.
 For example, import `Server` from `tmserver.network.server` and `MatchService`
@@ -107,9 +152,16 @@ lower receive path ignores the fifth service-marker byte; generic `GTM0` relays
 would therefore let a player impersonate service controls. Server-owned replies
 use their normal service delivery paths. Opaque non-game relay traffic is retained.
 
-The model stays ordinary Python dataclasses. SQLAlchemy Core and Alembic are
-optional persistence dependencies. There is no second ORM or Pydantic domain
-model to keep synchronized with the protocol's native representations.
+Runtime state uses Python dataclasses. Room and event configuration uses strict
+Pydantic validation, retaining frozen dataclass constructors and `replace` where
+those interfaces are already used. JSON conversion stays at the configuration
+boundary, including text encoding, route IDs and automatic seating. Unknown
+fields and numeric coercions are rejected; cross-field game rules and route
+collisions remain explicit domain checks. Auction persistence now uses the same
+strict boundary for saved record shapes in `economy/auctions/persistence.py`;
+the ledger retains identity, escrow, catalogue and cross-record invariants.
+Its version-1 JSON representation and legacy seven-field cards remain supported.
+SQLAlchemy Core and Alembic remain optional persistence dependencies.
 
 `cards.model.Card` defines the eight stored card fields once. Native rules and matches
 keep thin adapters for their different validation domains and wire encodings;
@@ -185,9 +237,10 @@ Durable receipts handle a commit whose acknowledgement was lost.
 Diagnostic log failures are separate from saved-state failures. A runtime log
 open/write/flush/close error disables that service's diagnostics and reports once
 through standard Python logging; responses and disconnect/shutdown cleanup
-continue. The game log still opens before startup, and a configured path that
-cannot be opened still fails startup. Save errors retain the fail-closed behavior
-above.
+continue. The game log opens after configuration and saved-state validation,
+before recovery can write. A configured path that cannot be opened fails before
+recovery; a later recovery failure closes the log even while its exception is
+retained. Save errors retain the fail-closed behavior above.
 
 Use [economy/commerce.py](../src/tmserver/economy/commerce.py) for account-only
 edits, [economy/match_transactions.py](../src/tmserver/economy/match_transactions.py)

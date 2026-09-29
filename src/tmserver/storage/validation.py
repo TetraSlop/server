@@ -33,6 +33,8 @@ def validate_snapshot_fields(snapshot):
 
 def validate_snapshot(snapshot, *, event_configs=()):
     """Use the domain's restore validators without running startup recovery."""
+    from tmserver.admin.audit import AdminAudit
+    from tmserver.accounts.identities import IdentityRegistry
     from tmserver.economy.auctions.ledger import AuctionEconomy
     from tmserver.profiles.characters import CharacterProfiles
     from tmserver.economy.service import EconomyService
@@ -46,13 +48,15 @@ def validate_snapshot(snapshot, *, event_configs=()):
 
     validate_snapshot_fields(snapshot)
     economy = EconomyService.restore(snapshot)
+    IdentityRegistry.restore(economy, snapshot.get("identities"))
     auctions = AuctionEconomy.restore(economy, snapshot.get("auction"))
-    PrizeService.restore(economy, snapshot.get("prize"))
+    prize = PrizeService.restore(economy, snapshot.get("prize"))
     ResultRewardService.restore(economy, auctions, snapshot.get("result_rewards"))
     MatchEconomy.restore(economy, snapshot.get("match_economy"))
     RatingPolicy(economy, snapshot=snapshot.get("ratings"))
     CharacterProfiles.restore(economy, snapshot.get("character_profiles"))
     events = EventHost.restore(economy, event_configs, snapshot.get("events"))
-    EventCardService.restore(economy, events, snapshot.get("event_cards"))
+    event_cards = EventCardService.restore(economy, events, snapshot.get("event_cards"))
+    AdminAudit.restore(economy, prize, snapshot.get("admin_audit"), event_cards=event_cards)
     EventResults.restore(snapshot.get("event_results"))
     return economy

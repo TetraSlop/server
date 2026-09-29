@@ -5,6 +5,8 @@ import json
 from contextlib import ExitStack
 from pathlib import Path
 
+from tmserver.admin.actions import PrizeAwardRequest, apply_prize_award, preview_prize_award
+from tmserver.admin.audit import AdminAudit
 from tmserver.admin.queries import account_summary
 from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.claim_transactions import event_transaction, prize_transaction
@@ -34,6 +36,14 @@ def integers(count):
     return parse
 
 
+def audited_arguments(parser, *, confirm):
+    parser.add_argument("--request-id", required=True, help="stable operator request ID")
+    parser.add_argument("--operator", required=True, help="operator recorded in the receipt")
+    parser.add_argument("--reason", required=True)
+    if confirm:
+        parser.add_argument("--digest", required=True, help="digest returned by the preview")
+
+
 def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     storage = parser.add_mutually_exclusive_group(required=True)
@@ -45,38 +55,54 @@ def arguments(argv=None):
     commands.add_parser("recovery", help="preview startup refunds and returned cards without saving")
     account = commands.add_parser("account", help="inspect saved balances, progress and rewards")
     account.add_argument("--account-key", required=True)
-    prize = commands.add_parser("prize-award", help="queue a Prize Center award")
-    prize.add_argument("--account-key", required=True)
-    prize.add_argument("--id", required=True, help="stable award ID for retries")
-    for field in ("top30", "lucky", "rookies"):
-        prize.add_argument("--" + field, type=int, default=0)
-    prize.add_argument("--lucky-cards", type=integers(3), default=(65535,) * 3, metavar="A,B,C")
-    grant = commands.add_parser("event-grant", help="queue explicit event cards or money")
-    grant.add_argument("--account-key", required=True)
-    grant.add_argument("--event", required=True)
-    grant.add_argument("--id", required=True, help="stable grant ID for retries")
-    grant.add_argument("--money", type=int, default=0)
-    grant.add_argument(
-        "--card",
-        type=integers(6),
-        action="append",
-        default=[],
-        metavar="MODEL,ATTACK,TYPE,PHYSICAL,MAGICAL,ARROWS",
-    )
-    eligibility = commands.add_parser("event-eligibility", help="set an existing member's status")
-    eligibility.add_argument("--account-key", required=True)
-    eligibility.add_argument("--event", required=True)
-    eligibility.add_argument(
-        "--value", type=int, required=True, help="signed integer; negative excludes"
-    )
-    progress = commands.add_parser("event-progress", help="record explicit local event progress")
-    progress.add_argument("--account-key", required=True)
-    progress.add_argument("--event", required=True)
-    progress.add_argument("--id", required=True, help="stable update ID for retries")
-    progress.add_argument("--steps", type=int, default=0, help="nonnegative additional steps")
-    progress.add_argument(
-        "--completed-missions", type=int, default=0, help="additional mission bitmask"
-    )
+    for command, help_text in (
+        ("prize-award", "queue a legacy Prize Center award without an operator audit"),
+        ("prize-preview", "preview an audited Prize Center award without saving"),
+        ("prize-apply", "confirm and atomically record a previewed Prize Center award"),
+    ):
+        prize = commands.add_parser(command, help=help_text)
+        prize.add_argument("--account-key", required=True)
+        prize.add_argument("--id", required=True, help="stable award ID for retries")
+        for field in ("top30", "lucky", "rookies"):
+            prize.add_argument("--" + field, type=int, default=0)
+        prize.add_argument("--lucky-cards", type=integers(3), default=(65535,) * 3, metavar="A,B,C")
+        if command != "prize-award":
+            audited_arguments(prize, confirm=command == "prize-apply")
+    receipt = commands.add_parser("operator-receipt", help="read an exact operator request receipt")
+    receipt.add_argument("--request-id", required=True)
+    for command, help_text in (
+        ("event-grant", "queue legacy event cards or money without an operator audit"),
+        ("event-grant-preview", "preview an audited event card/money grant without saving"),
+        ("event-grant-apply", "confirm and atomically record a previewed event grant"),
+    ):
+        grant = commands.add_parser(command, help=help_text)
+        grant.add_argument("--account-key", required=True)
+        grant.add_argument("--event", required=True)
+        grant.add_argument("--id", required=True, help="stable grant ID for retries")
+        grant.add_argument("--money", type=int, default=0)
+        grant.add_argument(
+            "--card", type=integers(6), action="append", default=[],
+            metavar="MODEL,ATTACK,TYPE,PHYSICAL,MAGICAL,ARROWS",
+        )
+        if command != "event-grant":
+            audited_arguments(grant, confirm=command == "event-grant-apply")
+    for kind in ("eligibility", "progress"):
+        for suffix in ("", "-preview", "-apply"):
+            action = commands.add_parser(f"event-{kind}{suffix}")
+            action.add_argument("--account-key", required=True)
+            action.add_argument("--event", required=True)
+            if kind == "eligibility":
+                action.add_argument(
+                    "--value", type=int, required=True, help="signed integer; negative excludes"
+                )
+            else:
+                action.add_argument("--id", required=True, help="stable update ID for retries")
+                action.add_argument("--steps", type=int, default=0, help="nonnegative added steps")
+                action.add_argument(
+                    "--completed-missions", type=int, default=0, help="additional mission bitmask"
+                )
+            if suffix:
+                audited_arguments(action, confirm=suffix == "-apply")
     return parser.parse_args(argv)
 
 
@@ -95,6 +121,9 @@ class AdminState:
         self.event_cards = EventCardService.restore(
             self.economy, self.events, snapshot.get("event_cards")
         )
+        self.admin_audit = AdminAudit.restore(
+            self.economy, self.prize, snapshot.get("admin_audit"), event_cards=self.event_cards,
+        )
         self.event_results = EventResults.restore(snapshot.get("event_results"))
         self.auction_ledger = AuctionEconomy.restore(self.economy, snapshot.get("auction"))
         self.match_economy = MatchEconomy.restore(self.economy, snapshot.get("match_economy"))
@@ -103,7 +132,7 @@ class AdminState:
         )
         self.saved_journals = {
             name: getattr(self, name).snapshot()
-            for name in ("prize", "events", "event_cards", "event_results")
+            for name in ("prize", "events", "event_cards", "event_results", "admin_audit")
         }
 
     def persist_changes(self, accounts, journals):
@@ -128,10 +157,73 @@ class AdminState:
                 )
                 for key, row in sorted(self.economy.snapshot()["accounts"].items())
             ]
+        if args.command == "operator-receipt":
+            receipt = self.admin_audit.get(args.request_id)
+            if receipt is None:
+                raise ValueError("operator request receipt not found")
+            return receipt.model_dump(mode="json")
         key = args.account_key
         self.economy.account_view(key)  # Exact saved key; never provision an account.
         if args.command == "account":
             return self.account_summary(key)
+        if args.command in ("prize-preview", "prize-apply"):
+            request = PrizeAwardRequest(
+                request_id=args.request_id, account_key=key, award_id=args.id,
+                operator=args.operator, source="cli", reason=args.reason,
+                top30=args.top30, lucky=args.lucky, rookies=args.rookies,
+                lucky_cards=args.lucky_cards,
+            )
+            result = (
+                preview_prize_award(self, request) if args.command == "prize-preview"
+                else apply_prize_award(self, request, args.digest)
+            )
+            return result.model_dump(mode="json")
+        if args.command in ("event-grant-preview", "event-grant-apply"):
+            from tmserver.admin.event_actions import (
+                EventGrantCard, EventGrantRequest, apply_event_grant, preview_event_grant,
+            )
+
+            request = EventGrantRequest(
+                request_id=args.request_id, account_key=key, event_id=args.event,
+                grant_id=args.id, operator=args.operator, source="cli", reason=args.reason,
+                money=args.money,
+                cards=tuple(
+                    EventGrantCard(
+                        model=model, attack=attack, kind=kind, physical=physical,
+                        magical=magical, arrows=arrows,
+                    )
+                    for model, attack, kind, physical, magical, arrows in args.card
+                ),
+            )
+            result = (
+                preview_event_grant(self, request) if args.command == "event-grant-preview"
+                else apply_event_grant(self, request, args.digest)
+            )
+            return result.model_dump(mode="json")
+        if args.command in (
+            "event-eligibility-preview", "event-eligibility-apply",
+            "event-progress-preview", "event-progress-apply",
+        ):
+            from tmserver.admin.audit import EventEligibilityRequest, EventProgressRequest
+            from tmserver.admin.member_actions import apply_event_member, preview_event_member
+
+            fields = dict(
+                request_id=args.request_id, account_key=key, event_id=args.event,
+                operator=args.operator, source="cli", reason=args.reason,
+            )
+            request = (
+                EventEligibilityRequest(**fields, value=args.value)
+                if args.command.startswith("event-eligibility")
+                else EventProgressRequest(
+                    **fields, update_id=args.id, steps_delta=args.steps,
+                    completed_missions=args.completed_missions,
+                )
+            )
+            result = (
+                preview_event_member(self, request) if args.command.endswith("-preview")
+                else apply_event_member(self, request, args.digest)
+            )
+            return result.model_dump(mode="json")
         result = {"account_key": key}
         if args.command == "prize-award":
             with prize_transaction(self, key) as prize:

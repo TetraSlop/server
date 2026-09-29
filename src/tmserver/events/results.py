@@ -1,7 +1,50 @@
 """Durable event outcome receipts and explicit local step-counting policy."""
 
-import re
 from copy import copy
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+_Identifier = Annotated[str, Field(pattern=r"\A[A-Za-z0-9_.:-]{1,128}\z")]
+_AccountKey = Annotated[str, Field(min_length=1, max_length=128)]
+
+
+class _Result(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+    id: _Identifier
+    event: _Identifier
+    characters: list[Annotated[int, Field(ge=1, le=0x7FFFFFFF)]]
+    keys: list[_AccountKey | None]
+    scores: list[Annotated[int, Field(ge=0, le=25)]] = Field(min_length=2, max_length=3)
+    classes: list[int]
+    policy: Literal["none", "wins", "rounds"]
+
+    @model_validator(mode="after")
+    def completed_outcome(self):
+        n = len(self.scores)
+        if any(len(values) != n for values in (self.characters, self.keys, self.classes)):
+            raise ValueError("invalid event result seats")
+        if sum(self.scores) != n * 5:
+            raise ValueError("invalid completed event score")
+        if len(set(self.characters)) != n:
+            raise ValueError("invalid event character identities")
+        expected = [
+            2 + sum(y > x for y in self.scores) - sum(y < x for y in self.scores)
+            for x in self.scores
+        ]
+        if self.classes != expected:
+            raise ValueError("event classes disagree with scores")
+        keys = [key for key in self.keys if key is not None]
+        if not keys or len(set(keys)) != len(keys):
+            raise ValueError("invalid human event accounts")
+        return self
+
+
+class _Journal(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    version: Literal[1]
+    rounds: list[_Result]
 
 
 class EventResults:
@@ -16,49 +59,10 @@ class EventResults:
     def publish_state(self, staged):
         self._rows = staged._rows
 
-    @staticmethod
-    def _validate(row):
-        fields = {"id", "event", "characters", "keys", "scores", "classes", "policy"}
-        if not isinstance(row, dict) or set(row) != fields:
-            raise ValueError("invalid event result fields")
-        for k in ("id", "event"):
-            if not isinstance(row[k], str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", row[k]):
-                raise ValueError("invalid event result identifier")
-        if any(not isinstance(row[k], list) for k in ("scores", "characters", "keys", "classes")):
-            raise ValueError("event result seat fields must be arrays")
-        n = len(row["scores"])
-        if n not in (2, 3) or any(len(row[k]) != n for k in ("characters", "keys", "classes")):
-            raise ValueError("invalid event result seats")
-        if (
-            any(type(x) is not int or not 0 <= x <= 25 for x in row["scores"])
-            or sum(row["scores"]) != n * 5
-        ):
-            raise ValueError("invalid completed event score")
-        if (
-            any(type(x) is not int or not 0 < x <= 0x7FFFFFFF for x in row["characters"])
-            or len(set(row["characters"])) != n
-        ):
-            raise ValueError("invalid event character identities")
-        expected = [
-            2 + sum(y > x for y in row["scores"]) - sum(y < x for y in row["scores"])
-            for x in row["scores"]
-        ]
-        if any(type(x) is not int for x in row["classes"]) or row["classes"] != expected:
-            raise ValueError("event classes disagree with scores")
-        keys = [k for k in row["keys"] if k is not None]
-        if (
-            not keys
-            or any(not isinstance(k, str) or not k or len(k) > 128 for k in keys)
-            or len(set(keys)) != len(keys)
-        ):
-            raise ValueError("invalid human event accounts")
-        if row["policy"] not in ("none", "wins", "rounds"):
-            raise ValueError("unknown local event progress policy")
-
     def record(self, host, event_id, round_id, outcome, keys, policy="none"):
         if outcome.aborted:
             raise ValueError("aborted event is not a completed outcome")
-        row = dict(
+        row = _Result(
             id=round_id,
             event=event_id,
             characters=list(outcome.character_ids),
@@ -67,23 +71,20 @@ class EventResults:
             classes=list(outcome.classes),
             policy=policy,
         )
-        self._validate(row)
-        old = self._rows.get(row["id"])
+        old = self._rows.get(row.id)
         if old is not None:
             if old != row:
                 raise ValueError("event result replay differs")
             return False
         updates = []
-        for seat, key in enumerate(row["keys"]):
+        for seat, key in enumerate(row.keys):
             if key is None:
                 continue
             view = host.economy.account_view(key)
-            member = host.member(key, row["event"])
-            if view.player_id != row["characters"][seat] or member is None:
+            member = host.member(key, row.event)
+            if view.player_id != row.characters[seat] or member is None:
                 raise ValueError("event result differs from authenticated membership")
-            delta = int(
-                row["policy"] == "rounds" or row["policy"] == "wins" and row["classes"][seat] < 2
-            )
+            delta = int(row.policy == "rounds" or row.policy == "wins" and row.classes[seat] < 2)
             if delta and (member.eligibility < 0 or member.steps + delta > 0x7FFFFFFF):
                 raise ValueError("event progress is outside the supported member state")
             if delta:
@@ -91,37 +92,21 @@ class EventResults:
         if updates:
             staged = host.stage_state(host.economy)
             for key, delta in updates:
-                staged.update_progress(key, row["event"], row["id"], steps_delta=delta)
+                staged.update_progress(key, row.event, row.id, steps_delta=delta)
             host.publish_state(staged)
-        self._rows[row["id"]] = row
+        self._rows[row.id] = row
         return True
 
     def snapshot(self):
-        return {
-            "version": 1,
-            "rounds": [
-                {k: list(v) if isinstance(v, list) else v for k, v in row.items()}
-                for row in self._rows.values()
-            ],
-        }
+        return {"version": 1, "rounds": [row.model_dump() for row in self._rows.values()]}
 
     @classmethod
     def restore(cls, snapshot=None):
         obj = cls()
         if snapshot is None:
             return obj
-        if (
-            not isinstance(snapshot, dict)
-            or set(snapshot) != {"version", "rounds"}
-            or snapshot["version"] != 1
-            or not isinstance(snapshot["rounds"], list)
-        ):
-            raise ValueError("invalid event result snapshot")
-        for row in snapshot["rounds"]:
-            obj._validate(row)
-            if row["id"] in obj._rows:
+        for row in _Journal.model_validate(snapshot).rounds:
+            if row.id in obj._rows:
                 raise ValueError("duplicate event result receipt")
-            obj._rows[row["id"]] = {
-                k: list(v) if isinstance(v, list) else v for k, v in row.items()
-            }
+            obj._rows[row.id] = row
         return obj

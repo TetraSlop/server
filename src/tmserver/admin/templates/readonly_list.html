@@ -1,0 +1,5 @@
+{% extends "@core/list.html" %}
+{% block content %}
+<p class="text-muted">Captured at {{ request.state.tm_capture_time }}. This view is read-only. Refresh the page for current values.</p>
+{{ super() }}
+{% endblock %}

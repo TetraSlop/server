@@ -48,14 +48,35 @@ class CheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for name in ("tests/storage/test_store.py", "tests/storage/test_postgres_store.py",
-                         "tests/cli/test_admin_postgres.py"):
+                         "tests/cli/test_admin_postgres.py", "tests/admin/test_queries.py",
+                         "tests/admin/web/test_web.py", "tests/admin/web/nested/test_auth.py"):
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.touch()
-            self.assertEqual(check_tests.test_modules("portable", root), ["tests.storage.test_store"])
+            self.assertEqual(check_tests.test_modules("portable", root), [
+                "tests.admin.test_queries", "tests.storage.test_store",
+            ])
             self.assertEqual(check_tests.test_modules("postgres", root), [
                 "tests.cli.test_admin_postgres", "tests.storage.test_postgres_store",
             ])
+            self.assertEqual(check_tests.test_modules("admin", root), [
+                "tests.admin.web.nested.test_auth", "tests.admin.web.test_web",
+            ])
+
+    def test_repository_collection_assigns_every_module_to_exactly_one_lane(self):
+        lanes = [check_tests.test_modules(lane) for lane in ("portable", "postgres", "admin", "auth")]
+        modules = [module for lane in lanes for module in lane]
+        self.assertEqual(len(modules), len(set(modules)))
+        self.assertTrue(all(lanes))
+        self.assertEqual(
+            set(modules),
+            {
+                ".".join(path.with_suffix("").relative_to(check_tests.ROOT).parts)
+                for path in (check_tests.ROOT / "tests").rglob("test_*.py")
+            },
+        )
+        for module in lanes[2]:
+            self.assertTrue(module.startswith("tests.admin.web."))
 
     def test_test_workers_do_not_inherit_database_urls_or_import_overrides(self):
         with patch.dict(os.environ, {"TM_DATABASE_URL": "live", "TM_TEST_DATABASE_URL": "live",
@@ -67,8 +88,8 @@ class CheckTests(unittest.TestCase):
             "KEEP": "yes", "TM_TEST_DATABASE_URL": "owned-container",
         })
 
-    def test_unexpected_skips_fail_both_lanes(self):
-        for lane in ("portable", "postgres"):
+    def test_unexpected_skips_fail_every_lane(self):
+        for lane in ("portable", "postgres", "admin"):
             with self.subTest(lane=lane):
                 success, report = check_tests.run_suite(
                     unittest.TestSuite([unittest.FunctionTestCase(skipped)]),
@@ -89,7 +110,7 @@ class CheckTests(unittest.TestCase):
         def optional():
             raise unittest.SkipTest(allowed_reason)
 
-        for lane, expected in (("portable", True), ("postgres", False)):
+        for lane, expected in (("portable", True), ("postgres", False), ("admin", False)):
             case = unittest.FunctionTestCase(optional)
             case.id = lambda: allowed_id
             success, report = check_tests.run_suite(
@@ -103,6 +124,31 @@ class CheckTests(unittest.TestCase):
             unittest.TestSuite([case]), lane="portable", stream=io.StringIO(),
         )
         self.assertFalse(success)
+
+    def test_admin_lane_requires_its_dependencies_instead_of_skipping(self):
+        output = io.StringIO()
+        with (
+            patch("sys.argv", ["check_tests", "admin"]),
+            patch.object(check_tests.importlib.util, "find_spec", return_value=None),
+            patch.object(check_tests, "run_worker") as run,
+            redirect_stderr(output),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            check_tests.main()
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn('.[dev,admin]', output.getvalue())
+        run.assert_not_called()
+
+    def test_admin_lane_runs_without_a_database_container(self):
+        with (
+            patch("sys.argv", ["check_tests", "admin"]),
+            patch.object(check_tests.importlib.util, "find_spec", return_value=object()),
+            patch.object(check_tests, "run_worker", return_value=0) as run,
+            patch.object(check_tests, "postgres_container") as database,
+        ):
+            self.assertEqual(check_tests.main(), 0)
+        run.assert_called_once_with("admin")
+        database.assert_not_called()
 
     def test_owned_container_uses_loopback_and_is_removed_after_test_error(self):
         calls = []

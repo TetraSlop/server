@@ -16,9 +16,10 @@ from typing import Callable
 from tmserver.cards.catalog import Catalog
 from tmserver.game import special_rules as special
 from tmserver.game.ai import Personality, choose_move, choose_target
+from tmserver.game.backends import RulesBackend
 from tmserver.game.boards import generate_board
 from tmserver.game.departure_rules import next_turn, result_ranking, result_slots
-from tmserver.game.errors import MatchError
+from tmserver.game.errors import MatchError, RulesExecutionError
 from tmserver.game.models import (
     DEFAULT_GAME_RULES,
     DEFAULT_TABLE_RULES,
@@ -72,10 +73,18 @@ class MatchService:
         flexible_seats=False,
         second_npc_nickname_id=None,
         room_rules=None,
+        rules_backend: RulesBackend | None = None,
     ):
         if mode not in ("computer", "versus"):
             raise ValueError("mode must be computer or versus")
         self.mode = mode
+        if rules_backend is not None and any(
+            not callable(getattr(rules_backend, name, None))
+            for name in ("calculate_battle", "choose_move")
+        ):
+            raise ValueError("rules backend requires battle and ordinary AI calculations")
+        self.rules_backend = rules_backend
+        self._rules_failure = None
         if type(npc_nickname_id) is not int or not 0 < npc_nickname_id < 1 << 64:
             raise ValueError("NPC nickname identity must be a nonzero uint64")
         self.npc_nickname_id = npc_nickname_id
@@ -228,6 +237,20 @@ class MatchService:
     def _shared_r(self):
         """Replacement-server policy: eight CRT low bytes, in transmitted order."""
         return tuple(self.draw() & 255 for _ in range(8))
+
+    def _backend_call(self, operation, *args, **kwargs):
+        if self._rules_failure is not None:
+            raise self._rules_failure
+        try:
+            return getattr(self.rules_backend, operation)(*args, **kwargs)
+        except Exception as error:
+            # A failed native call can consume randomness. End the round before
+            # adapter cleanup; neither retry nor departure substitution is safe.
+            self.phase = "finished"
+            self.pending_move = None
+            self.cancel_pending()
+            self._rules_failure = RulesExecutionError(f"Rules backend {operation} failed: {error}")
+            raise self._rules_failure from error
 
     def _effect_cells(self):
         cells = []
@@ -795,7 +818,9 @@ class MatchService:
         ack = (
             packet(0x41, 6, body="@GameQA=/QT=1")
             if subtype == 5
-            else packet(0x41, 14, body="@GameEA=/Exit=1") if subtype == 13 else None
+            else packet(0x41, 14, body="@GameEA=/Exit=1")
+            if subtype == 13
+            else None
         )
         roster = packet(0x41, 4, body=self._member_body(remaining))
         owner_notice = packet(
@@ -891,9 +916,7 @@ class MatchService:
             and not self.pending_work
             and self.targets
         ):
-            self._pending_battle = choose_target(
-                self.targets, self.draw, board_size=self.board_size
-            )
+            self._pending_battle = self._choose_target()
         return out
 
     def _emit(self, data, peer=None):
@@ -1287,6 +1310,15 @@ class MatchService:
                     self.draw,
                     personality,
                 )
+            elif self.rules_backend is not None:
+                move = self._backend_call(
+                    "choose_move",
+                    self.players[self.active].hand,
+                    self.board,
+                    self.active,
+                    self.draw,
+                    personality,
+                )
             else:
                 move = choose_move(
                     self.players[self.active].hand, self.board, self.active, self.draw, personality
@@ -1363,7 +1395,7 @@ class MatchService:
             or self._controlled(self.players[self.active])
             or self.players[self.active].departed
         ):
-            target = choose_target(self.targets, self.draw, board_size=self.board_size)
+            target = self._choose_target()
             if immediate:
                 return self._battle(target)
             self._pending_battle = target
@@ -1373,18 +1405,33 @@ class MatchService:
         self._adopt_effects(special.combo(self._effect_cells(), cell, winner, old_owner))
 
     def battle_values(self, attacker, defender, **effects):
-        result = calculate_battle(attacker, defender, self.draw, **effects)
+        result = (
+            calculate_battle(attacker, defender, self.draw, **effects)
+            if self.rules_backend is None
+            else self._backend_call("calculate_battle", attacker, defender, self.draw, **effects)
+        )
         return result.attacker.wire(0)[1:], result.defender.wire(0)[1:]
 
+    def _choose_target(self):
+        if callable(getattr(self.rules_backend, "choose_target", None)):
+            return self._backend_call(
+                "choose_target", self.targets, self.draw, board_size=self.board_size
+            )
+        return choose_target(self.targets, self.draw, board_size=self.board_size)
+
+    def _grow_card(self, card, mode, random_value):
+        baseline = self.baselines[card.model]
+        if callable(getattr(self.rules_backend, "grow_card", None)):
+            return self._backend_call("grow_card", card, baseline, mode, random_value)
+        return grow_card(card, baseline, mode, random_value)
+
     def _grow_board(self, board_card, mode, random_value):
-        result = grow_card(
-            board_card.card, self.baselines[board_card.card.model], mode, random_value
-        )
+        result = self._grow_card(board_card.card, mode, random_value)
         board_card.card = Card.from_card(result.card)
         if board_card.original_slot is not None:
-            self.players[board_card.original_owner].updated[
-                board_card.original_slot
-            ] = board_card.card
+            self.players[board_card.original_owner].updated[board_card.original_slot] = (
+                board_card.card
+            )
 
     def _battle(self, target):
         if target not in self.targets:
@@ -1537,6 +1584,7 @@ class MatchService:
         # Native result R indexes that rebuilt hand, not the original selection.
         classes = self.result_classes()
         orders = []
+        snapshots = {}
         for seat, p in enumerate(self.players):
             if not p.updated:
                 p.updated = list(p.selected)
@@ -1562,9 +1610,8 @@ class MatchService:
             eligible = classes[seat] < 3
             for hand_slot, original_slot in enumerate(order):
                 c = p.updated[original_slot]
-                result = grow_card(
+                result = self._grow_card(
                     c,
-                    self.baselines[c.model],
                     1 if eligible else 0,
                     shared[(hand_slot - 3 * seat + 2) & 7] if eligible else 255,
                 )
@@ -1578,9 +1625,10 @@ class MatchService:
                     and c.original_owner == 5
                     and c.owner == seat
                 )
-                self._final_snapshots[p.peer] = FinalCards(
+                snapshots[p.peer] = FinalCards(
                     self.completed_matches, p.selected, tuple(p.updated), p.result_stats, extras
                 )
+        self._final_snapshots = snapshots
         self._final_order = tuple(orders)
 
     def _final_cards(self, peer):
@@ -1589,7 +1637,7 @@ class MatchService:
             for i, original_slot in enumerate(self._final_order[seat]):
                 c = p.updated[original_slot]
                 owner = self._prize_tclist_owners[seat][i] if self.card_prizes else seat
-                body += f"/D{seat*5+i}={owner}|{c.reduced()}"
+                body += f"/D{seat * 5 + i}={owner}|{c.reduced()}"
         out = self._emit(
             packet(
                 0x43,
@@ -1707,171 +1755,8 @@ class MatchService:
         p = self.players[seat]
         if p.departed:
             return []  # Old/rebound input cannot control the substitute.
-        from tmserver.protocol.table import channel_exit, viewer_state
-
-        viewing = viewer_state(msg)
-        if viewing is not None:
-            if viewing:
-                self.viewer_peers.add(peer)
-            else:
-                self.viewer_peers.discard(peer)
-            return []  # It is not spectator admission or a game pause.
-        if channel_exit(msg):
-            if self.phase != "lobby":
-                return []  # A delayed startup cancel cannot end play.
-            if self.lobby_departure_supported():
-                return self.leave_lobby_member(peer, 0x20)
-            self.phase = "finished"
-            self.cancel_pending()
-            self.viewer_peers.clear()
-            return [
-                d for d in self._emit(packet(65, 16, body="@GameWa=/Error=-1")) if d.peer != peer
-            ]
-        admission = (
-            "Req"
-            if msg.primary == 1 and "Req" in msg.sections
-            else {1: "GameEN", 0x12: "GameENC"}.get(msg.subtype) if msg.primary == 0x41 else None
-        )
-        if admission:
-            if admission == "Req" and peer in self.kicked_peers:
-                raise MatchError("removed members must explicitly re-enter the table")
-            if self.phase != "lobby":
-                return []
-            if self.computer_menu and (
-                (admission == "GameEN") or (admission == "Req" and self.owner_peer != peer)
-            ):
-                raise MatchError("original computer service requires GameENC before Req")
-            if (admission == "Req" and p.accepted) or (admission != "Req" and p.requested):
-                return []
-            if admission not in msg.sections:
-                raise MatchError("admission subtype requires its matching section")
-            fields = msg.sections[admission]
-            identity = fields.get("NN")
-            try:
-                validate_admission(fields, admission)
-            except ValueError as exc:
-                raise MatchError(str(exc)) from exc
-            if identity is not None:
-                if not re.fullmatch(r"[0-9A-Fa-f]{16}", identity):
-                    raise MatchError("NN must be a sixteen-digit hexadecimal identity")
-                if p.identity_confirmed and p.nickname_id != int(identity, 16):
-                    raise MatchError("cannot change an admitted member identity")
-                # A first synthetic NN can differ from the IRC account. Freeze
-                # it once admitted; it is display identity, never authorization.
-                p.nickname_id = int(identity, 16)
-                p.identity_confirmed = True
-        if msg.primary == 0x41:
-            sub = msg.subtype
-            name = {
-                3: "GameM",
-                5: "GameQT",
-                8: "GameOK",
-                10: "GameReady",
-                13: "GameExit",
-                15: "GameNG",
-            }.get(sub)
-            if name is not None and name not in msg.sections:
-                raise MatchError("table-control subtype requires its matching section")
-            if sub in (1, 0x12):
-                if self.computer_menu and sub != 0x12:
-                    raise MatchError("original computer service requires GameENC admission")
-                if self.owner_peer is None:
-                    self.owner_peer = peer
-                self.kicked_peers.discard(peer)
-                for receipt in tuple(self.lobby_exit_receipts):
-                    if receipt[0] == peer:
-                        self.lobby_exit_receipts.pop(receipt)
-                # EN1 takes the new-owner settings scene at10090114..143;
-                # EN2 joins the existing table and takes its local stake debit.
-                admission_result = 1 if peer == self.owner_peer else 2
-                return self._emit(
-                    packet(
-                        0x41,
-                        2 if sub == 1 else 0x13,
-                        body=f"@GameEA=/EN={admission_result}" if sub == 1 else "@GameECA=/EN=1",
-                    ),
-                    peer,
-                )
-            if sub == 3:
-                if self.phase != "lobby":
-                    return []
-                return self._emit(packet(0x41, 4, body=self.member_list(peer, True)), peer)
-            if sub == 0x0A:
-                if (
-                    self.phase != "lobby"
-                    or self._start_offered
-                    or any(x.requested for x in self.players)
-                ):
-                    return []
-                if peer != (
-                    self.owner_peer if self.owner_peer is not None else self.players[0].peer
-                ):
-                    raise MatchError("only the table owner can offer a start")
-                self._freeze_seats()
-                self._start_offered = True
-                return [d for d in self._emit(packet(0x41, 7)) if d.peer != peer]
-            if sub == 8:
-                if self.phase != "lobby":
-                    return []
-                if not p.requested:
-                    raise MatchError("GameOK before Req")
-                # Direct Req/GameOK clients have no preceding GameReady. Freeze
-                # only after the currently seated humans have all requested.
-                if self.flexible_seats and not self._seats_frozen:
-                    if len(self.players) < 2 or not all(x.requested for x in self.players):
-                        return []
-                    self._freeze_seats()
-                p.accepted = True
-                self._add_ai()
-                if (
-                    len(self.players) == self.player_count
-                    and all(x.accepted for x in self.players if x.peer is not None)
-                    and self.phase == "lobby"
-                ):
-                    return self._emit(packet(0x41, 9)) + self.begin()
-                return []
-            if sub in (5, 0x0D, 0x0F):
-                # GameQT/GameNG belong to the table/start UI. Active-game aborts
-                # use43 Quit/Break first; delayed lobby exits cannot abort play.
-                if self.phase not in (
-                    ("lobby", "computer_menu", "finished") if sub == 0x0D else ("lobby",)
-                ):
-                    return []
-                if (peer, sub) in self._terminal_replies:
-                    return []
-                if sub == 5 and "ID" in msg.sections["GameQT"]:
-                    target = msg.sections["GameQT"]["ID"]
-                    if not re.fullmatch(r"[0-9A-Fa-f]{16}", target):
-                        raise MatchError("member identity must be sixteen hexadecimal digits")
-                    if int(target, 16) != p.nickname_id:
-                        return self.kick_lobby_member(peer, int(target, 16))
-                if sub in (5, 0x0D) and self.lobby_departure_supported():
-                    return self.leave_lobby_member(peer, sub)
-                self._terminal_replies.add((peer, sub))
-                self.phase = "finished"
-                self.cancel_pending()
-                if sub == 5:
-                    return self._emit(packet(0x41, 6, body="@GameQA=/QT=1"), peer)
-                if sub == 0x0D:
-                    return self._emit(packet(0x41, 0x0E, body="@GameEA=/Exit=1"), peer)
-                return self._emit(packet(0x41, 0x10, body="@GameWa=/Error=-1"))
-            return None
-        if msg.primary == 1 and "Req" in msg.sections:
-            p.requested = True
-            out = self._emit(self.playack(peer), peer)
-            if self.computer_menu:
-                p.accepted = True
-                self.phase = "computer_menu"
-                out += self._emit(self._com_init(peer), peer)
-            return out
-        if msg.primary in (0x14, 0x24):
-            return self._settings(peer, msg)
-        if msg.primary == 0x12:
-            return self._emit(packet(0x13, body=self.rules_body()), peer)
-        if msg.primary == 0x2D:
-            return self._emit(packet(0x2E, body="@CheckJoinTable_Ans=/Join=1/Mem=1"), peer)
         if msg.primary != 0x43:
-            return None
+            return self._table_message(peer, msg, p)
         section = {
             7: "CardSelect",
             9: "TurnData",
@@ -1961,6 +1846,177 @@ class MatchService:
             if section == "Quit"
             else []
         )
+
+    def _table_message(self, peer, msg, p):
+        """Handle table notices, admission, preferences and discovery."""
+        from tmserver.protocol.table import channel_exit, viewer_state
+
+        viewing = viewer_state(msg)
+        if viewing is not None:
+            if viewing:
+                self.viewer_peers.add(peer)
+            else:
+                self.viewer_peers.discard(peer)
+            return []  # It is not spectator admission or a game pause.
+        if channel_exit(msg):
+            if self.phase != "lobby":
+                return []  # A delayed startup cancel cannot end play.
+            if self.lobby_departure_supported():
+                return self.leave_lobby_member(peer, 0x20)
+            self.phase = "finished"
+            self.cancel_pending()
+            self.viewer_peers.clear()
+            return [
+                d for d in self._emit(packet(65, 16, body="@GameWa=/Error=-1")) if d.peer != peer
+            ]
+        admission = (
+            "Req"
+            if msg.primary == 1 and "Req" in msg.sections
+            else {1: "GameEN", 0x12: "GameENC"}.get(msg.subtype)
+            if msg.primary == 0x41
+            else None
+        )
+        if admission:
+            if admission == "Req" and peer in self.kicked_peers:
+                raise MatchError("removed members must explicitly re-enter the table")
+            if self.phase != "lobby":
+                return []
+            if self.computer_menu and (
+                (admission == "GameEN") or (admission == "Req" and self.owner_peer != peer)
+            ):
+                raise MatchError("original computer service requires GameENC before Req")
+            if (admission == "Req" and p.accepted) or (admission != "Req" and p.requested):
+                return []
+            if admission not in msg.sections:
+                raise MatchError("admission subtype requires its matching section")
+            fields = msg.sections[admission]
+            identity = fields.get("NN")
+            try:
+                validate_admission(fields, admission)
+            except ValueError as exc:
+                raise MatchError(str(exc)) from exc
+            if identity is not None:
+                if not re.fullmatch(r"[0-9A-Fa-f]{16}", identity):
+                    raise MatchError("NN must be a sixteen-digit hexadecimal identity")
+                if p.identity_confirmed and p.nickname_id != int(identity, 16):
+                    raise MatchError("cannot change an admitted member identity")
+                # A first synthetic NN can differ from the IRC account. Freeze
+                # it once admitted; it is display identity, never authorization.
+                p.nickname_id = int(identity, 16)
+                p.identity_confirmed = True
+        if msg.primary == 0x41:
+            return self._lobby_control(peer, msg, p)
+        if msg.primary == 1 and "Req" in msg.sections:
+            p.requested = True
+            out = self._emit(self.playack(peer), peer)
+            if self.computer_menu:
+                p.accepted = True
+                self.phase = "computer_menu"
+                out += self._emit(self._com_init(peer), peer)
+            return out
+        if msg.primary in (0x14, 0x24):
+            return self._settings(peer, msg)
+        if msg.primary == 0x12:
+            return self._emit(packet(0x13, body=self.rules_body()), peer)
+        if msg.primary == 0x2D:
+            return self._emit(packet(0x2E, body="@CheckJoinTable_Ans=/Join=1/Mem=1"), peer)
+        return None
+
+    def _lobby_control(self, peer, msg, p):
+        """Apply entry, roster, start and departure controls for a seated peer."""
+        sub = msg.subtype
+        name = {
+            3: "GameM",
+            5: "GameQT",
+            8: "GameOK",
+            10: "GameReady",
+            13: "GameExit",
+            15: "GameNG",
+        }.get(sub)
+        if name is not None and name not in msg.sections:
+            raise MatchError("table-control subtype requires its matching section")
+        if sub in (1, 0x12):
+            if self.computer_menu and sub != 0x12:
+                raise MatchError("original computer service requires GameENC admission")
+            if self.owner_peer is None:
+                self.owner_peer = peer
+            self.kicked_peers.discard(peer)
+            for receipt in tuple(self.lobby_exit_receipts):
+                if receipt[0] == peer:
+                    self.lobby_exit_receipts.pop(receipt)
+            # EN1 takes the new-owner settings scene at10090114..143;
+            # EN2 joins the existing table and takes its local stake debit.
+            admission_result = 1 if peer == self.owner_peer else 2
+            return self._emit(
+                packet(
+                    0x41,
+                    2 if sub == 1 else 0x13,
+                    body=f"@GameEA=/EN={admission_result}" if sub == 1 else "@GameECA=/EN=1",
+                ),
+                peer,
+            )
+        if sub == 3:
+            if self.phase != "lobby":
+                return []
+            return self._emit(packet(0x41, 4, body=self.member_list(peer, True)), peer)
+        if sub == 0x0A:
+            if (
+                self.phase != "lobby"
+                or self._start_offered
+                or any(x.requested for x in self.players)
+            ):
+                return []
+            if peer != (self.owner_peer if self.owner_peer is not None else self.players[0].peer):
+                raise MatchError("only the table owner can offer a start")
+            self._freeze_seats()
+            self._start_offered = True
+            return [d for d in self._emit(packet(0x41, 7)) if d.peer != peer]
+        if sub == 8:
+            if self.phase != "lobby":
+                return []
+            if not p.requested:
+                raise MatchError("GameOK before Req")
+            # Direct Req/GameOK clients have no preceding GameReady. Freeze
+            # only after the currently seated humans have all requested.
+            if self.flexible_seats and not self._seats_frozen:
+                if len(self.players) < 2 or not all(x.requested for x in self.players):
+                    return []
+                self._freeze_seats()
+            p.accepted = True
+            self._add_ai()
+            if (
+                len(self.players) == self.player_count
+                and all(x.accepted for x in self.players if x.peer is not None)
+                and self.phase == "lobby"
+            ):
+                return self._emit(packet(0x41, 9)) + self.begin()
+            return []
+        if sub in (5, 0x0D, 0x0F):
+            # GameQT/GameNG belong to the table/start UI. Active-game aborts
+            # use43 Quit/Break first; delayed lobby exits cannot abort play.
+            if self.phase not in (
+                ("lobby", "computer_menu", "finished") if sub == 0x0D else ("lobby",)
+            ):
+                return []
+            if (peer, sub) in self._terminal_replies:
+                return []
+            if sub == 5 and "ID" in msg.sections["GameQT"]:
+                target = msg.sections["GameQT"]["ID"]
+                if not re.fullmatch(r"[0-9A-Fa-f]{16}", target):
+                    raise MatchError("member identity must be sixteen hexadecimal digits")
+                if int(target, 16) != p.nickname_id:
+                    return self.kick_lobby_member(peer, int(target, 16))
+            if sub in (5, 0x0D) and self.lobby_departure_supported():
+                return self.leave_lobby_member(peer, sub)
+            self._terminal_replies.add((peer, sub))
+            self.phase = "finished"
+            self.cancel_pending()
+            if sub == 5:
+                return self._emit(packet(0x41, 6, body="@GameQA=/QT=1"), peer)
+            if sub == 0x0D:
+                return self._emit(packet(0x41, 0x0E, body="@GameEA=/Exit=1"), peer)
+            return self._emit(packet(0x41, 0x10, body="@GameWa=/Error=-1"))
+        return None
 
     def snapshot(self):
         return {

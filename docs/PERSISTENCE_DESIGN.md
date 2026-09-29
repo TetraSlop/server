@@ -42,12 +42,28 @@ stakes or collecting pending rewards.
 
 Alembic also maintains its own schema revision table.
 
-The nine service documents contain auctions and their escrow/claims, Prize
+The ten service documents contain auctions and their escrow/claims, Prize
 Center awards, result rewards, match settlement/recovery receipts, rating history,
-character profiles, event membership/progress, event grants and event outcomes.
+character profiles, event membership/progress, event grants, event outcomes and
+operator audit receipts.
 They are saved in the same transaction as affected inventories and balances.
 This preserves the existing recovery semantics without maintaining two
 authoritative economies.
+
+Audited Prize Center requests retain exact account/award/request identifiers,
+amounts, operator, reason, source, confirmation digest and commit timestamp.
+`admin_audit` and the Prize Center award share one commit; receipts survive player
+redemption and make exact retries idempotent after restart. Startup validates
+their references before recovery. PostgreSQL migration `0002_admin_audit` adds
+the journal name and refuses a downgrade that would discard retained receipts.
+
+Audited event grants commit `event_cards` and `admin_audit` together without an
+account write. Their receipts retain full canonical cards, queued money, the
+member's eligibility and the collection setting shown in the preview. Original
+grant facts remain saved while collection offsets advance, allowing exact
+retries after partial/full collection. All operator actions share request IDs.
+Prize-only journals remain version 1; journals containing event receipts use
+version 2 without changing older Prize receipt fields or the SQL schema.
 
 Native identities use NUMERIC(20,0), covering the full unsigned 64-bit range.
 Native names and profile templates use binary columns. Profiles are still

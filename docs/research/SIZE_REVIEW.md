@@ -1,5 +1,67 @@
 # Server size and structure review
 
+## Hosted authentication prototype, 2026-09-28
+
+The current tree has **24,460 physical Python lines across 139 runtime files**.
+The authentication addition is 734 net runtime lines over the prior checkpoint:
+605 in seven `auth` modules, plus trusted legacy transport bindings and CLI wiring.
+The HTTP listener owner moved from administration to `network/http.py` so the
+gateway reuses its startup/shutdown behavior instead of adding a second owner.
+Templates remain 261 lines and native sources remain 770 lines. Tests are counted
+separately: 43,773 lines in 221 files. This is new capability, not a size-reduction
+claim; the earlier feature breakdown below is its recorded pre-auth checkpoint.
+
+## Optional administration and native rules, 2026-09-28
+
+The current continuation contains **23,726 physical Python lines in 130 files**
+under `src/tmserver`, including blank lines, comments and optional modules. This
+checkpoint includes audited event administration, native ABI 2, shared PTL records,
+receipt history, and the final query, name and startup fixes. Its breakdown is:
+
+| Responsibility | Python lines |
+| --- | ---: |
+| Economy, shop, auctions, prizes and transaction coordination | 4,823 |
+| Match engine, game rules, AI and optional original-code adapters | 4,794 |
+| Event rooms, admission, matches, progress and grants | 3,504 |
+| Ordinary rooms, tables, spectators and lifecycle | 2,994 |
+| Connections, service routing and chat | 1,515 |
+| Rankings and rating history | 1,160 |
+| Shared admin queries, audited actions and optional web panel | 1,619 |
+| JSON/PostgreSQL storage and migrations | 857 |
+| Command-line entry points | 866 |
+| Profiles and preferences | 828 |
+| Transport and command codecs | 484 |
+| Cards and catalogue | 265 |
+| Resource helpers and package entry points | 17 |
+
+The web templates add 261 lines; the optional native bridge adds 770 C++/header
+lines outside that Python total. Test, research, documentation, generated build
+and dependency trees are excluded. Evidence is in
+`results/current-source-size.json` in the development checkout.
+
+The larger total primarily reflects added administration and original-code
+capabilities. Pydantic/Construct adoption and R6 were readability work, not a
+large size reduction: match `handle` is now 100 lines, table dispatch is 209,
+shop behavior has one stateless owner, and auction saved shapes use strict
+library models. The required Python rules remain available for portable serving;
+adding native execution does not delete them. No comparable-scope reduction of
+thousands of lines has been demonstrated.
+
+The shared Construct PTL table/service layout adds 32 net Python lines while
+removing three places that independently wrote the same offsets. Event outcome
+receipts use one private Pydantic model, reducing their owner from 127 to 112
+lines and explicit conditionals from 20 to 15 without moving progress rules.
+The next small
+Pydantic candidate is the event grant journal's saved shape. Its entire
+snapshot/restore path is only 48 lines, so it cannot deliver a large reduction.
+Match settlement has more repeated fields, but most of its restore logic checks
+escrow, payout and recovery invariants that a schema library cannot replace.
+
+Keep counting runtime separately from tests and optional tools. Further cuts
+should remove an actual responsibility or duplicated behavior. Compacting syntax,
+merging protocol dialects or hiding commit boundaries behind a generic framework
+would not make this server easier to review.
+
 ## Reservation and timeout consolidation, 2026-09-27
 
 Single-account reservation checks now share two private helpers inside

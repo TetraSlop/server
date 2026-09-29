@@ -1,0 +1,31 @@
+{% extends "readonly_detail.html" %}
+{% block content %}
+{{ super() }}
+{% if operator_actions_enabled %}
+<p class="mt-3">
+  <a class="btn btn-outline-primary" href="{{ url_for('admin:prize-awards').include_query_params(account=obj.id) }}">Queue a Prize Center award</a>
+  <a class="btn btn-outline-primary" href="{{ url_for('admin:event-grants').include_query_params(account=obj.id) }}">Queue an event grant</a>
+  <a class="btn btn-outline-primary" href="{{ url_for('admin:event-members').include_query_params(account=obj.id) }}">Correct event membership</a>
+</p>
+{% endif %}
+<section class="card mt-3">
+  <div class="card-header"><h2 class="card-title">Owned cards</h2></div>
+  <div class="table-responsive"><table class="table card-table">
+    <thead><tr><th>Card</th><th>Attack</th><th>Type</th><th>Physical defense</th><th>Magic defense</th><th>Arrows</th><th>Deck</th></tr></thead>
+    <tbody>{% for card in obj.inventory %}<tr>
+      <td>{{ card.name }}</td><td>{{ card.attack }}</td><td>{{ card.kind }}</td>
+      <td>{{ card.physical }}</td><td>{{ card.magical }}</td><td>{{ card.arrows }}</td><td>{{ card.deck }}</td>
+    </tr>{% else %}<tr><td colspan="7">This account has no owned cards.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+<section class="card mt-3">
+  <div class="card-header"><h2 class="card-title">Pending claims</h2></div>
+  <div class="card-body"><p>These entries remain separate from owned cards and spendable money. Round state and result claims can describe different stages of the same match.</p></div>
+  <div class="table-responsive"><table class="table card-table">
+    <thead><tr><th>Claim type</th><th>Receipt</th><th>Pending money</th><th>Pending cards</th><th>Prize points</th></tr></thead>
+    <tbody>{% for claim in obj.pending_claims %}<tr>
+      <td>{{ claim.kind }}</td><td>{{ claim.receipt }}</td><td>{{ claim.money }}</td><td>{{ claim.cards }}</td><td>{{ claim.prize_points }}</td>
+    </tr>{% else %}<tr><td colspan="5">There are no pending claims.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endblock %}

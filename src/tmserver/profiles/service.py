@@ -11,6 +11,9 @@ does not select an account. Cached contexts are process-local, bounded, and have
 no expiry beyond replacement/restart; a restarted service needs a fresh IRC
 context before encrypted profile use. Plain mode uses the same full digest.
 Encrypted authentication failure closes without guessing an error-response key.
+
+Gateway streams additionally bind the account and cached cipher history to one
+revocable play session; they never consult the local listener's shared cache.
 """
 
 import asyncio
@@ -44,28 +47,36 @@ class ProfileServer:
         self.listener = None
         self.tasks = set()
         self.writers = set()
+        self.game_server = game_server
+        self.files = directory_files()
+        self.account_files = {}
+        self.profile_ciphers = {}
+        self.statuses = {}
+        for key in self.accounts:
+            self._account(key)
+
+    def _account(self, account_key):
+        if account_key not in self.accounts:
+            raise ValueError("unknown profile account")
+        if account_key in self.statuses:
+            return self.accounts[account_key]
+        _, _, player_id = self.accounts[account_key]
         # Synthetic player record; most fields are not mapped yet. The leading
         # 300 matches the value written by TM 0x10114e87; its meaning is unproven.
         player = bytearray(0x3028)
         struct.pack_into("<I", player, 0, 300)
         player[0x3B] = 1  # Existing local test player: Warriors Guild (TM 0x1014c871).
-        self.account_files = {}
-        for key, (_, _, player_id) in self.accounts.items():
-            fallback = bytearray(player)
-            struct.pack_into("<IQ", fallback, 4, player_id, game_player_id(key.encode("ascii")))
-            name = display_name(player_id)
-            fallback[0x10 : 0x10 + len(name)] = name
-            self.account_files[key] = {"U/g/TM0DataFile": bytes(fallback)}
-        self.game_server = game_server
-        self.files = directory_files()
-        self.profile_ciphers = {key: [] for key in self.accounts}
-        self.statuses = {}
-        for key in self.accounts:
-            status = bytearray(0x7C)
-            status[3] = 1
-            status[4] = 1  # Viewer before the game changes ContentsClass to 2.
-            status[6] = 1  # Online, active handle zero.
-            self.statuses[key] = status
+        struct.pack_into("<IQ", player, 4, player_id, game_player_id(account_key.encode("ascii")))
+        name = display_name(player_id)[:16]
+        player[0x10 : 0x10 + len(name)] = name
+        self.account_files[account_key] = {"U/g/TM0DataFile": bytes(player)}
+        self.profile_ciphers[account_key] = []
+        status = bytearray(0x7C)
+        status[3] = 1
+        status[4] = 1  # Viewer before the game changes ContentsClass to 2.
+        status[6] = 1  # Online, active handle zero.
+        self.statuses[account_key] = status
+        return self.accounts[account_key]
 
     def log(self, event, **details):
         if self.log_error is not None:
@@ -92,10 +103,10 @@ class ProfileServer:
         if self.listener:
             await self.listener.wait_closed()
 
-    def _account(self, account_key):
-        if account_key not in self.accounts:
-            raise ValueError("unknown synthetic profile account")
-        return self.accounts[account_key]
+    def _local_accounts(self):
+        identities = getattr(self.game_server, "identities", None)
+        return {key: spec for key, spec in self.accounts.items()
+                if identities is None or not identities.owns(key)}
 
     def _identity(self, account_key):
         account_id, _, player_id = self._account(account_key)
@@ -108,40 +119,54 @@ class ProfileServer:
         # separate game-domain identity comes directly from the economy save.
         return wire.polid_from_string(account_id.decode("ascii")), player_id, name[:16]
 
-    def _cipher_candidates(self):
+    def _cipher_candidates(self, access=None):
         """At most three candidates per configured authenticated IRC account."""
-        for key in self.accounts:
+        for key in self._local_accounts() if access is None else (access.account_key,):
             candidates = []
-            if self.game_server is not None:
-                session = self.game_server.nicks.get(key.encode("ascii"))
+            if access is not None or self.game_server is not None:
+                session = (
+                    access.game
+                    if access is not None
+                    else self.game_server.nicks.get(key.encode("ascii"))
+                )
+                if access is not None and (
+                    session is None or session.closed or session.nick != key.encode("ascii")
+                ):
+                    session = None
                 if session is not None and getattr(session, "cipher", None) is not None:
                     candidates.append((session.cipher, session.iv))
-            for cipher, iv in self.profile_ciphers[key]:
+            cached = self.profile_ciphers.get(key, ()) if access is None else access.profile_ciphers
+            for cipher, iv in cached:
                 if not any(cipher is old and iv == old_iv for old, old_iv in candidates):
                     candidates.append((cipher, iv))
             for cipher, iv in candidates:
                 yield key, cipher, iv
 
-    def _remember_cipher(self, key, cipher, iv):
+    def _remember_cipher(self, key, cipher, iv, access=None):
         # Only nonce-authenticated profile contexts survive IRC reconnects.
-        cached = [
-            (old, old_iv)
-            for old, old_iv in self.profile_ciphers[key]
-            if old is not cipher or old_iv != iv
-        ]
-        self.profile_ciphers[key] = [(cipher, iv)] + cached[: MAX_CACHED_CIPHERS - 1]
+        previous = self.profile_ciphers[key] if access is None else access.profile_ciphers
+        cached = [(old, old_iv) for old, old_iv in previous if old is not cipher or old_iv != iv]
+        contexts = [(cipher, iv)] + cached[: MAX_CACHED_CIPHERS - 1]
+        if access is None:
+            self.profile_ciphers[key] = contexts
+        else:
+            access.profile_ciphers = contexts
 
-    def _authenticate(self, request, nonce, encrypted):
+    def _authenticate(self, request, nonce, encrypted, access=None):
+        accounts = self._local_accounts()
+        if access is not None:
+            access.check()
+            accounts = {access.account_key: self._account(access.account_key)}
         expected = {
             key: hashlib.md5(account_id + password + struct.pack("<I", nonce)).digest()
-            for key, (account_id, password, _) in self.accounts.items()
+            for key, (account_id, password, _) in accounts.items()
         }
         if not encrypted:
             for key, digest in expected.items():
                 if hmac.compare_digest(request[24:40], digest):
                     return key, request, None
         else:
-            for key, cipher, iv in self._cipher_candidates():
+            for key, cipher, iv in self._cipher_candidates(access):
                 plain = wire.crypt64(cipher, iv, request)
                 # No structural byte guesses: all 16 authentication bytes must
                 # match the account that owns this particular cipher context.
@@ -246,7 +271,7 @@ class ProfileServer:
         self.log("unsupported_operation", cmd=cmd, sub=sub, body=body.hex())
         return b"", 1
 
-    async def handle(self, reader, writer):
+    async def handle(self, reader, writer, *, access=None):
         task = asyncio.current_task()
         if len(self.tasks) >= max(8, len(self.accounts)):
             writer.close()
@@ -257,6 +282,8 @@ class ProfileServer:
         try:
             async with asyncio.timeout(20):
                 opening = await reader.readexactly(40)
+                if access is not None:
+                    access.check()
                 self.log("open", wire=opening.hex())
                 if opening[0] != 0 or opening[4:6] != b"\x01\0":
                     raise ValueError("invalid open")
@@ -265,7 +292,7 @@ class ProfileServer:
                 writer.write(answer(nonce=nonce))
                 await writer.drain()
                 request = await reader.readexactly(40)
-                authenticated = self._authenticate(request, nonce, encrypted)
+                authenticated = self._authenticate(request, nonce, encrypted, access)
                 if authenticated is None:
                     # Without an authenticated encrypted context, selecting a
                     # response key would reintroduce the same identity guess.
@@ -280,15 +307,18 @@ class ProfileServer:
                     crypt = lambda data, offset=0: wire.crypt64(cipher, iv, bytes(offset) + data)[
                         offset:
                     ]
-                self.log("request", account=account_key, wire=request.hex())
+                logged = request if access is None else request[:24] + bytes(16)
+                self.log("request", account=account_key, wire=logged.hex())
                 if request[0] != 2:
                     raise ValueError("unrecognized request (possibly encrypted)")
                 size = struct.unpack_from("<I", request, 4)[0]
                 if size > 1024 * 1024:
                     raise ValueError("request too large")
                 if context is not None:
-                    self._remember_cipher(account_key, *context)
+                    self._remember_cipher(account_key, *context, access=access)
                 body = await reader.readexactly(size)
+                if access is not None:
+                    access.check()
                 if crypt:
                     body = crypt(body, 40)
                 payload, error = self.dispatch(

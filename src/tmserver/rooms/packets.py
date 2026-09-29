@@ -9,6 +9,8 @@ import struct
 from tmserver.game.models import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, game_id
 from tmserver.rooms.metadata import table_info as encode_table_info
+from tmserver.rooms.records import alphahex as alphahex
+from tmserver.rooms.records import build_room_record, build_zone_record
 from tmserver.rooms.rules import RoomRules
 
 ROOM_ID = game_id(ROOM_RAW)
@@ -16,12 +18,6 @@ TABLE_ID = game_id(TABLE_RAW)
 ROOM_CHANNEL = b"#LOCALROOM01"
 TABLE_CHANNEL = b"#LOCALTABLE1"
 TRADE_CHANNEL = b"#LOCALTRADE1"
-
-
-def alphahex(value, width):
-    if not 0 <= value < 16**width:
-        raise ValueError("metadata value does not fit")
-    return bytes(65 + int(x, 16) for x in f"{value:0{width}X}")
 
 
 def table_info(
@@ -40,24 +36,17 @@ def table_info(
 def directory_files():
     zones = bytearray(0x848)
     struct.pack_into("<I", zones, 0x40, 1)
-    struct.pack_into("<II", zones, 0x48, 0, 1)
-    zones[0x54:0x59] = b"ENAAA"
-    zones[0x59:0x65] = b"Local Lobby\0"
-    zones[0x74:0x7E] = b"127.0.0.1\0"
+    zones[0x48:0x88] = build_zone_record(name=b"Local Lobby", room_count=1)
     rooms = bytearray(0xC848)
     struct.pack_into("<I", rooms, 0x40, 1)
-    r = memoryview(rooms)[0x48:0x110]
-    struct.pack_into("<Q", r, 0, ROOM_ID)
-    struct.pack_into("<H", r, 0x24, 1)
-    r[0x27] = 1
-    r[0x28] = ord("B")  # No fixed room rules; tables choose their own.
-    r[0x29] = ord("A")  # Separate native permission for Computer play.
-    r[0x2A:0x35] = b"Local Room*"
-    r[0x49:0x50] = RoomRules(**DEFAULT_GAME_RULES).packed()
-    r[0x6A:0x6D] = alphahex(1, 3)
-    r[0x6D:0x70] = alphahex(16, 3)
-    r[0x70] = ord("A")
-    r[0xB8 : 0xB8 + len(ROOM_CHANNEL)] = ROOM_CHANNEL
+    rooms[0x48:0x110] = build_room_record(
+        identity=ROOM_ID,
+        name=b"Local Room*",
+        channel=ROOM_CHANNEL,
+        table_count=1,
+        computer_enabled=True,
+        rules=RoomRules(**DEFAULT_GAME_RULES).packed(),
+    )
     return {"b/g/ZL": bytes(zones), "b/g/RL000": bytes(rooms)}
 
 

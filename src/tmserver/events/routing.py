@@ -49,11 +49,12 @@ async def dispatch_event(session, target, payload):
         )
         if entering and session in binding.room.members:
             await leave_other_rooms(server, session, key, binding.room)
-        with event_transaction(server, (key,)) as state:
-            if entering and session in binding.room.members:
-                responses.extend((session, p) for p in state.events.admit_room(key, event_id))
-            if len(commands) == 1 and commands[0].token == b"PC":
-                state.events.leave_room(key, event_id)
+        if commands[0].token != b"DR":
+            with event_transaction(server, (key,)) as state:
+                if entering and session in binding.room.members:
+                    responses.extend((session, p) for p in state.events.admit_room(key, event_id))
+                if commands[0].token == b"PC":
+                    state.events.leave_room(key, event_id)
         await server.room_updates(responses, source=target)
         await server.chat_updates(chat_updates)
         return True
@@ -61,17 +62,26 @@ async def dispatch_event(session, target, payload):
         replies = server.chat.enter(session, target, payload, identity=view.nn, name=view.name)
         await server.chat_updates(replies)
         return True
-    with event_transaction(server, (key,)) as state:
-        if payload.startswith(b"GTM0G84"):
-            replies = [save_options(state.events.economy, key, payload)]
-        elif route == "card" and payload[:7].upper() in (b"GTM0G90", b"GTM0GB2"):
-            replies = state.cards.handle(key, payload, event_id=event_id)
-        else:
-            replies = state.events.handle(key, payload, event_id=event_id, route=route)
+    family = payload[:7].upper()
+    if family == b"GTM0GD1":
+        replies = server.events.handle(key, payload, event_id=event_id, route=route)
+    elif (
+        payload.startswith(b"GTM0G84")
+        or family in (b"GTM0G90", b"GTM0G98")
+        or route == "card"
+        and family == b"GTM0GB2"
+    ):
+        with event_transaction(server, (key,)) as state:
+            if payload.startswith(b"GTM0G84"):
+                replies = [save_options(state.events.economy, key, payload)]
+            elif route == "card" and family in (b"GTM0G90", b"GTM0GB2"):
+                replies = state.cards.handle(key, payload, event_id=event_id)
+            else:
+                replies = state.events.handle(key, payload, event_id=event_id, route=route)
+    else:
+        return False
     if replies is None:
         return False
     for payload in replies:
-        await server.deliver(
-            session, service_notice(target, session.nick, payload)
-        )
+        await server.deliver(session, service_notice(target, session.nick, payload))
     return True

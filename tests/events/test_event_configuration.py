@@ -2,12 +2,12 @@
 
 import copy
 import unittest
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, is_dataclass, replace
 
 from tmserver.economy.service import EconomyService
 from tmserver.events.config import parse_event_configs, parse_event_setup
 from tmserver.events.matches import EventMatchRound, EventParticipant
-from tmserver.events.models import EventTableConfig
+from tmserver.events.models import EventListing, EventTableConfig
 from tmserver.events.rooms import EventRooms
 from tmserver.events.service import EventHost
 from tmserver.events.models import PrizeDisplay
@@ -44,6 +44,88 @@ DOCUMENT = {
 
 
 class EventConfigurationTests(unittest.TestCase):
+    def test_nested_configuration_types_are_strict(self):
+        for path, value in (
+            (("start",), True),
+            (("end",), "500"),
+            (("entry_answer",), 1.0),
+            (("match_enabled",), 1),
+            (("listing", "scalar"), False),
+            (("listing", "flags"), [0, 0, 0, True]),
+            (("listing", "description"), b"Already encoded"),
+            (("data", "start"), [0, 0, 0, "0", 0]),
+            (("data", "classes"), "AB"),
+            (("data", "missions"), {"0": True}),
+            (("data", "missions"), {"00": 3}),
+            (("data", "prizes", 0, "money"), 250.0),
+            (("data", "prizes", 0, "cards"), [True]),
+            (("room_id",), game_id(4096)),
+        ):
+            document = copy.deepcopy(DOCUMENT)
+            target = document["events"][0]
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = value
+            with self.subTest(path=path, value=value), self.assertRaises(ValueError):
+                parse_event_configs(document)
+
+    def test_table_types_and_nested_unknown_fields_are_rejected(self):
+        document = copy.deepcopy(DOCUMENT)
+        document["events"][0]["match_enabled"] = True
+        document["tables"] = [dict(event_id="festival", table_raw=4099, channel="#EVTABLE001")]
+        for key, value in (
+            ("player_count", 2.0),
+            ("turn_limit", True),
+            ("departure_rule", "1"),
+            ("seed", False),
+            ("cpu_cards", [[1, 50, False, 30, 30, 1, 255, 0]] * 5),
+            ("cpu_cards", None),
+            ("start_fields", tuple([0] * 16)),
+            ("table_id", game_id(4099)),
+            ("unknown", 1),
+        ):
+            invalid = copy.deepcopy(document)
+            invalid["tables"][0][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                parse_event_setup(invalid)
+        for path in (("listing",), ("data",), ("data", "prizes", 0)):
+            invalid = copy.deepcopy(DOCUMENT)
+            target = invalid["events"][0]
+            for key in path:
+                target = target[key]
+            target["unknown"] = 1
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                parse_event_configs(invalid)
+
+    def test_latin1_text_and_input_document_are_preserved(self):
+        document = copy.deepcopy(DOCUMENT)
+        document["events"][0]["listing"]["description"] = "Café ÿ"
+        document["events"][0]["data"]["classes"] = ["Étage", "Après"]
+        original = copy.deepcopy(document)
+        config = parse_event_configs(document)[0]
+        self.assertEqual(config.listing.description, b"Caf\xe9 \xff")
+        self.assertEqual(config.data[0x60:0x65], b"\xc9tage")
+        self.assertEqual(document, original)
+
+    def test_validated_models_keep_frozen_dataclass_apis(self):
+        listing = EventListing(b"Region", b"Event", b"Description")
+        self.assertTrue(is_dataclass(listing))
+        self.assertEqual(replace(listing, scalar=3).scalar, 3)
+        with self.assertRaises(FrozenInstanceError):
+            listing.scalar = 3
+        for scalar in (True, "3", 3.0):
+            with self.subTest(scalar=scalar), self.assertRaises(ValueError):
+                replace(listing, scalar=scalar)
+        with self.assertRaises(ValueError):
+            EventListing("Region", b"Event", b"Description")
+        config = parse_event_configs(DOCUMENT)[0]
+        self.assertTrue(is_dataclass(config))
+        self.assertEqual(replace(config, id="renamed").data, config.data)
+        cards = list(CARDS)
+        table = EventTableConfig("festival", game_id(4099), b"#EVTABLE001", cpu_cards=cards)
+        cards.clear()
+        self.assertEqual(table.cpu_cards, CARDS)
+
     def test_unplayable_boards_fail_during_configuration(self):
         for players in (2, 3):
             size = (players + 2) ** 2

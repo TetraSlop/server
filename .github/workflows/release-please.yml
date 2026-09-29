@@ -1,0 +1,60 @@
+name: Release please
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
+      - name: Check and publish the created tag
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh workflow run release.yml --ref "$RELEASE_TAG"
+      - name: Check for an unpublished draft
+        id: draft
+        if: steps.release.outputs.release_created != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          pending=$(gh release list --limit 30 --json isDraft --jq 'any(.[]; .isDraft)')
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        id: pr
+        if: steps.release.outputs.release_created != 'true' && steps.draft.outputs.pending == 'false'
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-release: true
+      # GITHUB_TOKEN-created PRs and tags do not trigger push/PR workflows.
+      - name: Check the generated release PR
+        if: steps.pr.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_PR: ${{ steps.pr.outputs.pr }}
+        run: |
+          number=$(jq -r '.number' <<< "$RELEASE_PR")
+          branch=$(gh pr view "$number" --json headRefName --jq '.headRefName')
+          gh workflow run checks.yml --ref "$branch"

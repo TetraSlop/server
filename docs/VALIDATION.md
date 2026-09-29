@@ -1,5 +1,302 @@
 # Packaging and transaction validation
 
+## Automatic Discord accounts, 2026-09-28
+
+The auth lane passes **56 tests in 24.558 seconds**; the admin lane passes
+**48 in 57.689 seconds**. First Play creates one account and starter inventory,
+including under concurrent requests. Tests exercise native encrypted game and
+profile transport, complete COM play and settlement using a newly allocated
+identity, restart, closed registrations, identical display names, raw-port denial,
+precommit rollback and lost commit acknowledgements. Provider verification is
+substituted at the HTTP integration boundary; provider tests separately validate
+that editable metadata cannot supply the required linked Discord identity.
+
+Real PostgreSQL passes **80 tests in 77.587 seconds**, with no skips. This includes
+joint account/identity rollback, lost acknowledgement recovery, importing an
+existing owner without changing their account, and migration upgrade/downgrade
+behavior. Revision `0003_identities` refuses downgrade with saved ownership.
+An initial new-fixture constructor typo was corrected before the green full
+PostgreSQL rerun. Evidence: `results/auto-registration-{auth,admin,postgres}.log`.
+
+A fresh wheel passes exact-source validation and isolated base/admin/auth
+installation: **161 files, 156 runtime files**. Its installed auth smoke creates
+an account without config bindings, saves the Discord name and starter cards,
+opens a WebSocket and verifies revocation. Base dependencies remain Pydantic and
+Construct. Lint, source import isolation and collection pass with **1,559 unique
+tests**. Evidence: `results/auto-registration-wheel.log`.
+
+The local gateway was restarted with automatic registration. Its existing pilot
+binding is now durable in the save, and the manual binding was removed from
+configuration. A before/after account hash proves the complete existing account
+was unchanged. Discovery returns 200 at `http://127.0.0.1:8081`; this is a local
+deployment, not public hosting or live second-user browser acceptance. Evidence:
+`results/auto-registration-pilot.json` and `var/auth-pilot/server.process.json`.
+
+The full portable regression run passes **1,375 tests in 1,067.538 seconds**,
+with no failures, errors or skips (`results/auto-registration-portable.log`).
+Combined with the auth, admin and PostgreSQL lanes, **all 1,559 collected tests
+pass**. The local pilot remains running; the disposable PostgreSQL instance
+used for verification has been stopped.
+
+## Event membership corrections and hosted COM, 2026-09-28
+
+The final admin lane passes **48 tests in 72.090 seconds** and the real PostgreSQL lane
+passes **74 tests in 81.166 seconds**, with no skips, errors or failures
+(`results/event-members-admin.log`, `results/event-members-postgres.log`). New
+corrections cover strict inputs, read-only previews, account/update/request scope,
+stale confirmation, exclusions, busy accounts, atomic writes, legacy audit loading,
+rollback between journals and commit followed by a lost acknowledgement. A final
+11-test action run additionally verifies pending admission survives preview/save
+failure and is cleared after successful exclusion (`results/event-members-actions.log`).
+The retained failure page refreshes only its CSRF token after a new login; stale
+tokens remain rejected, and the confirmed command/digest survive restart unchanged.
+
+The portable run found an outdated fixture that still classified audit v3 as an
+unknown version. The fixture now tests v4 and malformed version types as unsupported,
+and explicitly verifies v3 accepts existing grant receipts. All **91 focused audit
+and offline CLI tests pass in 6.714 seconds** after the correction
+(`results/event-members-audit-regression.log`); no runtime change was needed.
+The full run completed **1,366 portable tests in 1,076.808 seconds**, with that
+single stale assertion failure, zero errors and zero skips
+(`results/event-members-portable.log`). The remaining 1,365 tests passed. The
+corrected fixture and surrounding audit/CLI suite were rerun, not the entire
+18-minute portable lane; a completely green second full run is not claimed.
+
+`tests/auth/test_computer_match.py` promotes the reported wagered COM request to
+a maintained regression. Two checks pass in 5.207 seconds: disabled wagers leave
+the balance unchanged; enabled wagers complete a three-player encrypted match
+through the CLI-owned auth gateway, including settlement, exit, saved balance and
+subsequent PING. Only provider verification is substituted. This is automated
+transport/gameplay acceptance, not rendered native-client acceptance. The complete
+auth lane, including these cases, passes **49 tests in 15.849 seconds** with no
+skips (`results/event-members-auth.log`). Ruff and collection checks pass with
+**1,537 unique tests** and no import errors.
+
+A fresh wheel clean-installs with **157 files, 152 runtime files**, exactly matching
+source. Installed CLI and real HTTP panel checks exercise both membership actions,
+retry/reload, mixed v1/v2/v3 receipt history and templates. The auth smoke still
+passes encrypted WebSocket transport and revocation; base installation requires
+only Pydantic and Construct. Evidence: `results/event-members-wheel-build.log` and
+`results/event-members-wheel-tests.log`. The artifact is
+`dist/tmserver-0.1.0-py3-none-any.whl`. No remote CI run is claimed.
+
+## Discord display names, 2026-09-28
+
+The auth lane passes **47 tests in 9.707 seconds** (`results/auth-discord-names.log`)
+and 43 legacy game/profile/name-identity checks pass in 24.579 seconds
+(`results/discord-name-legacy-tests.log`). Provider HTTP fixtures exercise Discord
+identity name selection, normalization and rejection of editable metadata as a
+name source. Actual HTTP/WebSocket and encrypted profile checks carry the new
+label. Saved-state tests preserve everything except the account name and cover
+reload, unchanged/missing names, busy/connected accounts, rejected enrollment,
+pre-commit failure and lost commit acknowledgement. Changing a name preserves
+ticket replacement, renewal and logout ownership. Ruff and collection checks
+pass (1,514 unique tests). The user reported successful real Discord sign-in;
+the user subsequently confirmed the displayed native name worked.
+
+## Launcher authentication prototype, 2026-09-28
+
+The optional auth lane passes **37 tests in 9.156 seconds**, without skips
+(`results/auth-lane.log`). Actual HTTP/WebSocket checks carry the original
+encrypted game login/PING and profile file retrieval through the bound gateway,
+including fragmented writes, profile-key continuity within a play session,
+native reconnect, expiry, logout, renewal of an open stream, duplicate-channel
+denial, wrong account credentials, wrong upgrade metadata and oversized/text
+messages. The Supabase verification boundary is mocked; real provider/browser
+sign-in is not claimed. The public bootstrap response advertises Discord, and
+the loader contract and operator setup now use Discord through Supabase.
+
+Initial configuration now permits empty enrollment: an actual CLI-owned listener
+serves discovery, while even a verified identity cannot get a play ticket before
+being explicitly bound. The live project's public settings endpoint accepted
+the operator-supplied publishable key and reported Discord enabled. A separate
+disposable-state listener check served that project's configured public settings.
+No live Discord user sign-in or live game save was used. The installed-wheel
+checks below predate this empty-enrollment adjustment.
+
+Sixty focused legacy transport/ownership tests pass, including ten new trusted
+binding checks (`tests/network/test_bound_access.py`). The existing optional
+admin lane still passes **43 tests in 45.861 seconds** after extracting common
+HTTP listener ownership (`results/auth-admin-regression.log`); 18 CLI/tooling
+checks pass (`results/auth-cli-tooling-tests.log`). New configuration checks
+reject invalid enrollment before creating logs or opening saved state, normalize
+origins and keep accidental private-key input out of displayed validation errors.
+
+The new installed-wheel auth smoke starts actual CLI-owned services, fetches
+configuration, issues/redeems a launch ticket using a test identity verifier,
+receives the original game challenge over WebSocket, revokes the stream and
+rejects subsequent profile reuse. Base dependencies remain isolated. See
+`results/auth-wheel-build.log` and `results/auth-wheel-tests.log`. The auth CI lane
+is configured but has not run remotely. At this checkpoint loader implementation,
+real Supabase browser sign-in and public TLS deployment were pending; subsequent
+user reports confirm the first two. The exact contract is in
+[LOADER_AUTH_SPEC.md](LOADER_AUTH_SPEC.md).
+
+These are focused results for the authentication change. The full portable and
+database runs below describe their earlier checkpoints, not this later source.
+
+## Admin panel, native rules and roadmap continuation, 2026-09-28
+
+The first combined baseline passed **1,226 portable tests in 1,481.615 seconds**, with
+zero failures, errors or skips (`results/server-roadmap-portable.log`). It includes
+the R6 match/table/shop extractions, auction Pydantic snapshots, configuration and
+Construct directories, read-only admin integration and initial native backend
+injection. The next full portable run passed **1,261 tests in 1,152.391 seconds**,
+also with no failures, errors or skips (`results/audited-native-portable.log`).
+That includes Prize audit actions and ABI 2 integration. The latest combined run
+passes **1,316 tests in 1,016.574 seconds**, with zero failures, errors or skips,
+including event audits, read-path and late-growth corrections
+(`results/final-audited-event-portable.log`). Later bounded changes have the
+focused results recorded below; this is not a claim that every later source
+change was present in that broad run.
+
+The complete optional web lane passes **43 tests in 45.874 seconds**, with zero
+failures, errors or skips (`results/final-admin-lane.log`). It includes Prize and
+event forms, a real JSON commit followed by a lost acknowledgement, unavailable
+stale-cache lookup, restart, receipt inspection and exact retry. Preview does not
+write; changed requests, stale confirmations, busy accounts, unauthenticated/CSRF
+forms and storage errors cannot report success. Independent review found the
+misleading receipt 404 and verified the native C ABI and scratch-memory conventions.
+Typed receipt routes also prevent event receipts from being shown as Prize awards.
+Receipt history covers read-only search/detail, retained facts after collection
+and restart, HTML escaping, optional typed links and unavailable-state reporting.
+Twenty-one event action checks include encrypted native collection, canonical
+cards and malformed retained receipts. Together with Prize actions, 45 domain
+tests pass; all 33 offline administration tests pass, including six new event
+CLI cases (`results/audited-event-cli-tests.log`).
+
+A disposable PostgreSQL 16.15 instance on loopback replaces the unavailable
+Docker engine for this local run; no existing database/service was changed.
+The final complete PostgreSQL lane passed **71 tests in 64.997 seconds**, with
+zero failures, errors or skips (`results/postgres-disposable-tests.log`). This
+supersedes an earlier host-load timeout, which had also passed in isolation.
+The lane includes projection purity, audit migration, rollback between journal
+writes, real commit followed by lost acknowledgement, restart/retry, preservation
+of legacy awards, and refusal to downgrade retained receipts. Four event audit
+cases prove 12-card delivery in 9+3 batches, retained receipt facts after full
+collection, v1/v2 compatibility and unchanged account/card/other-journal SQL row
+versions when only queuing a grant (`results/postgres-event-actions-tests.log`).
+The owned temporary server has stopped; automatic approval review blocked
+deletion of its ignored build-directory cluster. No existing service was stopped.
+
+The ABI 2 bridge builds as C++23 with `/W4 /WX`. Twenty-five real Win32 tests
+pass, including 1,168 battle vectors, 256 ordinary AI cases, native growth/target
+boundaries and nine complete ordinary/special/CBC/three-player/event replays.
+An independent original-instruction oracle checks 6,248 growth cases against
+actual catalogue lookup and 700 target cases across all supported seats, plus
+both sole-target classifiers. There are 129 focused portable integration checks.
+The server uses no emulator; the independent research oracle does. This proves
+calculation/replay parity, not rendered-client acceptance or historical hosted
+reward policy. See [original rules](ORIGINAL_RULES_PROTOTYPE.md).
+Actual ABI 2 CLI startup accepts loopback connections on both ephemeral ports
+under 32-bit Python, then closes both on timed shutdown. The 64-bit CLI rejects
+before creating state/log directories. No emulator modules load.
+Evidence: `results/native-abi2-cli-acceptance.json`.
+The final combined Win32/native/admin run also passes under the actual CLI after
+installing the pinned admin extra into the isolated x86 environment. It verifies
+encrypted game login/PING and profile file retrieval, authenticated read-only
+pages and receipt history, disabled action routes, unchanged save bytes on admin
+inspection, and timed shutdown with drained connections, all three ports closed
+and the writer lease released. Temporary files were removable; no game or desktop
+was launched. No repository pins changed and no emulator imported.
+Evidence: `results/native-admin-win32-cli-acceptance.json` and its CLI log.
+After a regression exposed partial result publication on late native growth
+failure, all final snapshots now publish together. The 108 focused portable
+rules/match checks pass, and all 25 actual Win32 native checks pass again,
+including nine complete replays (`results/native-late-growth-fixed.log` and
+`results/native-abi2-post-atomic-growth.log`). The Windows CI job builds and checks
+the ABI without any original image; its exact hosted-runner execution is pending.
+
+A fresh 145-entry wheel exactly matches 140 runtime files and passes clean base
+installation, declared dependency isolation, CLI preview/apply/receipt/retry,
+temporary protocol listeners, then installation of the optional admin extra and
+actual HTTP login, packaged templates/CSS, unchanged read projections and audited
+Prize/event grant confirmations, retries and searchable receipt history. This
+final wheel includes the later result-model, chat, startup and form-token fixes.
+The base install exercises both
+receipt types across the v1→v2 journal transition without optional dependencies.
+Evidence: `results/final-event-wheel-build.log` and `results/final-event-wheel-tests.log`.
+
+Headless Chromium checks cover the read-only pages at 1,440 and 900 pixels, and
+the account-link → draft → preview → confirmation → receipt → refresh flow.
+Event forms additionally preserve draft values/request IDs when adding a second
+card and show canonical card facts on preview. Six event captures cover drafts,
+previews and receipts at both widths (`results/admin-event-visual.json`).
+There are no script failures, external asset requests or horizontal overflow.
+Tests use disposable state and never operate the user's game or desktop.
+Screenshots and results: `results/admin-visual-result.json` and
+`results/admin-award-visual.json`. CI is configured locally but has not run
+remotely; no push was made. Native UI acceptance remains user-operated.
+
+Three later bounded fixes have focused evidence separate from the broad run:
+the shared Construct PTL builder passes 40 checks against old builders, frozen
+original records and encrypted room/event/profile traffic; non-ASCII chat names
+pass 19 distinct fixture and encrypted reconnect/identity checks; startup log
+ownership passes 66 portable and five actual HTTP listener checks. The latter
+fix keeps invalid saves/configuration from opening a log, closes it after failed
+recovery, and preserves borrowed store/backend ownership. See the
+[chat audit](research/CHAT_NAME_BYTES.md) and the corresponding tests under
+`tests/rooms/test_table_records.py`, `tests/network/test_chat_service.py` and
+`tests/network/test_startup_logging.py`.
+
+The final event-outcome Pydantic cleanup changes its owner from 127 to 112 lines
+and removes five explicit branches. Forty-five affected tests pass, including
+encrypted event play, concurrent tables, claim transactions and recovery. An
+independent comparison finds 2,955 newly recorded outcomes byte-identical,
+2,955 reordered legacy objects semantically identical, and 68 malformed snapshots
+rejected by both versions (`results/event_results_model_comparison.json`).
+Object keys now serialize canonically after restore; seat/round order is unchanged,
+and a real JSON no-op test confirms this alone does not rewrite the save.
+
+An actual headless browser also retains an event failure page across a server
+restart on the same port, signs in in a separate tab, and retries the exact
+command/digest using the refreshed form token. The request commits once, account
+assets remain unchanged, and no script error or external request occurs
+(`results/admin-event-retry-browser.json`, `results/event-retry-browser-server.log`).
+Separate HTTP cases verify both precommit failure and lost-acknowledgement paths;
+stale tokens still receive 403 without a write.
+
+The final receipt-history browser check exercises list, search, detail and typed
+confirmation links at 1,440 and 900 pixels. Four captures have no document
+overflow, script errors or external requests. The host confirms both in-memory
+and saved state remain identical (`results/admin-receipts-visual.json`,
+`results/receipt-visual-server.log`). Temporary browser hosts have shut down.
+Final collection finds **1,457 unique tests with no import errors**; Ruff and
+diff whitespace checks pass. Collection is not an assertion that all lanes ran
+again after every later bounded edit; the evidence above identifies their scope.
+`results/server-candidate.json` records the current runtime, wheel and ABI 2
+bridge hashes plus the base commit; this candidate includes uncommitted changes.
+
+## Pydantic and Construct adoption, 2026-09-28
+
+Room and event configuration now uses strict Pydantic validation; default,
+ordinary and event room directories share Construct room/zone schemas. New
+tests cover nested types and unknown fields, JSON seat shorthand, Latin1 text,
+input nonmutation, frozen dataclass APIs and complete binary directory fixtures.
+An independent comparison of 715 ordinary-room JSON cases matched the previous
+parser's acceptance and output. Existing native directory hashes also match.
+
+The full portable run executed 1,188 tests in 1,057 seconds: 1,187 passed and
+one old admin test failed because it disabled all site packages. That assumption
+no longer applies with required runtime libraries. The test now retains its
+database/server import isolation assertions while allowing required packages;
+all 22 admin tests passed on rerun. Thus all 1,188 portable cases have passed
+across the broad run and the corrected targeted run, with no skips. The full
+suite was not repeated after this test-only adjustment. Logs are under ignored
+`results/pydantic-construct-portable.log` and `results/pydantic-construct-admin.log`.
+
+Twenty-four configuration and directory checks passed on 32-bit Python 3.13
+with the pinned libraries. Ruff, collection validation (1,247 unique tests) and
+whitespace checks pass. The fresh 125-entry wheel matches all 120 runtime files
+and passes clean installation with its two declared base dependencies, console
+and module entry points, JSON administration/recovery and temporary listeners.
+Database and Unicorn extras remain absent from the clean installation. The
+PostgreSQL lane was not rerun; storage code and save formats are unchanged.
+
+This migration changes its six production files from 1,004 to 1,015 physical
+lines, with 100 explicit `if` statements reduced to 74. The improvement is shared
+layouts and library-owned validation; this first slice does not reduce total LOC.
+
 ## First roadmap implementation, 2026-09-27
 
 The R1/R2/R4/R7 runtime changes address the review's reproduced failures without

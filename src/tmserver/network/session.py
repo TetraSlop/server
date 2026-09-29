@@ -48,8 +48,9 @@ def names_replies(nick, channel, members):
 
 
 class Session:
-    def __init__(self, server, reader, writer, session_id):
+    def __init__(self, server, reader, writer, session_id, *, access=None):
         self.server, self.reader, self.writer, self.id = server, reader, writer, session_id
+        self.access = access
         self.cipher, self.iv, self.nick = None, 0, None
         self.tm_player = None
         self.channels = set()
@@ -73,16 +74,22 @@ class Session:
         async with self.send_lock:
             if self.closed or self.server.storage_failed is not None:
                 return
+            if self.access is not None:
+                try:
+                    self.access.check()
+                except ValueError as error:
+                    raise ConnectionError("play session is no longer authorized") from error
             packet = wire.frame_line(message, self.cipher, self.iv)
             self.writer.write(packet)
             await asyncio.wait_for(self.writer.drain(), 5)
-            self.server.log(
-                "send",
-                session=self.id,
-                encrypted=self.cipher is not None,
-                text=message.decode("latin1"),
-                wire_hex=packet.hex(),
-            )
+            if self.access is None or self.nick is not None:
+                self.server.log(
+                    "send",
+                    session=self.id,
+                    encrypted=self.cipher is not None,
+                    text=message.decode("latin1"),
+                    wire_hex=packet.hex(),
+                )
 
     async def run(self):
         self.server.log("connect", session=self.id)
@@ -102,6 +109,8 @@ class Session:
             # Another writer can close this peer while its buffered read is ready.
             if self.closed or not raw:
                 break
+            if self.access is not None:
+                self.access.check()
             if len(raw) > MAX_LINE or not raw.endswith(b"\r\n"):
                 raise ValueError("oversized or unterminated frame")
             plain = wire.crypt64(self.cipher, self.iv, raw) if self.cipher else raw
@@ -110,19 +119,24 @@ class Session:
             message, checksum = plain[:-6], plain[-6:-2]
             if wire.checksum_chars(message) != checksum:
                 self.bad_checksums += 1
-                self.server.log("bad_checksum", session=self.id, wire_hex=raw.hex())
+                self.server.log(
+                    "bad_checksum",
+                    session=self.id,
+                    **({"wire_hex": raw.hex()} if self.access is None else {}),
+                )
                 if self.bad_checksums >= 3:
                     raise ValueError("repeated bad checksums")
                 continue
             if b"\0" in message or b"\r" in message or b"\n" in message:
                 raise ValueError("control byte in message")
-            self.server.log(
-                "receive",
-                session=self.id,
-                encrypted=self.cipher is not None,
-                text=message.decode("latin1"),
-                wire_hex=raw.hex(),
-            )
+            if self.access is None or self.nick is not None:
+                self.server.log(
+                    "receive",
+                    session=self.id,
+                    encrypted=self.cipher is not None,
+                    text=message.decode("latin1"),
+                    wire_hex=raw.hex(),
+                )
             verb, args = split_message(message)
             missed_ping = False
             if self.cipher is None:
@@ -146,6 +160,10 @@ class Session:
                 if len(parts) != 3 or parts[0] not in self.server.accounts:
                     raise ValueError("unknown synthetic account")
                 nick, digest, _ = parts
+                if self.access is None and self.server.identities.owns(nick.decode("ascii")):
+                    raise ValueError("hosted account requires an authorized play session")
+                if self.access is not None and nick != self.access.account_key.encode("ascii"):
+                    raise ValueError("game account differs from authorized play session")
                 expected = (
                     hashlib.md5(self.challenge + self.server.accounts[nick]).hexdigest().encode()
                 )
@@ -371,6 +389,8 @@ class Session:
         if self.closed:
             return
         self.closed = True
+        if self.access is not None and self.access.game is self:
+            self.access.game = None
         # Detach synchronously, before any notification can block. A reconnect
         # may bind the account while the old socket finishes closing.
         self.tm_player = None

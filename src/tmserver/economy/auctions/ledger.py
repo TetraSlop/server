@@ -9,11 +9,10 @@ No sockets, timers, file writes or fabricated auction-cancel wire command.
 
 import re
 from copy import copy
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 
 from tmserver.cards.catalog import collection_points
 from tmserver.economy.models import MAX_MONEY
-from tmserver.cards.model import Card
 from tmserver.economy.auctions.models import (
     Actor,
     AuctionError,
@@ -22,6 +21,8 @@ from tmserver.economy.auctions.models import (
     Listing,
     Pending,
 )
+
+from tmserver.economy.auctions.persistence import AuctionSnapshot, ExternalReturn
 
 INCREMENTS = (20, 50, 100, 200, 500, 1000)
 MAX_EXHIBITS = 30
@@ -390,45 +391,20 @@ class AuctionEconomy:
         del self._collections[reservation.key]
         return True
 
-    @staticmethod
-    def _actor_data(actor):
-        if actor is None:
-            return None
-        data = asdict(actor)
-        data["name"] = actor.name.hex()
-        return data
-
     def snapshot(self):
         """Ledger only; persist in the same atomic document as economy.snapshot()."""
-        listings = []
-        for item in self._listings.values():
-            row = asdict(item)
-            row.update(
-                seller=self._actor_data(item.seller),
-                bidder=self._actor_data(item.bidder),
-                card=list(item.card.full()),
-                item_metadata=list(item.item_metadata),
-            )
-            listings.append(row)
-        return {
-            "version": 1,
-            "next_id": self._next_id,
-            "next_pending": self._next_pending,
-            "listings": listings,
-            "history": [
-                {**asdict(b), "bidder": self._actor_data(b.bidder)}
-                for bids in self._history.values()
-                for b in bids
-            ],
-            "pending": [
-                {**asdict(p), "card": None if p.card is None else list(p.card.full())}
-                for p in self._pending
-            ],
-            "external_returns": [
-                {"id": source_id, "key": key, "cards": [list(c.full()) for c in cards]}
+        return AuctionSnapshot(
+            version=1,
+            next_id=self._next_id,
+            next_pending=self._next_pending,
+            listings=list(self._listings.values()),
+            history=[bid for bids in self._history.values() for bid in bids],
+            pending=list(self._pending),
+            external_returns=[
+                ExternalReturn(id=source_id, key=key, cards=list(cards))
                 for source_id, (key, cards) in sorted(self._external_returns.items())
             ],
-        }
+        ).model_dump(mode="json")
 
     @classmethod
     def restore(cls, economy, snapshot=None):
@@ -436,26 +412,14 @@ class AuctionEconomy:
         if snapshot is None:
             return result
         try:
-            if not isinstance(snapshot, dict) or set(snapshot) - {"external_returns"} != {
-                "version",
-                "next_id",
-                "next_pending",
-                "listings",
-                "history",
-                "pending",
-            }:
-                raise AuctionError("unsupported auction snapshot fields")
-            if snapshot["version"] != 1:
-                raise AuctionError("unsupported auction snapshot")
-            result._next_id = _uint(snapshot["next_id"], 0x100000000, 1)
-            result._next_pending = _uint(snapshot["next_pending"], 0x100000000, 1)
+            saved = AuctionSnapshot.read(snapshot)
+            result._next_id = saved.next_id
+            result._next_pending = saved.next_pending
 
-            def actor(data):
-                if data is None:
-                    return None
-                value = Actor(**{**data, "name": bytes.fromhex(data["name"])})
+            def actor(value):
+                if value is None:
+                    return
                 view = economy.account_view(value.key)
-                _uint(value.guild, 3)
                 # Init80 can register guild0 once. Preserve that earlier actor;
                 # a saved registered guild must still equal the current guild.
                 if (value.nn, value.player_id, value.name) != (
@@ -464,38 +428,20 @@ class AuctionEconomy:
                     view.name,
                 ) or value.guild not in (0, view.guild):
                     raise AuctionError("auction actor does not match its account")
-                _uint(value.rating)
-                _uint(value.points, 65535)
-                return value
 
-            for row in snapshot["listings"]:
-                item = Listing(
-                    **{
-                        **row,
-                        "seller": actor(row["seller"]),
-                        "bidder": actor(row["bidder"]),
-                        "card": economy.catalog.validate(Card(*row["card"])),
-                        "item_metadata": tuple(row["item_metadata"]),
-                    }
-                )
+            for item in saved.listings:
+                actor(item.seller)
+                actor(item.bidder)
+                economy.catalog.validate(item.card)
                 _uint(item.id, result._next_id - 1, 1)
                 if item.id in result._listings or item.card.deck != 255 or item.seller is None:
                     raise AuctionError("invalid or duplicate stored listing")
-                _uint(item.opening, MAX_MONEY, 1)
-                _uint(item.hours, 168, 1)
-                _uint(item.relists, 3)
-                _uint(item.created)
-                _uint(item.expires)
-                _uint(item.closed_at)
-                _uint(item.revision)
                 _uint(item.reoffers, item.relists)
                 if (
                     item.increment not in INCREMENTS
                     or item.expires != item.created + item.hours * 3600 * (item.reoffers + 1)
                 ):
                     raise AuctionError("invalid stored auction schedule")
-                if item.status not in ("active", "sold", "returned", "cancelled"):
-                    raise AuctionError("invalid stored auction status")
                 if (
                     item.status == "active"
                     and item.closed_at != 0
@@ -519,8 +465,8 @@ class AuctionEconomy:
                 result._descriptor(item.card, item.item_metadata)
                 result._listings[item.id] = item
                 result._history[item.id] = ()
-            for row in snapshot["history"]:
-                bid = Bid(**{**row, "bidder": actor(row["bidder"])})
+            for bid in saved.history:
+                actor(bid.bidder)
                 item = result.listing(bid.auction_id)
                 _uint(bid.amount, MAX_MONEY, item.opening)
                 _uint(bid.revision, item.revision, 1)
@@ -557,20 +503,12 @@ class AuctionEconomy:
                 ):
                     raise AuctionError("winning bid disagrees with history")
             ids = set()
-            for row in snapshot["pending"]:
-                value = Pending(
-                    **{
-                        **row,
-                        "card": (
-                            None
-                            if row["card"] is None
-                            else economy.catalog.validate(Card(*row["card"]))
-                        ),
-                    }
-                )
+            for value in saved.pending:
+                if value.card is not None:
+                    economy.catalog.validate(value.card)
                 economy.account_view(value.key)
                 _uint(value.id, result._next_pending - 1, 1)
-                if value.id in ids or value.kind not in _KINDS:
+                if value.id in ids:
                     raise AuctionError("invalid duplicate pending delivery")
                 if value.kind in ("payment", "refund"):
                     _uint(value.amount, MAX_MONEY, 1)
@@ -583,10 +521,8 @@ class AuctionEconomy:
             for key in {v.seller.key for v in result._listings.values()}:
                 if result.active_exhibits(key) > MAX_EXHIBITS:
                     raise AuctionError("stored exhibit count exceeds capacity")
-            for row in snapshot.get("external_returns", []):
-                if not isinstance(row, dict) or set(row) != {"id", "key", "cards"}:
-                    raise AuctionError("unsupported external return fields")
-                source_id, key = row["id"], row["key"]
+            for row in saved.external_returns:
+                source_id, key = row.id, row.key
                 economy.account_view(key)
                 if (
                     not isinstance(source_id, str)
@@ -594,8 +530,8 @@ class AuctionEconomy:
                     or source_id in result._external_returns
                 ):
                     raise AuctionError("invalid duplicate external return ID")
-                cards = tuple(economy.catalog.validate(Card(*c)) for c in row["cards"])
-                if len(cards) > 30 or any(c.deck != 255 for c in cards):
+                cards = tuple(economy.catalog.validate(card) for card in row.cards)
+                if any(c.deck != 255 for c in cards):
                     raise AuctionError("invalid stored external return cards")
                 result._external_returns[source_id] = (key, cards)
         except (KeyError, TypeError, ValueError, OverflowError) as exc:

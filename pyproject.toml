@@ -8,11 +8,18 @@ version = "0.1.0"
 description = "Local Tetra Master protocol and game server"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = ["pydantic==2.13.5", "construct==2.10.70"]
+
+[project.urls]
+Repository = "https://github.com/sruon/tmserver"
+Issues = "https://github.com/sruon/tmserver/issues"
 
 [project.optional-dependencies]
+admin = ["starlette-admin==1.0.1", "starlette==1.7.0", "uvicorn==0.54.0"]
+auth = ["starlette==1.7.0", "uvicorn==0.54.0", "httpx==0.28.1", "websockets==17.1"]
+original = ["unicorn==2.1.4"]
 postgres = ["SQLAlchemy==2.0.54", "alembic==1.20.0", "psycopg[binary]==3.3.6"]
-dev = ["ruff==0.16.4", "build>=1.2,<2"]
+dev = ["ruff==0.16.4", "build>=1.2,<2", "httpx==0.28.1"]
 
 [project.scripts]
 tmserver = "tmserver.cli.serve:main"
@@ -24,7 +31,7 @@ tmserver-admin = "tmserver.cli.admin:cli"
 where = ["src"]
 
 [tool.setuptools.package-data]
-tmserver = ["data/*.json", "data/*.tsv", "storage/migrations/*.py", "storage/migrations/versions/*.py"]
+tmserver = ["data/*.json", "data/*.tsv", "storage/migrations/*.py", "storage/migrations/versions/*.py", "admin/templates/*.html"]
 
 [tool.ruff]
 target-version = "py313"

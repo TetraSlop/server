@@ -10,6 +10,7 @@ from tmserver.cards.catalog import collection_points
 from tmserver.protocol.identities import GAME_KEY, player_id, service_nick
 from tmserver.rooms.departures import MatchDepartures
 from tmserver.game.match import MatchService
+from tmserver.game.errors import RulesExecutionError
 from tmserver.game.packets import decode as decode_match
 from tmserver.game.packets import packet as match_packet
 from tmserver.economy.match_transactions import match_transaction
@@ -94,6 +95,7 @@ class OrdinaryTable:
             card_prizes=self.card_prizes,
             flexible_seats=self.flexible_seats,
             room_rules=self.room_rules,
+            rules_backend=self.host.rules_backend,
             allow_wagers=self.allow_wagers,
             allow_departures=self.departures.enabled,
             npc_nickname_id=0x1FF + self.room.table_number,
@@ -388,6 +390,103 @@ class OrdinaryTable:
         if match is self.match and match.phase == "finished":
             await self.publish_room(self.room.clear_npcs())
 
+    async def _dispatch_query(self, session, msg):
+        """Answer lobby inspection and discovery while match_lock is held."""
+        if msg.primary == 0x41 and msg.subtype == 3:
+            key = self.host.ensure_account(session.nick)
+            identity = self.host.economy.account_view(key).nn
+            fields = msg.sections.get("GameM")
+            if (
+                msg.argument
+                or fields is None
+                or set(msg.sections) != {"GameM"}
+                or set(fields) - {"ID"}
+                or ("ID" in fields and fields["ID"].upper() != f"{identity:016X}")
+            ):
+                raise ValueError("table member query must name its authenticated requester")
+            response = match_packet(
+                0x41, 4, body=self.match._member_body(self.match.players, identity)
+            )
+            await self.deliver_table_packet(session, response)
+            return True
+        # Discovery queries are read-only; they must not claim a seat.
+        if msg.primary == 0x12:
+            response = match_packet(0x13, body=self.match.rules_body())
+        elif msg.primary == 0x2D:
+            available = int(self.match.accepting_players)
+            join = int(
+                bool(available)
+                or (
+                    self.spectators.enabled
+                    and self.match.table_rules["in"] != 1
+                    and self.match.phase in ("selection", "turn", "battle")
+                )
+            )
+            response = match_packet(0x2E, body=f"@CheckJoinTable_Ans=/Join={join}/Mem={available}")
+        else:
+            return False
+        await self.deliver_table_packet(session, response)
+        return True
+
+    async def _dispatch_nonparticipant(self, session, payload, msg, *, registered, admitting):
+        """Handle observers and visitors; None continues participant processing."""
+        viewing = viewer_state(msg)
+        exiting_channel = channel_exit(msg)
+        if registered:
+            return None
+        if session in self.spectator_admissions:
+            if viewing is not None:
+                if viewing:
+                    self.match.viewer_peers.add(session)
+                else:
+                    self.match.viewer_peers.discard(session)
+                return True
+            if exiting_channel:
+                self.detach_spectator(session)
+                await self.host.chat_updates(
+                    self.host.chat.leave(session, service_nick(self.table_raw))
+                )
+                return True
+        if viewing is not None or exiting_channel:
+            return True
+        if msg.primary == 0x41 and msg.subtype in (5, 0x0D):
+            receipt = self.match.lobby_exit_receipts.get((session, msg.subtype))
+            section = "GameQT" if msg.subtype == 5 else "GameExit"
+            if receipt is not None and msg.sections == {section: {}}:
+                await self.deliver_table_packet(session, receipt)
+                return True
+        preview_available = self.spectators.enabled and self.match.table_rules["in"] != 1
+        if preview_available:
+            watching = session in self.spectator_admissions
+            active = self.match.phase in ("selection", "turn", "battle")
+            if (
+                msg.primary == 1
+                and "Req" in msg.sections
+                and active
+                and self.table_channel in session.channels
+            ):
+                fields = msg.sections["Req"]
+                account = self.host.economy.account_view(self.host.ensure_account(session.nick))
+                validate_admission(fields, "Req", nn=account.nn, name=account.name)
+                self.spectator_admissions.add(session)
+                reply = self.match.playack(self.match.players[0].peer)
+                self.queue_spectator([(session, reply)], self.match, tracked=False)
+                return True
+            if msg.primary == 0x43 and (msg.subtype == 0x25 or watching):
+                if not watching or self.table_channel not in session.channels:
+                    raise ValueError("watch request requires table-channel admission")
+                replies = self.spectators.handle(
+                    session, payload, self.match.observer_snapshot(), epoch=self.match
+                )
+                if replies is not None:
+                    self.queue_spectator(replies, self.match)
+                    return True
+            if watching and admitting:
+                raise ValueError("observer cannot claim a participant seat")
+        if not admitting:
+            return await self._dispatch_query(session, msg)
+        return None
+
     async def dispatch_table(self, session, payload):
         aborted_peers = ()
         chat_updates = []
@@ -401,24 +500,8 @@ class OrdinaryTable:
                 return False
             host = self.host
             if msg.primary == 0x41 and msg.subtype == 3:
-                # Native GameM is a lobby inspection query. It must work for
-                # nonmembers and while the requester is seated elsewhere.
-                key = self.host.ensure_account(session.nick)
-                identity = self.host.economy.account_view(key).nn
-                fields = msg.sections.get("GameM")
-                if (
-                    msg.argument
-                    or fields is None
-                    or set(msg.sections) != {"GameM"}
-                    or set(fields) - {"ID"}
-                    or ("ID" in fields and fields["ID"].upper() != f"{identity:016X}")
-                ):
-                    raise ValueError("table member query must name its authenticated requester")
-                response = match_packet(
-                    0x41, 4, body=self.match._member_body(self.match.players, identity)
-                )
-                await self.deliver_table_packet(session, response)
-                return True
+                # Roster inspection also works for a requester seated elsewhere.
+                return await self._dispatch_query(session, msg)
             owner = host.table_for_peer(session)
             if owner is not None and owner is not self:
                 raise ValueError("leave the current ordinary table before entering another")
@@ -444,75 +527,11 @@ class OrdinaryTable:
             registered = any(p.peer is session for p in self.match.players)
             if admitting and not registered:
                 validate_room_entry(host, session, self.room)
-            viewing = viewer_state(msg)
-            exiting_channel = channel_exit(msg)
-            if not registered and session in self.spectator_admissions:
-                if viewing is not None:
-                    if viewing:
-                        self.match.viewer_peers.add(session)
-                    else:
-                        self.match.viewer_peers.discard(session)
-                    return True
-                if exiting_channel:
-                    self.detach_spectator(session)
-                    await host.chat_updates(host.chat.leave(session, service_nick(self.table_raw)))
-                    return True
-            if not registered and (viewing is not None or exiting_channel):
-                return True
-            if not registered and msg.primary == 0x41 and msg.subtype in (5, 0x0D):
-                receipt = self.match.lobby_exit_receipts.get((session, msg.subtype))
-                section = "GameQT" if msg.subtype == 5 else "GameExit"
-                if receipt is not None and msg.sections == {section: {}}:
-                    await self.deliver_table_packet(session, receipt)
-                    return True
-            preview_available = self.spectators.enabled and self.match.table_rules["in"] != 1
-            if preview_available and not registered:
-                watching = session in self.spectator_admissions
-                active = self.match.phase in ("selection", "turn", "battle")
-                if (
-                    msg.primary == 1
-                    and "Req" in msg.sections
-                    and active
-                    and self.table_channel in session.channels
-                ):
-                    fields = msg.sections["Req"]
-                    account = self.host.economy.account_view(self.host.ensure_account(session.nick))
-                    validate_admission(fields, "Req", nn=account.nn, name=account.name)
-                    self.spectator_admissions.add(session)
-                    reply = self.match.playack(self.match.players[0].peer)
-                    self.queue_spectator([(session, reply)], self.match, tracked=False)
-                    return True
-                if msg.primary == 0x43 and (msg.subtype == 0x25 or watching):
-                    if not watching or self.table_channel not in session.channels:
-                        raise ValueError("watch request requires table-channel admission")
-                    replies = self.spectators.handle(
-                        session, payload, self.match.observer_snapshot(), epoch=self.match
-                    )
-                    if replies is not None:
-                        self.queue_spectator(replies, self.match)
-                        return True
-                if watching and admitting:
-                    raise ValueError("observer cannot claim a participant seat")
-            if not registered and not admitting:
-                # Discovery queries are read-only; they must not claim a seat.
-                if msg.primary == 0x12:
-                    response = match_packet(0x13, body=self.match.rules_body())
-                elif msg.primary == 0x2D:
-                    available = int(self.match.accepting_players)
-                    join = int(
-                        bool(available)
-                        or (
-                            preview_available
-                            and self.match.phase in ("selection", "turn", "battle")
-                        )
-                    )
-                    response = match_packet(
-                        0x2E, body=f"@CheckJoinTable_Ans=/Join={join}/Mem={available}"
-                    )
-                else:
-                    return False
-                await self.deliver_table_packet(session, response)
-                return True
+            handled = await self._dispatch_nonparticipant(
+                session, payload, msg, registered=registered, admitting=admitting
+            )
+            if handled is not None:
+                return handled
             if not registered and msg.primary == 1 and session in self.match.kicked_peers:
                 raise ValueError("removed members must explicitly re-enter the table")
             # The wire carries no table generation nonce. Require the existing
@@ -641,7 +660,9 @@ class OrdinaryTable:
                 if not registered:
                     self.match_reservations[session] = self.host.economy.reserve_match(key)
                     self.host.result_rewards.forget(key)
-            except (ValueError, OSError):
+            except (ValueError, OSError) as error:
+                if isinstance(error, RulesExecutionError):
+                    self.departures.abort(match)
                 if not registered:
                     match.players = old_players
                     match.owner_peer = old_owner

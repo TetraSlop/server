@@ -1,35 +1,8 @@
-"""Local ordinary-shop service; no sockets or implicit filesystem writes.
+"""Account ownership, inventory, reservations and committed profile state.
 
-Integration:
-    shop = EconomyService(seed=1)
-    shop.provision(authenticated_key, nn=game_identity, name=b'LocalPlayer')
-    replies = shop.handle(authenticated_key, payload)  # None: unrelated family
-    # Send replies as NOTICE from the taught shop identity (raw POL ID 0x300).
-    profile = shop.profile_bytes(authenticated_key)  # U/g/TM0DataFile
-    # Persist shop.snapshot() after mutations; EconomyService.restore(snapshot)
-    # restores committed accounts. Call disconnect(key) when the client leaves.
-
-Mapped wire contracts: SHOP_INVENTORY, SHOP_SEQUENCE, ECONOMY_DETAILS,
-PACK_GENERATION and INVENTORY_BATCHING in ../protocol_map. This implements
-ordinary B0/00 and B2 shop traffic, not auction, trade, events or Prize Center.
-
-Explicit synthetic policy: provision defaults to 10,000 T and a ten-card
-Starter's Pack. Python's RNG supplies the recovered local generator; historical
-online randomness/entitlements are unknown. Ordinary catalogue categories 1/2,
-and the account's guild pack, are purchasable; free Pauper packs require <5
-cards. Rank/event packs are unavailable. No server-set price is sent: the
-native UI uses its own decoded catalogue prices and ignores Init /M.
-
-Buy stages one transaction, including overflow up to 1030 cards. Same-pack
-retries replay its exact Card response. Get atomically commits debit, cards and
-intervening edits only after capacity <=1000. A disconnect discards that pending
-transaction; profile/snapshot expose the last committed state. Existing-account
-Sell/Erase/Decks commit immediately. Mode2 is only a marker, never erase-all.
-Duplicate edits cannot be distinguished from intentional identical-card edits
-on this wire; preserve ordered delivery and do not invent automatic retries.
-Malformed messages fail atomically with EconomyError; integration should log
-and close/resync the connection, not report success. Insufficient funds or an
-unavailable pack receive the mapped nonpositive Card response instead.
+Mutation coordinators stage accounts and RNG through edit_accounts, save the
+staged state, then publish it. Shop protocol behavior lives in economy.shop;
+this owner authenticates requests and supplies its current staged dependencies.
 """
 
 import random
@@ -43,9 +16,9 @@ from dataclasses import replace
 from tmserver.cards.catalog import Catalog, collection_points
 from tmserver.cards.edits import apply_card_edits, parse_edit_records
 from tmserver.cards.model import Card
+from tmserver.economy import shop
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.models import (
-    MAX_CARDS,
     MAX_MONEY,
     PROFILE_SIZE,
     AccountView,
@@ -54,8 +27,8 @@ from tmserver.economy.models import (
     MatchReservation,
     PrizeReservation,
     _Account,
-    _Pending,
     _State,
+    check_inventory,
 )
 from tmserver.economy.packets import _hex, _int, _keys, named, parse_named
 from tmserver.economy.shop_offers import ShopOffers
@@ -109,6 +82,15 @@ class EconomyService:
             tuple(a.committed.cards),
             tuple(sorted(a.committed.names.items())),
         )
+
+    def set_display_name(self, key, name):
+        """Change only an idle account's label; its identity and inventory stay intact."""
+        if (not isinstance(name, bytes) or not 1 <= len(name) <= 15
+                or any(c < 32 or c > 126 for c in name)):
+            raise EconomyError("display name requires 1..15 printable ASCII bytes")
+        if self.is_busy(key):
+            raise EconomyError("cannot rename a busy account")
+        self._account(key).name = name
 
     def save_table_preferences(self, key, *, game=None, table=None):
         """Save the mapped groups while preserving inventory and live sessions.
@@ -285,7 +267,7 @@ class EconomyService:
         before, after = Counter(c.reduced() for c in expected), Counter(c.reduced() for c in final)
         if after - before or not allow_discard and before != after:
             raise EconomyError("prize output creates, changes or unexpectedly discards cards")
-        self._check_inventory(final)
+        check_inventory(final)
         names = self._deck_names(dict(view.deck_names) if deck_names is None else deck_names)
         template = bytearray(self._accounts[view.key].template)
         struct.pack_into("<I", template, 0x134, points)
@@ -341,7 +323,7 @@ class EconomyService:
         before, after = Counter(c.reduced() for c in expected), Counter(c.reduced() for c in final)
         if after - before or not allow_discard and before != after:
             raise EconomyError("auction output creates, changes or unexpectedly discards cards")
-        self._check_inventory(final)
+        check_inventory(final)
         names = self._deck_names(dict(view.deck_names) if deck_names is None else deck_names)
         self._accounts[view.key].committed = _State(balance, final, names)
         if keep_reserved:
@@ -463,7 +445,7 @@ class EconomyService:
         for seat, view in views.items():
             removed = {indices[seat][slot] for slot in lost[seat]}
             cards = [c for i, c in enumerate(view.cards) if i not in removed]
-            self._check_inventory(cards)
+            check_inventory(cards)
             states[view.key] = _State(view.balance, cards, dict(view.deck_names))
         for key, state in states.items():
             self._accounts[key].committed = state
@@ -488,7 +470,7 @@ class EconomyService:
         final = [self.catalog.validate(c) for c in (expected if cards is None else cards)]
         if Counter(c.reduced() for c in final) - Counter(c.reduced() for c in expected):
             raise EconomyError("result output creates or alters card stats")
-        self._check_inventory(final)
+        check_inventory(final)
         names = self._deck_names(dict(view.deck_names) if deck_names is None else deck_names)
         self._accounts[view.key].committed = _State(view.balance, final, names)
         refreshed = MatchReservation(self.account_view(view.key))
@@ -611,7 +593,7 @@ class EconomyService:
                 if delta > 1:
                     raise EconomyError("result growth can increment only one stat")
                 cards[index] = new
-            self._check_inventory(cards)
+            check_inventory(cards)
             states[view.key] = _State(view.balance, cards, dict(view.deck_names))
             if stats_by_key is not None:
                 result = stats_by_key.get(view.key)
@@ -719,7 +701,7 @@ class EconomyService:
             ):
                 raise EconomyError("stale exchange reservation")
             cards = [self.catalog.validate(c) for c in cards_by_key[view.key]]
-            self._check_inventory(cards)
+            check_inventory(cards)
             names = self._deck_names(
                 deck_names_by_key[view.key]
                 if deck_names_by_key is not None
@@ -771,7 +753,10 @@ class EconomyService:
             if not isinstance(name, bytes):
                 raise EconomyError("invalid delayed name")
             fields[f"DN{i}"] = {"S": name.hex()}
-        self._edit(a, 0x22, fields)
+        values, renamed = parse_edit_records(fields, "Decks", number=_int, error=EconomyError)
+        current = a.committed
+        updated, _ = apply_card_edits(current.cards, values, discard=False, error=EconomyError)
+        a.committed = _State(current.balance, updated, current.names | renamed)
 
     def _draw(self):
         return self.rng.randrange(32768)
@@ -827,7 +812,7 @@ class EconomyService:
                 for _ in range(10)
             ]
         cards = [self.catalog.validate(c) for c in cards]
-        self._check_inventory(cards)
+        check_inventory(cards)
         self._accounts[key] = _Account(
             nn, player_id, name, guild, bytes(profile_template), _State(balance, cards)
         )
@@ -870,14 +855,6 @@ class EconomyService:
                 account.guild = guild
         return named(0x81, subtype, 0, "@InitAns=/Ans=" + ("2" if guild else "1"))
 
-    @staticmethod
-    def _check_inventory(cards):
-        if len(cards) > MAX_CARDS:
-            raise EconomyError("inventory exceeds persisted capacity")
-        slots = [c.deck for c in cards if c.deck != 255]
-        if len(slots) != len(set(slots)):
-            raise EconomyError("two cards occupy one deck slot")
-
     def _account(self, key):
         try:
             return self._accounts[key]
@@ -909,147 +886,18 @@ class EconomyService:
         account.pending = None
         account.session = None
 
-    def _init(self, account):
-        s = account.committed
-        # Original Init treats header byte1 as failure; /N carries the session.
-        return named(
-            0xB2,
-            0x13,
-            0,
-            f"@Init=/N={account.session}/RA={struct.unpack_from('<I', account.template, 0x30)[0]}"
-            f"/M={s.balance}/CP={collection_points(s.cards)}/S={len(s.cards)}"
-            + account.offers.fields(),
-        )
-
     def handle(self, key, payload):
-        """Return response payloads, [] for accepted no-ack commands, or None."""
+        """Authenticate and route shop traffic; the caller owns staging and saving."""
         if not payload.startswith((b"GTM0GB0", b"GTM0GB2", b"GTM0Gb0", b"GTM0Gb2")):
             return None
         family, subtype, session, sections = parse_named(payload)
         account = self._account(key)
         if self.is_reserved(key):
             raise EconomyError("account is reserved by an exchange")
-        if family == 0xB0:
-            if subtype != 0 or set(sections) != {"ShReq"}:
-                raise EconomyError("only ordinary shop entry is implemented")
-            fields = sections["ShReq"]
-            _keys(fields, ("NN", "HID", "Dm", "Vol", "CN"))
-            if (
-                not re.fullmatch(r"[0-9A-Fa-f]{16}", fields["NN"])
-                or int(fields["NN"], 16) != account.nn
-            ):
-                raise EconomyError("ShReq identity does not match authenticated account")
-            _int(fields["HID"])
-            _int(fields["Dm"], maximum=255)
-            _int(fields["Vol"], maximum=65535)
-            if _hex(fields["CN"], 16) != account.name:
-                raise EconomyError("ShReq name does not match provisioned account")
-            if account.pending:
-                raise EconomyError("cannot reinitialize a pending purchase")
-            if account.session is None:
-                account.last_session = account.last_session % 255 + 1
-                account.session = account.last_session
-                account.offers = self.shop_offers
-            return [named(0xB1, 0, session, "@ShEnter=/EN=1"), self._init(account)]
-        if account.session is None:
-            # A retry of the last completed Quit is harmless; all edits stay closed.
-            if (
-                subtype == 0x17
-                and session == account.last_session
-                and sections == {"Quit": {"No": str(session)}}
-            ):
-                return [named(0xB2, 0x17, session, f"@Quit=/N={session}/D=0/B=0")]
-            raise EconomyError("shop session is not active")
-        if session != account.session:
-            raise EconomyError("stale shop session")
-        if subtype == 0x14:
-            if set(sections) != {"Buy"}:
-                raise EconomyError("expected Buy")
-            _keys(sections["Buy"], ("No",))
-            pack_id = _int(sections["Buy"]["No"], maximum=255)
-            if account.pending:
-                if pack_id == account.pending.pack:
-                    return [account.pending.reply]
-                return [named(0xB2, 0x14, session, "@Card=/S=0")]
-            state = account.committed
-            pack = self.catalog.packs[pack_id] if pack_id < len(self.catalog.packs) else None
-            available = pack_id in account.offers.visible(
-                self.catalog, account.guild, state.balance, len(state.cards)
-            )
-            if not available or pack["price"] > state.balance:
-                return [named(0xB2, 0x14, session, "@Card=/S=0")]
-            incoming = [
-                self.catalog.generate(
-                    self.catalog.select(pack_id, account.guild, self._draw), self._draw
-                )
-                for _ in range(pack["card_count"])
-            ]
-            if not 1 <= len(incoming) <= 30 or len(state.cards) + len(incoming) > 1030:
-                raise EconomyError("pack exceeds working inventory capacity")
-            body = f"@Card=/S={len(incoming)}" + "".join(
-                f"@N{i}=/D=" + "|".join(map(str, card.full())) for i, card in enumerate(incoming)
-            )
-            reply = named(0xB2, 0x14, session, body)
-            account.pending = _Pending(
-                pack_id,
-                reply,
-                _State(state.balance - pack["price"], state.cards + incoming, dict(state.names)),
-            )
-            return [reply]
-        if subtype in (0x15, 0x17):
-            token = "Get" if subtype == 0x15 else "Quit"
-            if set(sections) != {token}:
-                raise EconomyError("expected " + token)
-            _keys(sections[token], ("No",))
-            if _int(sections[token]["No"], maximum=255) != session:
-                raise EconomyError("body session does not match envelope")
-            if subtype == 0x15:
-                if account.pending:
-                    self._check_inventory(account.pending.state.cards)
-                    account.committed = account.pending.state
-                    account.pending = None
-                return []
-            if account.pending:
-                raise EconomyError("purchase must complete before Quit")
-            account.session = None
-            return [named(0xB2, 0x17, session, f"@Quit=/N={session}/D=0/B=0")]
-        if subtype not in (0x10, 0x16, 0x22):
-            raise EconomyError("unsupported ordinary shop operation")
-        self._edit(account, subtype, sections)
-        return []
-
-    def _edit(self, account, subtype, sections):
-        token = {0x10: "Erase", 0x16: "Sell", 0x22: "Decks"}[subtype]
-        if token not in sections:
-            raise EconomyError("expected " + token)
-        head = sections[token]
-        if subtype == 0x10:
-            mode = _int(head.get("Mode"), maximum=2)
-            if mode == 2:
-                if sections != {"Erase": {"Mode": "2"}}:
-                    raise EconomyError("Mode2 carries no card list")
-                return  # Recorded completion marker, not evidence of any deletion.
-            if mode != 1:
-                raise EconomyError("unsupported Erase mode")
-            _keys(head, ("Mode", "C"))
-        else:
-            _keys(head, ("C",))
-        values, renamed = parse_edit_records(sections, token, number=_int, error=EconomyError)
-        current = account.pending.state if account.pending else account.committed
-        cards, indices = apply_card_edits(
-            current.cards, values, discard=subtype != 0x22, error=EconomyError
+        return shop.handle(
+            account, family, subtype, session, sections,
+            catalog=self.catalog, offers=self.shop_offers, draw=self._draw,
         )
-        balance = current.balance
-        if subtype == 0x16:
-            balance = min(
-                MAX_MONEY,
-                balance + sum(self.catalog.sale_value(current.cards[i]) for i in indices),
-            )
-        updated = _State(balance, cards, current.names | renamed)
-        if account.pending:
-            account.pending.state = updated
-        else:
-            account.committed = updated
 
     def profile_bytes(self, key):
         """Canonical committed save; pending purchases require Get or disconnect."""

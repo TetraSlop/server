@@ -34,6 +34,13 @@ $env:TM_DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@HOST:5432/tetramaster
 tmserver-db upgrade
 ```
 
+Current schema revision is `0003_identities`. Stop the owning server and run
+`tmserver-db upgrade` when upgrading an existing database. Revision 0002 adds the
+administration audit journal; 0003 adds durable authentication ownership. Neither
+rewrites accounts or prizes. The server refuses an older schema. Downgrade
+refuses retained identity links or audit receipts; only an absent or empty
+respective journal permits reverting its migration.
+
 Create the database and its credentials separately. Use a direct PostgreSQL
 connection or a session-pooling endpoint: transaction-pooling proxies cannot
 preserve the session writer lock. Run migrations with a schema-owning role.

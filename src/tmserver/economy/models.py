@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 
+from tmserver.economy.errors import EconomyError
 from tmserver.economy.shop_offers import ShopOffers
 
 MAX_MONEY = 99_999_999
@@ -79,3 +80,12 @@ class PrizeReservation:
 
     account: AccountView
     points: int
+
+
+def check_inventory(cards):
+    """Enforce the persisted capacity and unique occupied deck slots."""
+    if len(cards) > MAX_CARDS:
+        raise EconomyError("inventory exceeds persisted capacity")
+    slots = [card.deck for card in cards if card.deck != 255]
+    if len(slots) != len(set(slots)):
+        raise EconomyError("two cards occupy one deck slot")

@@ -1,5 +1,225 @@
 # Server iteration log
 
+## Automatic Discord accounts, 2026-09-28
+
+First authenticated Play now provisions a saved account by verified Supabase
+issuer and UUID. Discord identity data supplies the display name; only a linked
+Discord identity permits automatic registration. The existing starter policy
+supplies ten cards and 10,000 gil, once. Explicit legacy bindings import without
+resetting saves and cannot reassign owners. `auto_register: false` closes new
+registration while existing owners remain admitted.
+
+The feature uses a small `accounts` owner with Pydantic journal validation and
+the existing account staging/store commit boundary. JSON and PostgreSQL persist
+account data and ownership together; migration 0003 adds the supported journal.
+Dynamic native credentials and lazy profile initialization remove dependence on
+the local fixture account pool. Both raw listeners reject owned accounts unless
+the stream has trusted session access. The loader protocol is unchanged.
+
+Updated setup and loader documentation, default example configuration, and the
+installed-package auth smoke. Auth, admin and real PostgreSQL checks pass; see
+the current [validation report](VALIDATION.md). The local pilot is running with
+automatic registration enabled. Its prior owner migrated durably and all saved
+account fields remained unchanged; manual configuration enrollment is removed.
+The loader repository and desktop/game UI were not changed.
+
+## Audited event membership and hosted COM regression, 2026-09-28
+
+Completed the remaining R9 event actions. Strict Pydantic requests and immutable
+before/after receipts now cover eligibility and trusted progress. CLI preview/apply
+commands and the authenticated, opt-in panel share staged `EventHost` operations.
+Confirmation binds account/member identity, current state and event configuration;
+stale previews, busy accounts, conflicting request/update IDs and invalid mission
+facts are rejected. Events and audit history commit together before live publication,
+without account, inventory or reward changes. Exact retries return the original
+receipt after subsequent corrections and restart. Exclusion clears pending
+admission only after a successful save. Audit v3 preserves existing v1/v2 receipts;
+no SQL schema migration is added. Legacy CLI commands retain their original behavior.
+
+The reported 310-gil, opponents 3/4 COM request is now a permanent auth-lane
+regression. It completes selection, all turns, result settlement and exit through
+CLI-owned HTTP/WebSocket services, checks the saved balance and verifies the same
+connection still answers PING. Disabling wagers rejects the request without a
+debit. The provider verification boundary is a fixture; the original encrypted
+game traffic and application services are real. This is not a native UI run.
+
+Admin, PostgreSQL, auth and clean-installed wheel checks are recorded in
+[VALIDATION.md](VALIDATION.md). Docker was stopped, so database tests used the
+existing PostgreSQL 16.15 binaries with a new loopback-only cluster. The owned
+test server stopped cleanly. Automatic approval review blocked removing its
+temporary files with "blocked by policy"; the ignored build-directory cluster
+remains. The user's auth pilot still serves Discord discovery on port 8081.
+The full portable run completed 1,366 tests; its sole failure was an old fixture
+still treating audit v3 as unknown. Corrected it to test unsupported v4/malformed
+versions and positive v3 compatibility, then passed all 91 affected audit/CLI
+checks. The final panel/auth/PostgreSQL lanes pass 48/49/74 tests respectively;
+the rebuilt wheel passes clean installation and real HTTP/WebSocket checks.
+
+## Hosted COM wager configuration, 2026-09-28
+
+The user reported failure creating a COM match. The captured request was
+`GTM0G43000603@ComGame=/Rule=310|0|0|0|2|0|0|0/Com=3|4`; the gateway's pilot launch
+had omitted `--wagers`, so existing rule validation rejected the stake before any
+debit. A disposable CLI-owned HTTP/WebSocket replay reproduces the rejection and
+then accepts the exact request with `--wagers`, persists 9,690 gil from a 10,000
+fixture balance and starts the 25-cell board after card selection. Existing COM
+payout and three-seat interruption/refund checks also pass (2 tests, 1.761 s).
+Evidence: `results/hosted-com-replay.log` and `results/hosted-com-wager-tests.log`.
+Restarted the actual pilot with wagers enabled and corrected `var/AUTH_SETUP.md`.
+This is a launch configuration correction; no game protocol/runtime code changed.
+
+## Discord display names, 2026-09-28
+
+The user expected their Discord name instead of the synthetic LocalPlayer label.
+Verified Supabase Discord identity data now supplies a normalized, 15-byte ASCII
+display name (global name, then username), persisted on Play before native profile
+downloads. Existing accounts are renamed without resetting cards, money, options
+or identity; busy/connected accounts defer the name change. Ownership comparisons
+use only issuer and user UUID, so presentation changes cannot break renewal or
+logout. Name writes use staged account persistence; a failed save revokes the new
+play session and cannot return a successful launch. All 47 auth and 43 focused
+legacy transport/name tests pass. No loader edit or token extraction was needed.
+
+## Discord project configuration, 2026-09-28
+
+Saved the operator-provided public project settings in ignored `var/auth.json`.
+The live Auth settings endpoint accepts the publishable key and reports Discord
+enabled (email also enabled). The local gateway serves the supplied project
+configuration; all listeners in the disposable-state verification were closed.
+No user identity is enrolled yet. Empty bindings now allow configuration discovery
+without granting game access, covered by the 37-test auth lane. The separately
+owned loader was inspected read-only to confirm its local callback pattern and
+hosted flags. `var/AUTH_SETUP.md` records local setup and the remaining user sign-in
+and explicit account enrollment steps. No loader or live save was modified.
+
+## Authentication prototype, 2026-09-28
+
+The user authorized trying hosted authentication and requested a concrete loader
+specification, then selected Discord login. The gateway advertises Discord and
+the loader contract specifies Discord browser PKCE through Supabase, with the
+Discord client secret retained only in Supabase. The optional auth gateway
+verifies Supabase access tokens, maps
+explicitly enrolled UUIDs to existing accounts, issues one-use launch tickets,
+and binds both game/profile WebSocket streams to revocable play sessions.
+Legacy handlers now support a trusted account binding while preserving default
+local behavior. Profile cipher continuity is limited to the same play session;
+new sessions cannot reuse old cipher contexts. Native payloads remain unchanged.
+
+`docs/LOADER_AUTH_SPEC.md` is the loader-agent handoff. The prototype has no
+production fake identity route. Supabase verification is mocked only in tests;
+actual browser sign-in and loader/native acceptance need a configured project.
+Enrollment remains an explicit config file over the existing local account pool.
+Public TLS hosting, admission rate limits and automatic account registration are
+later deployment/account-management work. No loader code or live save was edited.
+
+## Current continuation, 2026-09-28
+
+The user explicitly requested continuing server work until approximately 20%
+usage remains. This supersedes the earlier no-usage-check note for this run;
+check at meaningful milestones and never redeem credits. Recurring automation
+remains paused. Another agent owns tmloader; all work here is server-only.
+
+Stopped this continuation at 22% remaining in the current usage window, with all
+dispatched work complete. The final package/admin/native acceptance checks pass;
+their exact scope is in [VALIDATION.md](VALIDATION.md). All temporary listeners
+are stopped. Automatic approval review blocked deletion of the disposable
+PostgreSQL cluster with only "blocked by policy"; those files remain in the
+ignored build directory. No retry or alternate deletion was attempted afterward.
+Changes remain uncommitted and were not pushed.
+
+R6 now extracts stateless shop behavior and smaller match/table dispatch helpers.
+Auction save shapes use strict Pydantic models while domain invariants remain in
+the ledger. These clarify ownership and remove repeated validation; they do not
+promise a large net line reduction.
+
+The optional Starlette Admin panel now shares live, detached query results with
+the offline CLI. Its authenticated loopback listener runs beside game/profile
+services and drains before their state owner closes. Dedicated admin tests and
+clean-wheel checks keep optional web dependencies out of the base install.
+The first shared audited action now queues Prize Center awards through CLI or an
+explicitly enabled panel. Requests retain actor, reason and exact facts; preview
+is read-only and award/audit persistence is atomic. Retries survive redemption
+and restart. Receipt lookup reports uncertainty while storage has failed, until
+the next owner reloads durable state. PostgreSQL revision `0002_admin_audit`
+preserves older data and refuses to discard retained audit receipts on downgrade.
+
+Audited event grants now share the same request-ID namespace and exact-retry
+rules. They commit only the event-card and audit journals; normal client
+collection still delivers the cards and money. Version 2 receipts preserve
+version 1 Prize facts, with restoration after the retained event grants. Domain,
+offline CLI, encrypted collection and actual PostgreSQL failure/restart checks
+cover partial and complete collection. The opt-in event web form now uses named
+card rows and previews canonical cards plus collection status before confirmation.
+Headless browser checks cover adding rows, preserving the request, confirmation,
+receipt refresh and narrow layouts without operating the desktop.
+
+Read paths no longer enter unnecessary write transactions: event D1/DR and
+unhandled messages, auction searches and bid history, and an unchanged Init80
+guild. Auction expiry still persists when it actually changes state. Completing
+native card growth now publishes all final snapshots together, so a late native
+failure cannot expose only one player's completed result.
+
+A later original-client check found valid CP932 account names were rejected only
+by chat's ASCII restriction. Chat now preserves native high bytes while retaining
+control-byte rejection, authenticated name replacement and the existing byte
+limit. Frozen original consumers and encrypted reconnect/profile tests document
+the behavior. Construct also owns the shared 0x68-byte PTL table/service record,
+replacing repeated offset construction in ordinary and event builders; supported
+bytes remain unchanged.
+
+Startup validation now completes before acquiring the traffic log, and failed
+recovery closes it without closing borrowed storage/rules owners or replacing
+the original error. A retained failure traceback no longer holds the log open.
+Event result receipts now use one strict Pydantic model at their owning boundary,
+reducing the module by 15 lines while preserving progression and replay rules.
+Independent old/new outcomes and malformed saves retain their expected behavior.
+
+The event-grant recovery form now survives a real server restart: the operator
+keeps the failed request page, signs in separately, then retries unchanged facts
+with the current form token. This reuses the framework's cookie library and keeps
+all authentication, origin and CSRF checks. Actual browser acceptance verifies
+one commit and unchanged owned assets.
+
+Receipt history now reuses the framework's read-only table, search, sort and
+detail views. It includes actor, source, reason and saved time, with typed
+confirmation links when actions are enabled. History remains after collection
+and restart; failed storage reports reload-required uncertainty. This adds 66
+runtime lines without new templates, models, migrations or persistence writes.
+
+Native-hybrid serving now injects the borrowed original-code backend into ordinary
+and event matches. The CLI owns the Win32 context until services stop; failures
+abort the affected round without retrying consumed randomness. Python remains
+the default and handles special/three-player AI and all match/economy state.
+ABI 2 adds original card growth and target choice. Old two-method injected
+backends remain supported; capabilities are selected before invocation and
+never retried through Python after a native failure. Independent original-code
+comparisons and complete hybrid round replays cover these paths.
+
+Final combined acceptance runs the actual 32-bit CLI with native rules and the
+admin panel together. Encrypted game/profile requests, authenticated reads and
+timed shutdown pass; inspection leaves the save unchanged. Only the ignored x86
+environment gained the pinned admin extra. The final wheel matches all runtime
+source bytes and passes clean-install checks, including both audited actions
+and receipt history. Candidate hashes are recorded in `results/server-candidate.json`.
+
+## Configuration and directory libraries, 2026-09-28
+
+Pydantic 2.13.5 now validates ordinary room/table configuration and event
+configuration. Frozen dataclass construction and replacement remain supported;
+JSON seat shorthand, Latin1 event text and raw route conversion stay explicit.
+Cross-record routing, gameplay and persistence policy remain in their owners.
+
+Construct 2.10.70 owns the shared room and zone directory layouts in
+`rooms/records.py`. Default, ordinary and event builders supply their own rule,
+Computer-permission and occupancy values. Complete binary fixtures retain the
+previous output, including event rooms' zero rule bytes.
+
+This slice changes six production files from 1,004 to 1,015 physical lines,
+including the new schemas; conditional statements decrease from 100 to 74.
+It consolidates representation and validation rather than claiming a large size
+reduction. Installation and clean-wheel checks now include the two required
+libraries; database and emulator extras remain optional.
+
 ## Current scope
 
 Recurring automation remains paused. After the read-only multi-agent review,
@@ -7,7 +227,10 @@ the user authorized implementation of [ROADMAP.md](ROADMAP.md) and requested
 an admin panel. The first pass fixes R1/R2 protocol boundaries, implements R4
 rating preflight and R7 shared claim queries, and adds R3 validation tooling.
 The [admin panel plan](ADMIN_PANEL_PLAN.md) starts with a read-only interface over
-those queries, followed by shared audited actions. No HTTP listener is added yet.
+those queries, followed by shared audited actions. The optional read-only HTTP
+listener and audited Prize Center awards are now implemented. Event grants have
+a shared audited domain, CLI and panel form; eligibility and progress audits remain later
+checkpoints.
 
 Keep runtime modules and tests under their feature owners. Shared models and
 packet codecs have explicit modules; service behavior, durable transaction
@@ -15,10 +238,8 @@ coordination and SQL/file storage retain separate responsibilities. Import a
 shared definition from its owner, keeping package initializers lightweight.
 Continue readable Python consolidation and evidence-backed behavior gaps when
 iterating further.
-Continue the standing instruction to work without checking credits.
-Do not query usage limits or use a displayed percentage as a stopping condition.
-Do not redeem reset credits or purchase credits. This supersedes the earlier
-allowance-based stopping notes in this log.
+For this continuation, follow the explicit approximately-20%-remaining stopping
+request recorded above. Do not redeem reset credits or purchase credits.
 Preserve protocol, gameplay, progression and persistence behavior with regression
 evidence. Historical hosted reward formulas,
 mission rules and schedules remain unknown unless supported by original-client

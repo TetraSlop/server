@@ -37,6 +37,7 @@ class EventAdapter:
             hand_provider=hand_provider,
             allow_observers=allow_observers,
             transactions=server.commerce,
+            rules_backend=server.rules_backend,
         )
         self.routes = {
             service_nick(identity ^ GAME_KEY): (event, identity, channel)
@@ -199,7 +200,7 @@ class EventAdapter:
                         return
                     out = self.coordinator.poll()
                     for event, reason in self.coordinator.take_errors():
-                        self.server.log("event_configuration_error", event=event, reason=reason)
+                        self.server.log("event_match_error", event_id=event, reason=reason)
                     for event, epoch in self.coordinator.pending():
                         out += self.coordinator.advance(event, epoch)
                     if out or self.coordinator.results():

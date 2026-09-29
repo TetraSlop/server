@@ -25,12 +25,14 @@ class Delivery:
 
 
 def validate_name(name, *, limit=15):
+    # Names are opaque native bytes; high bytes may belong to a multibyte
+    # character. Only control bytes, including the TAB delimiter, are unsafe.
     if (
         not isinstance(name, bytes)
         or not 1 <= len(name) <= limit
-        or any(c < 32 or c > 126 for c in name)
+        or any(c < 32 or c == 127 for c in name)
     ):
-        raise ValueError(f"chat name must contain 1..{limit} printable bytes")
+        raise ValueError(f"chat name must contain 1..{limit} non-control native bytes")
 
 
 def display_name(canonical_name):

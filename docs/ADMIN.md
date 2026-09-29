@@ -97,7 +97,41 @@ the save nor advances auction expiry, ranking weeks, or event progress. It
 requires the same event configuration and writer ownership as other commands.
 Normal server startup remains responsible for actually committing recovery.
 
-## Queue a Prize Center award
+## Preview and audit a Prize Center award
+
+The audited flow records the exact request, operator, reason and original result
+with the queued award in one commit. Preview first, then confirm its digest:
+
+```powershell
+$award = @('--account-key', 'KEY', '--id', 'local-award-001', '--request-id', 'operator-request-001', '--operator', 'local-admin', '--reason', 'Tournament award', '--top30', '500')
+tmserver-admin --state .\var\local_state.json prize-preview @award
+tmserver-admin --state .\var\local_state.json prize-apply @award --digest DIGEST_FROM_PREVIEW
+tmserver-admin --state .\var\local_state.json operator-receipt --request-id operator-request-001
+```
+
+Preview does not write. It shows current points and the points available after
+normal redemption, including the 99,999 cap. Confirmation fails if relevant
+account or Prize Center state has changed. New audited awards require an idle
+account; the running panel applies that same rule. Lucky Card selections remain
+display values and never grant inventory cards.
+
+Keep the same request ID for a retry. IDs are global across operator actions;
+award references remain scoped to their account. An exact committed retry returns
+the original receipt even after redemption or while that account is busy. Changed
+amounts, reason, operator, source or target conflict instead of silently reusing
+an ID. CLI and browser requests record their distinct sources. An older award
+without an audit receipt cannot be attributed retroactively to a new request.
+
+A storage error can mean the acknowledgement was lost after the commit. Stop
+using a failed server/store, reload it, and look up the original request ID before
+deciding whether to retry. Do not substitute a new ID for an uncertain outcome.
+The award and receipt always commit together; a failure before commit leaves
+both unchanged. PostgreSQL needs `tmserver-db upgrade` for the audit journal.
+
+## Legacy Prize Center award command
+
+The earlier command remains compatible for existing local scripts, without the
+new preview, reason or operator audit receipt:
 
 ```powershell
 tmserver-admin --state .\var\local_state.json prize-award --account-key KEY --id local-award-001 --top30 500
@@ -120,7 +154,45 @@ so that second status does **not** assert that the repeated amounts match.
 Changing the values does not replace an award. IDs contain 1–128 letters,
 digits, periods, underscores, colons, or hyphens.
 
-## Queue event cards or money
+## Preview and audit event cards or money
+
+The audited event flow queues explicit assets for the event's normal collection
+screen. It does not edit the account's balance or owned cards:
+
+```powershell
+$grant = @('--account-key', 'KEY', '--event', 'festival', '--id', 'local-grant-001', '--request-id', 'operator-event-001', '--operator', 'local-admin', '--reason', 'Event participation award', '--money', '250', '--card', '0,12,0,10,10,5')
+tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json event-grant-preview @grant
+tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json event-grant-apply @grant --digest DIGEST_FROM_PREVIEW
+tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json operator-receipt --request-id operator-event-001
+```
+
+Preview shows each complete card, including catalogue-derived points and deck
+255, the member's eligibility, and whether collection is enabled. It changes
+no saved state. Confirmation records the grant and operator receipt in one
+commit, without rewriting the account or event progress. The account must be
+an existing event member and idle when a new grant is queued.
+
+Excluded members and events with collection disabled can receive queued grants;
+the preview makes that status explicit. Applying a grant does not change
+eligibility, enable collection, create a schedule, or invent a reward formula.
+The existing collection rules decide when the player may accept it.
+
+Request IDs are shared with Prize Center administration. Exact retries return
+the original receipt even after partial or full collection, after restart, or
+while the account is busy. Changed facts conflict. A legacy grant cannot acquire
+a new operator attribution through this command. Keep the original request ID
+after an uncertain storage outcome and reload before inspecting or retrying it.
+
+Prize-only audit journals retain version 1. The first audited event grant uses
+version 2, preserving existing Prize receipts unchanged. PostgreSQL still uses
+schema revision `0002_admin_audit`; no additional migration is required.
+
+The card and money limits below apply to both audited and legacy grants.
+
+## Legacy event grant command
+
+This command remains available for existing scripts. It has no preview, operator
+reason or audit receipt:
 
 ```powershell
 tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json event-grant --account-key KEY --event festival --id local-grant-001 --money 250 --card "0,12,0,10,10,5"
@@ -181,6 +253,41 @@ without adding steps twice; changing that ID's facts is rejected. A fresh update
 reports `recorded`. Progress and its replay receipt are saved together. This
 command does not grant cards, money or Prize Center points, and does not infer
 historical mission triggers. Inspect the resulting state with `account`.
+
+## Preview and audit event membership corrections
+
+Prefer the audited commands for operator work. They require the same exact account
+and event as the legacy commands, plus a stable request ID, operator and reason.
+For example, preview a progress correction:
+
+```powershell
+tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json event-progress-preview --account-key KEY --event EVENT --id correction-1 --steps 3 --completed-missions 0 --request-id request-1 --operator admin --reason "Correct participation"
+```
+
+Review `before` and `after`, then repeat with `event-progress-apply` and
+`--digest DIGEST_FROM_PREVIEW`, keeping all other arguments unchanged. Use
+`event-eligibility-preview` / `event-eligibility-apply` with `--value SIGNED_INT`
+instead of `--id`, `--steps` and `--completed-missions` to change eligibility.
+Negative values exclude the member; zero allows them. An eligibility request does
+not need a separate update ID.
+
+Both actions require a registered, idle member. Progress cannot advance an
+excluded member, overflow the displayed step count, or set unconfigured mission
+bits. The member and audit receipt commit together, with status `applied`; cards,
+money and queued rewards are unchanged. If the member or event configuration
+changes between preview and confirmation, obtain a fresh preview.
+
+Read the retained receipt with `operator-receipt --request-id request-1`. Exact
+retries return the original before/after facts without applying them again, even
+after later corrections or restart. A request ID cannot be reused for another
+operator, action or set of facts. An existing legacy progress ID cannot be assigned
+a new audit receipt. Legacy `event-progress` and `event-eligibility` commands remain
+available, but do not record an operator/reason history.
+
+The opt-in live panel exposes the same operations under **Correct event membership**;
+see [panel setup](ADMIN_PANEL_PLAN.md). Its web operator comes from the authenticated
+session. Existing audit journals upgrade to v3 on the first membership correction,
+preserving v1/v2 receipts. Older server versions cannot read v3 saves.
 
 ## PostgreSQL and commit behavior
 

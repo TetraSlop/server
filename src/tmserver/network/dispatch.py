@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from contextlib import AsyncExitStack
 
 from tmserver.economy.claim_transactions import auction_transaction, prize_transaction
+from tmserver.economy.packets import parse_named
 from tmserver.events.routing import dispatch_event
 from tmserver.protocol.identities import SHOP_RAW, TRADE_RAW, game_id, service_nick
 from tmserver.profiles.options import save_options
@@ -51,8 +52,7 @@ async def dispatch(session, target, payload):
     ordinary_room = session.server.ordinary_room_routes.get(target)
     if payload[:7].upper() == b"GTM0G80":
         key = session.server.ensure_account(session.nick)
-        with session.server.commerce.edit_account(key) as economy:
-            answer = economy.initialize_profile(key, payload)
+        answer = session.server.commerce.initialize_profile(key, payload)
         await session.send(service_notice(target, session.nick, answer))
         session.server.log("player_initialized", session=session.id, target=target.decode("ascii"))
         return True
@@ -76,27 +76,43 @@ async def dispatch(session, target, payload):
     if target in session.server.event_routes and await dispatch_event(session, target, payload):
         return True
     if payload.startswith(b"GTM0A"):
-        key = session.server.ensure_account(session.nick)
-        session.server.advance_auctions()
-        with auction_transaction(session.server, (key,)) as auction:
-            replies = auction.handle(key, payload)
-        if replies is not None:
+        commands = parse(payload[5:])
+        operation = commands[0].token if commands else None
+        if operation in (b"ER", b"BR", b"SI", b"BH"):
+            key = session.server.ensure_account(session.nick)
+            session.server.advance_auctions()
+            if operation in (b"SI", b"BH"):
+                # Search files are private connection snapshots; only expiry
+                # advancement above can change the durable auction ledger.
+                replies = session.server.auction.handle(key, payload)
+            else:
+                with auction_transaction(session.server, (key,)) as auction:
+                    replies = auction.handle(key, payload)
             for answer in replies:
                 await session.send(service_notice(target, session.nick, answer))
             return True
     if (
         ordinary_table is not None or ordinary_room is not None or target == service_nick(SHOP_RAW)
     ) and payload[:7].upper() in (b"GTM0GB0", b"GTM0GB2", b"GTM0G70"):
+        prefix = payload[:7].upper()
+        # B0 is shared with the shop. Parse the full envelope even when its
+        # subtype belongs elsewhere, so malformed requests still fail closed.
+        collection_entry = prefix == b"GTM0GB0" and parse_named(payload)[1] == 1
         key = session.server.ensure_account(session.nick)
         replies = None
-        if payload[:7].upper() == b"GTM0GB0" or session.server.auction.collection_active(key):
+        collecting = session.server.auction.collection_active(key)
+        if collection_entry or (prefix == b"GTM0GB2" and collecting):
             session.server.advance_auctions()
             with auction_transaction(session.server, (key,)) as auction:
                 replies = auction.handle(key, payload)
         elif (
-            payload[:7].upper() == b"GTM0G70"
-            or session.server.prize.is_active(key)
-            or session.server.prize.can_replay_quit(key, payload)
+            prefix != b"GTM0GB0"
+            and not collecting
+            and (
+                prefix == b"GTM0G70"
+                or session.server.prize.is_active(key)
+                or session.server.prize.can_replay_quit(key, payload)
+            )
         ):
             with prize_transaction(session.server, key) as prize:
                 replies = prize.handle(key, payload)

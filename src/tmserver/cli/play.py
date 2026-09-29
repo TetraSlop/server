@@ -64,7 +64,10 @@ def child_environment():
         key: value
         for key, value in os.environ.items()
         if key
-        not in {"TM_DATABASE_URL", "TM_TEST_DATABASE_URL", "TM_LOAD_DATABASE_URL", "__COMPAT_LAYER"}
+        not in {
+            "TM_DATABASE_URL", "TM_TEST_DATABASE_URL", "TM_LOAD_DATABASE_URL",
+            "TM_ADMIN_PASSWORD", "__COMPAT_LAYER",
+        }
         and not key.startswith("TM_PROBE_")
     }
 

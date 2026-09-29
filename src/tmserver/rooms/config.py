@@ -1,10 +1,12 @@
 """Explicit ordinary rooms and prepublished independent tables per room."""
 
-import json
 import re
 import struct
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationInfo, model_validator
+from pydantic.dataclasses import dataclass
 
 from tmserver.protocol.identities import (
     GAME_KEY,
@@ -16,86 +18,84 @@ from tmserver.protocol.identities import (
     service_nick,
 )
 from tmserver.rooms.table import OrdinaryTable
-from tmserver.rooms.packets import ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL, alphahex
+from tmserver.rooms.packets import ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL
+from tmserver.rooms.records import build_room_record
 from tmserver.rooms.service import RoomService
 from tmserver.rooms.rules import RoomRules
 from tmserver.rooms.spectators import SpectatorService
 
 
-@dataclass(frozen=True)
+CONFIG = ConfigDict(strict=True, extra="forbid", validate_default=True)
+RawRoute = Annotated[int, Field(ge=0, le=0x1FFFFFFFFFF)]
+SeatCount = Annotated[int, Field(ge=2, le=3)]
+
+
+def _ascii_text(value, info: ValidationInfo):
+    if info.mode == "json" and isinstance(value, str):
+        return value.encode("ascii")
+    return value
+
+
+AsciiBytes = Annotated[bytes, BeforeValidator(_ascii_text)]
+
+
+def _json_config(value, info: ValidationInfo):
+    """Convert JSON arrays and seat shorthand; keep internal flags out of the format."""
+    if info.mode == "json" and isinstance(value, dict):
+        if "flexible_seats" in value:
+            raise ValueError("use players='auto' to configure automatic seats")
+        if "rules" in value and value["rules"] is None:
+            raise ValueError("room rules must be an object")
+        value = dict(value)
+        if isinstance(value.get("tables"), list):
+            value["tables"] = tuple(value["tables"])
+        if value.get("players") == "auto":
+            value.update(players=3, flexible_seats=True)
+    return value
+
+
+def _validate_seats(config):
+    if config.mode == "computer" and config.players != 2:
+        raise ValueError("computer tables require two seats")
+    if config.flexible_seats and (config.mode != "versus" or config.players != 3):
+        raise ValueError("automatic seats require a three-seat versus table")
+
+
+@dataclass(frozen=True, config=CONFIG)
 class OrdinaryTableConfig:
-    table_raw: int
-    table_channel: bytes
-    mode: str = "versus"
-    players: int = 2
+    table_raw: RawRoute
+    table_channel: AsciiBytes
+    mode: Literal["versus", "computer"] = "versus"
+    players: SeatCount = 2
     flexible_seats: bool = False
 
+    _parse_config = model_validator(mode="before")(_json_config)
+
     def __post_init__(self):
-        if type(self.table_raw) is not int or not 0 <= self.table_raw <= 0x1FFFFFFFFFF:
-            raise ValueError("ordinary table route must be a raw41-bit identity")
-        if (
-            self.mode not in ("computer", "versus")
-            or type(self.players) is not int
-            or self.players not in (2, 3)
-        ):
-            raise ValueError("invalid ordinary table mode or seat count")
-        if self.mode == "computer" and self.players != 2:
-            raise ValueError("computer tables require two seats")
-        if (
-            type(self.flexible_seats) is not bool
-            or self.flexible_seats
-            and (self.mode != "versus" or self.players != 3)
-        ):
-            raise ValueError("automatic seats require a three-seat versus table")
-        if not isinstance(self.table_channel, bytes) or not re.fullmatch(
-            rb"#[A-Za-z0-9_-]{1,14}", self.table_channel
-        ):
+        _validate_seats(self)
+        if not re.fullmatch(rb"#[A-Za-z0-9_-]{1,14}", self.table_channel):
             raise ValueError("table channel must fit its terminated sixteen-byte field")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, config=CONFIG)
 class OrdinaryRoomConfig:
-    name: bytes
-    room_raw: int
-    table_raw: int
-    room_channel: bytes
-    table_channel: bytes
-    mode: str = "versus"
-    players: int = 2
-    tables: tuple[OrdinaryTableConfig, ...] = ()
+    name: AsciiBytes
+    room_raw: RawRoute
+    table_raw: RawRoute
+    room_channel: AsciiBytes
+    table_channel: AsciiBytes
+    mode: Literal["versus", "computer"] = "versus"
+    players: SeatCount = 2
+    tables: Annotated[tuple[OrdinaryTableConfig, ...], Field(max_length=126)] = ()
     flexible_seats: bool = False
     rules: RoomRules | None = None
 
+    _parse_config = model_validator(mode="before")(_json_config)
+
     def __post_init__(self):
-        if self.rules is not None and not isinstance(self.rules, RoomRules):
-            raise ValueError("room rules require a RoomRules value")
-        if (
-            not isinstance(self.name, bytes)
-            or not re.fullmatch(rb"[ -~]{1,30}", self.name)
-            or b"*" in self.name
-        ):
+        if not re.fullmatch(rb"[ -~]{1,30}", self.name) or b"*" in self.name:
             raise ValueError("room name must fit thirty printable bytes without asterisk")
-        for raw in (self.room_raw, self.table_raw):
-            if type(raw) is not int or not 0 <= raw <= 0x1FFFFFFFFFF:
-                raise ValueError("ordinary room routes must be raw41-bit identities")
-        if (
-            self.mode not in ("computer", "versus")
-            or type(self.players) is not int
-            or self.players not in (2, 3)
-        ):
-            raise ValueError("invalid ordinary room match mode or seat count")
-        if self.mode == "computer" and self.players != 2:
-            raise ValueError("computer rooms require two seats")
-        if (
-            type(self.flexible_seats) is not bool
-            or self.flexible_seats
-            and (self.mode != "versus" or self.players != 3)
-        ):
-            raise ValueError("automatic seats require a three-seat versus room")
-        if not isinstance(self.tables, tuple) or any(
-            not isinstance(t, OrdinaryTableConfig) for t in self.tables
-        ):
-            raise ValueError("additional room tables must be a tuple of table configurations")
+        _validate_seats(self)
         if (
             self.rules is not None
             and self.rules.gs != 0
@@ -104,8 +104,6 @@ class OrdinaryRoomConfig:
             # The hosted Computer constructor sets gs=0, and its menu has no
             # departure-rule control. ComGameInit carries no override for it.
             raise ValueError("fixed rooms with Computer tables require departure rule gs=0")
-        if len(self.tables) > 126:
-            raise ValueError("room tables and trade service exceed native128-slot limit")
         RoomService(
             self.players,
             room_id=game_id(self.room_raw),
@@ -115,58 +113,13 @@ class OrdinaryRoomConfig:
         )
 
 
+class _RoomDocument(BaseModel):
+    model_config = CONFIG
+    rooms: list[OrdinaryRoomConfig]
+
+
 def load_ordinary_rooms(path):
-    document = json.loads(Path(path).read_text(encoding="utf8"))
-    if (
-        not isinstance(document, dict)
-        or set(document) != {"rooms"}
-        or not isinstance(document["rooms"], list)
-    ):
-        raise ValueError("ordinary configuration requires a rooms array")
-    rows = []
-    required = {"name", "room_raw", "table_raw", "room_channel", "table_channel"}
-    for row in document["rooms"]:
-        if (
-            not isinstance(row, dict)
-            or not required <= set(row)
-            or set(row) - required - {"mode", "players", "tables", "rules"}
-        ):
-            raise ValueError("missing or unknown ordinary room configuration field")
-        row = dict(row)
-        if "rules" in row:
-            if not isinstance(row["rules"], dict):
-                raise ValueError("room rules must be an object")
-            try:
-                row["rules"] = RoomRules(**row["rules"])
-            except TypeError as exc:
-                raise ValueError("unknown room rule field") from exc
-        if row.get("players") == "auto":
-            row.update(players=3, flexible_seats=True)
-        extra = row.get("tables", [])
-        if not isinstance(extra, list):
-            raise ValueError("additional room tables require an array")
-        tables = []
-        for table in extra:
-            if (
-                not isinstance(table, dict)
-                or not {"table_raw", "table_channel"} <= set(table)
-                or set(table) - {"table_raw", "table_channel", "mode", "players"}
-            ):
-                raise ValueError("missing or unknown additional table configuration field")
-            table = dict(table)
-            if table.get("players") == "auto":
-                table.update(players=3, flexible_seats=True)
-            if not isinstance(table["table_channel"], str):
-                raise ValueError("table channel must be a string")
-            table["table_channel"] = table["table_channel"].encode("ascii")
-            tables.append(OrdinaryTableConfig(**table))
-        row["tables"] = tuple(tables)
-        for key in ("name", "room_channel", "table_channel"):
-            if not isinstance(row[key], str):
-                raise ValueError("room text must be a string")
-            row[key] = row[key].encode("ascii")
-        rows.append(OrdinaryRoomConfig(**row))
-    return tuple(rows)
+    return tuple(_RoomDocument.model_validate_json(Path(path).read_bytes()).rooms)
 
 
 def configure_rooms(host, configs):
@@ -278,21 +231,17 @@ def directory_files(host):
     start = struct.unpack_from("<I", rooms, 0x40)[0]
     struct.pack_into("<I", rooms, 0x40, start + len(host.ordinary_room_configs))
     for row, (config, table) in enumerate(host.ordinary_room_bindings, start):
-        record = memoryview(rooms)[0x48 + row * 0xC8 : 0x48 + (row + 1) * 0xC8]
-        struct.pack_into("<Q", record, 0, table.room.room_id)
-        struct.pack_into("<I", record, 0x10, len(table.room.members))
-        struct.pack_into("<I", record, 0x18, sum(t.table_count > 0 for t in table.room.tables))
-        struct.pack_into("<H", record, 0x24, 1)
-        record[0x27] = 1
-        record[0x28] = ord("A" if config.rules is not None else "B")
-        record[0x29] = ord("A") if any(t.computer_enabled for t in table.room.tables) else 0
-        name = config.name + b"*"
-        record[0x2A : 0x2A + len(name)] = name
-        record[0x49:0x50] = (config.rules or RoomRules()).packed()
-        record[0x6A:0x6D] = alphahex(len(table.room.tables), 3)
-        record[0x6D:0x70] = alphahex(16, 3)
-        record[0x70] = ord("A")
-        record[0xB8 : 0xB8 + len(config.room_channel)] = config.room_channel
+        rooms[0x48 + row * 0xC8 : 0x48 + (row + 1) * 0xC8] = build_room_record(
+            identity=table.room.room_id,
+            name=config.name + b"*",
+            channel=config.room_channel,
+            member_count=len(table.room.members),
+            occupied_tables=sum(t.table_count > 0 for t in table.room.tables),
+            table_count=len(table.room.tables),
+            fixed_rules=config.rules is not None,
+            computer_enabled=any(t.computer_enabled for t in table.room.tables),
+            rules=(config.rules or RoomRules()).packed(),
+        )
     struct.pack_into("<I", rooms, 0x48 + 0x10, len(host.room.members))
     struct.pack_into("<I", rooms, 0x48 + 0x18, int(host.room.table_count > 0))
     rooms[0x48 + 0x29] = ord("A") if host.room.computer_enabled else 0

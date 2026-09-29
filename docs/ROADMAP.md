@@ -1,27 +1,46 @@
 # Server roadmap
 
+The later authorized [authentication prototype](AUTHENTICATION.md) now verifies
+Supabase identities and carries account-bound game/profile streams through an
+optional gateway. Verified Discord users now receive a persistent account on
+their first Play request, without manual enrollment or a fixed account pool.
+Legacy pilot bindings migrate without resetting player data. The user has confirmed
+real Discord sign-in through the separately owned loader and the imported display
+name. An automated encrypted replay of the captured wagered COM request completes
+a three-player match through the hosted tunnel, including settlement and exit;
+a complete native hosted COM match still needs user acceptance.
+Public deployment remains a subsequent milestone. See the
+[loader contract](LOADER_AUTH_SPEC.md).
+
 Reviewed at `9cdc374` on 2026-09-27. Three independent agents reviewed
 protocol/gameplay, economy/persistence, and architecture/packaging; the main
 agent checked the findings and combined the priorities below. This was a code
 review with bounded synthetic reproductions, not a native-client acceptance run.
 No runtime fixes were made during this sweep. Recurring automation remains paused.
 
-Implementation was subsequently authorized. R1/R2/R4/R7 are implemented with
-focused regressions; R3 tooling and CI are implemented and the installed wheel
-passes exact-source verification. The full portable suite passes 1,155 tests
-with no skips; the additional tooling diagnostic passes separately. Live
-PostgreSQL validation remains unavailable
-while Docker's engine is stopped. See [VALIDATION.md](VALIDATION.md) for the latest
-combined result. R5 native acceptance, R6 structural cleanup and R8 decisions
-remain separate work; R9 is planned with its shared-query foundation in place.
+Implementation was subsequently authorized. R1/R2/R4/R7 and R3 validation tooling
+are implemented. R6's match/table helpers and stateless shop extraction are now
+implemented with focused regression coverage. R9 has a working optional,
+authenticated panel, read-only by default, with opt-in audited Prize Center awards
+and event card/money grants, eligibility and progress corrections shared with
+offline administration. Read-only receipt
+history preserves operator facts after collection and restart.
+Pydantic handles configuration and auction save shapes, and Construct owns
+directory records. An opt-in native-hybrid backend now connects the original
+battle, growth, target selection and ordinary AI routines to the server without an emulator.
 
-The next work should fix the reproduced observer and reply-construction failures,
-then make verification repeatable before continuing structural changes. Keep
-Python, feature ownership, explicit transaction coordinators and SQLAlchemy Core.
+See [VALIDATION.md](VALIDATION.md) for current test and package results. Live
+PostgreSQL validation now runs against an isolated local PostgreSQL instance. R5 native
+acceptance is user-operated; R8 still needs decisions or original-client evidence.
+
+Combined, targeted and installed-package validation are recorded in the validation
+report. Next complete the user-operated native acceptance checklist, then public
+TLS deployment and admission controls. Keep Python, feature ownership, explicit
+transaction coordinators and SQLAlchemy Core.
 The current transaction contexts already express their participants and commit
 order clearly; a generic transaction framework is not justified by this review.
 
-## Baseline
+## Review baseline (2026-09-27, before implementation)
 
 - Runtime: 20,868 physical Python lines across 108 files, including comments and
   blanks. Tests are separate: 34,719 lines across 173 files.
@@ -47,10 +66,10 @@ coverage; **L** needs protocol research or a product decision.
 | R3 | P1 | Package and test verification run reproducibly and reject misleading passes. | S + M | Can run alongside R1/R2 |
 | R4 | P1 | Incompatible local rating history is reported before starting play. | S | Existing consistency rules |
 | R5 | Acceptance milestone | One recorded native candidate passes the core play/reload scenarios. | User-operated | R1/R2, then R3 verification |
-| R6 | P2 | Long handlers and shop behavior have smaller, explicit responsibilities. | M per change | R1–R4 and a verified baseline |
+| R6 | Implemented | Long handlers and shop behavior have smaller, explicit responsibilities. | M per change | Regression verification |
 | R7 | P2 | Offline inspection shows all assets still waiting to be claimed. | S | Existing journal read APIs |
 | R8 | Deferred | Rating migration and spectator synchronization have explicit policies/protocols. | M–L | Decisions or original-client evidence |
-| R9 | Planned feature | An authenticated admin panel shares account/claim queries and audited actions with the CLI. | M per checkpoint | R1/R2, R3 verification and R7 queries |
+| R9 | Implemented | An authenticated panel shares queries, Prize awards, event grants, eligibility and progress corrections. | M per checkpoint | Public administration and role design deferred |
 
 ## R1 — Isolate spectator bootstrap failures
 
@@ -192,6 +211,13 @@ protocol tests do not mark this candidate accepted.
 
 ## R6 — Reduce responsibilities inside the largest services
 
+**Implemented 2026-09-28:** match dispatch now delegates table messages and lobby
+controls; ordinary table dispatch delegates query/observer paths. Shop behavior
+is in `economy/shop.py`, receiving the staged draw callback per operation. Shared
+inventory checks live beside account models, and delayed deck edits call their
+codec directly. These are responsibility reductions, not a large net line-count
+reduction. The following records the original review rationale.
+
 **Optional refactors after the correctness work.** The directory layout is now
 adequate. The remaining reading cost is concentrated in long stateful methods:
 
@@ -263,11 +289,19 @@ Requested after this review. Follow [ADMIN_PANEL_PLAN.md](ADMIN_PANEL_PLAN.md):
 start with server/account/room status and outstanding claims, using the same
 read projections as offline administration. Add existing grant/progress actions
 through shared transactions and audit receipts after the read-only panel passes.
-Use an optional FastAPI/Jinja2 interface attached to the running server's state
-owner. The panel must not open another writer on the active save.
-
-R1 and R2 can proceed as separate fixes while R3's tooling work runs independently.
-The first checkpoint is reproduced failures turned into passing regressions,
-an exact-source package and a fresh test baseline. Then run R5 while completing
-R4; start the first bounded R6 extraction after R4 is complete. R7 can run
-independently of match refactoring and supplies the first R9 checkpoint.
+The implemented optional Starlette Admin interface attaches to the running
+server's state owner. It never opens another writer on the active save. The
+framework supplies the interface, authentication integration and CSRF handling;
+shared detached projections define balances, inventory and outstanding claims.
+Its separate test lane and installed-wheel smoke keep the base server independent
+of web dependencies. Prize Center actions now share strict requests, stale-preview
+checks and atomic audit receipts between CLI and web. Explicit `--admin-actions`
+enables these controls. Event grants now have the same shared preview, atomic
+receipt and retry contract in the CLI and panel, including canonical card facts
+and collection status. Eligibility and progress now use shared strict requests,
+before/after previews and jointly committed event/audit journals. New CLI preview
+and apply commands and the opt-in panel share those actions. Legacy commands remain
+available for compatibility; they never acquire invented operator receipts.
+Journal v3 reads earlier v1/v2 receipts unchanged and retains exact progress facts
+and original eligibility history after later corrections. These explicit operator
+actions do not infer retail event rules or grant assets automatically.

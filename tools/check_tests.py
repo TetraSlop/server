@@ -1,4 +1,4 @@
-"""Run portable tests, or database tests against an owned disposable PostgreSQL container."""
+"""Run portable, optional admin, or disposable PostgreSQL tests without skipped coverage."""
 
 import argparse
 from contextlib import contextmanager
@@ -24,10 +24,17 @@ PORTABLE_SKIPS = {
 
 
 def test_modules(lane, root=ROOT):
+    def selected_lane(path):
+        if path.is_relative_to(root / "tests" / "auth"):
+            return "auth"
+        if path.is_relative_to(root / "tests" / "admin" / "web"):
+            return "admin"
+        return "postgres" if "postgres" in path.stem.split("_") else "portable"
+
     return sorted(
         ".".join(path.with_suffix("").relative_to(root).parts)
         for path in (root / "tests").rglob("test_*.py")
-        if ("postgres" in path.stem.split("_")) == (lane == "postgres")
+        if selected_lane(path) == lane
     )
 
 
@@ -84,7 +91,7 @@ def run_suite(suite, *, lane, errors=(), stream=None):
         "unexpected_skips": unexpected,
     }
     # The portable lane permits one documented optional-dependency import check.
-    # Database coverage must never become a successful skipped run.
+    # Optional admin and database coverage must never become a successful skipped run.
     success = result.wasSuccessful() and not unexpected and result.testsRun == count
     return success, report
 
@@ -101,11 +108,21 @@ def run_worker(lane, url=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("lane", choices=("portable", "postgres"))
+    parser.add_argument("lane", choices=("portable", "postgres", "admin", "auth"))
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.lane == "auth" and any(
+        importlib.util.find_spec(name) is None
+        for name in ("starlette", "uvicorn", "httpx", "websockets")
+    ):
+        parser.error('install ".[dev,auth]" before selecting the auth lane')
+    if args.lane == "admin" and any(
+        importlib.util.find_spec(name) is None
+        for name in ("starlette_admin", "starlette", "uvicorn", "httpx")
+    ):
+        parser.error('install ".[dev,admin]" before selecting the admin lane')
     if not args.worker:
-        if args.lane == "portable":
+        if args.lane in ("portable", "admin", "auth"):
             return run_worker(args.lane)
         if any(importlib.util.find_spec(name) is None for name in ("sqlalchemy", "alembic", "psycopg")):
             parser.error('install ".[postgres]" before selecting the PostgreSQL lane')

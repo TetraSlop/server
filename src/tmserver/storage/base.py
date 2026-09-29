@@ -6,6 +6,8 @@ SERVICE_NAMES = frozenset(
     {
         "auction",
         "prize",
+        "admin_audit",
+        "identities",
         "result_rewards",
         "match_economy",
         "ratings",

@@ -517,7 +517,7 @@ class AdminTests(unittest.TestCase):
         )
         self.assertIn("prize", self.load())
 
-    def test_json_command_and_help_run_without_site_packages_or_server_import(self):
+    def test_json_command_and_help_run_without_database_or_server_import(self):
         environment = dict(os.environ, PYTHONPATH=str(ROOT / "src"))
         code = (
             "from tmserver.cli.admin import cli; cli(); import sys; "
@@ -531,7 +531,7 @@ class AdminTests(unittest.TestCase):
             self.argv(*self.prize()),
         ):
             result = subprocess.run(
-                [sys.executable, "-S", "-B", "-c", code, *args],
+                [sys.executable, "-B", "-c", code, *args],
                 env=environment,
                 cwd=self.path.parent,
                 capture_output=True,

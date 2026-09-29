@@ -9,7 +9,8 @@ from dataclasses import dataclass
 
 from tmserver.events.models import EventError
 from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, SHOP_RAW, TABLE_RAW, TRADE_RAW, game_id
-from tmserver.rooms.packets import ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL, alphahex
+from tmserver.rooms.packets import ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL
+from tmserver.rooms.records import build_room_record, build_zone_record
 from tmserver.rooms.service import RoomService
 from tmserver.rooms.packets import directory_files as base_directory_files
 from tmserver.protocol.commands import Command
@@ -204,32 +205,22 @@ class EventRooms:
             struct.pack_into("<I", rooms, 0x40, count)
             for row, binding in enumerate(members, start):
                 config = self.host.config(binding.event_id)
-                record = memoryview(rooms)[0x48 + row * 0xC8 : 0x48 + (row + 1) * 0xC8]
-                struct.pack_into("<Q", record, 0, binding.room_id)
-                struct.pack_into("<I", record, 0x10, len(binding.room.members))
-                struct.pack_into(
-                    "<I", record, 0x18, sum(t.table_count > 0 for t in binding.room.tables)
+                # Events retain zero rule bytes and disabled Computer availability.
+                rooms[0x48 + row * 0xC8 : 0x48 + (row + 1) * 0xC8] = build_room_record(
+                    identity=binding.room_id,
+                    name=config.listing.key_event + b"*",
+                    channel=binding.room_channel,
+                    member_count=len(binding.room.members),
+                    occupied_tables=sum(t.table_count > 0 for t in binding.room.tables),
+                    table_count=sum(t.table_id is not None for t in binding.room.tables),
                 )
-                struct.pack_into("<H", record, 0x24, 1)
-                record[0x27] = 1
-                # B is the proven "Not Set" rule-panel path. Event association
-                # is the exact names lookup, independent of the A/B flag.
-                record[0x28] = ord("B")
-                name = config.listing.key_event + b"*"
-                record[0x2A : 0x2A + len(name)] = name
-                record[0x6A:0x6D] = alphahex(
-                    sum(t.table_id is not None for t in binding.room.tables), 3
-                )
-                record[0x6D:0x70] = alphahex(16, 3)
-                record[0x70] = ord("A")
-                record[0xB8 : 0xB8 + len(binding.room_channel)] = binding.room_channel
             files[f"b/g/RL{index:03d}"] = bytes(rooms)
-            record = memoryview(zones)[0x48 + index * 0x40 : 0x48 + (index + 1) * 0x40]
-            struct.pack_into("<II", record, 0, sum(len(b.room.members) for b in members), count)
-            record[0x0C:0x11] = b"ENAAA"
-            record[0x11:0x2C] = region.ljust(27, b"\0")
-            record[0x2C:0x3C] = b"127.0.0.1\0".ljust(16, b"\0")
-            record[0x3C] = index
+            zones[0x48 + index * 0x40 : 0x48 + (index + 1) * 0x40] = build_zone_record(
+                name=region,
+                room_count=count,
+                member_count=sum(len(b.room.members) for b in members),
+                index=index,
+            )
         files["b/g/ZL"] = bytes(zones)
         return files
 

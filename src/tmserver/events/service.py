@@ -237,6 +237,11 @@ class EventHost:
         body = f"@CardEnt=/Ans={answer}" if family == 0x90 else f"@EInitEnt=/Card=0/Ans={answer}"
         return [named(0x91 if family == 0x90 else 0x99, 0, sequence, body)]
 
+    def progress_update(self, key, event_id, update_id):
+        """Read immutable trusted facts without advancing or creating progress."""
+        self.config(event_id)
+        return self._updates[event_id].get((key, update_id))
+
     def update_progress(self, key, event_id, update_id, *, steps_delta=0, completed_missions=0):
         """Trusted engine/policy facts only; replay-safe and never grants assets.
 

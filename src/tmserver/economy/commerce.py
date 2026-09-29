@@ -19,6 +19,15 @@ class Commerce:
             yield staged
             self.save_accounts(staged.snapshot()["accounts"])
 
+    def initialize_profile(self, key, payload):
+        """Init probes and retries only save when they select a new guild."""
+        with self.economy.edit_accounts((key,)) as staged:
+            guild = staged.account_view(key).guild
+            reply = staged.initialize_profile(key, payload)
+            if staged.account_view(key).guild != guild:
+                self.save_accounts(staged.snapshot()["accounts"])
+            return reply
+
     def shop(self, key, payload):
         with self.economy.edit_accounts((key,)) as staged:
             replies = staged.handle(key, payload)

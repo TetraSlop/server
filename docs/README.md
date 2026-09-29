@@ -10,8 +10,13 @@ The optional [weekly rankings](WEEKLY_RANKINGS.md) record future local match
 rewards and prior-week ratings using an explicit UTC calendar policy.
 [Offline administration](ADMIN.md) provides account and reward inspection, prize
 awards, event grants, explicit progress and eligibility through existing transactions.
-The [admin panel plan](ADMIN_PANEL_PLAN.md) adds a server-owned web interface over
-shared queries and, later, audited operator actions.
+The optional [admin panel](ADMIN_PANEL_PLAN.md) provides a server-owned web
+interface over shared queries and explicitly enabled, audited Prize Center awards
+and event grants. The [original rules guide](ORIGINAL_RULES_PROTOTYPE.md) describes
+the optional Win32 DLL bridge, supported routines and remaining Python ownership.
+The [authentication prototype](AUTHENTICATION.md) and
+[loader specification](LOADER_AUTH_SPEC.md) describe hosted sign-in and the
+account-bound game/profile WebSocket gateway.
 
 [Persistence design](PERSISTENCE_DESIGN.md) explains the current data model.
 [Historical research notes](research/README.md) retain the original protocol

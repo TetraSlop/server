@@ -1,0 +1,9 @@
+LIBRARY tm_original_rules
+EXPORTS
+    tm_rules_abi
+    tm_rules_open
+    tm_rules_close
+    tm_rules_battle
+    tm_rules_move
+    tm_rules_growth
+    tm_rules_target

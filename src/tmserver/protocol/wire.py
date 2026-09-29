@@ -74,6 +74,17 @@ def polid_from_string(s):
     return v
 
 
+def polid_to_string(value):
+    """Canonical eight-character login for a native 41-bit POL identity."""
+    if type(value) is not int or not 0 <= value <= 0x1FFFFFFFFFF:
+        raise ValueError("raw POL identity exceeds 41 bits")
+    digits = bytearray(8)
+    for index in range(7, -1, -1):
+        value, digit = divmod(value, 36)
+        digits[index] = POLID_CHARS[digit]
+    return digits.decode("ascii")
+
+
 def checksum_chars(msg):
     """sqCalcChecksum + 4-char encoding appended before CRLF on every line."""
     n4 = len(msg) & ~3

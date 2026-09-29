@@ -8,6 +8,8 @@ dist/
 var/
 results/
 .env
+.env.*
+!.env.example
 *.log
 *.tmp
 *.lock

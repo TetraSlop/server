@@ -1,0 +1,41 @@
+{
+  "scope": "Frozen original x86 name intake and extraction only. No glyph rendering or locale conversion.",
+  "source": "protocol_map/chat_lifecycle_vectors.py VM harness from research/migration.json source archive",
+  "original_image_sha256": "422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879",
+  "substitutions": "Heap allocation/free and lock calls only; original name consumers execute under Unicorn.",
+  "roster": {
+    "entry_address": "1007E320",
+    "return_address": "20000000",
+    "input_after_gtm0g": "42000400@Chat=/C=1/Num=0|1/NN=1122334455667788/CN=82A0",
+    "identity_hex": "1122334455667788",
+    "extracted_name_hex": "82A0"
+  },
+  "presentation": {
+    "entry_address": "1000CF97",
+    "accept_address": "1000D029",
+    "reject_address": "1000DDD7",
+    "cases": [
+      {
+        "input_name_hex": "82A0",
+        "input_text_hex": "82A00968656C6C6F",
+        "accepted": true,
+        "stop_address": "1000D029",
+        "extracted_name_hex": "82A0"
+      },
+      {
+        "input_name_hex": "414141414141414141414141414182",
+        "input_text_hex": "4141414141414141414141414141820968656C6C6F",
+        "accepted": true,
+        "stop_address": "1000D029",
+        "extracted_name_hex": "414141414141414141414141414182"
+      },
+      {
+        "input_name_hex": "414141414141414141414141414182A0",
+        "input_text_hex": "414141414141414141414141414182A00968656C6C6F",
+        "accepted": false,
+        "stop_address": "1000DDD7",
+        "extracted_name_hex": null
+      }
+    ]
+  }
+}

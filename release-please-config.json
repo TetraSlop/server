@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "python",
+  "package-name": "tmserver",
+  "include-component-in-tag": false,
+  "bump-minor-pre-major": true,
+  "draft": true,
+  "bootstrap-sha": "48ab9112b7a515fcdd131022cc563276e06dcf32",
+  "packages": {
+    ".": {}
+  }
+}

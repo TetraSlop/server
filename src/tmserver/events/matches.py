@@ -122,6 +122,7 @@ class EventMatchRound:
         turn_limit=2,
         departure_rule=1,
         observation=1,
+        rules_backend=None,
     ):
         participants = tuple(participants)
         if (cpu_cards is not None and len(participants) != 1) or (
@@ -141,6 +142,7 @@ class EventMatchRound:
             catalog=catalog,
             start_fields=start_fields,
             ai_cards=cpu_cards,
+            rules_backend=rules_backend,
         )
         self._combat.game_rules.update(tl=turn_limit, gs=departure_rule)
         self._combat.table_rules["in"] = observation
@@ -259,7 +261,7 @@ class EventMatchRound:
             moves += self._combat.handle(peer, packet(0x43, 7, seat, body))
         for peer, seat in self._seat.items():
             body = "@EventCard=/Ok=1" + "".join(
-                f"/D{seat*5+i}={c.reduced()}" for i, c in enumerate(self._hands[peer])
+                f"/D{seat * 5 + i}={c.reduced()}" for i, c in enumerate(self._hands[peer])
             )
             out.append(Delivery(peer, packet(0x43, 7, body=body)))
         out.extend(d for d in moves if decode(d.payload).subtype != 7)

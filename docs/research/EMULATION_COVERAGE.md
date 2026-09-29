@@ -8,6 +8,12 @@ For the packaged server's current test results, see
 [validation](../VALIDATION.md) and [the iteration log](../WORK_LOG.md). The
 checkpoints below retain the research history and its original test counts.
 
+The current server also has an optional [Win32 original-code backend](../ORIGINAL_RULES_PROTOTYPE.md)
+for battle, card growth, target selection and ordinary AI. It is a hybrid with
+the Python match/economy owners and does not establish historical hosted policy.
+The [chat name audit](CHAT_NAME_BYTES.md) separately preserves accepted native
+non-ASCII bytes without claiming locale or glyph-rendering coverage.
+
 | Area | Current implementation | Next coverage needed |
 |---|---|---|
 | Game transport | Challenge/RSA, original Blowfish/checksum, authenticated IRC, channels and validated chat/trade relay; player-forged service controls blocked | Wider native error/retry coverage |
@@ -23,7 +29,7 @@ checkpoints below retain the research history and its original test counts.
 | Rankings | All5 query categories, metadata, saved hide-name preference, isolated immutable files, delete, original consumers; optional durable UTC-week prize totals and previous-week local ratings from future play | Native menu checks; historical calendar, rookie and award policies remain unknown |
 | Auctions | Durable ledger, query/file service, bids/refunds/expiry and original two-stage card collection | Native transaction UI checks; historical fee/quote policy |
 | Prize Center | Award IDs, point credits, all30 catalogue exchanges, atomic Get and restart | Native UI checks; historical automatic award policy |
-| Operator administration | Saved accounts/rewards, read-only startup recovery preview, explicit Prize Center awards, event progress/grants and member eligibility through existing transactions; JSON and PostgreSQL writer exclusion | Native collection of operator-queued rewards; no automatic historical award rule |
+| Operator administration | Shared account/claim inspection and an optional authenticated panel; audited Prize Center awards and event grants with preview, atomic receipts and exact retries; legacy progress/eligibility commands; JSON and PostgreSQL writer exclusion | Native collection of operator-queued rewards; audited eligibility/progress adapters; no automatic historical award rule |
 | Character profiles | Authenticated CR/PG/GR, all71 PO fields, partial/privacy updates and persistence | Unknown historical score/title mapping; native menu checks |
 | Special boards | F0..18 effects, CPU scoring, generated CBC cards, complete encrypted matches and durable rewards; original menu-driven2/3p board generation with1024 original comparisons | Native scene checks |
 | Events | Configured rooms and multiple matchmaking tables per event, exact directory keys, owner-routed files, authenticated admission/time/selection/exit, durable progress and F-card collection; encrypted2/3p E matches and observers; original mode8 nonplaying admission | Native event scenes and historical mission/reward/broadcast policy |

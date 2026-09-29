@@ -4,9 +4,10 @@ import argparse
 import asyncio
 import math
 import os
-from contextlib import ExitStack, asynccontextmanager
+from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tmserver.events.config import load_event_setup
 from tmserver.network.local_accounts import MAX_ACCOUNTS, account_specs
@@ -16,6 +17,9 @@ from tmserver.network.server import Server
 from tmserver.economy.shop_offers import load_shop_offers
 from tmserver.rooms.spectators import SpectatorService
 from tmserver.storage.json import writer_lease
+
+if TYPE_CHECKING:
+    from tmserver.network.http import HttpListener
 
 DIRECTORY = Path.cwd() / "var"
 
@@ -38,6 +42,29 @@ def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--game-port", type=int, default=51241)
     parser.add_argument("--profile-port", type=int, default=51220)
+    parser.add_argument(
+        "--admin-port", type=int,
+        help="enable the read-only admin panel on 127.0.0.1 (requires the admin extra)",
+    )
+    parser.add_argument("--admin-user", default="admin", help="local operator username")
+    parser.add_argument("--auth-config", type=Path, help="enable the Supabase launcher gateway")
+    parser.add_argument("--auth-port", type=int, help="loopback auth listener (default:8081)")
+    parser.add_argument("--auth-insecure-loopback", action="store_true",
+                        help="local loader testing only: advertise HTTP/WS on the bound loopback port")
+    parser.add_argument(
+        "--admin-actions", action="store_true",
+        help="enable previewed, audited Prize Center awards in the admin panel",
+    )
+    parser.add_argument(
+        "--admin-password-file", type=Path,
+        help="operator password file; otherwise read TM_ADMIN_PASSWORD when admin is enabled",
+    )
+    parser.add_argument(
+        "--rules-backend", choices=("python", "native-hybrid"), default="python",
+        help="native-hybrid uses original battle, growth, target and ordinary AI code on 32-bit Windows",
+    )
+    parser.add_argument("--rules-image", type=Path, help="verified unpacked TM memory image")
+    parser.add_argument("--rules-bridge", type=Path, help="Win32 tm_original_rules.dll bridge")
     storage = parser.add_mutually_exclusive_group()
     storage.add_argument("--state", type=Path, help="JSON save (default: var/local_state.json)")
     storage.add_argument(
@@ -136,6 +163,23 @@ def arguments(argv=None):
         parser.error(f"accounts must be between2 and{MAX_ACCOUNTS}")
     if not all(0 <= port <= 65535 for port in (args.game_port, args.profile_port)):
         parser.error("ports must be between0 and65535")
+    if args.admin_port is not None and not 0 <= args.admin_port <= 65535:
+        parser.error("admin port must be between 0 and 65535")
+    if (args.auth_port is not None or args.auth_insecure_loopback) and args.auth_config is None:
+        parser.error("auth listener options require --auth-config")
+    if args.auth_config is not None:
+        args.auth_port = 8081 if args.auth_port is None else args.auth_port
+        if not 0 <= args.auth_port <= 65535:
+            parser.error("auth port must be between 0 and 65535")
+    if args.admin_password_file is not None and args.admin_port is None:
+        parser.error("--admin-password-file requires --admin-port")
+    if args.admin_actions and args.admin_port is None:
+        parser.error("--admin-actions requires --admin-port")
+    if args.rules_backend == "native-hybrid":
+        if args.rules_image is None or args.rules_bridge is None:
+            parser.error("native-hybrid requires --rules-image and --rules-bridge")
+    elif args.rules_image is not None or args.rules_bridge is not None:
+        parser.error("--rules-image and --rules-bridge require --rules-backend native-hybrid")
     if not math.isfinite(args.seconds) or args.seconds < 0:
         parser.error("seconds must be finite and nonnegative")
     if args.players == 3:
@@ -164,7 +208,22 @@ async def run(args):
             f"profile 127.0.0.1:{services.profile_port}",
             flush=True,
         )
-        if args.seconds:
+        if services.admin is not None:
+            print(f"Admin panel ready: http://127.0.0.1:{services.admin.port}/admin/", flush=True)
+        if services.auth is not None:
+            print(f"Launcher gateway ready on 127.0.0.1:{services.auth.port}", flush=True)
+        listeners = [item for item in (services.admin, services.auth) if item is not None]
+        if listeners:
+            waits = [asyncio.create_task(item.wait(args.seconds)) for item in listeners]
+            try:
+                done, _ = await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    task.result()
+            finally:
+                for task in waits:
+                    task.cancel()
+                await asyncio.gather(*waits, return_exceptions=True)
+        elif args.seconds:
             await asyncio.sleep(args.seconds)
         else:
             await asyncio.Event().wait()
@@ -176,14 +235,54 @@ class RunningServices:
     profile: ProfileServer
     game_port: int
     profile_port: int
+    admin: "HttpListener | None" = None
+    auth: "HttpListener | None" = None
+
+
+def admin_options(args):
+    """Load explicit credentials without putting them in arguments or logs."""
+    port = getattr(args, "admin_port", None)
+    if port is None:
+        return None
+    path = getattr(args, "admin_password_file", None)
+    password = path.read_text(encoding="utf8").rstrip("\r\n") if path else os.environ.get(
+        "TM_ADMIN_PASSWORD", ""
+    )
+    username = getattr(args, "admin_user", "admin")
+    if not username.strip() or not password or "\n" in password or "\r" in password:
+        raise ValueError("Admin requires a username and a nonempty, single-line password")
+    try:
+        from tmserver.admin.server import serving_admin  # noqa: F401
+    except ModuleNotFoundError as exc:
+        raise ValueError('Install the admin dependencies with pip install "tmserver[admin]"') from exc
+    return dict(
+        port=port, username=username, password=password,
+        actions_enabled=getattr(args, "admin_actions", False),
+    )
 
 
 @asynccontextmanager
 async def running_services(args):
     """Own both listeners and their store until the caller has finished."""
-    args.log_dir.mkdir(parents=True, exist_ok=True)
+    admin = admin_options(args)
+    auth = None
+    if getattr(args, "auth_config", None) is not None:
+        try:
+            from tmserver.auth.config import load_auth_config
+            from tmserver.auth.server import serving_auth  # noqa: F401
+            import websockets  # noqa: F401
+        except ModuleNotFoundError as exc:
+            raise ValueError('Install the auth dependencies with pip install "tmserver[auth]"') from exc
+        auth = load_auth_config(args.auth_config)
+        auth.account_bindings(account_specs(args.accounts))
     events, tables, progress = load_event_setup(args.events) if args.events else ((), (), "none")
     with ExitStack() as resources:
+        rules_backend = None
+        if getattr(args, "rules_backend", "python") == "native-hybrid":
+            from tmserver.game.original.native import NativeRules
+
+            rules_backend = resources.enter_context(NativeRules(args.rules_image, args.rules_bridge))
+        args.log_dir.mkdir(parents=True, exist_ok=True)
         store = None
         if args.database_url:
             from tmserver.storage.postgres import PostgresStateStore
@@ -191,16 +290,19 @@ async def running_services(args):
             store = resources.enter_context(PostgresStateStore(args.database_url))
         else:
             resources.enter_context(writer_lease(args.state))
-        async with serving(args, events, tables, progress, store) as services:
+        async with serving(
+            args, events, tables, progress, store, rules_backend=rules_backend, admin=admin, auth=auth
+        ) as services:
             yield services
 
 
 @asynccontextmanager
-async def serving(args, events, tables, progress, store):
+async def serving(args, events, tables, progress, store, *, rules_backend=None, admin=None, auth=None):
     game = Server(
         args.log_dir / "local_traffic.jsonl",
         args.state,
         store=store,
+        rules_backend=rules_backend,
         match_mode=args.mode,
         match_player_count=args.players,
         match_start_fields=args.board,
@@ -224,7 +326,21 @@ async def serving(args, events, tables, progress, store):
         try:
             game_port = await game.start(args.game_port)
             profile_port = await profile.start(args.profile_port)
-            yield RunningServices(game, profile, game_port, profile_port)
+            async with AsyncExitStack() as listeners:
+                panel = None
+                gateway = None
+                if admin is not None:
+                    from tmserver.admin.server import serving_admin
+
+                    panel = await listeners.enter_async_context(serving_admin(game, **admin))
+                if auth is not None:
+                    from tmserver.auth.server import serving_auth
+
+                    gateway = await listeners.enter_async_context(serving_auth(
+                        game, profile, auth, port=args.auth_port,
+                        insecure_loopback=args.auth_insecure_loopback,
+                    ))
+                yield RunningServices(game, profile, game_port, profile_port, panel, gateway)
         finally:
             await profile.stop()
     finally:
@@ -236,6 +352,8 @@ def main():
         asyncio.run(run(arguments()))
     except KeyboardInterrupt:
         pass
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 if __name__ == "__main__":

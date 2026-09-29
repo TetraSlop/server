@@ -22,6 +22,7 @@ from tmserver.events.matches import (
 )
 from tmserver.events.models import EventDelivery, EventError, EventTableConfig
 from tmserver.game.models import Card
+from tmserver.game.errors import RulesExecutionError
 from tmserver.game.packets import decode, numbers, packet
 from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.protocol.table import channel_exit, viewer_state
@@ -81,6 +82,7 @@ class EventMatchmaking:
         watchdog_factory=None,
         allow_observers=False,
         transactions=None,
+        rules_backend=None,
     ):
         if rooms.host is not host or (hand_provider is not None and not callable(hand_provider)):
             raise EventError("coordinator needs matching host/rooms and trusted hand provider")
@@ -97,6 +99,7 @@ class EventMatchmaking:
         ):
             raise EventError("proposal backoff must be positive and below timeout")
         self.host, self.rooms, self.economy = host, rooms, host.economy
+        self.rules_backend = rules_backend
         self.transactions = self.economy if transactions is None else transactions
         if type(allow_observers) is not bool:
             raise EventError("observer enablement must be boolean")
@@ -326,6 +329,7 @@ class EventMatchmaking:
                     turn_limit=c.turn_limit,
                     departure_rule=c.departure_rule,
                     observation=0 if self.allow_observers else 1,
+                    rules_backend=self.rules_backend,
                 )
                 watchdog = self.watchdog_factory()
                 if not all(callable(getattr(watchdog, m, None)) for m in ("observe", "expired")):
@@ -609,7 +613,10 @@ class EventMatchmaking:
                 if msg.argument != 3 or numbers(f["ID"], 1) != [e.reservation.account.player_id]:
                     raise EventError("invalid event Break identity")
                 return self.cancel(event_id, r.epoch)
-            out = self._emit(r, r.engine.handle(peer, payload))
+            try:
+                out = self._emit(r, r.engine.handle(peer, payload))
+            except RulesExecutionError as error:
+                return self._rules_failed(r, error)
             self._observe(event_id, r)
             if r.engine.phase == "finished":
                 r.phase = "completed"
@@ -663,7 +670,10 @@ class EventMatchmaking:
             if len(r.accepted) < len(r.entries):
                 return []
             # Build before phase assignment; begin is an in-memory atomic epoch.
-            initial = r.engine.begin()
+            try:
+                initial = r.engine.begin()
+            except RulesExecutionError as error:
+                return self._rules_failed(r, error)
             r.phase = "playing"
             self._observe(event_id, r)
             binding = self._binding(event_id)
@@ -682,9 +692,16 @@ class EventMatchmaking:
         r = self._round(event_id, epoch)
         if r is None or r.epoch != epoch or r.phase != "playing":
             return []
-        out = self._emit(r, r.engine.advance(max_battles))
+        try:
+            out = self._emit(r, r.engine.advance(max_battles))
+        except RulesExecutionError as error:
+            return self._rules_failed(r, error)
         self._observe(event_id, r)
         return out
+
+    def _rules_failed(self, r, error):
+        self._errors.append((r.config.event_id, str(error)))
+        return self.cancel(r.config.event_id, r.epoch)
 
     def _observe(self, event_id, r):
         r.engine.observe(r.watchdog, r.epoch)

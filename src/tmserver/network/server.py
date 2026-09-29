@@ -9,11 +9,14 @@ Only synthetic accounts listed below are accepted. No production credentials.
 from tmserver.protocol.messages import service_notice
 
 import asyncio
+import secrets
 import time
 from collections import deque
 from contextlib import contextmanager
 from pathlib import Path
 
+from tmserver.admin.audit import AdminAudit
+from tmserver.accounts.identities import IdentityRegistry
 from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.auctions.models import AuctionError
 from tmserver.economy.auctions.service import AuctionService
@@ -41,6 +44,7 @@ from tmserver.network.session import (
     split_message as split_message,
 )
 from tmserver.network.local_accounts import account_specs, display_name
+from tmserver.protocol.wire import polid_to_string, polid_unscramble
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.rooms.config import configure_rooms
 from tmserver.rooms.config import directory_files as ordinary_directory_files
@@ -91,6 +95,7 @@ class Server:
         ordinary_rooms=(),
         flexible_seats=False,
         store: StateStore | None = None,
+        rules_backend=None,
     ):
         if store is not None and state_path is not None:
             raise ValueError("choose either state_path or store")
@@ -109,9 +114,11 @@ class Server:
                 "automatic seats require a three-seat versus table with a generated board"
             )
         self.account_specs = account_specs(account_count)
+        # Like an injected store, the rules backend is borrowed from the caller.
+        self.rules_backend = rules_backend
         self.accounts = {key.encode("ascii"): value[1] for key, value in self.account_specs.items()}
         self.connection_limit = max(8, len(self.accounts))
-        self.log_file = Path(log_path).open("a", encoding="utf-8") if log_path else None
+        self.log_file = None
         self.log_error = None
         self.sessions = set()
         self.tasks = set()
@@ -141,6 +148,11 @@ class Server:
         else:
             self.economy = EconomyService(seed=1, shop_offers=shop_offers)
         self.account_keys = set(self.economy.snapshot()["accounts"])
+        self.identities = IdentityRegistry.restore(
+            self.economy, None if saved is None else saved.get("identities")
+        )
+        for link in self.identities.snapshot()["links"]:
+            self.register_hosted_account(link["account_key"])
         self.commerce = Commerce(self.economy, self.persist_accounts)
         self.auction_ledger = AuctionEconomy.restore(
             self.economy, None if saved is None else saved.get("auction")
@@ -208,6 +220,12 @@ class Server:
             self.events,
             None if saved is None else saved.get("event_cards"),
         )
+        self.admin_audit = AdminAudit.restore(
+            self.economy,
+            self.prize,
+            None if saved is None else saved.get("admin_audit"),
+            event_cards=self.event_cards,
+        )
         self.event_routes = {
             service_nick(identity ^ GAME_KEY): (c.id, route)
             for c in event_configs
@@ -245,12 +263,19 @@ class Server:
         configure_rooms(self, ordinary_rooms)
         self.trade = TradeService(self.economy, transactions=self.commerce)
         self.trade_router = TradeRouter(self.trade, self.trade_busy)
+        # Validate the full host before acquiring its log. An unavailable log
+        # must still fail before startup recovery changes the durable save.
+        self.log_file = Path(log_path).open("a", encoding="utf-8") if log_path else None
         # Interrupted rewards use the mapped returned-card collection path;
         # recovery is durably complete before either listener can be started.
-        recovered = self.match_economy.recover_all(self.auction_ledger)
-        recovered = self.result_rewards.recover_all() or recovered
-        if recovered:
-            self.persist()
+        try:
+            recovered = self.match_economy.recover_all(self.auction_ledger)
+            recovered = self.result_rewards.recover_all() or recovered
+            if recovered:
+                self.persist()
+        except BaseException:
+            self._close_log()
+            raise
 
     def trade_busy(self, peer):
         return (
@@ -315,19 +340,35 @@ class Server:
             self.log("auction_expiry", count=len(changes))
         return changes
 
-    def ensure_account(self, nick):
+    def register_hosted_account(self, key):
+        """Expose saved hosted identities to bound transports, never raw logins."""
+        if key not in self.account_specs:
+            nick = key.encode("ascii")
+            login = polid_to_string(polid_unscramble(nick)).encode("ascii")
+            password = secrets.token_hex(8).encode("ascii")
+            self.account_specs[key] = (login, password, self.economy.account_view(key).player_id)
+            self.accounts[nick] = password
+            self.connection_limit = max(8, len(self.accounts))
+
+    def ensure_account(self, nick, *, name=None):
         key = nick.decode("ascii")
-        if key not in self.account_keys:
-            character = self.account_specs[key][2]
-            with self.economy.edit_accounts(()) as staged:
+        existing = key in self.account_keys
+        if existing and (name is None or self.economy.account_view(key).name == name
+                         or nick in self.nicks or self.economy.is_busy(key)):
+            return key
+        with self.economy.edit_accounts((key,) if existing else ()) as staged:
+            if not existing:
+                character = self.account_specs[key][2]
                 staged.provision(
                     key,
                     nn=player_id(nick),
                     player_id=character,
                     name=display_name(character),
                 )
-                self.persist_changes(staged.snapshot()["accounts"], self.journal_snapshot())
-            self.account_keys.add(key)
+            if name is not None:
+                staged.set_display_name(key, name)
+            self.persist_changes(staged.snapshot()["accounts"], self.journal_snapshot())
+        self.account_keys.add(key)
         return key
 
     def profile_file(self, account_key, name, *, owner=None):
@@ -381,8 +422,10 @@ class Server:
 
     def journal_snapshot(self):
         return dict(
+            identities=self.identities.snapshot(),
             auction=self.auction_ledger.snapshot(),
             prize=self.prize.snapshot(),
+            admin_audit=self.admin_audit.snapshot(),
             result_rewards=self.result_rewards.snapshot(),
             match_economy=self.match_economy.snapshot(),
             ratings=self.ratings.snapshot(),
@@ -502,14 +545,25 @@ class Server:
             except OSError as exc:
                 self.log("auction_storage_error", reason=str(exc))
 
-    async def accept(self, reader, writer):
+    async def accept(self, reader, writer, *, access=None):
         if self.storage_failed is not None or len(self.sessions) >= self.connection_limit:
             writer.close()
             return
+        if access is not None:
+            try:
+                access.check()
+                if access.account_key not in self.account_specs or access.game is not None:
+                    raise ValueError("play session cannot open another game connection")
+            except ValueError as error:
+                self.log("connection_rejected", reason=str(error))
+                writer.close()
+                return
         self.counter += 1
         task = asyncio.current_task()
         self.tasks.add(task)
-        session = Session(self, reader, writer, self.counter)
+        session = Session(self, reader, writer, self.counter, access=access)
+        if access is not None:
+            access.game = session
         self.sessions.add(session)
         try:
             await session.run()
@@ -551,6 +605,9 @@ class Server:
             await asyncio.gather(*list(self.tasks), return_exceptions=True)
         if self.room_task is not None:
             await self.room_task
+        self._close_log()
+
+    def _close_log(self):
         stream, self.log_file = self.log_file, None
         if stream is not None:
             try:
