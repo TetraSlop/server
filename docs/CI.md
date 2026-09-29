@@ -22,11 +22,18 @@ Its Python strategy updates `pyproject.toml` and the release manifest together.
 Review and merge that pull request to create a version tag and draft release.
 There is no automatic merge.
 
-GitHub's repository token does not trigger ordinary workflows from bot-created
-PRs or tags. The release-please workflow explicitly dispatches Checks for its PR
-branch and Release packages for a created tag. Only that workflow can write PRs;
-ordinary test jobs have read-only repository permissions. GitHub Actions must
-be allowed to create pull requests in the repository workflow settings.
+GitHub creates approval-required Checks runs for PRs opened or updated with its
+repository token. Review the release PR changes, then select **Approve workflows
+to run** in its merge box. Checks then runs against the proposed merge. The bot
+does not approve its own runs or create a second copy of the test suite. Tags
+created with that token do not start push workflows, so release please explicitly
+dispatches Release packages for its created tag. These are GitHub's documented
+[workflow trigger rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+
+Only the release-please workflow can write PRs; ordinary test jobs have read-only
+repository permissions. GitHub Actions must be allowed to create pull requests
+in the repository workflow settings. No personal token or additional secrets
+are required by this setup.
 
 Release packages validates that the tag is exactly `v<pyproject version>`, reruns
 the complete Checks workflow on that tag, and publishes only after every check
