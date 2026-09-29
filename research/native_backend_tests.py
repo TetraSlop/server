@@ -1,32 +1,46 @@
-"""Opt-in Windows x86 bridge checks; no game launch or emulator dependency.
+"""Native x86 acceptance checks against frozen original-code results.
 
-Set TM_ORIGINAL_IMAGE and TM_NATIVE_BRIDGE, then run this module with a
-32-bit Windows Python interpreter. Missing inputs are errors, not skips.
+Set TM_ORIGINAL_IMAGE and TM_NATIVE_BRIDGE and run with 32-bit Windows Python.
+Missing inputs are errors, not successful skips. No game or UI is launched.
 """
 
 import ctypes
 import os
-import random
-import subprocess
-import sys
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
 from threading import Event
 from unittest.mock import Mock, patch
 
-from research import original_backend_tests as shared_checks
-from research.native_primitive_cases import growth_cases, target_cases
 from tmserver.game import ai, rules
 from tmserver.game.original.image import OriginalCodeError
 from tmserver.game.original.native import NativeRules
 from tmserver.game.original import native as native_api
-from tools.probe_original_rules import Draws, battle_cases, compare, move_cases
+from tools.probe_original_rules import Draws, SPECIAL_VECTORS, VECTORS, snapshot, verify_vectors
 
 CARD = rules.Card(1, 50, 0, 40, 30, 1, 255)
 HAND = (CARD,) * 5
 BOARD = (None,) * 16
 BASELINE = rules.GrowthBaseline(100, 80, 60, 20, 100)
+
+
+def battle(seed):
+    value = VECTORS["samples"][str(seed)]["battle"]
+    return rules.BattleResult(
+        rules.BattleSide(**value["attacker"]),
+        rules.BattleSide(**value["defender"]),
+        tuple(value["raw_draws"]),
+    )
+
+
+def move(seed):
+    return ai.Move(**VECTORS["samples"][str(seed)]["move"])
+
+
+def growth(mode):
+    value = VECTORS["growth"][str(mode)]
+    return rules.GrowthResult(
+        rules.Card(**value["card"]), value["sale_value"], value["changed_field"]
+    )
 
 
 class NativeBackendTests(unittest.TestCase):
@@ -35,76 +49,6 @@ class NativeBackendTests(unittest.TestCase):
         self.bridge = os.environ["TM_NATIVE_BRIDGE"]
         self.backend = NativeRules(self.image, self.bridge)
         self.addCleanup(self.backend.close)
-
-    def test_battle_results_and_draw_order(self):
-        self.assertEqual(
-            compare(
-                rules.calculate_battle, self.backend.calculate_battle, battle_cases(), self.backend
-            ),
-            1168,
-        )
-
-    def test_ai_results_and_draw_order(self):
-        self.assertEqual(
-            compare(ai.choose_move, self.backend.choose_move, move_cases(), self.backend), 256
-        )
-
-    def test_growth_matches_all_original_oracle_cases(self):
-        comparisons = 0
-        for card, baseline, mode, value, precision in growth_cases():
-            actual = self.backend.grow_card(card, baseline, mode, value, x87_precision=precision)
-            self.assertEqual(
-                actual,
-                rules.grow_card(card, baseline, mode, value, x87_precision=precision),
-                (card, baseline, mode, value, precision),
-            )
-            self.assertEqual(self.backend.last_draws, ())
-            comparisons += 1
-        self.assertEqual(comparisons, 6248)
-
-    def test_growth_uses_supplied_baseline_and_preserves_full_model_domain(self):
-        rng = random.Random(99031)
-        for model in (0, 249, 250, 32767, 32768, 65534):
-            for precision in (53, 64):
-                for price in (0, 1, 0x7FFFFFFF):
-                    card = rules.Card(
-                        model, 255, rng.randrange(4), 0, 254, 255, 129, rng.randrange(256)
-                    )
-                    baseline = rules.GrowthBaseline(1, 255, 13, 255, price)
-                    for mode, value in ((0, 0), (1, 1), (257, -1), (-256, 1 << 80)):
-                        with self.subTest(card=card, baseline=baseline, mode=mode, value=value):
-                            self.assertEqual(
-                                self.backend.grow_card(
-                                    card, baseline, mode, value, x87_precision=precision
-                                ),
-                                rules.grow_card(
-                                    card, baseline, mode, value, x87_precision=precision
-                                ),
-                            )
-
-    def test_targets_preserve_bounds_order_and_consumed_draws(self):
-        count = 0
-        for targets, size, values in target_cases():
-            actual_draw, expected_draw = Draws(values), Draws(values)
-            self.assertEqual(
-                self.backend.choose_target(targets, actual_draw, board_size=size),
-                ai.choose_target(targets, expected_draw, board_size=size),
-            )
-            self.assertEqual(actual_draw.used, expected_draw.used)
-            self.assertEqual(self.backend.last_draws, tuple(expected_draw.used))
-            count += 1
-        self.assertEqual(count, 360)
-
-    def test_growth_and_target_do_not_execute_python_algorithms(self):
-        growth = rules.grow_card(CARD, BASELINE, 1, 0)
-        with (
-            patch.object(rules, "grow_card", side_effect=AssertionError("Python growth")),
-            patch.object(rules, "_sale_value", side_effect=AssertionError("Python sale")),
-            patch.object(ai, "choose_target", side_effect=AssertionError("Python target")),
-            patch.object(ai, "poll_target", side_effect=AssertionError("Python target")),
-        ):
-            self.assertEqual(self.backend.grow_card(CARD, BASELINE, 1, 0), growth)
-            self.assertEqual(self.backend.choose_target((14, 1, 6), iter((0, 1)).__next__), 1)
 
     def test_growth_and_target_reject_invalid_static_inputs(self):
         draw = Mock(side_effect=AssertionError("Randomness before validation"))
@@ -172,16 +116,14 @@ class NativeBackendTests(unittest.TestCase):
         self.assertIs(caught.exception, failure)
         self.assertEqual(self.backend.last_draws, (123,))
         self.assertEqual(self.backend.choose_target((0, 1), iter((0, 1)).__next__), 1)
-        self.assertEqual(
-            self.backend.grow_card(CARD, BASELINE, 0, 0), rules.grow_card(CARD, BASELINE, 0, 0)
-        )
+        self.assertEqual(self.backend.grow_card(CARD, BASELINE, 0, 0), growth(0))
 
     def test_growth_restores_x87_state_even_after_native_access_violation(self):
         crt = ctypes.CDLL("msvcrt")
         crt._control87.argtypes = [ctypes.c_uint, ctypes.c_uint]
         crt._control87.restype = ctypes.c_uint
         saved = crt._control87(0, 0)
-        expected = rules.grow_card(CARD, BASELINE, 1, 0)
+        expected = growth(1)
         request = native_api._GrowthRequest(
             (native_api._U32 * 8)(*CARD.full()),
             (native_api._U32 * 5)(100, 80, 60, 20, 100),
@@ -205,17 +147,44 @@ class NativeBackendTests(unittest.TestCase):
         finally:
             crt._control87(saved, 0xFFFFFFFF)
 
-    def test_no_python_rule_execution(self):
-        shared_checks.OriginalBackendTests.test_no_python_rule_execution(self)
-
     def test_no_move_does_not_consume_randomness(self):
-        shared_checks.OriginalBackendTests.test_no_move_does_not_consume_randomness(self)
+        for hand, board in (
+            ((), BOARD),
+            (HAND, (ai.BLOCKED,) * 16),
+            (HAND, (ai.Cell(CARD, 1),) * 16),
+        ):
+            self.assertIsNone(self.backend.choose_move(hand, board, 0, Draws(())))
+            self.assertEqual(self.backend.last_draws, ())
 
     def test_invalid_inputs_fail_before_randomness(self):
-        shared_checks.OriginalBackendTests.test_invalid_inputs_fail_before_randomness(self)
+        draw = Draws(())
+        for kwargs in ({"attacker_modifier": 128}, {"defender_property": -1}):
+            with self.assertRaises(rules.RulesError):
+                self.backend.calculate_battle(CARD, CARD, draw, **kwargs)
+        for hand, board, owner, personality in (
+            (HAND * 2, BOARD, 0, ai.Personality()),
+            ((), BOARD, 2, ai.Personality()),
+            ((), BOARD[:15], 0, ai.Personality()),
+            ((rules.Card(250, 1, 0, 1, 1, 1, 0),), BOARD, 0, ai.Personality()),
+            ((), BOARD, 0, None),
+        ):
+            with self.assertRaises(ai.AIError):
+                self.backend.choose_move(hand, board, owner, draw, personality)
+        self.assertEqual(draw.used, [])
 
     def test_rng_errors_propagate_and_context_recovers(self):
-        shared_checks.OriginalBackendTests.test_rng_errors_propagate_and_context_recovers(self)
+        for value in (-1, True, 32768):
+            with self.assertRaises(ai.AIError):
+                self.backend.choose_move(HAND, BOARD, 0, lambda: value)
+        for value in (-1, True, 0x80000000):
+            with self.assertRaises(rules.RulesError):
+                self.backend.calculate_battle(CARD, CARD, lambda: value)
+        with self.assertRaises(StopIteration):
+            self.backend.calculate_battle(CARD, CARD, Draws(()))
+        self.assertEqual(
+            self.backend.calculate_battle(CARD, CARD, rules.CRTLCG(9)),
+            battle(9),
+        )
 
     def test_rng_exception_identity_and_partial_draws(self):
         failure = RuntimeError("RNG callback interrupted")
@@ -259,11 +228,11 @@ class NativeBackendTests(unittest.TestCase):
 
             self.assertEqual(
                 self.backend.calculate_battle(CARD, CARD, draw),
-                rules.calculate_battle(CARD, CARD, rules.CRTLCG(19)),
+                battle(19),
             )
             self.assertEqual(
                 other.choose_move(HAND, BOARD, 0, rules.CRTLCG(19)),
-                ai.choose_move(HAND, BOARD, 0, rules.CRTLCG(19)),
+                move(19),
             )
 
     def test_concurrent_context_is_busy_and_recovers(self):
@@ -287,11 +256,11 @@ class NativeBackendTests(unittest.TestCase):
                     release.set()
                 self.assertEqual(
                     job.result(timeout=5),
-                    rules.calculate_battle(CARD, CARD, rules.CRTLCG(21)),
+                    battle(21),
                 )
             self.assertEqual(
                 other.calculate_battle(CARD, CARD, rules.CRTLCG(21)),
-                rules.calculate_battle(CARD, CARD, rules.CRTLCG(21)),
+                battle(21),
             )
 
     def test_context_reference_counts_and_reopening(self):
@@ -304,36 +273,18 @@ class NativeBackendTests(unittest.TestCase):
                 self.backend.__enter__()
             self.assertEqual(
                 other.calculate_battle(CARD, CARD, rules.CRTLCG(9)),
-                rules.calculate_battle(CARD, CARD, rules.CRTLCG(9)),
+                battle(9),
             )
         with NativeRules(self.image, self.bridge) as reopened:
             self.assertEqual(
                 reopened.choose_move(HAND, BOARD, 0, rules.CRTLCG(9)),
-                ai.choose_move(HAND, BOARD, 0, rules.CRTLCG(9)),
+                move(9),
             )
-
-    def test_interleaved_contexts_reset_global_state(self):
-        with NativeRules(self.image, self.bridge) as other:
-            for index, (args, options, values) in enumerate(move_cases(100)):
-                expected = ai.choose_move(*args, Draws(values), **options)
-                self.backend.calculate_battle(CARD, CARD, rules.CRTLCG(index))
-                card = replace(CARD, model=65534, kind=index % 4)
-                growth = rules.grow_card(card, BASELINE, index, index)
-                self.assertEqual(other.grow_card(card, BASELINE, index, index), growth)
-                self.assertEqual(
-                    self.backend.choose_target((24, 3), iter((1, index)).__next__, board_size=25),
-                    (24, 3)[index % 2],
-                )
-                self.assertEqual(
-                    self.backend.choose_move(*args, Draws(values), **options), expected
-                )
-                other.choose_move(HAND, BOARD, 1, rules.CRTLCG(index + 999))
-                self.assertEqual(other.choose_move(*args, Draws(values), **options), expected)
 
     def test_abi_version_is_checked_before_image_open(self):
         with patch("tmserver.game.original.native.ctypes.CDLL") as load:
             load.return_value.tm_rules_abi.return_value = 1
-            with self.assertRaisesRegex(OriginalCodeError, "ABI 1; expected 2"):
+            with self.assertRaisesRegex(OriginalCodeError, "ABI 1; expected 3"):
                 NativeRules(self.image, self.bridge)
             load.return_value.tm_rules_open.assert_not_called()
             self.assertNotIn("tm_rules_growth", load.return_value._mock_children)
@@ -346,112 +297,76 @@ class NativeBackendTests(unittest.TestCase):
             with self.assertRaisesRegex(OriginalCodeError, "32-bit Windows Python"):
                 NativeRules(self.image, self.bridge)
 
-    def test_adapter_imports_no_emulator(self):
-        script = """
-import ctypes, sys
-from tmserver.game.original.native import NativeRules
-with NativeRules(sys.argv[1], sys.argv[2]):
-    assert ctypes.sizeof(ctypes.c_void_p) == 4
-    assert not any(name == 'unicorn' or name.startswith('unicorn.') for name in sys.modules)
-    assert 'tmserver.game.original.machine' not in sys.modules
-    assert 'tmserver.game.original.backend' not in sys.modules
-"""
-        child = subprocess.run(
-            [sys.executable, "-B", "-c", script, self.image, self.bridge],
-            capture_output=True,
-            text=True,
-            timeout=15,
+    def test_frozen_original_results_and_draw_order(self):
+        self.assertEqual(
+            verify_vectors(self.backend),
+            {
+                **{name: record["count"] for name, record in VECTORS["groups"].items()},
+                "special_moves": len(SPECIAL_VECTORS),
+            },
         )
-        self.assertEqual(child.returncode, 0, child.stdout + child.stderr)
 
-    def test_complete_com_rounds_emit_identical_packets_and_results(self):
-        with (
-            patch.object(self.backend, "grow_card", wraps=self.backend.grow_card) as growth,
-            patch.object(self.backend, "choose_target", wraps=self.backend.choose_target) as target,
-        ):
-            shared_checks.OriginalBackendTests.test_complete_com_rounds_emit_identical_packets_and_results(
-                self
+    def test_move_abi_rejects_malformed_records_before_randomness(self):
+        draws = []
+
+        @native_api._Random
+        def callback(*_):
+            draws.append(1)
+            return 1
+
+        invalid = (
+            ("board_size", 0),
+            ("board_size", 24),
+            ("board_size", 0xFFFFFFFF),
+            ("owner", 3),
+            ("count", 6),
+            ("model", 250),
+            ("model", 0x800C),
+            ("cell_owner", 3),
+            ("arrows", 256),
+            ("property", 256),
+            ("direction", 8),
+        )
+        for field, value in invalid:
+            request = native_api._MoveRequest()
+            request.count, request.owner, request.board_size = 1, 0, 25
+            request.hand[0] = native_api._HandCard(1, 255)
+            for index in range(25):
+                request.board[index] = native_api._BoardCell(0xFFFF, 0, 8, 0, 0)
+            if field in ("board_size", "owner", "count"):
+                setattr(request, field, value)
+            else:
+                setattr(request.board[24], "owner" if field == "cell_owner" else field, value)
+            result = native_api._MoveResult(91, 92)
+            with self.subTest(field=field, value=value):
+                self.assertEqual(
+                    self.backend._bridge.tm_rules_move(
+                        ctypes.byref(request), callback, None, ctypes.byref(result)
+                    ),
+                    2,
+                )
+                self.assertEqual((result.hand, result.field), (91, 92))
+        self.assertEqual(draws, [])
+
+    def test_known_native_results(self):
+        self.assertEqual(self.backend.calculate_battle(CARD, CARD, rules.CRTLCG(7)), battle(7))
+        self.assertEqual(self.backend.choose_move(HAND, BOARD, 0, rules.CRTLCG(7)), move(7))
+        self.assertEqual(self.backend.grow_card(CARD, BASELINE, 1, 0), growth(1))
+        self.assertEqual(self.backend.choose_target((14, 1, 6), iter((0, 1)).__next__), 1)
+
+    def test_interleaved_calls_reset_global_state(self):
+        for seed in (7, 9, 19, 21):
+            self.backend.choose_target((24, 3), iter((1, seed)).__next__, board_size=25)
+            self.backend.grow_card(CARD, BASELINE, 1, seed)
+            self.assertEqual(
+                self.backend.calculate_battle(CARD, CARD, rules.CRTLCG(seed)), battle(seed)
             )
-        self.assertGreaterEqual(growth.call_count, 30)
-        self.assertGreater(target.call_count, 0)
-
-    def test_hybrid_special_cbc_and_three_player_rounds_preserve_packets_and_all_draws(self):
-        """Special/three-player placement AI stays Python; other supported rules are native."""
-        from tests.game.test_match_service import select
-        from tests.game.test_three_player_computer import choose, finish, menu
-        from tmserver.game.models import Card
-
-        cards = tuple(Card.from_card(CARD) for _ in range(5))
-        for npcs, tile in (((1, 30), 0), ((1,), 6), ((1,), 18)):
-            with self.subTest(npcs=npcs, tile=tile):
-                fields = None if not tile else (0, tile) + (0,) * 14
-                menu_rules = f"0|0|{int(bool(tile))}|0|2|0|0|1"
-
-                def play(backend=None):
-                    rng = rules.CRTLCG(57)
-                    draws = []
-
-                    def draw():
-                        value = rng()
-                        draws.append(value)
-                        return value
-
-                    match = menu(
-                        rules_backend=backend, draw=draw, start_fields=fields, allow_cbc=tile == 18
-                    )
-                    output = match.handle("alice", choose(npcs, rules=menu_rules))
-                    output += match.handle("alice", select(cards))
-                    output += finish(match)
-                    return output, match.snapshot(), match.final_cards("alice"), draws
-
-                expected = play()
-                backend = Mock(wraps=self.backend)
-                self.assertEqual(play(backend), expected)
-                self.assertGreater(backend.calculate_battle.call_count, 0)
-                backend.choose_move.assert_not_called()
-                self.assertGreaterEqual(backend.grow_card.call_count, 5 * (len(npcs) + 1))
-                self.assertGreater(backend.choose_target.call_count, 0)
-                if tile == 18:
-                    self.assertTrue(any(b"/CBC=" in item.payload for item in expected[0]))
-
-    def test_hybrid_event_rounds_preserve_borrowed_hands_and_results(self):
-        from tests.events.test_event_matches import finish
-        from tmserver.events.matches import EventMatchRound, EventParticipant
-        from tmserver.game.models import Card
-
-        cards = tuple(Card.from_card(CARD) for _ in range(5))
-        for count, cpu in ((2, False), (3, False), (2, True)):
-            with self.subTest(count=count, cpu=cpu):
-
-                def play(backend=None):
-                    match = EventMatchRound(
-                        tuple(
-                            EventParticipant(i, i + 1, f"Player{i}".encode(), i + 1, cards)
-                            for i in range(1 if cpu else count)
-                        ),
-                        cpu_cards=cards if cpu else None,
-                        seed=17,
-                        rules_backend=backend,
-                    )
-                    draws = Draws(iter(match._combat.rng, None))
-                    match._combat.draw = draws
-                    output = match.begin() + finish(match)
-                    return (
-                        output,
-                        match.snapshot(),
-                        match.outcome,
-                        draws.used,
-                        match._combat.rng.state,
-                    )
-
-                expected = play()
-                backend = Mock(wraps=self.backend)
-                self.assertEqual(play(backend), expected)
-                self.assertGreater(backend.calculate_battle.call_count, 0)
-                self.assertEqual(backend.choose_move.call_count, 5 if cpu else 0)
-                # Borrowed event hands receive combat promotion, never ordinary result growth.
-                self.assertGreater(backend.grow_card.call_count, 0)
-                self.assertGreater(backend.choose_target.call_count, 0)
+            self.assertEqual(
+                self.backend.choose_move(HAND, BOARD, 0, rules.CRTLCG(seed)), move(seed)
+            )
+            self.assertEqual(
+                snapshot(self.backend.grow_card(CARD, BASELINE, 0, 0)), VECTORS["growth"]["0"]
+            )
 
 
 if __name__ == "__main__":

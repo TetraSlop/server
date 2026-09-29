@@ -1,18 +1,31 @@
-"""Compare and benchmark the optional original-code backend without starting a game."""
+"""Verify and benchmark native original-code rules without launching the game."""
 
 import argparse
+import hashlib
 import json
 import platform
 import random
 import statistics
 import struct
 import time
-from contextlib import ExitStack
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 
-from tmserver.game import ai, rules
+from research.native_primitive_cases import growth_cases, target_cases
+from tmserver.game import ai, rules, special_rules
 from tmserver.game.original.image import IMAGE_SHA256
+from tmserver.game.original.native import NativeRules
+
+VECTORS = json.loads(
+    (Path(__file__).resolve().parents[1] / "research/native_vectors.json").read_text(
+        encoding="utf-8"
+    )
+)
+SPECIAL_VECTORS = json.loads(
+    (Path(__file__).resolve().parents[1] / "research/native_special_vectors.json").read_text(
+        encoding="utf-8"
+    )
+)["cases"]
 
 
 class Draws:
@@ -105,22 +118,6 @@ def move_cases(count=256):
         )
 
 
-def compare(reference, original, cases, backend):
-    count = 0
-    for index, (args, options, values) in enumerate(cases):
-        expected_draws, actual_draws = Draws(values), Draws(values)
-        expected = reference(*args, expected_draws, **options)
-        actual = original(*args, actual_draws, **options)
-        if actual != expected or actual_draws.used != expected_draws.used:
-            raise AssertionError(
-                f"{reference.__name__} differs at case {index}: {actual} != {expected}"
-            )
-        if backend.last_draws != tuple(expected_draws.used):
-            raise AssertionError(f"Draw accounting differs at {reference.__name__} case {index}")
-        count += 1
-    return count
-
-
 def timing(function, case, repetitions):
     args, options, values = case
     for _ in range(10):
@@ -137,63 +134,97 @@ def timing(function, case, repetitions):
     }
 
 
-def probe(image, *, repetitions=200, bridge=None):
-    """Supplying an x86 bridge selects native execution without importing Unicorn."""
-    start = time.perf_counter()
-    with ExitStack() as cleanup:
-        if bridge is None:
-            from tmserver.game.original.backend import OriginalRules
-
-            backend = OriginalRules(image)
-        else:
-            from tmserver.game.original.native import NativeRules
-
-            backend = cleanup.enter_context(NativeRules(image, bridge))
-        initialization_ms = (time.perf_counter() - start) * 1000
-        report = measure(backend, repetitions)
-        report.update(
-            backend="original-x86-native" if bridge is not None else "original-x86-unicorn",
-            initialization_ms=round(initialization_ms, 3),
-        )
-        return report
+def snapshot(value):
+    """Canonical JSON representation, including tuple-valued native records."""
+    return json.loads(json.dumps(asdict(value) if is_dataclass(value) else value))
 
 
-def measure(backend, repetitions):
-    battles, moves = list(battle_cases()), list(move_cases())
-    matched = {
-        "battles": compare(rules.calculate_battle, backend.calculate_battle, battles, backend),
-        "moves": compare(ai.choose_move, backend.choose_move, moves, backend),
-    }
-    # Run a populated-board scoring case, not an empty-hand early return.
-    move_case = next(
-        case
-        for case in moves
-        if len(case[0][0]) == 5 and case[1]["personality"].score_chance >= 100
-    )
-    measurements = {}
-    for name, reference, original, case in (
-        ("battle", rules.calculate_battle, backend.calculate_battle, battles[-1]),
-        ("move", ai.choose_move, backend.choose_move, move_case),
+def vector_digest(records):
+    encoded = json.dumps(records, sort_keys=True, separators=(",", ":")).encode()
+    return {"count": len(records), "sha256": hashlib.sha256(encoded).hexdigest()}
+
+
+def verify_vectors(backend):
+    """Check frozen original-code outputs and draw order; no Python rules oracle."""
+    actual = {}
+    for name, function, cases in (
+        ("battles", backend.calculate_battle, battle_cases()),
+        ("moves", backend.choose_move, move_cases()),
     ):
-        measurements[name] = {
-            "python": timing(reference, case, repetitions),
-            "original": timing(original, case, repetitions),
-        }
-    card = rules.Card(1, 50, 0, 40, 30, 1, 255)
-    sample = backend.calculate_battle(card, card, rules.CRTLCG(11))
+        records = []
+        for args, options, values in cases:
+            draws = Draws(values)
+            result = function(*args, draws, **options)
+            if backend.last_draws != tuple(draws.used):
+                raise AssertionError(f"Draw accounting differs in {name} case {len(records)}")
+            records.append({"result": snapshot(result), "draws": list(backend.last_draws)})
+        actual[name] = vector_digest(records)
+    records = []
+    for card, baseline, mode, value, precision in growth_cases():
+        result = backend.grow_card(card, baseline, mode, value, x87_precision=precision)
+        records.append({"result": snapshot(result), "draws": list(backend.last_draws)})
+    actual["growth"] = vector_digest(records)
+    records = []
+    for targets, size, values in target_cases():
+        draws = Draws(values)
+        result = backend.choose_target(targets, draws, board_size=size)
+        if backend.last_draws != tuple(draws.used):
+            raise AssertionError(f"Draw accounting differs in targets case {len(records)}")
+        records.append({"result": result, "draws": list(backend.last_draws)})
+    actual["targets"] = vector_digest(records)
+    for name, expected in VECTORS["groups"].items():
+        if actual[name] != expected:
+            raise AssertionError(
+                f"Frozen native {name} vectors changed: {actual[name]} != {expected}"
+            )
+    for index, row in enumerate(SPECIAL_VECTORS):
+        board = tuple(
+            special_rules.Cell(
+                model=model, arrows=arrows, owner=owner, property=prop, direction=direction
+            )
+            for model, arrows, owner, prop, direction in row["board"]
+        )
+        hand = tuple(rules.Card(model, 10, 0, 10, 10, 1, arrows) for model, arrows in row["hand"])
+        draws = Draws(row["draws"])
+        result = backend.choose_special_move(
+            hand, board, row["active"], draws, ai.Personality(*row["personality"])
+        )
+        if snapshot(result) != row["expected"] or draws.used != row["used"]:
+            raise AssertionError(f"Frozen special-board native vector changed at case {index}")
+        if backend.last_draws != tuple(draws.used):
+            raise AssertionError(f"Draw accounting differs in special-board case {index}")
     return {
-        "image_sha256": IMAGE_SHA256,
-        "python": platform.python_version(),
-        "python_bits": struct.calcsize("P") * 8,
-        "platform": platform.platform(),
-        "matched": matched,
-        "exact_random_draws": True,
-        "timing_includes_memory_reset": True,
-        "repetitions": repetitions,
-        "timings": measurements,
-        "sample_battle": asdict(sample),
-        "scope": "Battle calculation and ordinary two-player AI only; live server unchanged",
+        **{name: record["count"] for name, record in actual.items()},
+        "special_moves": len(SPECIAL_VECTORS),
     }
+
+
+def probe(image, *, bridge, repetitions=200):
+    start = time.perf_counter()
+    with NativeRules(image, bridge) as backend:
+        initialization_ms = (time.perf_counter() - start) * 1000
+        verified = verify_vectors(backend)
+        battle_case = next(iter(battle_cases()))
+        move_case = next(
+            case
+            for case in move_cases()
+            if len(case[0][0]) == 5 and case[1]["personality"].score_chance >= 100
+        )
+        return {
+            "backend": "original-x86-native",
+            "image_sha256": IMAGE_SHA256,
+            "python": platform.python_version(),
+            "python_bits": struct.calcsize("P") * 8,
+            "platform": platform.platform(),
+            "initialization_ms": round(initialization_ms, 3),
+            "verified": verified,
+            "exact_random_draws": True,
+            "repetitions": repetitions,
+            "timings": {
+                "battle": timing(backend.calculate_battle, battle_case, repetitions),
+                "move": timing(backend.choose_move, move_case, repetitions),
+            },
+        }
 
 
 def main():
@@ -201,18 +232,19 @@ def main():
     parser.add_argument(
         "--image", type=Path, required=True, help="unpacked TM_emulated_mapped.dll memory image"
     )
-    parser.add_argument("--output", type=Path, help="optional JSON report")
     parser.add_argument(
         "--bridge",
         type=Path,
-        help="run natively using this bridge DLL (requires 32-bit Windows Python)",
+        required=True,
+        help="native bridge DLL; requires 32-bit Windows Python",
     )
+    parser.add_argument("--output", type=Path, help="optional JSON report")
     parser.add_argument("--repetitions", type=int, default=200)
     args = parser.parse_args()
     if args.repetitions < 1:
         parser.error("--repetitions must be positive")
     report = (
-        json.dumps(probe(args.image, repetitions=args.repetitions, bridge=args.bridge), indent=2)
+        json.dumps(probe(args.image, bridge=args.bridge, repetitions=args.repetitions), indent=2)
         + "\n"
     )
     if args.output:

@@ -17,8 +17,11 @@ Issues = "https://github.com/sruon/tmserver/issues"
 [project.optional-dependencies]
 admin = ["starlette-admin==1.0.1", "starlette==1.7.0", "uvicorn==0.54.0"]
 auth = ["starlette==1.7.0", "uvicorn==0.54.0", "httpx==0.28.1", "websockets==17.1"]
-original = ["unicorn==2.1.4"]
-postgres = ["SQLAlchemy==2.0.54", "alembic==1.20.0", "psycopg[binary]==3.3.6"]
+postgres = [
+    "SQLAlchemy==2.0.54", "alembic==1.20.0",
+    "psycopg==3.3.6; sys_platform == 'win32'",
+    "psycopg[binary]==3.3.6; sys_platform != 'win32'",
+]
 dev = ["ruff==0.16.4", "build>=1.2,<2", "httpx==0.28.1"]
 
 [project.scripts]

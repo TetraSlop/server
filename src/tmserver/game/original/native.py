@@ -1,4 +1,4 @@
-"""Windows x86 bridge to original battle, growth, target and ordinary AI code.
+"""Windows x86 bridge to original battle, growth, target and board AI code.
 
 Native contexts share one mapped image and allow one operation process-wide.
 Close contexts explicitly, preferably with a ``with NativeRules(...)`` block.
@@ -11,7 +11,7 @@ from pathlib import Path
 from threading import Lock
 
 from tmserver.data.resources import read_json
-from tmserver.game import ai, rules
+from tmserver.game import ai, rules, special_rules
 from tmserver.game.original.image import OriginalCodeError, read_image
 
 _U32 = ctypes.c_uint32
@@ -39,16 +39,23 @@ class _HandCard(ctypes.Structure):
 
 
 class _BoardCell(ctypes.Structure):
-    _fields_ = [("model", _U32), ("arrows", _U32), ("owner", _U32)]
+    _fields_ = [
+        ("model", _U32),
+        ("arrows", _U32),
+        ("owner", _U32),
+        ("property", _U32),
+        ("direction", _U32),
+    ]
 
 
 class _MoveRequest(ctypes.Structure):
     _fields_ = [
         ("count", _U32),
         ("owner", _U32),
+        ("board_size", _U32),
         ("personality", _U32 * 3),
         ("hand", _HandCard * 5),
-        ("board", _BoardCell * 16),
+        ("board", _BoardCell * 25),
     ]
 
 
@@ -96,8 +103,8 @@ def _load_bridge(path):
         bridge.tm_rules_abi.argtypes = []
         bridge.tm_rules_abi.restype = _U32
         version = bridge.tm_rules_abi()
-        if version != 2:
-            raise OriginalCodeError(f"Unsupported native rules ABI {version}; expected 2")
+        if version != 3:
+            raise OriginalCodeError(f"Unsupported native rules ABI {version}; expected 3")
         signatures = (
             ("tm_rules_open", [ctypes.c_void_p, _U32, ctypes.c_void_p, _U32]),
             ("tm_rules_close", []),
@@ -260,15 +267,41 @@ class NativeRules:
     ) -> ai.Move | None:
         hand = tuple(ai._card(card) for card in hand)
         snapshot = ai._board(board, owner)
+        cells = []
+        for cell in snapshot:
+            if cell is None:
+                values = (0xFFFF, 0, 8, 0, 0)
+            elif cell is ai.BLOCKED:
+                values = (0x8000, 0, 9, 0, 0)
+            else:
+                (model, arrows), seat = cell
+                values = (model, arrows, seat, 0, 0)
+            cells.append(_BoardCell(*values))
+        return self._choose_move(hand, cells, owner, raw_rng, personality)
+
+    def choose_special_move(
+        self, hand, board, active, raw_rng, personality=None
+    ) -> ai.Move | None:
+        """Choose on a 4x4 or 5x5 board, preserving tile properties and spinners."""
+        hand = tuple(ai._card(card) for card in hand)
+        special_rules._active(board, active)
+        cells = [
+            _BoardCell(cell.model, cell.arrows, cell.owner, cell.property, cell.direction)
+            for cell in board
+        ]
+        return self._choose_move(hand, cells, active, raw_rng, personality or ai.Personality())
+
+    def _choose_move(self, hand, cells, owner, raw_rng, personality):
         if len(hand) > 5:
             raise ai.AIError("native hand has at most five cards")
         if not isinstance(personality, ai.Personality):
             raise ai.AIError("personality must be a Personality")
         with self._operation():
-            if not hand or all(cell is not None for cell in snapshot):
+            if not hand or all(cell.owner != 8 for cell in cells):
                 return None
             request = _MoveRequest()
             request.count, request.owner = len(hand), owner
+            request.board_size = len(cells)
             request.personality[:] = (
                 personality.score_chance,
                 personality.preference,
@@ -276,21 +309,14 @@ class NativeRules:
             )
             for index, card in enumerate(hand):
                 request.hand[index] = _HandCard(*card)
-            for index, cell in enumerate(snapshot):
-                if cell is None:
-                    values = (0xFFFF, 0, 8)
-                elif cell is ai.BLOCKED:
-                    values = (0x8000, 0, 9)
-                else:
-                    (model, arrows), seat = cell
-                    values = (model, arrows, seat)
-                request.board[index] = _BoardCell(*values)
+            for index, cell in enumerate(cells):
+                request.board[index] = cell
             result = _MoveResult()
             self._call(self._bridge.tm_rules_move, request, result, raw_rng, 32767, ai.AIError)
             if (
                 not 0 <= result.hand < len(hand)
-                or not 0 <= result.field < 16
-                or snapshot[result.field] is not None
+                or not 0 <= result.field < len(cells)
+                or cells[result.field].owner != 8
             ):
                 raise OriginalCodeError("Original AI returned an invalid immediate move")
             return ai.Move(result.hand, result.field)

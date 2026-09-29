@@ -1,0 +1,57 @@
+name: Native gameplay
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      TM_ORIGINAL_IMAGE_URL:
+        required: true
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: pwsh
+jobs:
+  native:
+    name: Original code and server integration (Windows x86)
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      TM_ORIGINAL_IMAGE: ${{ github.workspace }}/build/TM_emulated_mapped.dll
+      TM_NATIVE_BRIDGE: ${{ github.workspace }}/build/native-ci/Release/tm_original_rules.dll
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          architecture: x86
+      - run: python -m pip install -e ".[dev,admin,auth]"
+      - run: cmake -S native/original_rules -B build/native-ci -G "Visual Studio 17 2022" -A Win32
+      - run: cmake --build build/native-ci --config Release --parallel 2
+      - name: Fetch operator-supplied original image and verify its identity
+        env:
+          TM_ORIGINAL_IMAGE_URL: ${{ secrets.TM_ORIGINAL_IMAGE_URL }}
+        run: |
+          @'
+          import os
+          from pathlib import Path
+          from urllib.request import urlopen
+          from tmserver.game.original.image import IMAGE_SIZE, read_image
+          url = os.environ.get("TM_ORIGINAL_IMAGE_URL", "")
+          if not url.startswith("https://"):
+              raise SystemExit("Configure the TM_ORIGINAL_IMAGE_URL repository secret with an HTTPS image URL")
+          try:
+              with urlopen(url, timeout=60) as response:
+                  data = response.read(IMAGE_SIZE + 1)
+          except Exception:
+              raise SystemExit("Cannot retrieve original image; check the repository secret") from None
+          path = Path(os.environ["TM_ORIGINAL_IMAGE"])
+          path.write_bytes(data)
+          read_image(path)
+          '@ | python -
+      - run: python -m tools.check_native_bridge $env:TM_NATIVE_BRIDGE
+      - run: python -m unittest research.native_backend_tests -v
+      - run: python -m tools.check_tests native
+      - run: python -m tools.build_wheel
+      - run: python -m tools.check_wheel (Get-ChildItem dist/*.whl).FullName --native --admin --auth

@@ -2,17 +2,41 @@
 
 The [Checks workflow](https://github.com/sruon/tmserver/actions/workflows/checks.yml)
 runs on main, pull requests and manual dispatch. It checks lint and complete test
-discovery, portable tests on Windows and Linux, isolated admin/auth tests, and
+discovery, image-free tests on Windows and Linux, isolated admin/auth tests, and
 transactions/migrations against a disposable PostgreSQL 16 container. Unexpected
 skips fail the run. The aggregate **All checks** job fails if any required job
 fails or is cancelled, and can be selected as a branch-protection requirement.
 
 Packaging builds from fresh sources and checks exact wheel contents before
 installing in a new environment. The installed base, admin and auth flows are
-exercised, including automatic account creation and WebSocket revocation. A
-separate Windows x86 job compiles the optional C++23 rules bridge and validates
+exercised where they do not execute original code. A
+separate Windows x86 job compiles the required C++23 rules bridge and validates
 its ABI without an original game image. Successful builds retain the
 `tmserver-wheel` and `tmserver-native-win32` artifacts for 14 days.
+
+The **Native gameplay** workflow runs the image-dependent `native` test lane,
+8,067 frozen original-routine cases, and installed-package startup/auth checks
+on 32-bit Windows. Configure the repository secret `TM_ORIGINAL_IMAGE_URL` with
+an operator-controlled HTTPS download of the unpacked image; its exact size and
+SHA-256 are verified before execution. The image is not a repository or release
+artifact. This workflow can be dispatched manually and is a mandatory release
+gate. Without that secret, native cloud acceptance and release publication fail
+explicitly; ordinary image-free CI is not a claim of full gameplay acceptance.
+
+`tests/native_modules.json` assigns image-dependent modules to the native lane.
+The remaining portable/admin/auth/PostgreSQL lanes cannot silently skip native
+failures. Collection checks ensure every maintained test module has one lane.
+Locally, set `TM_ORIGINAL_IMAGE` and `TM_NATIVE_BRIDGE`, install
+`".[dev,admin,auth]"` into 32-bit Python, then run
+`python -m tools.check_tests native` and
+`python -m unittest research.native_backend_tests`.
+
+Two complete-match PostgreSQL tests use the separate `native-postgres` lane;
+the hosted PostgreSQL job runs the other 78 tests without an image. Run the
+combined lane on Windows x86 with a matching libpq and a disposable PostgreSQL
+host. `python -m tools.check_tests native-postgres` creates a Docker test host;
+for an already prepared disposable host, set `TM_TEST_DATABASE_URL` and add
+`--worker`. This combined lane is currently verified locally, not on hosted CI.
 
 ## Versioning
 
@@ -32,13 +56,13 @@ dispatches Release packages for its created tag. These are GitHub's documented
 
 Only the release-please workflow can write PRs; ordinary test jobs have read-only
 repository permissions. GitHub Actions must be allowed to create pull requests
-in the repository workflow settings. No personal token or additional secrets
-are required by this setup.
+in the repository workflow settings. No personal token is required. Native
+acceptance uses the separately configured image URL secret described above.
 
 Release packages validates that the tag is exactly `v<pyproject version>`, reruns
-the complete Checks workflow on that tag, and publishes only after every check
+the Checks and Native gameplay workflows on that tag, and publishes only after every check
 passes. It attaches the Python wheel, `tmserver-native-win32.zip` containing our
-optional bridge, and `SHA256SUMS`. Original game DLLs, private configuration,
+required bridge, and `SHA256SUMS`. Original game DLLs, private configuration,
 account saves and local logs are not packaged. Nothing is deployed to a server
 or uploaded to PyPI by these workflows.
 

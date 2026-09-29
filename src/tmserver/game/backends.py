@@ -7,7 +7,7 @@ from tmserver.game.rules import BattleResult, GrowthBaseline, GrowthResult
 
 
 class RulesBackend(Protocol):
-    """Required operations; GrowthBackend and TargetBackend are optional capabilities."""
+    """Complete calculation contract; no optional Python fallback."""
 
     def calculate_battle(
         self,
@@ -30,8 +30,6 @@ class RulesBackend(Protocol):
         personality: Personality = Personality(),
     ) -> Move | None: ...
 
-
-class GrowthBackend(Protocol):
     def grow_card(
         self,
         card,
@@ -42,8 +40,8 @@ class GrowthBackend(Protocol):
         x87_precision: int = 64,
     ) -> GrowthResult: ...
 
-
-class TargetBackend(Protocol):
     def choose_target(
         self, candidates, raw_rng: Callable[[], int], *, board_size: int = 16
     ) -> int | None: ...
+
+    def choose_special_move(self, hand, board, active, raw_rng, personality=None) -> Move | None: ...

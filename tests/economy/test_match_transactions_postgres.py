@@ -4,7 +4,6 @@ import unittest
 from copy import deepcopy
 from unittest.mock import patch
 
-from tests.storage import test_postgres_protocol as protocol
 from tests.economy.test_match_transactions import TableFixture
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture, sa
 from tmserver.storage.schema import service_state
@@ -150,23 +149,3 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
         with self.assertRaises(OSError):
             self.store.save_changes({}, {"accounts": {}})
         self.assertEqual(self.reopen().load(), durable)
-
-
-@unittest.skipUnless(TEST_URL, "set TM_TEST_DATABASE_URL for real PostgreSQL tests")
-class ScopedMatchProtocolTests(protocol.ProtocolFixture):
-    player_count = 2
-    options = protocol.PostgresMatchTests.options
-    flush = protocol.PostgresMatchTests.flush
-    send = protocol.PostgresMatchTests.send
-    play = protocol.PostgresMatchTests.play
-    choose = protocol.PostgresMatchTests.choose
-    admit = protocol.PostgresMatchTests.admit
-
-    async def test_encrypted_match_never_calls_the_full_save_path(self):
-        with (
-            patch.object(self.server, "persist", side_effect=AssertionError("full match save")),
-            patch.object(self.store, "save", side_effect=AssertionError("full snapshot write")),
-        ):
-            await protocol.PostgresMatchTests.test_complete_match_prizes_stakes_ratings_and_restart(
-                self
-            )

@@ -1,0 +1,157 @@
+{
+  "provenance": "Captured through original Win32 x86 bridge ABI 2 on 2026-09-29; deterministic corpus previously compared against independent original-instruction oracle. No executable image included.",
+  "groups": {
+    "battles": {
+      "count": 1168,
+      "sha256": "a5da74fbfc7f7748cb2a989c6e0b02e36d5ecd67cc36b18b1f0429d6a482bb49"
+    },
+    "moves": {
+      "count": 256,
+      "sha256": "0dc76e3429a28132105170d4984ed5ca1aabb4da725b471fa82f795a980d6967"
+    },
+    "growth": {
+      "count": 6248,
+      "sha256": "3cbbcf3b482b4cde6bb88a26ad79698aabe8b243139ba2991d303ecc6c30f603"
+    },
+    "targets": {
+      "count": 360,
+      "sha256": "810190cfdfdfc625f2635577b0bde712026b6c14094a30972fbcf0be8a266c9c"
+    }
+  },
+  "samples": {
+    "7": {
+      "battle": {
+        "attacker": {
+          "start": 50,
+          "final": 20,
+          "selector": 1,
+          "multiplier": 1
+        },
+        "defender": {
+          "start": 40,
+          "final": 16,
+          "selector": 4,
+          "multiplier": 1
+        },
+        "raw_draws": [
+          61,
+          17422,
+          15215,
+          7040
+        ]
+      },
+      "move": {
+        "hand_index": 2,
+        "field": 4
+      }
+    },
+    "9": {
+      "battle": {
+        "attacker": {
+          "start": 50,
+          "final": 24,
+          "selector": 1,
+          "multiplier": 1
+        },
+        "defender": {
+          "start": 40,
+          "final": 12,
+          "selector": 4,
+          "multiplier": 1
+        },
+        "raw_draws": [
+          68,
+          6151,
+          18175,
+          22398
+        ]
+      },
+      "move": {
+        "hand_index": 1,
+        "field": 1
+      }
+    },
+    "19": {
+      "battle": {
+        "attacker": {
+          "start": 50,
+          "final": 40,
+          "selector": 1,
+          "multiplier": 1
+        },
+        "defender": {
+          "start": 40,
+          "final": 15,
+          "selector": 4,
+          "multiplier": 1
+        },
+        "raw_draws": [
+          100,
+          15331,
+          209,
+          888
+        ]
+      },
+      "move": {
+        "hand_index": 1,
+        "field": 5
+      }
+    },
+    "21": {
+      "battle": {
+        "attacker": {
+          "start": 50,
+          "final": 18,
+          "selector": 1,
+          "multiplier": 1
+        },
+        "defender": {
+          "start": 40,
+          "final": 11,
+          "selector": 4,
+          "multiplier": 1
+        },
+        "raw_draws": [
+          107,
+          4060,
+          3169,
+          16246
+        ]
+      },
+      "move": {
+        "hand_index": 0,
+        "field": 2
+      }
+    }
+  },
+  "growth": {
+    "0": {
+      "card": {
+        "model": 1,
+        "attack": 50,
+        "kind": 2,
+        "physical": 40,
+        "magical": 30,
+        "points": 10,
+        "arrows": 255,
+        "deck": 255
+      },
+      "sale_value": 62,
+      "changed_field": "kind"
+    },
+    "1": {
+      "card": {
+        "model": 1,
+        "attack": 51,
+        "kind": 0,
+        "physical": 40,
+        "magical": 30,
+        "points": 10,
+        "arrows": 255,
+        "deck": 255
+      },
+      "sale_value": 50,
+      "changed_field": "attack"
+    }
+  }
+}

@@ -23,22 +23,29 @@ three-player menu still needs a native screen check.
 
 Build artifacts and release instructions are in [Checks and releases](docs/CI.md).
 
-Python 3.13 or newer:
+Gameplay requires **32-bit Windows Python 3.13 or newer**, the native bridge,
+and an operator-supplied unpacked TM image. Follow the
+[native setup guide](docs/ORIGINAL_RULES_PROTOTYPE.md) first and set
+`TM_ORIGINAL_IMAGE` and `TM_NATIVE_BRIDGE`. There is no Python rules backend.
+
+With that 32-bit Python:
 
 ```powershell
-python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev]"
+& 'C:/path/to/32-bit/python.exe' -m venv .venv
+.venv/Scripts/python -m pip install -e ".[dev,admin,auth]"
 .venv/Scripts/python -m tools.check_collection
 .venv/Scripts/python -m tools.check_tests portable
+.venv/Scripts/python -m tools.check_tests native
 .venv/Scripts/ruff check src tests tools
 .venv/Scripts/python -m tools.build_wheel
-.venv/Scripts/python -m tools.check_wheel dist/tmserver-0.1.0-py3-none-any.whl
+.venv/Scripts/python -m tools.check_wheel dist/tmserver-0.1.0-py3-none-any.whl --native --admin --auth
 ```
 
-On Linux, use `.venv/bin/python` and `.venv/bin/ruff` instead. Pydantic validates
+Import, schema, storage and other image-free checks can also run on Linux.
+Pydantic validates
 room/event configuration and auction save records; Construct defines the binary
 directory records. Both install with the package. The admin panel, PostgreSQL
-and original-rules emulator remain optional dependencies.
+and authentication remain optional dependencies. There is no emulator dependency.
 
 The portable lane runs without a database. It checks source import boundaries,
 rejects duplicate test IDs and fails on unexpected skips. Its only allowed skip
@@ -53,6 +60,8 @@ then run `python -m tools.check_tests postgres`. It creates a temporary PostgreS
 with no skips allowed, and removes the container and its data afterward. Neither
 lane inherits `TM_DATABASE_URL` or `TM_TEST_DATABASE_URL`. CI runs the portable
 lane on Windows and Linux, and separate PostgreSQL, admin and auth lanes on Linux.
+Gameplay and service-launch tests belong to the `native` lane, which requires
+the external image and 32-bit Windows with `".[dev,admin,auth]"` installed.
 The optional admin lane requires `".[dev,admin]"` and runs with
 `python -m tools.check_tests admin`; it permits no skipped tests.
 
@@ -154,13 +163,12 @@ Build a wheel with `python -m tools.build_wheel`. Runtime data and migrations ar
 tests, research scripts, client binaries, captures and live saves are excluded.
 Historical online reward policies and full native UI parity remain unproved.
 
-An optional [original-code rules prototype](docs/ORIGINAL_RULES_PROTOTYPE.md)
-executes the client's battle and ordinary AI instructions through a native 32-bit
-C++ bridge, with an optional Unicorn backend for comparison. It requires a
-separately supplied unpacked code image. Python remains the default; the explicit
-`--rules-backend native-hybrid` option injects the native routines into ordinary
-and event matches. Special/three-player AI and the match state machine remain
-Python. See the linked guide for required paths, supported hosts and lifetime.
+The required [native rules bridge](docs/ORIGINAL_RULES_PROTOTYPE.md) executes
+the client's battles, growth, target selection and COM decisions, including
+special boards and three players. Python owns the match state machine, board
+effects and generation, transactions and services. The replaced Python
+algorithms and the old emulator have been deleted. See the guide for required
+paths, supported hosts and lifetime.
 
 ## Ownership and load testing
 

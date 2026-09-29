@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.29)
 project(tm_original_rules LANGUAGES CXX)
 if(NOT WIN32 OR NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-    message(FATAL_ERROR "The native rules prototype requires MSVC x86: configure with -A Win32")
+    message(FATAL_ERROR "The native rules bridge requires MSVC x86: configure with -A Win32")
 endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

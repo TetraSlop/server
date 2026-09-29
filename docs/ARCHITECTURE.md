@@ -38,7 +38,7 @@ remain in their economy/ranking owners.
 The optional Starlette Admin listener runs on the same event loop and borrows
 that host. Request-local detached projections are captured before rendering;
 the panel never opens storage or enrolls accounts. `cli.serve` stops HTTP first,
-then profiles and game, before releasing storage and an optional native rules
+then profiles and game, before releasing storage and the required native rules
 context. The base installation never imports the web framework.
 
 The optional auth gateway verifies a provider identity before asking
@@ -58,17 +58,13 @@ remain unchanged until normal collection. Restoration loads event grants before
 audit receipts so it can check their original facts even after collection.
 
 `game.backends.RulesBackend` describes the borrowed calculation dependency.
-The default calls the existing Python functions. A supplied backend calculates
-battles and ordinary two-player AI; the match owner retains random state,
-selection, turn order, rewards and all other transitions. Special and three-player
-AI continue through Python. Ordinary/event table constructors propagate the same
-backend reference. Only the caller closes it, after its services drain. An
-injected calculation failure aborts the affected round without retrying already
-consumed randomness through another backend.
-Optional `GrowthBackend` and `TargetBackend` capabilities let the native ABI 2
-bridge calculate growth and target choice. Older battle/move backends keep the
-Python defaults for those capabilities. Selection happens before invocation;
-an invoked operation never falls back after failure.
+It requires battle, growth, target choice and ordinary/special/three-player COM
+decisions. The CLI validates and opens native ABI 3 before any save or listener,
+then closes it after the services drain. Direct API users can supply an owned
+`NativeRules` context; the default loads the environment-configured process
+context on first calculation. There is no Python algorithm backend or capability
+fallback. Python retains match state and random state. A calculation failure
+aborts the affected round without retrying already consumed randomness.
 Final card snapshots publish together after every player's growth succeeds.
 A late failure therefore cannot expose a partially completed result.
 

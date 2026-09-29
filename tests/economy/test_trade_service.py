@@ -3,7 +3,6 @@
 No sockets, native process launches or file writes. Run with python -B.
 """
 
-import importlib.util
 import json
 import struct
 import sys
@@ -403,23 +402,6 @@ class TradeTests(unittest.TestCase):
         for key in ("left", "right"):
             self.assertEqual(restored.profile_bytes(key), self.economy.profile_bytes(key))
             self.assertEqual(restored.inventory(key), self.economy.inventory(key))
-
-
-@unittest.skipUnless(
-    importlib.util.find_spec("unicorn"),
-    "optional original-x86 receiver verification requires Unicorn",
-)
-class OriginalReceiverTests(TradeTests):
-    """Own test method drives two original clients, not just our own decoder."""
-
-    # Suppress inherited cases: they run once in TradeTests.
-    __unittest_skip__ = False
-
-
-# Only inherit shared setup/helpers in the original receiver class, not test cases.
-for _name in tuple(vars(TradeTests)):
-    if _name.startswith("test_"):
-        setattr(OriginalReceiverTests, _name, None)
 
 
 if __name__ == "__main__":

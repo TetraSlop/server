@@ -15,7 +15,7 @@ from typing import Callable
 
 from tmserver.cards.catalog import Catalog
 from tmserver.game import special_rules as special
-from tmserver.game.ai import Personality, choose_move, choose_target
+from tmserver.game.ai import Personality
 from tmserver.game.backends import RulesBackend
 from tmserver.game.boards import generate_board
 from tmserver.game.departure_rules import next_turn, result_ranking, result_slots
@@ -40,7 +40,8 @@ from tmserver.game.prizes import (
     PrizeLedger,
     choose_computer_prize,
 )
-from tmserver.game.rules import CRTLCG, GrowthBaseline, calculate_battle, grow_card
+from tmserver.game.rules import CRTLCG, GrowthBaseline
+from tmserver.game.original.runtime import NativeRuntime
 from tmserver.protocol.admission import validate_admission
 from tmserver.rankings.stats import PracticeStats
 from tmserver.rooms.metadata import TableMetadataError, table_info
@@ -80,10 +81,10 @@ class MatchService:
         self.mode = mode
         if rules_backend is not None and any(
             not callable(getattr(rules_backend, name, None))
-            for name in ("calculate_battle", "choose_move")
+            for name in ("calculate_battle", "choose_move", "choose_special_move", "grow_card", "choose_target")
         ):
-            raise ValueError("rules backend requires battle and ordinary AI calculations")
-        self.rules_backend = rules_backend
+            raise ValueError("rules backend requires battle, growth, target, ordinary and special AI calculations")
+        self.rules_backend = rules_backend if rules_backend is not None else NativeRuntime()
         self._rules_failure = None
         if type(npc_nickname_id) is not int or not 0 < npc_nickname_id < 1 << 64:
             raise ValueError("NPC nickname identity must be a nonzero uint64")
@@ -1303,14 +1304,15 @@ class MatchService:
                 else player.ai_personality or self.ai_personality
             )
             if any(self.start_board.fields) or self.player_count == 3:
-                move = special.choose_special_move(
+                move = self._backend_call(
+                    "choose_special_move",
                     self.players[self.active].hand,
                     self._effect_cells(),
                     self.active,
                     self.draw,
                     personality,
                 )
-            elif self.rules_backend is not None:
+            else:
                 move = self._backend_call(
                     "choose_move",
                     self.players[self.active].hand,
@@ -1318,10 +1320,6 @@ class MatchService:
                     self.active,
                     self.draw,
                     personality,
-                )
-            else:
-                move = choose_move(
-                    self.players[self.active].hand, self.board, self.active, self.draw, personality
                 )
             if move is None:
                 raise MatchError("active computer has no legal move")
@@ -1405,25 +1403,15 @@ class MatchService:
         self._adopt_effects(special.combo(self._effect_cells(), cell, winner, old_owner))
 
     def battle_values(self, attacker, defender, **effects):
-        result = (
-            calculate_battle(attacker, defender, self.draw, **effects)
-            if self.rules_backend is None
-            else self._backend_call("calculate_battle", attacker, defender, self.draw, **effects)
-        )
+        result = self._backend_call("calculate_battle", attacker, defender, self.draw, **effects)
         return result.attacker.wire(0)[1:], result.defender.wire(0)[1:]
 
     def _choose_target(self):
-        if callable(getattr(self.rules_backend, "choose_target", None)):
-            return self._backend_call(
-                "choose_target", self.targets, self.draw, board_size=self.board_size
-            )
-        return choose_target(self.targets, self.draw, board_size=self.board_size)
+        return self._backend_call("choose_target", self.targets, self.draw, board_size=self.board_size)
 
     def _grow_card(self, card, mode, random_value):
         baseline = self.baselines[card.model]
-        if callable(getattr(self.rules_backend, "grow_card", None)):
-            return self._backend_call("grow_card", card, baseline, mode, random_value)
-        return grow_card(card, baseline, mode, random_value)
+        return self._backend_call("grow_card", card, baseline, mode, random_value)
 
     def _grow_board(self, board_card, mode, random_value):
         result = self._grow_card(board_card.card, mode, random_value)
