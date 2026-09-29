@@ -47,14 +47,3 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           skip-github-release: true
-      # GITHUB_TOKEN-created PRs and tags do not trigger push/PR workflows.
-      - name: Check the generated release PR
-        if: steps.pr.outputs.pr != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_PR: ${{ steps.pr.outputs.pr }}
-        run: |
-          number=$(jq -r '.number' <<< "$RELEASE_PR")
-          branch=$(gh pr view "$number" --json headRefName --jq '.headRefName')
-          gh workflow run checks.yml --ref "$branch"

@@ -23,7 +23,8 @@ from tmserver.network.server import Server
 class LocalPlayTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = self.enterContext(tempfile.TemporaryDirectory())
-        self.root = Path(self.temp)
+        # Windows runners may return an 8.3 alias such as RUNNER~1 in TEMP.
+        self.root = Path(self.temp).resolve()
         (self.root / "examples").mkdir()
         shutil.copyfile(
             ROOT / "examples/auto_rooms.example.json",
