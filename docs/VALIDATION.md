@@ -9,6 +9,12 @@ PostgreSQL tests**, and **2 native PostgreSQL match tests**, covering all
 native preflight to `Play.cmd`'s Python entry point. Test lanes now separate
 image-dependent modules explicitly instead of falling back to Python rules.
 
+Hosted Linux CI caught one additional native dependency after the final launcher
+preflight change: `tests.storage.test_startup_snapshot_validation` also checks
+successful local setup. That module now runs in the native lane. Its seven tests
+and twelve lane-tooling tests pass with the real bridge
+(`results/native-ci-lane-correction.log`); all 1,555 tests remain assigned once.
+
 Native ABI 3 builds with MSVC x86 and passes its image-free layout/guard check.
 Seventeen native acceptance tests verify 8,067 frozen original-code results and
 random-draw sequences, including special and three-player COM decisions. The

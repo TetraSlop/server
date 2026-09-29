@@ -53,5 +53,6 @@
   "tests.rooms.test_three_player_computer_observers",
   "tests.rooms.test_three_player_spectators",
   "tests.storage.test_json_state_store",
+  "tests.storage.test_startup_snapshot_validation",
   "tests.storage.test_writer_lease"
 ]
