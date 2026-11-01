@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
           config-file: release-please-config.json
@@ -40,7 +40,7 @@ jobs:
         run: |
           pending=$(gh release list --limit 30 --json isDraft --jq 'any(.[]; .isDraft)')
           echo "pending=$pending" >> "$GITHUB_OUTPUT"
-      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: pr
         if: steps.release.outputs.release_created != 'true' && steps.draft.outputs.pending == 'false'
         with:
