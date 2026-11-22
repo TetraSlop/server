@@ -71,20 +71,9 @@ class Server:
         store=None,
         rules_backend=None,
     ):
-        if match_player_count not in (2, 3) or (
-            match_player_count == 3 and (match_mode != "versus" or account_count < 3)
-        ):
-            raise ValueError("three-player tables require versus mode and three enabled accounts")
-        if (
-            type(flexible_seats) is not bool
-            or flexible_seats
-            and (
-                match_mode != "versus" or match_player_count != 3 or match_start_fields is not None
-            )
-        ):
-            raise ValueError(
-                "automatic seats require a three-seat versus table with a generated board"
-            )
+        # MatchService checks the seat and board rules; only the account count is ours.
+        if match_player_count == 3 and account_count < 3:
+            raise ValueError("three-player tables require three enabled accounts")
         self.account_specs = account_specs(account_count)
         # Like an injected store, the rules backend is borrowed from the caller.
         self.rules_backend = rules_backend

@@ -121,7 +121,9 @@ class MatchService:
             player_count == 3 and mode != "versus" and not computer_menu
         ):
             raise ValueError("three-player mode requires humans or the original computer menu")
-        if flexible_seats and (mode != "versus" or player_count != 3 or start_fields is not None):
+        if type(flexible_seats) is not bool or (
+            flexible_seats and (mode != "versus" or player_count != 3 or start_fields is not None)
+        ):
             raise ValueError(
                 "automatic seats require a three-seat versus table with a generated board"
             )

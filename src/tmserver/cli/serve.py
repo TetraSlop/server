@@ -185,18 +185,11 @@ def arguments(argv=None):
         parser.error("--admin-actions requires --admin-port")
     if not math.isfinite(args.seconds) or args.seconds < 0:
         parser.error("seconds must be finite and nonnegative")
+    # MatchService checks the seat and board rules; main() reports its ValueError.
     if args.players == 3:
-        if args.mode != "versus":
-            parser.error("three players require --mode versus")
         args.accounts = max(args.accounts, 3)
-    if args.board is not None:
-        if args.flexible_seats:
-            parser.error("automatic seats require a generated board; omit --board")
-        if len(args.board) != (args.players + 2) ** 2:
-            parser.error("board dimensions must match --players")
-        if 18 in args.board:
-            if not args.allow_cbc:
-                parser.error("F18 requires --allow-cbc")
+    if args.board is not None and 18 in args.board and not args.allow_cbc:
+        parser.error("F18 requires --allow-cbc")
     return args
 
 
