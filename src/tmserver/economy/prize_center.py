@@ -178,13 +178,9 @@ class PrizeService:
             named(0x71, 0, header_session, "@CvEnter=/EN=1"),
             self._init(number, token.points, award, lucky_cards),
         )
-        try:
-            token = self.economy.commit_prize(
-                token, credit=0 if award is None else award.top30 + award.lucky + award.rookies
-            )
-        except Exception:
-            self.economy.release_prize(token)
-            raise
+        token = self.economy.commit_prize(
+            token, credit=0 if award is None else award.top30 + award.lucky + award.rookies
+        )
         self._pending_awards.pop(key, None)
         self._last[key] = number
         self._active[key] = _Session(number, token, replies, lucky_cards)
