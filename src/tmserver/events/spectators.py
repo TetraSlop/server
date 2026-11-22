@@ -30,10 +30,7 @@ class EventSpectators:
         if old is not None and old[0] is engine:
             return old
         if old is not None:
-            for peer, (bound, _) in tuple(self.admissions.items()):
-                if bound == target:
-                    self.disconnect(peer)
-                    self._close_later(peer)
+            self._evict_target(target)
         template = self.adapter.server.default_table.spectators
         service = SpectatorService(
             enabled=template.enabled,
@@ -47,6 +44,15 @@ class EventSpectators:
         )
         self.contexts[target] = (engine, service)
         return engine, service
+
+    def _evict(self, peer):
+        self.disconnect(peer)
+        self._close_later(peer)
+
+    def _evict_target(self, target):
+        for peer, (bound, _) in tuple(self.admissions.items()):
+            if bound == target:
+                self._evict(peer)
 
     def _close_later(self, peer):
         # The close path reacquires the event lock; never await it here.
@@ -148,18 +154,14 @@ class EventSpectators:
             self._queue(d.peer, target, engine, service, d.payload)
         for peer, reason in service.take_evicted():
             self.adapter.server.log("event_observer_evicted", reason=reason)
-            self.disconnect(peer)
-            self._close_later(peer)
+            self._evict(peer)
 
     def publish(self, deliveries):
         if self.stopping:
             return
         for target, (engine, service) in tuple(self.contexts.items()):
             if engine.outcome is not None and engine.outcome.aborted:
-                for peer, (bound, _) in tuple(self.admissions.items()):
-                    if bound == target:
-                        self.disconnect(peer)
-                        self._close_later(peer)
+                self._evict_target(target)
                 del self.contexts[target]
                 continue
             current = self.adapter.coordinator.observer_context(target)
@@ -175,8 +177,7 @@ class EventSpectators:
             return
         queue = self.queues.setdefault(peer, deque())
         if len(queue) >= self.adapter.server.default_table.spectators.max_backlog + 3:
-            self.disconnect(peer)
-            self._close_later(peer)
+            self._evict(peer)
             return
         queue.append((target, engine, service, payload))
         if peer not in self.tasks:

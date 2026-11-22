@@ -17,6 +17,8 @@ from tmserver.protocol.commands import Command
 
 _DEFAULT_REGION = b"Local Lobby"
 _DEFAULT_ROOM = b"Local Room"
+_RESERVED_IDS = frozenset(game_id(i) for i in (0, ROOM_RAW, TABLE_RAW, SHOP_RAW, TRADE_RAW))
+_RESERVED_CHANNELS = frozenset(c.upper() for c in (ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL))
 
 
 def _raw(identity):
@@ -91,8 +93,8 @@ class EventRooms:
         self._by_channel = {}
         self._by_owner = {}
         bindings = []
-        used_ids = {game_id(i) for i in (0, ROOM_RAW, TABLE_RAW, SHOP_RAW, TRADE_RAW)}
-        used_channels = {c.upper() for c in (ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL)}
+        used_ids = set(_RESERVED_IDS)
+        used_channels = set(_RESERVED_CHANNELS)
         for config in configs:
             raw = _raw(config.room_id)
             channel = _room_channel(raw)
@@ -145,14 +147,12 @@ class EventRooms:
                 if (existing.table_channel, existing.player_count) == (table_channel, player_count):
                     return []
                 raise EventError("event table is already bound with different settings")
-        if table_id in self._by_service or table_id in {
-            game_id(i) for i in (0, ROOM_RAW, TABLE_RAW, SHOP_RAW, TRADE_RAW)
-        }:
+        if table_id in self._by_service or table_id in _RESERVED_IDS:
             raise EventError("event table identity overlaps a route")
         if (
             not isinstance(table_channel, bytes)
             or table_channel.upper() in self._by_channel
-            or table_channel.upper() in {ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL}
+            or table_channel.upper() in _RESERVED_CHANNELS
         ):
             raise EventError("event table channel overlaps a route")
         # Reuse all original record/channel/capacity validation before assignment.

@@ -198,7 +198,7 @@ def _keys(values, expected):
         raise EventError("unexpected event fields")
 
 
-def _number(value, maximum):
+def _number(value, maximum=0xFFFFFFFF):
     if (
         not isinstance(value, str)
         or not re.fullmatch(r"[0-9]{1,10}", value)
