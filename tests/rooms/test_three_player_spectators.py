@@ -1,28 +1,16 @@
 """Three-player WatchInfo/WatchCard consumers and encrypted observer isolation."""
 
-import asyncio
-import sys
-import tempfile
 import unittest
-from dataclasses import replace
-from pathlib import Path
 
-from tests import ROOT
 from tests.game import test_three_player_integration as versus
-from tests.game.test_match_service import CARDS, select
 from tests.profiles.test_profile_accounts import file_request, transact
-from tests.support.irc import Client
+from tests.rooms.harness import instant_spectators, read_notice, serve
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.network.local_accounts import account_specs
-from tmserver.game.models import Card
-from tmserver.game.match import MatchService
 from tmserver.game.packets import decode, packet
-from tmserver.game.special_rules import Cell
 from tmserver.profiles.service import ProfileServer
 from tmserver.rooms.packets import TABLE_CHANNEL
 from tmserver.cli.serve import arguments
-from tmserver.network.server import Server
-from tmserver.rooms.spectators import SpectatorService, bootstrap
 
 
 class ThreePlayerSpectatorIntegration(unittest.IsolatedAsyncioTestCase):
@@ -32,39 +20,18 @@ class ThreePlayerSpectatorIntegration(unittest.IsolatedAsyncioTestCase):
     round = versus.ThreePlayerIntegrationTests.round
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
-        self.server = Server(
-            state_path=self.path,
+        await serve(
+            self,
             account_count=4,
             match_mode="versus",
             match_player_count=3,
-            spectator=SpectatorService(
-                enabled=True, bootstrap_delay=0, turn_delay=0, action_delay=0, packet_delay=0
-            ),
+            spectator=instant_spectators(),
         )
-        self.port = await self.server.start(0)
-        self.clients = []
-        for nick in self.server.accounts:
-            client = Client()
-            self.clients.append(client)
-            await client.open(self.port, account=nick)
-            self.assertIn(b" 422 ", await client.read())
         self.keys = [c.nick.decode() for c in self.clients[:3]]
         self.target = service_nick(TABLE_RAW)
 
-    async def asyncTearDown(self):
-        for client in self.clients:
-            await client.close()
-        await self.server.stop()
-        self.temp.cleanup()
-
     async def read_watch(self):
-        line = await self.clients[3].read()
-        self.assertTrue(line)
-        self.assertTrue(line.startswith(b":" + self.target + b"!p@local NOTICE "))
-        return line.split(b" :", 1)[1]
+        return await read_notice(self, self.clients[3], self.target)
 
     async def test_fourth_account_watches_full_three_player_round_and_profile(self):
         await self.admit()
@@ -105,7 +72,7 @@ class ThreePlayerSpectatorIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([m.argument for m in live if m.subtype == 10], list(range(15)))
         self.assertFalse(any(m.subtype == 0x1A for m in live))
         self.assertEqual(self.server.economy.profile_bytes(key), before)
-        profile = ProfileServer(Path(self.temp.name) / "profile.jsonl", self.server)
+        profile = ProfileServer(self.state_path.parent / "profile.jsonl", self.server)
         port = await profile.start(0)
         try:
             row = account_specs(4)[key]

@@ -1,17 +1,14 @@
 """Saved personal rules remain separate while an encrypted client changes rooms."""
 
-import asyncio
 import hashlib
 import json
-import tempfile
 import unittest
-from pathlib import Path
 
 from tests import FIXTURES, ROOT
 from tests.rooms import test_room_transitions as transitions
 from tests.protocol.test_admission_identity import native_identity
 from tests.rooms.test_room_rules import settings
-from tests.support.irc import Client
+from tests.rooms.harness import serve
 from tmserver.protocol.identities import GAME_KEY, service_nick
 from tmserver.game.models import DEFAULT_GAME_RULES
 from tmserver.game.packets import decode, packet
@@ -28,29 +25,14 @@ class RoomRuleTransitions(unittest.IsolatedAsyncioTestCase):
     enter = transitions.RoomTransitions.enter
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory()
-        self.path = Path(self.temp.name) / "state.json"
         self.configs = load_ordinary_rooms(
             ROOT / "examples/auto_rooms.example.json"
         )
-        self.server = Server(state_path=self.path, account_count=3, ordinary_rooms=self.configs)
-        self.clients, self.inbox = [], [[], [], []]
-        port = await self.server.start(0)
-        for nick in self.server.accounts:
-            client = Client()
-            self.clients.append(client)
-            await client.open(port, account=nick)
-            self.assertIn(b" 422 ", await client.read())
+        await serve(self, account_count=3, ordinary_rooms=self.configs)
+        self.inbox = [[], [], []]
         self.peers = [self.server.nicks[c.nick] for c in self.clients]
         self.keys = [c.nick.decode() for c in self.clients]
         self.rooms = [t.room for t in self.server.ordinary_tables]
-
-    async def asyncTearDown(self):
-        for client in self.clients:
-            await client.close()
-        await self.server.stop()
-        self.temp.cleanup()
 
     async def query(self, table):
         await self.send(0, table.room.table_id, packet(0x12, body="@Rule="))
@@ -156,7 +138,7 @@ class RoomRuleTransitions(unittest.IsolatedAsyncioTestCase):
         for client in self.clients:
             await client.close()
         await self.server.stop()
-        restored = Server(state_path=self.path, account_count=3, ordinary_rooms=self.configs)
+        restored = Server(state_path=self.state_path, account_count=3, ordinary_rooms=self.configs)
         try:
             self.assertEqual(
                 read_preferences(restored.economy.profile_bytes(self.keys[0]))["Tet"],

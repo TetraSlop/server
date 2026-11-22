@@ -1,6 +1,5 @@
 """Published room rules and Computer permission match the playable services."""
 
-import asyncio
 import hashlib
 import json
 import struct
@@ -26,7 +25,7 @@ from tmserver.profiles.service import ProfileServer
 from tmserver.profiles.packets import checked
 from tmserver.rooms.rules import RoomRules
 from tmserver.network.server import Server
-from tests.support.irc import Client
+from tests.rooms.harness import serve
 
 
 PRESETS = ROOT / "examples/auto_rooms.example.json"
@@ -127,23 +126,13 @@ class RoomPresetConfiguration(unittest.IsolatedAsyncioTestCase):
 
 
 class ComputerDiscoveryIntegration(unittest.IsolatedAsyncioTestCase):
-    asyncTearDown = computer.ComputerMenuIntegrationTests.asyncTearDown
     request = computer.ComputerMenuIntegrationTests.request
     menu = computer.ComputerMenuIntegrationTests.menu
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory()
-        self.state_path = Path(self.temp.name) / "state.json"
-        self.server = Server(
-            state_path=self.state_path,
-            account_count=3,
-            ordinary_rooms=load_ordinary_rooms(PRESETS),
+        (self.client,) = await serve(
+            self, clients=1, account_count=3, ordinary_rooms=load_ordinary_rooms(PRESETS)
         )
-        self.port = await self.server.start(0)
-        self.client = Client()
-        await self.client.open(self.port)
-        self.assertIn(b" 422 ", await self.client.read())
         self.key = self.client.nick.decode()
 
     async def test_human_table_rejects_computer_entry_without_reserving_or_closing_peer(self):
@@ -177,7 +166,7 @@ class ComputerDiscoveryIntegration(unittest.IsolatedAsyncioTestCase):
         return data[:-4]
 
     async def test_encrypted_directory_exposes_computer_and_admits_two_opponents(self):
-        profile = ProfileServer(Path(self.temp.name) / "profile.jsonl", self.server)
+        profile = ProfileServer(self.state_path.parent / "profile.jsonl", self.server)
         port = await profile.start(0)
         try:
             rooms = await self.read_file(port, "b/g/RL000")

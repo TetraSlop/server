@@ -6,13 +6,12 @@ from unittest.mock import patch
 
 from tests import ROOT
 from tests.events.test_event_rooms import presence
-from tests.support.irc import Client
 from tests.protocol.test_admission_identity import native_identity
 from tests.rooms.test_room_rules import settings
 from tests.rooms import test_room_transitions as transitions
+from tests.rooms.harness import serve
 from tmserver.game.packets import decode, packet
 from tmserver.network import dispatch as services
-from tmserver.network.server import Server
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
 from tmserver.protocol.commands import parse
 from tmserver.rooms.config import load_ordinary_rooms
@@ -25,27 +24,17 @@ class OrdinaryRoomPartTests(unittest.IsolatedAsyncioTestCase):
     enter = transitions.RoomTransitions.enter
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.server = Server(
+        await serve(
+            self,
+            clients=2,
             account_count=3,
             ordinary_rooms=load_ordinary_rooms(ROOT / "examples/auto_rooms.example.json"),
         )
-        self.clients, self.inbox = [], [[], []]
-        port = await self.server.start(0)
-        for nick in list(self.server.accounts)[:2]:
-            client = Client()
-            self.clients.append(client)
-            await client.open(port, account=nick)
-            self.assertIn(b" 422 ", await client.read())
+        self.inbox = [[], []]
         self.peers = [self.server.nicks[c.nick] for c in self.clients]
         self.keys = [c.nick.decode() for c in self.clients]
         self.quick = self.server.ordinary_tables[-1]
         self.local = self.server.default_table
-
-    async def asyncTearDown(self):
-        for client in self.clients:
-            await client.close()
-        await self.server.stop()
 
     async def channel(self, side, verb, channel):
         await self.clients[side].send(verb + b" :" + channel)

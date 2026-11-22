@@ -1,23 +1,18 @@
 """Native roster barriers over original code and encrypted room/table routes."""
 
 import asyncio
-import sys
-import tempfile
 import unittest
 from dataclasses import replace
-from pathlib import Path
 
-from tests import ROOT
 from tests.events.test_event_rooms import presence
 from tests.game.test_match_service import NATIVE_SETTINGS
 from tests.rooms.test_ordinary_rooms import EXTRA
-from tests.support.irc import Client
+from tests.rooms.harness import serve
 from tmserver.network import dispatch as services
 from tmserver.protocol.identities import GAME_KEY, service_nick
 from tmserver.game.match import MatchService
 from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import OrdinaryTableConfig
-from tmserver.network.server import Server
 from tmserver.rooms.roster import TableRoster
 from tmserver.protocol.commands import Command, encode, parse
 
@@ -51,30 +46,15 @@ class RosterUnits(unittest.TestCase):
 
 class RosterIntegration(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
         extra = replace(EXTRA, tables=(OrdinaryTableConfig(0x202, b"#ROSTER3", "versus"),))
-        self.server = Server(
-            state_path=Path(self.temp.name) / "state.json",
+        await serve(
+            self,
             match_mode="versus",
             match_player_count=3,
             account_count=4,
             ordinary_rooms=(extra,),
         )
-        self.clients = []
-        port = await self.server.start(0)
-        for nick in self.server.accounts:
-            c = Client()
-            self.clients.append(c)
-            await c.open(port, account=nick)
-            self.assertIn(b" 422 ", await c.read())
         self.peers = [self.server.nicks[c.nick] for c in self.clients]
-
-    async def asyncTearDown(self):
-        for c in self.clients:
-            await c.close()
-        await self.server.stop()
-        self.temp.cleanup()
 
     async def send(self, side, target, payload):
         await self.clients[side].send(

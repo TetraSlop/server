@@ -9,6 +9,7 @@ from unittest.mock import patch
 from tests.events.test_event_rooms import presence
 from tests.rooms.test_match_watchdog_integration import SETTINGS
 from tests.network.test_session_recovery import Writer
+from tests.rooms.harness import local_peer
 from tmserver.economy.packets import named
 from tmserver.game.models import Card
 from tmserver.game.packets import packet
@@ -29,13 +30,8 @@ class TableAbortCleanupTests(unittest.IsolatedAsyncioTestCase):
         self.tables = self.server.ordinary_tables[1:]
         self.room = self.tables[0].room
         self.peers = []
-        for index, nick in enumerate(self.server.accounts):
-            peer = Session(self.server, None, Writer(), index + 1)
-            peer.nick = nick
-            self.server.ensure_account(nick)
-            self.server.trade.bind(peer, nick.decode("ascii"))
-            self.server.nicks[nick] = peer
-            self.server.sessions.add(peer)
+        for nick in self.server.accounts:
+            peer = local_peer(self.server, nick)
             self.peers.append(peer)
             view = self.server.economy.account_view(nick.decode("ascii"))
             await self.tables[0].publish_room(self.room.handle(

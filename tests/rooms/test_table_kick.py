@@ -1,21 +1,15 @@
 """Pre-start member removal through original code and encrypted sessions."""
 
-import asyncio
-import sys
-import tempfile
 import unittest
-from pathlib import Path
 
-from tests import ROOT
 from tests.game import test_three_player_integration as three
 from tests.game import test_versus_integration as versus
 from tests.game.test_match_service import NATIVE_SETTINGS
-from tests.support.irc import Client
+from tests.rooms.harness import serve
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.game.errors import MatchError
 from tmserver.game.match import MatchService
 from tmserver.game.packets import decode, packet
-from tmserver.network.server import Server
 
 
 def make_table():
@@ -103,27 +97,8 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
     round = three.ThreePlayerIntegrationTests.round
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
-        self.server = Server(
-            state_path=self.path, match_mode="versus", match_player_count=3, account_count=4
-        )
-        port = await self.server.start(0)
-        self.clients = []
-        for nick in self.server.accounts:
-            c = Client()
-            self.clients.append(c)
-            await c.open(port, account=nick)
-            self.assertIn(b" 422 ", await c.read())
-        self.all_clients = list(self.clients)
+        await serve(self, match_mode="versus", match_player_count=3, account_count=4)
         self.keys = [c.nick.decode() for c in self.clients]
-
-    async def asyncTearDown(self):
-        for c in self.all_clients:
-            await c.close()
-        await self.server.stop()
-        self.temp.cleanup()
 
     async def send(self, side, payload):
         await self.clients[side].send(b"NOTICE " + service_nick(TABLE_RAW) + b" :" + payload)

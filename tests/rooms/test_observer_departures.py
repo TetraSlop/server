@@ -1,8 +1,6 @@
 """Observer snapshots and skipped turns after opt-in practice departures."""
 
-import sys
 import unittest
-from pathlib import Path
 
 from tests.rooms import test_departure_integration as departures
 from tests.support.irc import Client
@@ -23,11 +21,6 @@ class ObserverDepartureIntegration(unittest.IsolatedAsyncioTestCase):
     finish = departures.DepartureIntegrationTests.finish
     continue_leave = departures.DepartureIntegrationTests.continue_leave
 
-    async def asyncTearDown(self):
-        if hasattr(self, "observer"):
-            await self.observer.close()
-        await departures.DepartureIntegrationTests.asyncTearDown(self)
-
     async def read_watch(self):
         for _ in range(100):
             line = await self.observer.read()
@@ -47,6 +40,7 @@ class ObserverDepartureIntegration(unittest.IsolatedAsyncioTestCase):
         )
         self.observer = Client()
         await self.observer.open(self.port, account=list(self.server.accounts)[3])
+        self.addAsyncCleanup(self.observer.close)
         self.assertIn(b" 422 ", await self.observer.read())
         before = self.server.economy.profile_bytes(self.observer.nick.decode())
         if late:

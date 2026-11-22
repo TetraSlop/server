@@ -9,7 +9,6 @@ from tmserver.protocol.identities import service_nick
 
 class TableDispatchTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = roster.RosterIntegration.asyncSetUp
-    asyncTearDown = roster.RosterIntegration.asyncTearDown
     send = roster.RosterIntegration.send
     drain = roster.RosterIntegration.drain
     table = roster.RosterIntegration.table

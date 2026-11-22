@@ -3,13 +3,11 @@
 import asyncio
 import unittest
 
-from tests.network.test_session_recovery import Writer
+from tests.rooms.harness import local_peer
 from tmserver.game.models import Card
 from tmserver.game.packets import packet
 from tmserver.rooms.watchdog import MatchWatchdog
-from tests.support.irc import ACCOUNTS
 from tmserver.network.server import Server
-from tmserver.network.session import Session
 
 SETTINGS = "@Tet=/bm=0/du=0/st=0/cb=0/ca=0/gs=0/tl=0@Tab=/in=0/lu=100/ll=0/au=300/al=100/co=0/pa=0"
 
@@ -25,13 +23,7 @@ class WatchdogIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.server.stop()
 
     def new_peer(self):
-        peer = Session(self.server, None, Writer(), len(self.server.sessions) + 1)
-        peer.nick = next(iter(ACCOUNTS))
-        self.server.ensure_account(peer.nick)
-        self.server.trade.bind(peer, peer.nick.decode("ascii"))
-        self.server.nicks[peer.nick] = peer
-        self.server.sessions.add(peer)
-        return peer
+        return local_peer(self.server, next(iter(self.server.accounts)))
 
     async def selection(self):
         await self.server.default_table.dispatch_table(self.peer, packet(0x41, 1, body="@GameEN="))

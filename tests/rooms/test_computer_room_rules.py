@@ -1,6 +1,5 @@
 """Configured Computer rooms must be representable by the original menu."""
 
-import asyncio
 import json
 import tempfile
 import unittest
@@ -9,12 +8,11 @@ from pathlib import Path
 from tests import FIXTURES
 from tests.game import test_computer_menu_integration as computer
 from tests.protocol.test_admission_identity import native_identity
-from tests.support.irc import Client
 from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import OrdinaryRoomConfig, OrdinaryTableConfig, load_ordinary_rooms
 from tmserver.rooms.rules import RoomRules
-from tmserver.network.server import Server
 from tests.support.profiles import read_preferences
+from tests.rooms.harness import serve
 
 
 def room(*, mode="versus", rules=None, tables=()):
@@ -61,24 +59,17 @@ class ComputerRoomConfiguration(unittest.TestCase):
 
 class NativeComputerRoomIntegration(unittest.IsolatedAsyncioTestCase):
     request = computer.ComputerMenuIntegrationTests.request
-    asyncTearDown = computer.ComputerMenuIntegrationTests.asyncTearDown
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
         evidence = json.loads(
             (FIXTURES / "computer_room_rules.json").read_text()
         )
         self.case = next(c for c in evidence["cases"] if c["name"] == "fixed_gs0_saved2")
         self.rules = RoomRules(**self.case["preset"])
-        self.temp = tempfile.TemporaryDirectory()
-        self.state_path = Path(self.temp.name) / "state.json"
-        self.server = Server(
-            state_path=self.state_path, ordinary_rooms=(room(mode="computer", rules=self.rules),)
+        (self.client,) = await serve(
+            self, clients=1, ordinary_rooms=(room(mode="computer", rules=self.rules),)
         )
         self.table = self.server.ordinary_tables[1]
-        self.client = Client()
-        await self.client.open(await self.server.start(0))
-        self.assertIn(b" 422 ", await self.client.read())
         self.key = self.client.nick.decode()
         with self.server.commerce.edit_account(self.key) as economy:
             economy.save_table_preferences(self.key, game=self.case["saved_tet"])

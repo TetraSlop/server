@@ -1,48 +1,32 @@
 """Encrypted room migration and rejection across ordinary/event services."""
 
-import asyncio
 import struct
-import sys
-import tempfile
 import unittest
-from dataclasses import replace
-from pathlib import Path
 
-from tests import ROOT
 from tests.events.test_event_rooms import config, presence
 from tests.rooms.test_ordinary_rooms import EXTRA
-from tests.support.irc import Client
+from tests.rooms.harness import serve
 from tmserver.network import dispatch as services
 from tmserver.events.models import EventTableConfig
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
-from tmserver.game.packets import decode, packet
+from tmserver.game.packets import packet
 from tmserver.rooms.config import directory_files
-from tmserver.network.server import Server
 from tmserver.protocol.commands import Command, encode, parse
 
 
 class RoomTransitions(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
         self.cfg = config(match_enabled=True)
         self.second = config("second", 0x1100, name=b"Second Event")
-        self.server = Server(
-            state_path=Path(self.temp.name) / "state.json",
+        await serve(
+            self,
             account_count=3,
             ordinary_rooms=(EXTRA,),
             event_configs=(self.cfg, self.second),
             event_tables=(EventTableConfig("festival", game_id(0x1003), b"#EVTABLE001"),),
             event_clock=lambda: 200,
         )
-        port = await self.server.start(0)
-        self.clients = []
         self.inbox = [[], [], []]
-        for nickname in self.server.accounts:
-            client = Client()
-            self.clients.append(client)
-            await client.open(port, account=nickname)
-            self.assertIn(b" 422 ", await client.read())
         self.peers = [self.server.nicks[c.nick] for c in self.clients]
         self.keys = [c.nick.decode() for c in self.clients]
         self.rooms = [
@@ -50,12 +34,6 @@ class RoomTransitions(unittest.IsolatedAsyncioTestCase):
             *[b.room for b in self.server.event_rooms.rooms],
             self.server.ordinary_tables[1].room,
         ]
-
-    async def asyncTearDown(self):
-        for client in self.clients:
-            await client.close()
-        await self.server.stop()
-        self.temp.cleanup()
 
     async def drain(self, first=0):
         for side in (first, *(i for i in range(len(self.clients)) if i != first)):

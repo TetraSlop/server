@@ -1,8 +1,6 @@
 """Original owner observation choices govern ordinary table watch admission."""
 
-import sys
 import unittest
-from pathlib import Path
 
 from tests.rooms import test_spectator_integration as base
 from tmserver.protocol.identities import player_id
@@ -13,7 +11,6 @@ from tmserver.rooms.packets import TABLE_CHANNEL
 class ObserveDisabledIntegration(unittest.IsolatedAsyncioTestCase):
     observation_rule = 1
     asyncSetUp = base.SpectatorIntegrationTests.asyncSetUp
-    asyncTearDown = base.SpectatorIntegrationTests.asyncTearDown
     player = base.SpectatorIntegrationTests.player
     read_watch = base.SpectatorIntegrationTests.read_watch
 
@@ -48,7 +45,6 @@ class ObserveDisabledIntegration(unittest.IsolatedAsyncioTestCase):
 class ObserveNoCommentsAdmission(unittest.IsolatedAsyncioTestCase):
     observation_rule = 2
     asyncSetUp = base.SpectatorIntegrationTests.asyncSetUp
-    asyncTearDown = base.SpectatorIntegrationTests.asyncTearDown
     player = base.SpectatorIntegrationTests.player
     read_watch = base.SpectatorIntegrationTests.read_watch
     admit_watch = base.SpectatorIntegrationTests.admit_watch

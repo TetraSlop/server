@@ -5,47 +5,25 @@ as human count. Read-only receiver probes checked N3/C0|1|30/G0|0|0|1 at
 viewer levels0/65535; native presentation timing remains unverified.
 """
 
-import asyncio
 import json
-import tempfile
 import unittest
-from pathlib import Path
 
-from tests import ROOT
 from tests.rooms import test_spectator_integration as observers
 from tests.protocol.test_admission_identity import native_identity
-from tests.support.irc import Client
+from tests.rooms.harness import instant_spectators, read_notice, serve
 from tmserver.protocol.identities import TABLE_RAW, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.game.opponents import opponent
 from tmserver.rooms.packets import TABLE_CHANNEL
-from tmserver.network.server import Server
 from tmserver.rooms.spectators import SpectatorService
 
 
 class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
     player = observers.SpectatorIntegrationTests.player
-    asyncTearDown = observers.SpectatorIntegrationTests.asyncTearDown
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.state_path = Path(self.temp.name) / "state.json"
-        self.server = Server(
-            state_path=self.state_path,
-            account_count=3,
-            spectator=SpectatorService(
-                enabled=True, bootstrap_delay=0, turn_delay=0, action_delay=0, packet_delay=0
-            ),
-        )
-        self.port = await self.server.start(0)
+        await serve(self, account_count=3, spectator=instant_spectators())
         self.target = service_nick(TABLE_RAW)
-        self.clients = []
-        for nick in self.server.accounts:
-            client = Client()
-            self.clients.append(client)
-            await client.open(self.port, account=nick)
-            self.assertIn(b" 422 ", await client.read())
         view = self.server.economy.account_view(self.clients[0].nick.decode())
         await self.player(packet(0x41, 0x12, body=native_identity(view, "GameENC")))
         await self.player(packet(1, body=native_identity(view, "Req")))
@@ -57,9 +35,7 @@ class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
         }
 
     async def read_watch(self, client):
-        line = await client.read()
-        self.assertTrue(line.startswith(b":" + self.target + b"!p@local NOTICE "), line)
-        payload = line.split(b" :", 1)[1]
+        payload = await read_notice(self, client, self.target)
         self.assertLessEqual(len(payload), 469)
         return payload
 
