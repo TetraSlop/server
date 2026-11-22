@@ -143,7 +143,8 @@ The play token remains unchanged on renewal; the authenticated owner must match.
 ## Tunnel the original connections
 
 Intercept the native client's game and profile connections locally. For each
-native connection, open one WebSocket to the corresponding returned URL with:
+native connection, open one WebSocket to the corresponding returned URL with
+(browsers authenticate differently; see [Browser clients](#browser-clients)):
 
 ```text
 Authorization: Bearer OPAQUE_RANDOM_CAPABILITY
@@ -203,6 +204,77 @@ Logout revokes the play session, closes local connections and removes remembered
 credentials. Supabase sign-out is separate; use its documented logout API if the
 user also requests provider-session revocation. Never log access/refresh/play
 tokens, tickets, auth headers or callback codes.
+
+## Browser clients
+
+A browser (WebAssembly) client uses the same discovery, Supabase sign-in, tickets,
+play sessions, renewal, logout and stream bytes as the loader. Only two things
+differ, because a browser cannot set headers on a WebSocket upgrade.
+
+**Origin allowlist.** The operator lists the page origins that may call the
+gateway in the auth config:
+
+```json
+{"browser_origins": ["https://play.example.com"]}
+```
+
+Entries are HTTPS origins with no path, at most 16. For development, plain HTTP
+is also accepted for `127.0.0.1` and `localhost` (e.g. `http://localhost:5173`).
+The list is empty by default, which disables browser clients: requests then
+behave exactly as described above, byte for byte. A request with an `Origin`
+that is neither `public_origin` nor on the list is refused with 403
+`invalid_origin`, before any credential is checked.
+
+**CORS.** Requests from a listed origin get CORS responses on every `/v1/auth`
+and `/v1/play` route: preflights for `GET`, `POST` and `DELETE` with
+`Authorization` and `Content-Type`, cached for 600 seconds, and
+`Access-Control-Allow-Origin: <origin>` with `Vary: Origin` on responses,
+errors included. Credentials mode is not supported; send `fetch` with the
+default `credentials: "same-origin"` or `"omit"`. No cookies are used. Requests
+from other origins get no CORS headers.
+
+**Stream authentication.** Open the returned `game` or `profile` URL with
+`new WebSocket(url, "tm-stream-v1")` and `binaryType = "arraybuffer"`. Do not put
+the play token in the URL or subprotocol. The server recognizes a browser stream
+by a listed `Origin` and no `Authorization` header. It accepts the upgrade, then
+waits up to 5 seconds for the first message, which must be a **text** message
+whose content is exactly the play-session token (no `Bearer` prefix, no JSON).
+After that message the stream is the same ordered binary byte stream as the
+loader's; binary stream bytes may follow immediately without waiting for a reply.
+The server sends no acknowledgement. For the game stream, the original server
+greeting is the first thing it sends.
+
+A browser stream that fails after the upgrade closes with code 1008 and one of
+these reasons, which replace the loader's pre-upgrade 403:
+
+| Reason | Meaning |
+| --- | --- |
+| `invalid_token` | The first message was binary, empty or not a token shape. |
+| `invalid_session` | The token is unknown, expired, revoked, or from before a restart. |
+| `channel_busy` | The game stream, or all four profile streams, are already open. |
+| `auth_timeout` | No first message within 5 seconds. |
+| `storage_unavailable` | The server lost storage while waiting. |
+
+A wrong path, a missing `tm-stream-v1` subprotocol, an unlisted Origin, or more
+than 32 browser streams waiting for their first message are still refused before
+the upgrade (HTTP 403, which a browser reports as a failed connection). Once
+authenticated, the close codes in [Failures and logout](#failures-and-logout)
+apply unchanged. The token stays reusable for reconnects until the play session
+expires or is revoked, exactly as with the header.
+
+Why a first message and not a token in the URL: a URL, even a single-use stream
+ticket in one, is written to reverse-proxy and CDN access logs and to browser and
+error-reporting tooling, while a WebSocket message is only ever inside TLS. The
+first message adds no new credential, endpoint or server state; the browser
+already holds the play token it would use to mint tickets. Its cost is a few
+seconds of unauthenticated accepted socket, which the deadline and the 32-stream
+cap bound. The Origin allowlist is the cross-site WebSocket defense: a page on
+another origin cannot open a browser stream at all.
+
+Keep the play token in memory only; never write it, the Supabase tokens or
+tickets to `localStorage`, URLs or logs. Use Supabase's browser PKCE flow with a
+redirect back to the page in place of the loopback callback; allowlist that page's
+redirect URL in Supabase.
 
 ## Loader acceptance
 

@@ -74,6 +74,10 @@ class AuthHttpTests(unittest.IsolatedAsyncioTestCase):
                 return case.identities[token]
 
         self.app = create_app(self.host, self.profile, self.config, FakeVerifier())
+        self.browser = "https://app.example.test"
+        browser_config = AuthConfig(**self.config.model_dump() | {"browser_origins": [self.browser]})
+        self.browser_app = create_app(self.host, self.profile, browser_config, FakeVerifier())
+        self.addCleanup(self.browser_app.state.play_sessions.close)
         self.before, self.disk = deepcopy(self.host.snapshot()), self.store.load()
         for method in ("ensure_account", "persist", "persist_changes", "advance_auctions"):
             self.enterContext(patch.object(self.host, method, side_effect=AssertionError(method)))
@@ -81,12 +85,15 @@ class AuthHttpTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.sessions.close)
         self.now = 100.0
         self.sessions.clock = lambda: self.now
-        self.client = httpx.AsyncClient(
-            base_url=self.origin,
-            transport=httpx.ASGITransport(app=self.app),
-            trust_env=False,
+        self.browser_app.state.play_sessions.clock = lambda: self.now
+        self.client, self.browser_client = (
+            httpx.AsyncClient(
+                base_url=self.origin, transport=httpx.ASGITransport(app=app), trust_env=False
+            )
+            for app in (self.app, self.browser_app)
         )
         self.addAsyncCleanup(self.client.aclose)
+        self.addAsyncCleanup(self.browser_client.aclose)
 
     async def asyncTearDown(self):
         self.assertEqual(self.host.snapshot(), self.before)
@@ -365,3 +372,99 @@ class AuthHttpTests(unittest.IsolatedAsyncioTestCase):
         self.assert_error(response, 503, "storage_unavailable")
         self.assertEqual(len(self.sessions.tickets), 1)
         self.assertEqual(self.sessions.sessions, {})
+
+    def preflight(self, client, origin, path="/v1/play/tickets", method="POST"):
+        return client.options(
+            path,
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": method,
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+
+    async def test_allowlisted_browser_origin_gets_cors_on_config_ticket_and_session_routes(self):
+        page = {"Origin": self.browser}
+        for path, method in (
+            ("/v1/auth/config", "GET"),
+            ("/v1/play/tickets", "POST"),
+            ("/v1/play/sessions", "POST"),
+            ("/v1/play/renew", "POST"),
+            ("/v1/play/session", "DELETE"),
+        ):
+            with self.subTest(path=path):
+                response = await self.preflight(self.browser_client, self.browser, path, method)
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.headers["access-control-allow-origin"], self.browser)
+                self.assertIn(method, response.headers["access-control-allow-methods"])
+                allowed = response.headers["access-control-allow-headers"].lower()
+                self.assertIn("authorization", allowed)
+                self.assertNotIn("access-control-allow-credentials", response.headers)
+        configuration = await self.browser_client.get("/v1/auth/config", headers=page)
+        issued = await self.browser_client.post(
+            "/v1/play/tickets", json={"protocol": 1}, headers=page | {"Authorization": "Bearer one"}
+        )
+        self.assertEqual(issued.status_code, 201, issued.text)
+        redeemed = await self.browser_client.post(
+            "/v1/play/sessions", json={"ticket": issued.json()["ticket"]}, headers=page
+        )
+        self.assertEqual(redeemed.status_code, 201, redeemed.text)
+        replay = await self.browser_client.post(
+            "/v1/play/sessions", json={"ticket": issued.json()["ticket"]}, headers=page
+        )
+        self.assert_error(replay, 401, "invalid_ticket")
+        for response in (configuration, issued, redeemed, replay):
+            self.assertEqual(response.headers["access-control-allow-origin"], self.browser)
+            self.assertIn("Origin", response.headers["vary"])
+
+    async def test_origin_not_on_the_browser_list_gets_no_cors_and_is_refused(self):
+        for client, origin in (
+            (self.browser_client, "https://other.test"),
+            (self.browser_client, "null"),
+            (self.browser_client, "https://app.example.test.other.test"),
+            (self.client, self.browser),  # An empty list keeps browsers out entirely.
+        ):
+            with self.subTest(origin=origin, allowlist=client is self.browser_client):
+                preflight = await self.preflight(client, origin)
+                self.assertEqual(preflight.status_code, 405)
+                self.assertNotIn("access-control-allow-origin", preflight.headers)
+                response = await client.post(
+                    "/v1/play/tickets",
+                    json={"protocol": 1},
+                    headers={"Origin": origin, "Authorization": "Bearer one"},
+                )
+                self.assert_error(response, 403, "invalid_origin")
+                self.assertNotIn("access-control-allow-origin", response.headers)
+        self.assertEqual(self.verify_calls, [])
+        self.assertEqual(self.sessions.tickets, {})
+
+    async def test_loader_requests_are_byte_identical_with_a_browser_allowlist(self):
+        async def exchange(client, method, path, **options):
+            response = await client.request(method, path, **options)
+            return response.status_code, response.headers.multi_items(), response.content
+
+        for method, path, options in (
+            ("GET", "/v1/auth/config", {}),
+            ("GET", "/v1/auth/config", dict(headers={"Origin": self.origin})),
+            ("POST", "/v1/play/tickets", dict(json={"protocol": 1})),
+            ("POST", "/v1/play/tickets", dict(json={"protocol": 2}, headers=self.headers())),
+            ("POST", "/v1/play/tickets", dict(json={"protocol": 1}, headers=self.headers("unlinked"))),
+            ("POST", "/v1/play/sessions", dict(json={"ticket": "x" * 32})),
+            ("POST", "/v1/play/renew", dict(json={"session_token": "x" * 32}, headers=self.headers())),
+            ("DELETE", "/v1/play/session", dict(headers=self.headers("x" * 32))),
+            ("OPTIONS", "/v1/play/tickets", {}),
+            ("GET", "/v1/streams/game", {}),
+        ):
+            with self.subTest(method=method, path=path, options=options):
+                self.assertEqual(
+                    await exchange(self.client, method, path, **options),
+                    await exchange(self.browser_client, method, path, **options),
+                )
+        ticket = {"json": {"protocol": 1}}
+        loader = await self.client.post("/v1/play/tickets", **ticket, headers=self.headers("one"))
+        browser = await self.browser_client.post(
+            "/v1/play/tickets", **ticket, headers=self.headers("two")
+        )
+        self.assertEqual(loader.status_code, browser.status_code)
+        self.assertEqual(loader.headers.multi_items(), browser.headers.multi_items())
+        self.assertEqual(loader.json().keys(), browser.json().keys())

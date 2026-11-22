@@ -5,14 +5,32 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.applications import Starlette
+from starlette.datastructures import Headers
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route, WebSocketRoute
+from starlette.websockets import WebSocketState
 
 from tmserver.accounts.provisioning import AccountCapacityError, import_bindings, provision_identity
 
 from .provider import InvalidToken, ProviderUnavailable, header_value
 from .sessions import AccessError, SESSION_SECONDS, TICKET_SECONDS, Sessions
 from .streams import CHUNK_BYTES, relay
+
+
+BROWSER_AUTH_SECONDS = 5
+MAX_BROWSER_PENDING = 32
+
+
+class BrowserCors(CORSMiddleware):
+    """CORS for listed page origins only; other requests pass through byte for byte."""
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and Headers(scope=scope).get("origin") in self.allow_origins:
+            await super().__call__(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
 
 
 class TicketRequest(BaseModel):
@@ -65,12 +83,14 @@ def create_app(host, profile, config, verifier, *, public_origin=None):
     websocket_origin = origin.replace("https://", "wss://", 1).replace("http://", "ws://", 1)
     import_bindings(host, verifier.issuer, config.account_bindings(host.account_specs))
     sessions = Sessions(lambda subject: host.identities.account(verifier.issuer, subject))
+    browsers = frozenset(config.browser_origins)
+    pending = 0
 
     def boundary(connection):
         if connection.headers.getlist("host") != [authority] or connection.url.query:
             raise AccessError("invalid_origin", 403)
         origins = connection.headers.getlist("origin")
-        if origins and origins != [origin]:
+        if origins and (len(origins) != 1 or origins[0] != origin and origins[0] not in browsers):
             raise AccessError("invalid_origin", 403)
         if host.storage_failed is not None:
             raise AccessError("storage_unavailable", 503)
@@ -153,23 +173,61 @@ def create_app(host, profile, config, verifier, *, public_origin=None):
         sessions.revoke_subject(await verified(request))
         return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
+    def route(websocket):
+        kind = websocket.path_params["kind"]
+        if kind not in ("game", "profile"):
+            raise AccessError("invalid_channel")
+        if websocket.scope.get("subprotocols") != ["tm-stream-v1"]:
+            raise AccessError("invalid_protocol")
+        return kind
+
+    def admit(websocket, token):
+        session = sessions.get(token)
+        kind = route(websocket)
+        if session.streams[kind] >= (1 if kind == "game" else 4):
+            raise AccessError("channel_busy")
+        return session, kind
+
+    async def first_message(websocket):
+        """Browsers cannot set Authorization, so the play token is the first text message."""
+        nonlocal pending
+        route(websocket)
+        if pending >= MAX_BROWSER_PENDING:
+            raise AccessError("capacity", 503)
+        pending += 1
+        try:
+            await websocket.accept(subprotocol="tm-stream-v1")
+            async with asyncio.timeout(BROWSER_AUTH_SECONDS):
+                message = await websocket.receive()
+        except TimeoutError:
+            raise AccessError("auth_timeout") from None
+        finally:
+            pending -= 1
+        return message.get("text")  # None for binary data or a disconnect.
+
     async def stream(websocket):
         try:
             boundary(websocket)
-            session = sessions.get(bearer(websocket))
-            kind = websocket.path_params["kind"]
-            if kind not in ("game", "profile"):
-                raise AccessError("invalid_channel")
-            if websocket.scope.get("subprotocols") != ["tm-stream-v1"]:
-                raise AccessError("invalid_protocol")
-            if session.streams[kind] >= (1 if kind == "game" else 4):
-                raise AccessError("channel_busy")
-        except AccessError:
-            await websocket.close(code=1008)  # Denial before accept becomes HTTP 403.
+            browser = (not websocket.headers.getlist("authorization")
+                       and websocket.headers.get("origin") in browsers)
+            if browser:
+                token = await first_message(websocket)
+                boundary(websocket)  # Storage may have failed during the wait.
+            else:
+                token = bearer(websocket)
+            session, kind = admit(websocket, token)
+        except AccessError as error:
+            # Denial before accept becomes HTTP 403; after a browser accept, a 1008 close.
+            connected = websocket.application_state is WebSocketState.CONNECTED
+            try:
+                await websocket.close(code=1008, reason=error.code if connected else None)
+            except (RuntimeError, OSError):
+                pass  # The browser already went away.
             return
         session.streams[kind] += 1
         try:
-            await websocket.accept(subprotocol="tm-stream-v1")
+            if not browser:
+                await websocket.accept(subprotocol="tm-stream-v1")
             await relay(websocket, host.accept if kind == "game" else profile.handle, session.access)
         finally:
             session.streams[kind] -= 1
@@ -182,6 +240,9 @@ def create_app(host, profile, config, verifier, *, public_origin=None):
         Route("/v1/play/session", endpoint(revoke), methods=["DELETE"]),
         Route("/v1/play/account-session", endpoint(revoke_account), methods=["DELETE"]),
         WebSocketRoute("/v1/streams/{kind}", stream),
-    ])
+    ], middleware=[Middleware(
+        BrowserCors, allow_origins=browsers, allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"], max_age=600,
+    )] if browsers else None)
     app.state.play_sessions = sessions
     return app
