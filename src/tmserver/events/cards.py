@@ -7,7 +7,6 @@ choice: prizes come only from explicit grants. Layout: TetraPackets
 flows/event-cards.md.
 """
 
-import re
 import struct
 from copy import copy
 from dataclasses import dataclass, replace
@@ -18,37 +17,16 @@ from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_records
+from tmserver.events.models import EventError
+from tmserver.events.packets import _id, _keys, _number
 
-
-class EventCardError(EconomyError):
-    pass
-
-
-def _id(value):
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value):
-        raise EventCardError("invalid event grant ID")
-    return value
+EventCardError = EventError
 
 
 def _integer(value, maximum):
     if type(value) is not int or not 0 <= value <= maximum:
         raise EventCardError("invalid event delivery integer")
     return value
-
-
-def _number(value, maximum=0xFFFFFFFF):
-    if (
-        not isinstance(value, str)
-        or not re.fullmatch(r"[0-9]{1,10}", value)
-        or int(value) > maximum
-    ):
-        raise EventCardError("invalid event delivery decimal")
-    return int(value)
-
-
-def _keys(value, expected):
-    if set(value) != set(expected):
-        raise EventCardError("invalid event delivery fields")
 
 
 @dataclass

@@ -327,6 +327,27 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(self.c.finish("festival", old), [])
         self.assertEqual(before, self.c.snapshot("festival"))
 
+    def test_table_exits_reply_and_cancel_admission(self):
+        for subtype, body, reply in (
+            (5, "@GameQT=", packet(0x41, 6, body="@GameQA=/QT=1")),
+            (13, "@GameExit=", packet(0x41, 14, body="@GameEA=/Exit=1")),
+            (15, "@GameNG=", None),
+        ):
+            with self.subTest(subtype=subtype):
+                self.setUp()
+                self.admit("1")
+                self.admit("2")
+                self.c.poll()
+                self.consent("1")
+                self.consent("2")
+                out = self.send("1", packet(0x41, subtype, body=body))
+                if reply is not None:
+                    self.assertEqual((out[0].peer, out[0].payload), ("1", reply))
+                failed = [d.peer for d in out if b"@GameWa=/Error=-1" in d.payload]
+                self.assertEqual(failed, ["1", "2"])
+                self.assertIsNone(self.c.snapshot("festival"))
+                self.assertFalse(self.economy.is_busy("1"))
+
     def test_configuration_collision_and_mode8_rejected_atomically(self):
         rooms = EventRooms(self.host)
         before = rooms.profile_file(0x1000, "b/g/PTL")

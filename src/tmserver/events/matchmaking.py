@@ -27,6 +27,14 @@ from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.protocol.table import channel_exit, viewer_state
 
 
+# Table exits: subtype -> (section, (reply subtype, reply body) or None).
+_EXITS = {
+    5: ("GameQT", (6, "@GameQA=/QT=1")),
+    13: ("GameExit", (14, "@GameEA=/Exit=1")),
+    15: ("GameNG", None),
+}
+
+
 @dataclass
 class _Entry:
     peer: object
@@ -601,8 +609,8 @@ class EventMatchmaking:
             if r.engine.phase == "finished":
                 r.phase = "completed"
             return out
-        if msg.primary == 0x41 and msg.subtype in (5, 13, 15):
-            name = {5: "GameQT", 13: "GameExit", 15: "GameNG"}[msg.subtype]
+        if msg.primary == 0x41 and msg.subtype in _EXITS:
+            name, reply = _EXITS[msg.subtype]
             f = self._section(msg, name)
             if set(f) - ({"ID"} if msg.subtype == 5 else set()):
                 raise EventError("invalid exit fields")
@@ -611,18 +619,8 @@ class EventMatchmaking:
             if r.phase not in ("proposal", "admission", "completed"):
                 return []
             out = []
-            if msg.subtype in (5, 13):
-                out.append(
-                    EventDelivery(
-                        peer,
-                        target,
-                        packet(
-                            0x41,
-                            6 if msg.subtype == 5 else 14,
-                            body="@GameQA=/QT=1" if msg.subtype == 5 else "@GameEA=/Exit=1",
-                        ),
-                    )
-                )
+            if reply is not None:
+                out.append(EventDelivery(peer, target, packet(0x41, reply[0], body=reply[1])))
             return out + self.cancel(event_id, r.epoch)
         if r.phase in ("proposal", "backoff") and msg.primary in (1, 0x41):
             raise EventError("table admission requires accepted proposal")
