@@ -18,7 +18,6 @@ from tmserver.economy.auctions.packets import (
     EXHIBIT_PATH,
     METADATA_PATH,
     PENDING_PATHS,
-    _hex_name,
     _name,
     _number,
     bid_record,
@@ -28,7 +27,7 @@ from tmserver.economy.auctions.packets import (
 from tmserver.cards.catalog import collection_points
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
-from tmserver.economy.packets import card_pages, named, parse_named
+from tmserver.economy.packets import card_pages, check_entry, named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
 from tmserver.protocol.commands import Command, encode_service, parse
 
@@ -291,19 +290,7 @@ class AuctionService:
 
     def _start_collection(self, key, request_session, sections):
         account = self.economy.account_view(key)
-        if set(sections) != {"ShReq"} or set(sections["ShReq"]) != {"NN", "HID", "Dm", "Vol", "CN"}:
-            raise EconomyError("invalid collection ShReq")
-        fields = sections["ShReq"]
-        if (
-            re.fullmatch(r"[0-9A-Fa-f]{16}", fields["NN"]) is None
-            or int(fields["NN"], 16) != account.nn
-        ):
-            raise EconomyError("collection identity differs from authenticated account")
-        if _hex_name(fields["CN"], 16) != account.name:
-            raise EconomyError("collection name differs from authenticated account")
-        _number(fields["HID"])
-        _number(fields["Dm"], 8)
-        _number(fields["Vol"], 16)
+        check_entry(sections, "ShReq", account)
         if key in self._collections:
             raise EconomyError("collection already active; entry is not a replay")
         reservation = self.ledger.reserve_collection(key)

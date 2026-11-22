@@ -39,12 +39,6 @@ def _name(value, limit=16):
     return value
 
 
-def _hex_name(value, limit):
-    if re.fullmatch(r"[0-9a-fA-F]*", value) is None or len(value) % 2:
-        raise EconomyError("invalid hexadecimal name")
-    return _name(bytes.fromhex(value), limit)
-
-
 def actor_record(actor):
     """UI identity/name fields; unknown actor metadata remains explicitly zero."""
     out = bytearray(0x38)

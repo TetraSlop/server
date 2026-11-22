@@ -8,14 +8,13 @@ TetraPackets flows/prize-center.md.
 """
 
 import random
-import re
 from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, replace
 from functools import partial
 
-from tmserver.checks import decimal, exact_keys, hex_bytes, stable_id
+from tmserver.checks import decimal, exact_keys, stable_id
 from tmserver.economy.errors import EconomyError
-from tmserver.economy.packets import named, parse_named
+from tmserver.economy.packets import check_entry, named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
 
 
@@ -24,7 +23,6 @@ PrizeError = EconomyError
 
 _integer = partial(decimal, error=PrizeError, what="Prize Center integer")
 _fields = partial(exact_keys, error=PrizeError, what="Prize Center fields")
-_hex = partial(hex_bytes, error=PrizeError, what="Prize Center string")
 
 
 @dataclass(frozen=True)
@@ -166,19 +164,7 @@ class PrizeService:
     def _entry(self, key, subtype, header_session, sections):
         if subtype != 0:
             raise PrizeError("invalid CvReq subtype")
-        _fields(sections, ("CvReq",))
-        f = sections["CvReq"]
-        _fields(f, ("NN", "HID", "Dm", "Vol", "CN"))
-        view = self.economy.account_view(key)
-        if (
-            not re.fullmatch(r"[0-9A-Fa-f]{16}", f["NN"])
-            or int(f["NN"], 16) != view.nn
-            or _hex(f["CN"], 16) != view.name
-        ):
-            raise PrizeError("CvReq identity differs from authenticated account")
-        _integer(f["HID"])
-        _integer(f["Dm"], 255)
-        _integer(f["Vol"], 65535)
+        check_entry(sections, "CvReq", self.economy.account_view(key))
         current = self._active.get(key)
         if current is not None:
             if current.pending is not None:
