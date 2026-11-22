@@ -6,13 +6,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.support.irc import Client
+from tests import FIXTURES
+from tests.support.irc import ACCOUNTS, Client
 from tests.profiles.test_profile_accounts import file_request, transact
 from tmserver.network.chat import ChatService, Member, relay_text, roster_pages
 from tmserver.protocol.identities import ROOM_RAW, player_id, service_nick
 from tmserver.network.local_accounts import MAX_ACCOUNTS
 from tmserver.game.packets import decode, packet
-from tests.support.irc import ACCOUNTS
 from tmserver.network.server import Server
 from tmserver.profiles.packets import checked
 from tmserver.profiles.service import ProfileServer
@@ -20,40 +20,35 @@ from tmserver.protocol.messages import FRAME_OVERHEAD, MAX_LINE
 from tmserver.protocol.wire import frame_line
 from tmserver.storage.json import JsonStateStore
 
+NATIVE_NAMES = json.loads((FIXTURES / "chat_native_names.json").read_text())
+
+
+def entry(identity):
+    return packet(0x42, 1, body=f"@Chat=/NN={identity:016X}")
+
+
+def enter(service, peer, identity, name, *, claimed=None):
+    claimed = identity if claimed is None else claimed
+    return service.enter(peer, b"group", entry(claimed), identity=identity, name=name)
+
 
 class ChatTests(unittest.TestCase):
     def test_entry_roster_replay_leave_and_identity(self):
         service = ChatService()
-
-        def enter(peer, identity):
-            return service.enter(
-                peer,
-                b"group",
-                packet(0x42, 1, body=f"@Chat=/NN={identity:016X}"),
-                identity=identity,
-                name=peer.encode(),
-            )
-
-        first = enter("Alice", 1)
+        first = enter(service, "Alice", 1, b"Alice")
         self.assertEqual(decode(first[0].payload).sections, {"Chat": {"EN": "1"}})
         self.assertEqual(decode(first[1].payload).sections["Chat"]["Num"], "0|1")
-        second = enter("Bob", 2)
+        second = enter(service, "Bob", 2, b"Bob")
         self.assertEqual(len(second), 3)
         self.assertEqual(decode(second[1].payload).sections["Chat"]["C"], "2")
-        duplicate = enter("Bob", 2)
+        duplicate = enter(service, "Bob", 2, b"Bob")
         self.assertEqual(decode(duplicate[1].payload).sections["Chat"]["C"], "2")
         left = service.leave("Alice")
         self.assertEqual(len(left), 1)
         self.assertEqual(decode(left[0].payload).sections["Chat"]["NN"], "0000000000000002")
         self.assertEqual(decode(left[0].payload).sections["Chat"]["C"], "3")
         with self.assertRaises(ValueError):
-            service.enter(
-                "Eve",
-                b"group",
-                packet(0x42, 1, body="@Chat=/NN=0000000000000002"),
-                identity=3,
-                name=b"Eve",
-            )
+            enter(service, "Eve", 3, b"Eve", claimed=2)
         self.assertEqual(list(service.groups[b"group"]), ["Bob"])
 
     def test_raw_text_and_authenticated_name(self):
@@ -74,12 +69,11 @@ class ChatTests(unittest.TestCase):
     def test_full_account_name_has_bounded_authenticated_presentation(self):
         name = b"ABCDEFGHIJKLMNOP"
         service = ChatService()
-        entry = packet(0x42, 1, body="@Chat=/NN=0000000000000001")
-        first = service.enter("peer", b"group", entry, identity=1, name=name)
+        first = enter(service, "peer", 1, name)
         roster = decode(first[1].payload).sections["Chat"]
         self.assertEqual(bytes.fromhex(roster["CN"]), name[:15])
         self.assertEqual(roster["NN"], "0000000000000001")
-        replay = service.enter("peer", b"group", entry, identity=1, name=name)
+        replay = enter(service, "peer", 1, name)
         self.assertEqual(replay[1].payload, first[1].payload)
         for private in (False, True):
             incoming = packet(
@@ -95,14 +89,13 @@ class ChatTests(unittest.TestCase):
 
     def test_invalid_names_are_rejected_before_truncation(self):
         service = ChatService()
-        entry = packet(0x42, 1, body="@Chat=/NN=0000000000000001")
         prefix = b"GTM0G42000800@Chat=/La=1/Dt=#CHAT#"
         valid_message = prefix + b"Alice\thello"
         controls = bytes(range(32)) + b"\x7f"
         for name in (b"", b"A" * 17, *(b"A" * 15 + bytes((c,)) for c in controls)):
             with self.subTest(name=name):
                 with self.assertRaises(ValueError):
-                    service.enter("peer", b"group", entry, identity=1, name=name)
+                    enter(service, "peer", 1, name)
                 self.assertEqual(service.groups, {})
                 with self.assertRaises(ValueError):
                     relay_text(valid_message, name, private=False)
@@ -116,9 +109,7 @@ class ChatTests(unittest.TestCase):
                 roster_pages([Member("peer", 1, b"\x82\xa0" + bytes((control,)))], 1)
 
     def test_original_non_ascii_name_bytes_survive_roster_and_text(self):
-        fixture = json.loads(
-            (Path(__file__).parents[1] / "fixtures/chat_native_names.json").read_text()
-        )
+        fixture = NATIVE_NAMES
         # Frozen original x86 intake/extraction; no font or transcoding claim.
         roster = fixture["roster"]
         identity = int(roster["identity_hex"], 16)
@@ -127,8 +118,7 @@ class ChatTests(unittest.TestCase):
             name, bytes.fromhex(fixture["presentation"]["cases"][0]["extracted_name_hex"])
         )
         service = ChatService()
-        entry = packet(0x42, 1, body=f"@Chat=/NN={identity:016X}")
-        replies = service.enter("peer", b"group", entry, identity=identity, name=name)
+        replies = enter(service, "peer", identity, name)
         self.assertEqual(
             replies[1].payload,
             b"GTM0G" + roster["input_after_gtm0g"].encode("ascii"),
@@ -139,13 +129,11 @@ class ChatTests(unittest.TestCase):
             b"GTM0G42000800@Chat=/La=1/Dt=#CHAT#\x82\xa0\thello",
         )
         with self.assertRaisesRegex(ValueError, "authenticated account"):
-            service.enter("spoof", b"group", entry, identity=identity + 1, name=name)
+            enter(service, "spoof", identity + 1, name, claimed=identity)
         self.assertEqual(list(service.groups[b"group"]), ["peer"])
 
     def test_original_byte_gate_keeps_existing_16_to_15_byte_truncation(self):
-        fixture = json.loads(
-            (Path(__file__).parents[1] / "fixtures/chat_native_names.json").read_text()
-        )
+        fixture = NATIVE_NAMES
         accepted, rejected = fixture["presentation"]["cases"][1:]
         self.assertTrue(accepted["accepted"])
         self.assertFalse(rejected["accepted"])
@@ -160,14 +148,7 @@ class ChatTests(unittest.TestCase):
             relay_text(incoming, canonical, private=False),
             b"GTM0G42000800@Chat=/La=1/Dt=#CHAT#" + displayed + b"\thello",
         )
-        service = ChatService()
-        replies = service.enter(
-            "peer",
-            b"group",
-            packet(0x42, 1, body="@Chat=/NN=0000000000000001"),
-            identity=1,
-            name=canonical,
-        )
+        replies = enter(ChatService(), "peer", 1, canonical)
         self.assertEqual(
             bytes.fromhex(decode(replies[1].payload).sections["Chat"]["CN"]), displayed
         )
@@ -218,13 +199,7 @@ class ChatTests(unittest.TestCase):
         for index in range(MAX_ACCOUNTS):
             identity, name = index + 1, f"{index:016d}".encode()
             expected.append((f"{identity:016X}", name[:15].hex().upper()))
-            service.enter(
-                index,
-                b"group",
-                packet(0x42, 1, body=f"@Chat=/NN={identity:016X}"),
-                identity=identity,
-                name=name,
-            )
+            enter(service, index, identity, name)
         pages = roster_pages(service.groups[b"group"].values(), 0x7FFFFFFF)
         self.assertEqual(len(pages), 16)
         actual = []

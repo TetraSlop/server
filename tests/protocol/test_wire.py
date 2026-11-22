@@ -1,9 +1,9 @@
 """Round trips for the PlayOnline IRC wire encoders."""
 
-import math
 import os
 import unittest
 
+from tests.support.irc import D, N
 from tmserver.protocol.wire import (
     MD5_IV,
     SqBlowfish,
@@ -17,13 +17,6 @@ from tmserver.protocol.wire import (
     polid_unscramble,
     rsa_wrap_session_key,
 )
-
-
-def _prime128():
-    while True:
-        x = int.from_bytes(os.urandom(16), "big") | 1 << 127 | 1
-        if all(pow(a, x - 1, x) == 1 for a in (2, 3, 5, 7, 11)) and math.gcd(0xFFFF, x - 1) == 1:
-            return x
 
 
 class WireTests(unittest.TestCase):
@@ -52,10 +45,8 @@ class WireTests(unittest.TestCase):
         self.assertNotIn(b"\n", framed[:-1])
 
     def test_rsa_session_key_wrap(self):
-        p, q = _prime128(), _prime128()
-        n, d = p * q, pow(0xFFFF, -1, (p - 1) * (q - 1))
         key = os.urandom(8)
-        wrapped = b64dec(rsa_wrap_session_key(n.to_bytes(32, "little"), key))[:32]
-        block = pow(int.from_bytes(wrapped, "big"), d, n).to_bytes(32, "big")
+        wrapped = b64dec(rsa_wrap_session_key(N.to_bytes(32, "little"), key))[:32]
+        block = pow(int.from_bytes(wrapped, "big"), D, N).to_bytes(32, "big")
         self.assertEqual(block[:2], b"\0\x02")
         self.assertEqual(block[-8:][::-1], key)
