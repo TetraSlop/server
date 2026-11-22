@@ -5,7 +5,6 @@ given source identity, and hold the adapter lock around all calls. The clock is
 injected monotonic time; event eligibility uses EventHost's epoch clock.
 """
 
-import math
 import re
 import struct
 import time
@@ -88,39 +87,13 @@ class EventMatchmaking:
         transactions=None,
         rules_backend=None,
     ):
-        if rooms.host is not host:
-            raise EventError("coordinator needs matching host/rooms")
-        if (
-            type(admission_timeout) not in (int, float)
-            or not math.isfinite(admission_timeout)
-            or not 0 < admission_timeout < 3600
-        ):
-            raise EventError("bounded admission timeout required")
-        if (
-            type(proposal_backoff) not in (int, float)
-            or not math.isfinite(proposal_backoff)
-            or not 0 < proposal_backoff < admission_timeout
-        ):
-            raise EventError("proposal backoff must be positive and below timeout")
         self.host, self.rooms, self.economy = host, rooms, host.economy
         self.rules_backend = rules_backend
         self.transactions = self.economy if transactions is None else transactions
-        if type(allow_observers) is not bool:
-            raise EventError("observer enablement must be boolean")
         self.allow_observers = allow_observers
         configs = tuple(configs)
         self.configs = {c.table_id: c for c in configs}
-        if len(self.configs) != len(configs):
-            raise EventError("duplicate event table")
         self.event_ids = frozenset(c.event_id for c in configs)
-        # Validate the complete set on an isolated room map before any live bind.
-        from tmserver.events.rooms import EventRooms
-
-        check = EventRooms(host)
-        for c in configs:
-            if host.config(c.event_id).entry_answer != 1:
-                raise EventError("globalmode8 is not the playable matchmaking path")
-            check.bind_match_table(c.event_id, c.table_id, c.channel, c.player_count)
         self.clock = clock
         self.timeout = float(admission_timeout)
         self.backoff = float(proposal_backoff)

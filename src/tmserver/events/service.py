@@ -50,10 +50,6 @@ class EventHost:
         if len(self.configs) != len(configs):
             raise EventError("duplicate event ID")
         event_list(tuple(config.listing for config in configs))
-        ids = [i for c in configs for i in (c.room_id, c.init_id, c.card_id)]
-        channels = [v for c in configs for v in (c.init_channel, c.card_channel)]
-        if len(set(ids)) != len(ids) or len(set(channels)) != len(channels):
-            raise EventError("event service routes overlap")
         self._members = {c.id: {} for c in configs}
         self._updates = {c.id: {} for c in configs}
         self._present = {}

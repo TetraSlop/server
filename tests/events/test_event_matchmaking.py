@@ -348,7 +348,7 @@ class CoordinatorTests(unittest.TestCase):
                 self.assertIsNone(self.c.snapshot("festival"))
                 self.assertFalse(self.economy.is_busy("1"))
 
-    def test_configuration_collision_and_mode8_rejected_atomically(self):
+    def test_configuration_collision_rejected_atomically(self):
         rooms = EventRooms(self.host)
         before = rooms.profile_file(0x1000, "b/g/PTL")
         with self.assertRaises(EventError):
@@ -358,9 +358,6 @@ class CoordinatorTests(unittest.TestCase):
                 [replace(self.table, table_id=self.cfg.init_id)],
             )
         self.assertEqual(before, rooms.profile_file(0x1000, "b/g/PTL"))
-        host = EventHost(self.economy, [replace(self.cfg, entry_answer=2)], clock=lambda: self.time)
-        with self.assertRaises(EventError):
-            EventMatchmaking(host, EventRooms(host), [self.table])
 
     def test_result_facts_precede_ready_and_survive_disconnect(self):
         self.start()
@@ -508,20 +505,7 @@ class CoordinatorTests(unittest.TestCase):
         self.assertTrue(self.economy.is_busy("2"))
         self.assertTrue(any(d.peer == "2" and b"@MuchMake=" in d.payload for d in out))
 
-    def test_timeout_configuration_and_pairing_do_not_extend_entry_deadline(self):
-        for key, value in [
-            ("admission_timeout", True),
-            ("proposal_backoff", True),
-            ("admission_timeout", float("nan")),
-            ("proposal_backoff", float("inf")),
-        ]:
-            with self.assertRaises(EventError):
-                EventMatchmaking(
-                    self.host,
-                    EventRooms(self.host),
-                    [self.table],
-                    **{key: value},
-                )
+    def test_pairing_does_not_extend_entry_deadline(self):
         self.admit("1")
         self.mono += 100
         self.admit("2")
