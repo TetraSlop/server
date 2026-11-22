@@ -3,7 +3,11 @@
 import re
 import time
 from copy import copy
+from typing import Annotated
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from tmserver.checks import STABLE_ID
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
 
@@ -24,6 +28,41 @@ from .packets import (
     text,
     time_reply,
 )
+
+
+_SAVED = ConfigDict(strict=True, extra="forbid")
+
+
+class _SavedMember(BaseModel):
+    model_config = _SAVED
+    key: str
+    identity: int
+    name: Annotated[str, Field(pattern=r"\A(?:[0-9a-fA-F]{2}){1,15}\z")]
+    steps: int
+    completed_missions: int
+    eligibility: int
+
+
+class _SavedUpdate(BaseModel):
+    model_config = _SAVED
+    key: str
+    id: Annotated[str, Field(pattern=rf"\A{STABLE_ID}\z")]
+    steps_delta: Annotated[int, Field(ge=0, le=0x7FFFFFFF)]
+    completed_missions: Annotated[int, Field(ge=0, le=0xFFFFFFFF)]
+
+
+class _SavedEvent(BaseModel):
+    model_config = _SAVED
+    id: str
+    configuration: str
+    members: list[_SavedMember]
+    updates: list[_SavedUpdate]
+
+
+class _EventSnapshot(BaseModel):
+    model_config = _SAVED
+    version: Annotated[int, Field(ge=1, le=1)]
+    events: list[_SavedEvent]
 
 
 # Empty, compatible browse files until a tournament is explicitly hosted.
@@ -300,36 +339,33 @@ class EventHost:
         return named(0xD1, subtype, 0, "@EventTime=" + body)
 
     def snapshot(self):
-        return {
-            "version": 1,
-            "events": [
-                {
-                    "id": eid,
-                    "configuration": self.configs[eid].fingerprint(),
-                    "members": [
-                        {
-                            "key": key,
-                            "identity": m.identity,
-                            "name": m.name.hex(),
-                            "steps": m.steps,
-                            "completed_missions": m.completed_missions,
-                            "eligibility": m.eligibility,
-                        }
+        return _EventSnapshot(
+            version=1,
+            events=[
+                _SavedEvent(
+                    id=eid,
+                    configuration=self.configs[eid].fingerprint(),
+                    members=[
+                        _SavedMember(
+                            key=key,
+                            identity=m.identity,
+                            name=m.name.hex(),
+                            steps=m.steps,
+                            completed_missions=m.completed_missions,
+                            eligibility=m.eligibility,
+                        )
                         for key, m in sorted(rows.items())
                     ],
-                    "updates": [
-                        {
-                            "key": key,
-                            "id": uid,
-                            "steps_delta": facts[0],
-                            "completed_missions": facts[1],
-                        }
-                        for (key, uid), facts in sorted(self._updates[eid].items())
+                    updates=[
+                        _SavedUpdate(
+                            key=key, id=uid, steps_delta=delta, completed_missions=missions
+                        )
+                        for (key, uid), (delta, missions) in sorted(self._updates[eid].items())
                     ],
-                }
+                )
                 for eid, rows in sorted(self._members.items())
             ],
-        }
+        ).model_dump()
 
     @classmethod
     def restore(cls, economy, configs=(), snapshot=None, *, clock=time.time):
@@ -337,50 +373,39 @@ class EventHost:
         if snapshot is None:
             return result
         try:
-            _keys(snapshot, ("version", "events"))
-            if snapshot["version"] != 1:
-                raise EconomyError("unsupported event snapshot version")
+            saved = _EventSnapshot.model_validate(snapshot)
             seen = set()
-            for row in snapshot["events"]:
-                _keys(row, ("id", "configuration", "members", "updates"))
-                eid = row["id"]
+            for row in saved.events:
+                eid = row.id
                 config = result.config(eid)
-                if eid in seen or row["configuration"] != config.fingerprint():
+                if eid in seen or row.configuration != config.fingerprint():
                     raise EconomyError("saved event configuration differs")
                 seen.add(eid)
-                for record in row["members"]:
-                    _keys(
-                        record,
-                        ("key", "identity", "name", "steps", "completed_missions", "eligibility"),
-                    )
-                    key = record["key"]
+                for record in row.members:
+                    key = record.key
                     view = economy.account_view(key)
-                    if key in result._members[eid] or record["identity"] != view.nn:
+                    if key in result._members[eid] or record.identity != view.nn:
                         raise EconomyError("saved event member owner differs")
-                    if not isinstance(record["name"], str) or not re.fullmatch(
-                        r"[0-9a-fA-F]{2,30}", record["name"]
-                    ):
-                        raise EconomyError("invalid saved member name")
                     member = EventMember(
-                        record["identity"],
-                        bytes.fromhex(record["name"]),
-                        record["steps"],
-                        record["completed_missions"],
-                        record["eligibility"],
+                        record.identity,
+                        bytes.fromhex(record.name),
+                        record.steps,
+                        record.completed_missions,
+                        record.eligibility,
                     )
                     if member.completed_missions & ~config.mission_mask:
                         raise EconomyError("saved member has disabled mission")
                     result._members[eid][key] = member
+                # The member file codec bounds identities, names and counters.
                 event_members(tuple(result._members[eid].values()))
                 totals = {key: [0, 0] for key in result._members[eid]}
-                for update in row["updates"]:
-                    _keys(update, ("key", "id", "steps_delta", "completed_missions"))
-                    key = update["key"]
-                    identity = (key, _id(update["id"]))
+                for update in row.updates:
+                    key = update.key
+                    identity = (key, update.id)
                     if key not in totals or identity in result._updates[eid]:
                         raise EconomyError("invalid progress update owner/ID")
-                    facts = (integer(update["steps_delta"]), integer(update["completed_missions"]))
-                    if facts[0] > 0x7FFFFFFF or facts[1] & ~config.mission_mask:
+                    facts = (update.steps_delta, update.completed_missions)
+                    if facts[1] & ~config.mission_mask:
                         raise EconomyError("invalid saved progress facts")
                     totals[key][0] += facts[0]
                     totals[key][1] |= facts[1]

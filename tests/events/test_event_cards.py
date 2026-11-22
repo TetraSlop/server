@@ -334,6 +334,55 @@ class EventCardTests(unittest.TestCase):
         with self.assertRaises(EconomyError):
             EventCardService.restore(self.e, self.h, bad)
 
+    def test_restore_rejects_malformed_saved_shapes(self):
+        self.s.grant("a", "event", "grant", cards=[self.card], money=25)
+        self.entry()
+        self.h.update_progress("a", "event", "round-1", steps_delta=2)
+        cards, host = self.s.snapshot(), self.h.snapshot()
+        restore_cards = lambda bad: EventCardService.restore(self.e, self.h, bad)  # noqa: E731
+        restore_host = lambda bad: EventHost.restore(self.e, (self.config,), bad)  # noqa: E731
+        cases = [
+            (cards, restore_cards, (), "version", True),
+            (cards, restore_cards, (), "version", 2),
+            (cards, restore_cards, (), "extra", 0),
+            (cards, restore_cards, ("last_sessions",), "a", 0),
+            (cards, restore_cards, ("last_sessions",), "a", True),
+            (cards, restore_cards, ("grants", 0), "money", 25.0),
+            (cards, restore_cards, ("grants", 0), "card_offset", False),
+            (cards, restore_cards, ("grants", 0), "cards", [[1, 2, 3]]),
+            (cards, restore_cards, ("grants", 0), "extra", 0),
+            (host, restore_host, (), "version", True),
+            (host, restore_host, ("events", 0), "members", None),
+            (host, restore_host, ("events", 0, "members", 0), "name", "6"),
+            (host, restore_host, ("events", 0, "members", 0), "name", "zz"),
+            (host, restore_host, ("events", 0, "members", 0), "steps", True),
+            (host, restore_host, ("events", 0, "members", 0), "extra", 0),
+            (host, restore_host, ("events", 0, "updates", 0), "id", "bad id"),
+            (host, restore_host, ("events", 0, "updates", 0), "steps_delta", 0x80000000),
+            (host, restore_host, ("events", 0, "updates", 0), "completed_missions", -1),
+        ]
+        for saved, restore, path, field, value in cases:
+            bad = copy.deepcopy(saved)
+            target = bad
+            for step in path:
+                target = target[step]
+            target[field] = value
+            with self.subTest(path=path, field=field, value=value):
+                with self.assertRaises(EconomyError):
+                    restore(bad)
+        for saved, restore, path, field in [
+            (cards, restore_cards, ("grants", 0), "money_claimed"),
+            (host, restore_host, ("events", 0, "members", 0), "eligibility"),
+            (host, restore_host, ("events", 0, "updates", 0), "key"),
+        ]:
+            bad = copy.deepcopy(saved)
+            target = bad
+            for step in path:
+                target = target[step]
+            del target[field]
+            with self.subTest(path=path, missing=field), self.assertRaises(EconomyError):
+                restore(bad)
+
 
 if __name__ == "__main__":
     unittest.main()

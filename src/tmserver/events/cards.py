@@ -11,6 +11,9 @@ import struct
 from copy import copy
 from dataclasses import dataclass, replace
 from functools import partial
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from tmserver.cards.catalog import collection_points
 from tmserver.economy.models import MAX_MONEY
@@ -19,9 +22,28 @@ from tmserver.checks import uint
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
-from tmserver.events.packets import _id, _keys
+from tmserver.events.packets import _id
 
 _integer = partial(uint, error=EconomyError, what="event delivery integer")
+_SAVED = ConfigDict(strict=True, extra="forbid")
+
+
+class _SavedGrant(BaseModel):
+    model_config = _SAVED
+    key: str
+    event_id: str
+    id: str
+    cards: list[Annotated[list[int], Field(min_length=8, max_length=8)]]
+    money: int
+    card_offset: int
+    money_claimed: int
+
+
+class _GrantSnapshot(BaseModel):
+    model_config = _SAVED
+    version: Annotated[int, Field(ge=1, le=1)]
+    last_sessions: dict[str, Annotated[int, Field(ge=1, le=255)]]
+    grants: list[_SavedGrant]
 
 
 @dataclass
@@ -276,22 +298,22 @@ class EventCardService:
         self._closed.pop(key, None)
 
     def snapshot(self):
-        return {
-            "version": 1,
-            "last_sessions": dict(self._last),
-            "grants": [
-                {
-                    "key": g.key,
-                    "event_id": g.event_id,
-                    "id": g.id,
-                    "cards": [list(c.full()) for c in g.cards],
-                    "money": g.money,
-                    "card_offset": g.card_offset,
-                    "money_claimed": g.money_claimed,
-                }
+        return _GrantSnapshot(
+            version=1,
+            last_sessions=dict(self._last),
+            grants=[
+                _SavedGrant(
+                    key=g.key,
+                    event_id=g.event_id,
+                    id=g.id,
+                    cards=[list(c.full()) for c in g.cards],
+                    money=g.money,
+                    card_offset=g.card_offset,
+                    money_claimed=g.money_claimed,
+                )
                 for g in self._grants.values()
             ],
-        }
+        ).model_dump()
 
     @classmethod
     def restore(cls, economy, host, snapshot=None):
@@ -299,27 +321,18 @@ class EventCardService:
         if snapshot is None:
             return result
         try:
-            _keys(snapshot, ("version", "last_sessions", "grants"))
-            if snapshot["version"] != 1:
-                raise EconomyError("unsupported event grant snapshot")
-            for key, value in snapshot["last_sessions"].items():
+            saved = _GrantSnapshot.model_validate(snapshot)
+            for key, value in saved.last_sessions.items():
                 economy.account_view(key)
-                _integer(value, 255)
-                if value == 0:
-                    raise EconomyError("invalid saved event session")
                 result._last[key] = value
-            for row in snapshot["grants"]:
-                _keys(
-                    row, ("key", "event_id", "id", "cards", "money", "card_offset", "money_claimed")
-                )
-                cards = tuple(Card(*c) for c in row["cards"])
-                if not result.grant(
-                    row["key"], row["event_id"], row["id"], cards=cards, money=row["money"]
-                ):
+            for row in saved.grants:
+                cards = tuple(Card(*c) for c in row.cards)
+                # grant() checks the ID, the member, the money bound and every card.
+                if not result.grant(row.key, row.event_id, row.id, cards=cards, money=row.money):
                     raise EconomyError("duplicate saved grant")
-                g = result._grants[(row["key"], row["event_id"], row["id"])]
-                g.card_offset = _integer(row["card_offset"], len(cards))
-                g.money_claimed = _integer(row["money_claimed"], g.money)
+                g = result._grants[(row.key, row.event_id, row.id)]
+                g.card_offset = _integer(row.card_offset, len(cards))
+                g.money_claimed = _integer(row.money_claimed, g.money)
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             if isinstance(exc, EconomyError):
                 raise
