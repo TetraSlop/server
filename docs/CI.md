@@ -12,7 +12,7 @@ Packaging checks exact wheel contents before installing in a new environment,
 then starts the installed services and smokes the entry points and admin
 templates.
 
-The **Container image** job builds the Docker image with the GitHub Actions layer
+The first job also builds the Docker image with the GitHub Actions layer
 cache, without pushing it. It then starts `compose.yaml` (PostgreSQL 17, the
 schema upgrade and the server), waits for every service to be healthy, and runs
 `tools/check_container.py`. That script registers a new account with LOGIN and
