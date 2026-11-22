@@ -62,8 +62,8 @@ then profiles and game, before releasing storage. The base installation never im
 
 A loader's LOGIN line arrives on the game listener after the key exchange.
 `Server.login` registers an unknown username through `accounts.provisioning`: it
-assigns a free POL ID whose raw value is also the player ID (polcore sends it as
-GID), and the account, username and scrypt hash commit together through the
+assigns a free POL ID whose raw value, below 2^31, is also the player ID (polcore
+sends it as GID and, signed, in the `<CR>` locator), and the account, username and scrypt hash commit together through the
 existing store. A known username has its saved hash checked off the event loop. It then mints a game password that lives only
 in `account_specs`. The game NICK and the profile digests check that password
 exactly as they check a built-in test account's, so profiles need no separate
