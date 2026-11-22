@@ -8,7 +8,7 @@ from pathlib import Path
 
 from tests.game import test_three_player_integration as versus
 from tmserver.game.packets import decode, packet
-from tmserver.game.ai import DIRECTIONS
+from tmserver.game.special_rules import DIRECTIONS
 from tmserver.network.server import Server
 
 

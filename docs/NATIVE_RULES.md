@@ -88,7 +88,8 @@ records successfully consumed random values, including a partial failed call.
 The CLI owns its context until services drain. Embedding applications may pass a
 `rules_backend=engine` context and retain responsibility for closing it. Direct
 rules entry points use the process-owned native context configured through the
-two environment variables; they never substitute Python formulas.
+two environment variables through `original.runtime.default_rules()`; they never
+substitute Python formulas.
 
 Contexts share a fixed-address image and permit one operation per process at a
 time. Interleaved contexts are supported; concurrent and reentrant calls raise

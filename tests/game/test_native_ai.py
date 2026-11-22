@@ -9,9 +9,8 @@ from tmserver.game.ai import (
     Cell,
     Move,
     Personality,
-    choose_move,
-    choose_target,
 )
+from tmserver.game.original.runtime import default_rules
 
 
 @dataclass(frozen=True)
@@ -42,7 +41,7 @@ class NativeAIPolicyTests(unittest.TestCase):
         for choice in (0, 1, 15, 16, 32767):
             with self.subTest(choice=choice):
                 self.assertEqual(
-                    choose_move((Card(0, 255),), (None,) * 16, 0, Draws([0, 0, 0, 0, 0, choice])),
+                    default_rules().choose_move((Card(0, 255),), (None,) * 16, 0, Draws([0, 0, 0, 0, 0, choice])),
                     Move(0, choice % 16),
                 )
 
@@ -56,18 +55,18 @@ class NativeAIPolicyTests(unittest.TestCase):
         cells[15] = BLOCKED
         board = tuple(cells)
         before = repr((hand, board))
-        move = choose_move(hand, board, 0, Draws([123, 1, 22, 0, 0, 7]))
+        move = default_rules().choose_move(hand, board, 0, Draws([123, 1, 22, 0, 0, 7]))
         self.assertEqual(repr((hand, board)), before)
         changed_stats = tuple(Card(c.model, c.arrows, 255, 3, 255, 255) for c in hand)
-        self.assertEqual(choose_move(changed_stats, board, 0, Draws([123, 1, 22, 0, 0, 7])), move)
+        self.assertEqual(default_rules().choose_move(changed_stats, board, 0, Draws([123, 1, 22, 0, 0, 7])), move)
 
     def test_empty_and_blocked_boundaries_do_not_draw(self):
-        self.assertIsNone(choose_move((), (None,) * 16, 0, Draws([])))
-        self.assertIsNone(choose_move((Card(),), (BLOCKED,) * 16, 0, Draws([])))
-        self.assertIsNone(choose_target((), Draws([])))
+        self.assertIsNone(default_rules().choose_move((), (None,) * 16, 0, Draws([])))
+        self.assertIsNone(default_rules().choose_move((Card(),), (BLOCKED,) * 16, 0, Draws([])))
+        self.assertIsNone(default_rules().choose_target((), Draws([])))
         board = [BLOCKED] * 16
         board[6] = None
-        self.assertEqual(choose_move((Card(),), board, 0, Draws([0] * 6)), Move(0, 6))
+        self.assertEqual(default_rules().choose_move((Card(),), board, 0, Draws([0] * 6)), Move(0, 6))
 
     def test_input_validation(self):
         for value in (-1, 256, True):
@@ -75,7 +74,7 @@ class NativeAIPolicyTests(unittest.TestCase):
                 Personality(score_chance=value)
         for invalid in (-1, 32768, True):
             with self.assertRaises(AIError):
-                choose_move((Card(),), (None,) * 16, 0, Draws([invalid]))
+                default_rules().choose_move((Card(),), (None,) * 16, 0, Draws([invalid]))
         for hand, board, owner in (
             ((Card(0x8009),), (None,) * 16, 0),
             ((Card(),), (None,) * 24, 0),
@@ -83,10 +82,10 @@ class NativeAIPolicyTests(unittest.TestCase):
             ((Card(),) * 6, (None,) * 16, 0),
         ):
             with self.assertRaises(AIError):
-                choose_move(hand, board, owner, Draws([]))
+                default_rules().choose_move(hand, board, owner, Draws([]))
         for targets in ((1, 1), (-1,), (16,), tuple(range(9))):
             with self.assertRaises(AIError):
-                choose_target(targets, Draws([]))
+                default_rules().choose_target(targets, Draws([]))
 
 
 if __name__ == "__main__":

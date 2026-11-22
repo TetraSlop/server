@@ -65,5 +65,3 @@ def decode(payload):
             sections[name] = fields
     return Packet(int(m[1], 16), int(m[3], 16), int(m[4], 16), sections)
 
-
-RULES = "@Tet=/bm=0/du=0/st=0/cb=0/ca=0/gs=1/tl=2@Tab=/in=1/lu=99999/ll=0/au=300/al=100/co=4/pa=0"

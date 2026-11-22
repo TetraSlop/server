@@ -37,17 +37,5 @@ def default_rules():
 class NativeRuntime:
     """Defer loading for import/inspection tools; all calculations require native code."""
 
-    def calculate_battle(self, *args, **kwargs):
-        return default_rules().calculate_battle(*args, **kwargs)
-
-    def grow_card(self, *args, **kwargs):
-        return default_rules().grow_card(*args, **kwargs)
-
-    def choose_move(self, *args, **kwargs):
-        return default_rules().choose_move(*args, **kwargs)
-
-    def choose_special_move(self, *args, **kwargs):
-        return default_rules().choose_special_move(*args, **kwargs)
-
-    def choose_target(self, *args, **kwargs):
-        return default_rules().choose_target(*args, **kwargs)
+    def __getattr__(self, name):
+        return getattr(default_rules(), name)

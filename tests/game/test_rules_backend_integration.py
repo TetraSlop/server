@@ -8,8 +8,8 @@ from tests.events import test_event_multitable as events
 from tests.game.test_rules_backend import recording_backend
 from tests.support.irc import Client
 from tests.rooms import test_ordinary_rooms as ordinary
-from tmserver.game import rules
 from tmserver.game.models import BoardCard
+from tmserver.game.original.runtime import default_rules
 from tmserver.game.packets import packet
 from tmserver.network.server import Server
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
@@ -30,7 +30,7 @@ def failing_battle(match, backend, *, deferred):
         if draw is match.draw:
             calls.append(draw())
             raise RuntimeError("injected failure after native RNG callback")
-        return rules.calculate_battle(attacker, defender, draw, **effects)
+        return default_rules().calculate_battle(attacker, defender, draw, **effects)
 
     backend.calculate_battle.side_effect = calculate
     return calls

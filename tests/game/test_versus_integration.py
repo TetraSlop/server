@@ -194,7 +194,7 @@ class CBCRewardIntegrationTests(unittest.IsolatedAsyncioTestCase):
     start_fields = None
 
     async def cbc_round(self):
-        from tmserver.game.ai import DIRECTIONS
+        from tmserver.game.special_rules import DIRECTIONS
 
         card = self.server.economy.inventory(self.keys[0])[0]
         self.assertNotEqual(card.arrows, 0)

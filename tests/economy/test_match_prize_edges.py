@@ -66,7 +66,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         # original starter hands so deterministic public moves stay reproducible.
         if cbc:
             card = self.server.economy.inventory(self.keys[0])[0]
-            from tmserver.game.ai import DIRECTIONS
+            from tmserver.game.special_rules import DIRECTIONS
 
             direction = next(i for i in range(8) if card.arrows & (1 << i))
             dx, dy = DIRECTIONS[direction]

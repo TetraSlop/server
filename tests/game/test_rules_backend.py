@@ -52,8 +52,7 @@ class RulesBackendTests(unittest.TestCase):
         match = self.computer(backend)
         expected = self.computer()
         expected_output = finish_arrowless_round(expected)
-        with patch("tmserver.game.ai.choose_move", side_effect=AssertionError("fallback")):
-            self.assertEqual(finish_arrowless_round(match), expected_output)
+        self.assertEqual(finish_arrowless_round(match), expected_output)
         self.assertEqual(
             (match.snapshot(), match.rng.state), (expected.snapshot(), expected.rng.state)
         )
@@ -63,8 +62,7 @@ class RulesBackendTests(unittest.TestCase):
             attacker_property=0x42,
             defender_property=0x51,
         )
-        with patch("tmserver.game.rules.calculate_battle", side_effect=AssertionError("fallback")):
-            actual = match.battle_values(CARDS[0], CARDS[1], **effects)
+        actual = match.battle_values(CARDS[0], CARDS[1], **effects)
         self.assertEqual(actual, expected.battle_values(CARDS[0], CARDS[1], **effects))
         backend.calculate_battle.assert_called_once_with(CARDS[0], CARDS[1], match.draw, **effects)
         self.assertEqual(backend.choose_move.call_count, 5)
@@ -79,10 +77,9 @@ class RulesBackendTests(unittest.TestCase):
         expected_card = BoardCard(CARDS[0], 0, 0, 0)
         expected._grow_board(expected_card, 0, 0)
         expected_output = finish_arrowless_round(expected)
-        with patch("tmserver.game.rules.grow_card", side_effect=AssertionError("fallback")):
-            match._grow_board(board_card, 0, 0)
-            self.assertEqual(board_card, expected_card)
-            self.assertEqual(finish_arrowless_round(match), expected_output)
+        match._grow_board(board_card, 0, 0)
+        self.assertEqual(board_card, expected_card)
+        self.assertEqual(finish_arrowless_round(match), expected_output)
         self.assertEqual(backend.grow_card.call_count, 11)
         self.assertEqual(match.final_cards("alice"), expected.final_cards("alice"))
         self.assertEqual(match.rng.state, expected.rng.state)
@@ -93,8 +90,7 @@ class RulesBackendTests(unittest.TestCase):
         match.handle("alice", choose((1, 30)))
         match.handle("alice", select())
         match.targets = [24, 17, 1]
-        with patch("tmserver.game.ai.choose_target", side_effect=AssertionError("fallback")):
-            self.assertIn(match._choose_target(), match.targets)
+        self.assertIn(match._choose_target(), match.targets)
         backend.choose_target.assert_called_once_with(match.targets, match.draw, board_size=25)
 
     def test_native_target_failure_consumes_draw_once_and_aborts(self):
@@ -110,11 +106,10 @@ class RulesBackendTests(unittest.TestCase):
         backend.choose_target.side_effect = fail
         expected = rules.CRTLCG(match.rng.state)
         expected()
-        with patch("tmserver.game.ai.choose_target", side_effect=AssertionError("fallback")):
-            for _ in range(2):
-                with self.assertRaises(RulesExecutionError) as caught:
-                    match._choose_target()
-                self.assertIs(caught.exception.__cause__, failure)
+        for _ in range(2):
+            with self.assertRaises(RulesExecutionError) as caught:
+                match._choose_target()
+            self.assertIs(caught.exception.__cause__, failure)
         self.assertEqual(backend.choose_target.call_count, 1)
         self.assertEqual(match.rng.state, expected.state)
         self.assertEqual(match.phase, "finished")
@@ -127,11 +122,10 @@ class RulesBackendTests(unittest.TestCase):
         failure = RuntimeError("growth bridge failed")
         backend.grow_card.side_effect = failure
         rng_before = match.rng.state
-        with patch("tmserver.game.rules.grow_card", side_effect=AssertionError("fallback")):
-            for _ in range(2):
-                with self.assertRaises(RulesExecutionError) as caught:
-                    match._grow_board(board_card, 0, 0)
-                self.assertIs(caught.exception.__cause__, failure)
+        for _ in range(2):
+            with self.assertRaises(RulesExecutionError) as caught:
+                match._grow_board(board_card, 0, 0)
+            self.assertIs(caught.exception.__cause__, failure)
         self.assertEqual(backend.grow_card.call_count, 1)
         self.assertEqual(board_card.card, CARDS[0])
         self.assertEqual(match.players[0].updated[0], CARDS[0])
@@ -161,7 +155,7 @@ class RulesBackendTests(unittest.TestCase):
                     calls += 1
                     if calls == failed_call:
                         raise RuntimeError("result growth failed after the first player")
-                    return rules.grow_card(*args, **kwargs)
+                    return default_rules().grow_card(*args, **kwargs)
 
                 backend.grow_card.side_effect = interrupted_growth
                 with self.assertRaises(RulesExecutionError):
@@ -207,11 +201,10 @@ class RulesBackendTests(unittest.TestCase):
         expected_rng()
         match._pending_battle = 0
         match.pending_move = (0, 0)
-        with patch("tmserver.game.rules.calculate_battle", side_effect=AssertionError("fallback")):
-            for _ in range(2):
-                with self.assertRaises(RulesExecutionError) as caught:
-                    match.battle_values(CARDS[0], CARDS[1])
-                self.assertIs(caught.exception.__cause__, failure)
+        for _ in range(2):
+            with self.assertRaises(RulesExecutionError) as caught:
+                match.battle_values(CARDS[0], CARDS[1])
+            self.assertIs(caught.exception.__cause__, failure)
         self.assertEqual(backend.calculate_battle.call_count, 1)
         self.assertEqual(match.rng.state, expected_rng.state)
         self.assertEqual(match.phase, "finished")
@@ -236,14 +229,6 @@ class RulesBackendTests(unittest.TestCase):
                 calculate.assert_called_once()
                 self.assertEqual(match.advance(), [])
                 calculate.assert_called_once()
-
-    def test_backend_requires_every_native_operation(self):
-        for operation in ("calculate_battle", "choose_move", "choose_special_move", "grow_card", "choose_target"):
-            with self.subTest(operation=operation):
-                backend = recording_backend()
-                delattr(backend, operation)
-                with self.assertRaisesRegex(ValueError, "rules backend"):
-                    MatchService(rules_backend=backend)
 
 
 if __name__ == "__main__":

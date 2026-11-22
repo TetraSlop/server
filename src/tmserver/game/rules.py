@@ -127,14 +127,3 @@ class GrowthResult:
     sale_value: int
     changed_field: str | None
 
-
-def calculate_battle(attacker, defender, draw, **effects):
-    from tmserver.game.original.runtime import default_rules
-
-    return default_rules().calculate_battle(attacker, defender, draw, **effects)
-
-
-def grow_card(card, baseline, mode, random_value, *, x87_precision=64):
-    from tmserver.game.original.runtime import default_rules
-
-    return default_rules().grow_card(card, baseline, mode, random_value, x87_precision=x87_precision)
