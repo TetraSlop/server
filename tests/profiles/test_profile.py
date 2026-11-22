@@ -11,6 +11,7 @@ from tests import ROOT
 from tests.profiles.test_profile_accounts import KEYS, transact
 from tmserver.protocol import wire
 from tmserver.protocol.identities import SHOP_RAW, game_id
+from tmserver.network.server import Server
 from tmserver.profiles.service import ProfileServer
 from tmserver.profiles.packets import answer, checked, checksum
 from tmserver.network.dispatch import TEACH_DV_ANSWER
@@ -21,8 +22,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
         self.cipher = await asyncio.to_thread(wire.SqBlowfish, b"TMtest01")
         self.iv = 0x123456789ABCDEF0
-        nick = wire.polid_scramble(wire.polid_from_string("EEEEEEEF"))
-        game = SimpleNamespace(nicks={nick: SimpleNamespace(cipher=self.cipher, iv=self.iv)})
+        game = Server()
+        game.nicks[KEYS[0].encode("ascii")] = SimpleNamespace(cipher=self.cipher, iv=self.iv)
         self.server = ProfileServer(Path(self.temp.name) / "traffic.jsonl", game)
         self.port = await self.server.start(0)
 

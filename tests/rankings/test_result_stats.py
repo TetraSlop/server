@@ -8,7 +8,6 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
 
 from tests import ROOT
 from tmserver.cards.model import Card
@@ -16,11 +15,14 @@ from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
 from tmserver.game.original.runtime import default_rules
 from tmserver.game.rules import GrowthBaseline
-from tmserver.profiles.service import SYNTHETIC_ACCOUNTS, ProfileServer
+from tests.support.memory_store import MemoryStore
+from tmserver.network.local_accounts import account_specs
+from tmserver.network.server import Server
+from tmserver.profiles.service import ProfileServer
 from tmserver.rankings.errors import RankingError
 from tmserver.rankings.stats import PracticeStats
 
-
+SYNTHETIC_ACCOUNTS = account_specs()
 
 SEEDED = PracticeStats(
     rating=223,
@@ -348,9 +350,7 @@ class ResultStatsProfileTCPTests(unittest.IsolatedAsyncioTestCase):
         final = SEEDED.next_result(1)
         service.commit_match_growth([(token, cards, cards)], {key: final})
         service = EconomyService.restore(json.loads(json.dumps(service.snapshot())))
-        game = SimpleNamespace(
-            economy=service, nicks={}, ensure_account=lambda nick: nick.decode("ascii")
-        )
+        game = Server(store=MemoryStore(service.snapshot()))
         with tempfile.TemporaryDirectory(dir=(ROOT / "tests")) as directory:
             profile = ProfileServer(Path(directory) / "traffic.jsonl", game)
             try:
@@ -365,6 +365,7 @@ class ResultStatsProfileTCPTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(PracticeStats.from_profile(data[:-4]).count, 29)
             finally:
                 await profile.stop()
+                await game.stop()
 
 
 if __name__ == "__main__":

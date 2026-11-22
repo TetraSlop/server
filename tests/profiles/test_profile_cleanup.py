@@ -6,13 +6,14 @@ import unittest
 from pathlib import Path
 
 from tests.network.test_connection_cleanup import ClosingWriter, FailedCloseWriter
+from tmserver.network.server import Server
 from tmserver.profiles.service import ProfileServer
 
 
 class ProfileCleanupTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.server = ProfileServer(Path(self.temp.name) / "profile.jsonl")
+        self.server = ProfileServer(Path(self.temp.name) / "profile.jsonl", Server())
         self.running = []
 
     async def asyncTearDown(self):

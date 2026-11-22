@@ -11,11 +11,13 @@ from types import SimpleNamespace
 from tests import ROOT
 from tests.support.memory_store import MemoryStore
 from tmserver.protocol import wire
-from tmserver.economy.service import EconomyService
+from tmserver.network.local_accounts import account_specs
+from tmserver.network.server import Server
 from tmserver.protocol.identities import player_id
-from tmserver.profiles.service import MAX_CACHED_CIPHERS, SYNTHETIC_ACCOUNTS, ProfileServer
+from tmserver.profiles.service import MAX_CACHED_CIPHERS, ProfileServer
 from tmserver.profiles.packets import checked, checksum
 
+SYNTHETIC_ACCOUNTS = account_specs()
 KEYS = tuple(SYNTHETIC_ACCOUNTS)
 
 
@@ -103,7 +105,8 @@ class ProfileAccountsTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1.0
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.economy = EconomyService(seed=11)
+        self.game = Server()
+        self.economy = self.game.economy
         self.contexts = tuple(
             (cipher, 0x1020304050607080 + i) for i, cipher in enumerate(self.ciphers)
         )
@@ -115,22 +118,18 @@ class ProfileAccountsTests(unittest.IsolatedAsyncioTestCase):
                 name=(b"Alice", b"Boris")[i],
                 balance=(12345, 54321)[i],
             )
+            self.game.account_keys.add(key)
+            self.game.nicks[key.encode("ascii")] = SimpleNamespace(
+                cipher=self.contexts[i][0], iv=self.contexts[i][1]
+            )
         self.ensured = []
+        ensure_account = self.game.ensure_account
 
-        def ensure_account(nick):
-            key = nick.decode("ascii")
-            self.economy.account_view(key)
-            self.ensured.append(key)
-            return key
+        def ensured(nick, **options):
+            self.ensured.append(nick.decode("ascii"))
+            return ensure_account(nick, **options)
 
-        self.game = SimpleNamespace(
-            economy=self.economy,
-            ensure_account=ensure_account,
-            nicks={
-                key.encode("ascii"): SimpleNamespace(cipher=cipher, iv=iv)
-                for key, (cipher, iv) in zip(KEYS, self.contexts)
-            },
-        )
+        self.game.ensure_account = ensured
         self.server = ProfileServer(Path(self.temp.name) / "traffic.jsonl", self.game)
         self.port = await self.server.start(0)
 
@@ -150,7 +149,6 @@ class ProfileAccountsTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(error, 0)
             self.assertEqual(data, checked(self.economy.profile_bytes(KEYS[i])))
         self.assertNotEqual(results[0][1], results[1][1])
-        self.assertNotIn("U/g/TM0DataFile", self.server.files)
         self.assertEqual((await self.request(0, 3, 0, file_request()))[1], results[0][1])
         self.assertEqual((await self.request(1, 3, 0, file_request()))[1], results[1][1])
 
@@ -241,13 +239,9 @@ class ProfileAccountsTests(unittest.IsolatedAsyncioTestCase):
         for context in contexts[1:]:
             self.assertEqual((await self.request(0, 0, 9, context=context))[0], 0)
 
-    async def test_private_file_fallback_cannot_leak_shared_or_other_account_data(self):
-        self.server.files["U/g/private"] = b"wrong shared source"
-        self.server.account_files[KEYS[0]]["U/g/private"] = b"account zero"
-        self.assertEqual(
-            await self.request(0, 3, 0, file_request("U/g/private")), (0, checked(b"account zero"))
-        )
-        self.assertEqual(await self.request(1, 3, 0, file_request("U/g/private")), (0x7E, b""))
+    async def test_unknown_private_file_is_missing_for_every_account(self):
+        for i in range(2):
+            self.assertEqual(await self.request(i, 3, 0, file_request("U/g/private")), (0x7E, b""))
 
     async def test_storage_failure_prevents_any_further_profile_operations(self):
         self.game.storage_failed = OSError("injected persistence failure")

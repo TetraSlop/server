@@ -201,7 +201,8 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         request = bytearray(0x19C)
         request[0x10:0x20] = b"U/g/TM0DataFile\0"
         struct.pack_into("<II", request, 0x190, 0, 0x3028)
-        data, error = service.dispatch(3, 0, checked(request))
+        key = next(iter(self.server.accounts)).decode()
+        data, error = service.dispatch(3, 0, checked(request), key)
         self.assertEqual(error, 0)
         return data[:-4]
 

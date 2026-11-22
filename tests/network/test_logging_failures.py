@@ -79,14 +79,14 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
                 server, peers = await self.occupied_game()
                 before = server.economy.snapshot()
                 broken = BrokenLog(failure)
-                server.log_file = broken
+                server.log.stream = broken
                 with self.assertLogs(LOGGER, level="ERROR") as logged:
                     await server.stop()
                     await server.stop()
                 self.assertEqual(len(logged.records), 1)
-                self.assertIn(failure, str(server.log_error))
+                self.assertIn(failure, str(server.log.error))
                 self.assertEqual(broken.calls["close"], 1)
-                self.assertIsNone(server.log_file)
+                self.assertIsNone(server.log.stream)
                 self.assertFalse(server.sessions)
                 self.assertTrue(all(peer.closed and peer.writer.closed for peer in peers))
                 self.assertFalse(any(table.match_reservations for table in server.ordinary_tables))
@@ -96,7 +96,7 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
     async def test_cleanup_error_log_cannot_strand_an_already_closed_peers_reservation(self):
         server, peers = await self.occupied_game()
         broken = BrokenLog("flush", "close")
-        server.log_file = broken
+        server.log.stream = broken
         with self.assertLogs(LOGGER, level="ERROR") as logged:
             with patch.object(server.trade, "disconnect", side_effect=ValueError("cleanup fault")):
                 await peers[0].close()
@@ -104,7 +104,7 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
             await server.stop()
         self.assertEqual(len(logged.records), 1)
         self.assertEqual(broken.calls, {"write": 1, "flush": 1, "close": 1})
-        self.assertIn("flush", str(server.log_error))
+        self.assertIn("flush", str(server.log.error))
         self.assertFalse(server.default_table.match_reservations)
         self.assertFalse(server.economy.is_reserved(peers[0].nick.decode()))
         self.assertIsNone(server.storage_failed)
@@ -112,7 +112,7 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
     async def test_connection_error_still_retires_accept_task(self):
         server = Server()
         self.servers.append(server)
-        server.log_file = BrokenLog("write")
+        server.log.stream = BrokenLog("write")
         writer = Writer()
         with self.assertLogs(LOGGER, level="ERROR") as logged:
             with patch.object(Session, "run", AsyncMock(side_effect=ValueError("bad protocol"))):
@@ -125,7 +125,7 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_failed_delivery_still_closes_its_recipient(self):
         server, peers = await self.occupied_game()
-        server.log_file = BrokenLog("flush")
+        server.log.stream = BrokenLog("flush")
         peers[0].writer.fail = True
         with self.assertLogs(LOGGER, level="ERROR") as logged:
             self.assertFalse(await server.deliver(peers[0], b"PING :failure"))
@@ -139,7 +139,7 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
     async def test_game_listener_can_start_and_stop_after_first_log_flush_fails(self):
         server = Server()
         self.servers.append(server)
-        server.log_file = BrokenLog("flush")
+        server.log.stream = BrokenLog("flush")
         with self.assertLogs(LOGGER, level="ERROR") as logged:
             port = await server.start(0)
             self.assertGreater(port, 0)
@@ -152,7 +152,7 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
     async def test_profile_requests_continue_without_retrying_failed_log_io(self):
         for failure in ("open", "write", "flush", "close"):
             with self.subTest(failure=failure):
-                profile = ProfileServer(self.root / (failure + ".jsonl"))
+                profile = ProfileServer(self.root / (failure + ".jsonl"), game := Server())
                 self.servers.append(profile)
                 port = await profile.start(0)
                 broken = BrokenLog(failure)
@@ -166,12 +166,10 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
                         for _ in range(2):
                             error, data = await transact(port, KEYS[0], 3, 0, file_request())
                             self.assertEqual(error, 0)
-                            self.assertEqual(
-                                data, checked(profile.account_files[KEYS[0]]["U/g/TM0DataFile"])
-                            )
+                            self.assertEqual(data, checked(game.economy.profile_bytes(KEYS[0])))
                         self.assertEqual(opened.call_count, 1)
                 self.assertEqual(len(logged.records), 1)
-                self.assertIn(failure, str(profile.log_error))
+                self.assertIn(failure, str(profile.log.error))
                 await profile.stop()
                 self.assertFalse(profile.tasks)
                 self.assertFalse(profile.writers)
@@ -180,9 +178,9 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
     async def test_successful_jsonl_records_keep_the_same_content_and_file_ownership(self):
         game_path, profile_path = self.root / "game.jsonl", self.root / "profile.jsonl"
         game = Server(log_path=game_path)
-        profile = ProfileServer(profile_path)
+        profile = ProfileServer(profile_path, game)
         self.servers.extend((game, profile))
-        stream = game.log_file
+        stream = game.log.stream
         fields = {"name": "Ren\u00e9e", "wire": "00FF", "items": [1, 2]}
         with patch("time.time", return_value=12.5):
             game.log("example", **fields)
@@ -193,12 +191,12 @@ class LoggingFailureTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(stream.closed)
         await game.stop()
         self.assertTrue(stream.closed)
-        self.assertIsNone(game.log_error)
-        self.assertIsNone(profile.log_error)
+        self.assertIsNone(game.log.error)
+        self.assertIsNone(profile.log.error)
 
     async def test_broken_fallback_logger_cannot_interrupt_cleanup_or_state_failure(self):
         server, peers = await self.occupied_game()
-        server.log_file = BrokenLog("flush")
+        server.log.stream = BrokenLog("flush")
         with patch("logging.Logger.error", side_effect=OSError("stderr unavailable")) as report:
             server.log("first")
             server.log("second")

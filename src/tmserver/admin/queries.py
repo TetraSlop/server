@@ -241,7 +241,7 @@ def server_overview(host, *, started_at):
     return dict(
         captured_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         version=revision, uptime_seconds=max(0, int(time.monotonic() - started_at)),
-        storage=storage, diagnostics="Ready" if host.log_error is None else "Logging stopped",
+        storage=storage, diagnostics="Ready" if host.log.error is None else "Logging stopped",
         connected_accounts=sum(not peer.closed for peer in host.nicks.values()),
         accounts=len(host.account_keys), rooms=len(rooms),
         tables=sum(room["tables"] for room in rooms),

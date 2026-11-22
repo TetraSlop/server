@@ -10,7 +10,6 @@ import secrets
 import time
 from collections import deque
 from contextlib import contextmanager
-from pathlib import Path
 
 from tmserver.admin.audit import AdminAudit
 from tmserver.accounts.identities import IdentityRegistry
@@ -22,7 +21,7 @@ from tmserver.profiles.characters import CharacterProfiles
 from tmserver.network.chat import ChatService
 from tmserver.economy.claim_transactions import auction_transaction
 from tmserver.economy.commerce import Commerce
-from tmserver.network.diagnostics import report_failure, write_record
+from tmserver.network.diagnostics import JsonlLog
 from tmserver.economy.service import EconomyService
 from tmserver.events.adapter import EventAdapter
 from tmserver.events.cards import EventCardService
@@ -96,8 +95,7 @@ class Server:
         self.rules_backend = rules_backend
         self.accounts = {key.encode("ascii"): value[1] for key, value in self.account_specs.items()}
         self.connection_limit = max(8, len(self.accounts))
-        self.log_file = None
-        self.log_error = None
+        self.log = JsonlLog("Game")
         self.sessions = set()
         self.tasks = set()
         self.nicks = {}
@@ -223,7 +221,8 @@ class Server:
         self.trade_router = TradeRouter(self.trade, self.trade_busy)
         # Validate the full host before acquiring its log. An unavailable log
         # must still fail before startup recovery changes the durable save.
-        self.log_file = Path(log_path).open("a", encoding="utf-8") if log_path else None
+        self.log = JsonlLog("Game", log_path)
+        self.log.open()
         # Interrupted rewards use the mapped returned-card collection path;
         # recovery is durably complete before either listener can be started.
         try:
@@ -232,7 +231,7 @@ class Server:
             if recovered:
                 self.persist()
         except BaseException:
-            self._close_log()
+            self.log.close()
             raise
 
     def trade_busy(self, peer):
@@ -453,16 +452,6 @@ class Server:
             await peer.close()
             return False
 
-    def log(self, event, **fields):
-        if self.log_file is None or self.log_error is not None:
-            return
-        record = {"time": time.time(), "event": event, **fields}
-        try:
-            write_record(self.log_file, record)
-        except OSError as error:
-            self.log_error = error
-            report_failure("Game", error)
-
     async def start(self, port=51241):
         if self.storage_failed is not None:
             raise OSError("restart the server after correcting state storage")
@@ -544,14 +533,4 @@ class Server:
             await asyncio.gather(*list(self.tasks), return_exceptions=True)
         if self.room_task is not None:
             await self.room_task
-        self._close_log()
-
-    def _close_log(self):
-        stream, self.log_file = self.log_file, None
-        if stream is not None:
-            try:
-                stream.close()
-            except OSError as error:
-                if self.log_error is None:
-                    self.log_error = error
-                    report_failure("Game", error)
+        self.log.close()

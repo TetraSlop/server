@@ -20,35 +20,23 @@ import hashlib
 import hmac
 import secrets
 import struct
-import time
-from pathlib import Path
 
 from tmserver.protocol import wire
-from tmserver.network.diagnostics import report_failure, write_record
-from tmserver.protocol.identities import player_id as game_player_id
-from tmserver.network.local_accounts import account_specs, display_name
+from tmserver.network.diagnostics import JsonlLog
 from tmserver.profiles.location import FileOwner
 from tmserver.profiles.packets import answer, checked, checksum
-from tmserver.rooms.packets import directory_files
 
-# These are the default two local fixtures. Keep the profile module
-# independent of server's import graph; never accept arbitrary production IDs.
-SYNTHETIC_ACCOUNTS = account_specs()
-DEFAULT_ACCOUNT = next(iter(SYNTHETIC_ACCOUNTS))
 MAX_CACHED_CIPHERS = 2  # Per account; the active IRC key is an extra candidate.
 
 
 class ProfileServer:
-    def __init__(self, log_path, game_server=None):
-        self.accounts = getattr(game_server, "account_specs", SYNTHETIC_ACCOUNTS)
-        self.log_path = Path(log_path)
-        self.log_error = None
+    def __init__(self, log_path, game_server):
+        self.game_server = game_server
+        self.accounts = game_server.account_specs
+        self.log = JsonlLog("Profile", log_path, keep_open=False)
         self.listener = None
         self.tasks = set()
         self.writers = set()
-        self.game_server = game_server
-        self.files = directory_files()
-        self.account_files = {}
         self.profile_ciphers = {}
         self.statuses = {}
         for key in self.accounts:
@@ -57,35 +45,13 @@ class ProfileServer:
     def _account(self, account_key):
         if account_key not in self.accounts:
             raise ValueError("unknown profile account")
-        if account_key in self.statuses:
-            return self.accounts[account_key]
-        _, _, player_id = self.accounts[account_key]
-        # Synthetic player record; most fields are not mapped yet. The leading
-        # 300 matches the value written by TM 0x10114e87; its meaning is unproven.
-        player = bytearray(0x3028)
-        struct.pack_into("<I", player, 0, 300)
-        player[0x3B] = 1  # Existing local test player: Warriors Guild (TM 0x1014c871).
-        struct.pack_into("<IQ", player, 4, player_id, game_player_id(account_key.encode("ascii")))
-        name = display_name(player_id)[:16]
-        player[0x10 : 0x10 + len(name)] = name
-        self.account_files[account_key] = {"U/g/TM0DataFile": bytes(player)}
-        self.profile_ciphers[account_key] = []
-        status = bytearray(0x7C)
-        status[3] = 1
-        status[4] = 1  # Viewer before the game changes ContentsClass to 2.
-        status[6] = 1  # Online, active handle zero.
-        self.statuses[account_key] = status
+        if account_key not in self.statuses:
+            status = bytearray(0x7C)
+            status[3] = 1
+            status[4] = 1  # Viewer before the game changes ContentsClass to 2.
+            status[6] = 1  # Online, active handle zero.
+            self.statuses[account_key] = status
         return self.accounts[account_key]
-
-    def log(self, event, **details):
-        if self.log_error is not None:
-            return
-        try:
-            with self.log_path.open("a", encoding="utf-8") as stream:
-                write_record(stream, dict(time=time.time(), event=event, **details))
-        except OSError as error:
-            self.log_error = error
-            report_failure("Profile", error)
 
     async def start(self, port=51220):
         self.listener = await asyncio.start_server(self.handle, "127.0.0.1", port)
@@ -103,39 +69,38 @@ class ProfileServer:
             await self.listener.wait_closed()
 
     def _local_accounts(self):
-        identities = getattr(self.game_server, "identities", None)
-        return {key: spec for key, spec in self.accounts.items()
-                if identities is None or not identities.owns(key)}
+        owns = self.game_server.identities.owns
+        return {key: spec for key, spec in self.accounts.items() if not owns(key)}
 
     def _identity(self, account_key):
-        account_id, _, player_id = self._account(account_key)
-        name = display_name(player_id)
-        if self.game_server is not None and hasattr(self.game_server, "economy"):
-            self.game_server.ensure_account(account_key.encode("ascii"))
-            view = self.game_server.economy.account_view(account_key)
-            name, player_id = view.name, view.player_id
+        account_id, _, _ = self._account(account_key)
+        self.game_server.ensure_account(account_key.encode("ascii"))
+        view = self.game_server.economy.account_view(account_key)
         # Generic profile handles contain the raw POL identity. TM0DataFile's
         # separate game-domain identity comes directly from the economy save.
-        return wire.polid_from_string(account_id.decode("ascii")), player_id, name[:16]
+        return wire.polid_from_string(account_id), view.player_id, view.name[:16]
+
+    def _cipher_cache(self, key, access):
+        # Gateway streams keep their history on the play session, never in the shared cache.
+        return (
+            self.profile_ciphers.setdefault(key, []) if access is None else access.profile_ciphers
+        )
 
     def _cipher_candidates(self, access=None):
         """At most three candidates per configured authenticated IRC account."""
         for key in self._local_accounts() if access is None else (access.account_key,):
+            nick = key.encode("ascii")
+            session = access.game if access is not None else self.game_server.nicks.get(nick)
+            if (
+                access is not None
+                and session is not None
+                and (session.closed or session.nick != nick)
+            ):
+                session = None
             candidates = []
-            if access is not None or self.game_server is not None:
-                session = (
-                    access.game
-                    if access is not None
-                    else self.game_server.nicks.get(key.encode("ascii"))
-                )
-                if access is not None and (
-                    session is None or session.closed or session.nick != key.encode("ascii")
-                ):
-                    session = None
-                if session is not None and getattr(session, "cipher", None) is not None:
-                    candidates.append((session.cipher, session.iv))
-            cached = self.profile_ciphers.get(key, ()) if access is None else access.profile_ciphers
-            for cipher, iv in cached:
+            if session is not None and getattr(session, "cipher", None) is not None:
+                candidates.append((session.cipher, session.iv))
+            for cipher, iv in self._cipher_cache(key, access):
                 if not any(cipher is old and iv == old_iv for old, old_iv in candidates):
                     candidates.append((cipher, iv))
             for cipher, iv in candidates:
@@ -143,13 +108,9 @@ class ProfileServer:
 
     def _remember_cipher(self, key, cipher, iv, access=None):
         # Only nonce-authenticated profile contexts survive IRC reconnects.
-        previous = self.profile_ciphers[key] if access is None else access.profile_ciphers
-        cached = [(old, old_iv) for old, old_iv in previous if old is not cipher or old_iv != iv]
-        contexts = [(cipher, iv)] + cached[: MAX_CACHED_CIPHERS - 1]
-        if access is None:
-            self.profile_ciphers[key] = contexts
-        else:
-            access.profile_ciphers = contexts
+        cache = self._cipher_cache(key, access)
+        older = [(old, old_iv) for old, old_iv in cache if old is not cipher or old_iv != iv]
+        cache[:] = [(cipher, iv), *older][:MAX_CACHED_CIPHERS]
 
     def _authenticate(self, request, nonce, encrypted, access=None):
         accounts = self._local_accounts()
@@ -173,12 +134,10 @@ class ProfileServer:
                     return key, plain, (cipher, iv)
         return None
 
-    def dispatch(self, cmd, sub, body, account_key=None):
-        if getattr(self.game_server, "storage_failed", None) is not None:
+    def dispatch(self, cmd, sub, body, account_key):
+        """Serve one request for the account proven by the complete nonce authentication."""
+        if self.game_server.storage_failed is not None:
             raise ValueError("state storage failed; restart is required")
-        # Legacy unit helpers are trusted direct calls. Network callers MUST
-        # supply the identity proven by the complete nonce authentication.
-        account_key = DEFAULT_ACCOUNT if account_key is None else account_key
         self._account(account_key)
         status = self.statuses[account_key]
         op = cmd, sub
@@ -222,39 +181,18 @@ class ProfileServer:
                 name = name[2:]
             self.log("file_request", account=account_key, operation=sub, name=name, body=body.hex())
             if sub == 0 and len(body) == 0x1A0:
-                provider = getattr(self.game_server, "profile_file", None)
                 owner = FileOwner.decode(struct.unpack_from("<Q", body, 8)[0])
-                supplied = (
-                    provider(account_key, name, owner=owner) if provider is not None else None
-                )
-                if (
-                    name == "U/g/TM0DataFile"
-                    and self.game_server is not None
-                    and hasattr(self.game_server, "economy")
-                ):
+                if name == "U/g/TM0DataFile":
                     self.game_server.ensure_account(account_key.encode("ascii"))
                     data = self.game_server.economy.profile_bytes(account_key)
-                elif supplied is not None:
-                    data = supplied
-                elif (
-                    name == "b/g/PTL"
-                    and provider is None
-                    and self.game_server is not None
-                    and hasattr(self.game_server, "room")
-                ):
-                    data = self.game_server.room.snapshot()
-                elif name.startswith("U/"):
-                    data = self.account_files[account_key].get(name)
                 else:
-                    data = self.files.get(name)
+                    data = self.game_server.profile_file(account_key, name, owner=owner)
                 if data is None:
                     return b"", 0x7E
                 offset, maximum = struct.unpack_from("<II", body, 0x190)
                 return checked(data[offset : offset + min(maximum, 1024 * 1024)]), 0
             if sub == 2 and len(body) == 0x198:
-                delete = getattr(self.game_server, "delete_profile_file", None)
-                if delete is not None:
-                    delete(account_key, name)
+                self.game_server.delete_profile_file(account_key, name)
                 # Common344/10027250 completes on ReadAns only; no result body.
                 return b"", 0
             if sub == 3 and len(body) == 0x1A0:

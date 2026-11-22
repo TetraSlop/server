@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 from tests.support.memory_store import MemoryStore
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.economy.result_rewards import ResultRewardService
+from tmserver.network.diagnostics import JsonlLog
 from tmserver.network.server import Server
 from tmserver.rankings.stats import PracticeStats
 
@@ -117,12 +118,12 @@ class StartupLoggingTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(Path, "open", opened),
             patch.object(MatchEconomy, "recover_all", side_effect=failure),
-            patch("tmserver.network.server.report_failure") as report,
+            patch.object(JsonlLog, "fail") as report,
         ):
             error = self.failed_start()
         self.assertIs(error, failure)
         stream.close.assert_called_once()
-        report.assert_called_once_with("Game", stream.close.side_effect)
+        report.assert_called_once_with(stream.close.side_effect)
 
     async def test_successful_recovery_keeps_log_open_until_stop(self):
         key = await self.pending_recovery()
@@ -130,7 +131,7 @@ class StartupLoggingTests(unittest.IsolatedAsyncioTestCase):
         store.close = Mock()
         host = Server(log_path=self.path, store=store, rules_backend=backend)
         self.addAsyncCleanup(host.stop)
-        stream = host.log_file
+        stream = host.log.stream
         self.assertFalse(stream.closed)
         self.assertIsNone(host.listener)
         self.assertIsNone(host.result_rewards.status(key))
@@ -141,6 +142,6 @@ class StartupLoggingTests(unittest.IsolatedAsyncioTestCase):
         await host.stop()
         await host.stop()
         self.assertTrue(stream.closed)
-        self.assertIsNone(host.log_file)
+        self.assertIsNone(host.log.stream)
         store.close.assert_not_called()
         backend.close.assert_not_called()

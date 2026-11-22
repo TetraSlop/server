@@ -239,7 +239,7 @@ class LiveQueryTests(unittest.TestCase):
         self.assertEqual((healthy["uptime_seconds"], healthy["connected_accounts"]), (0, 1))
         self.assertEqual(healthy["storage"], "Memory only")
         host.storage_failed = OSError("postgres://operator:secret@database/private")
-        host.log_error = OSError("C:/private/credential.log")
+        host.log.error = OSError("C:/private/credential.log")
         failed = server_overview(host, started_at=0)
         self.assertEqual(failed["storage"], "Writes stopped after a storage failure")
         self.assertEqual(failed["diagnostics"], "Logging stopped")
