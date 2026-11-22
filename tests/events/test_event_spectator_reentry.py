@@ -68,7 +68,7 @@ class EventSpectatorReentryTests(base.EventSpectatorHelpers, unittest.IsolatedAs
                 if part:
                     await self.observer.join(self.table.channel)
                 await self.observer_send(packet(1, body=native_identity(self.observer_view, "Req")))
-                self.assertEqual(decode(await self.read_watch()).primary, 2)
+                self.assertEqual(decode(await self.read_watch()).family, 2)
                 await self.observer_send(packet(67, 37, body="@Data=/Watch=0"))
                 await asyncio.wait_for(new_blocked.wait(), 2)
                 new_task = spectators.tasks[peer]

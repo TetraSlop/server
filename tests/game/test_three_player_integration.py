@@ -104,7 +104,7 @@ class ThreePlayerIntegrationTests(unittest.IsolatedAsyncioTestCase):
             result = [
                 decode(p)
                 for p in received[side]
-                if decode(p).subtype == 13 and decode(p).primary == 0x43
+                if decode(p).subtype == 13 and decode(p).family == 0x43
             ]
             self.assertEqual(len(result), 1)
             self.assertIn(f"No{side}", result[0].sections)

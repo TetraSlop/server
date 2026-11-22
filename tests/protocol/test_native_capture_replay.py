@@ -82,9 +82,9 @@ class NativeCaptureReplayTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(server.default_table.match.players[0].character_id, 1)
                 self.assertEqual(len(server.default_table.match.players[0].hand), 5)
                 self.assertTrue(
-                    any(r.primary == 2 and r.sections["PLAYACK"]["EN"] == "1" for r in received)
+                    any(r.family == 2 and r.sections["PLAYACK"]["EN"] == "1" for r in received)
                 )
-                self.assertTrue(any(r.primary == 0x43 and r.subtype == 8 for r in received))
+                self.assertTrue(any(r.family == 0x43 and r.subtype == 8 for r in received))
                 self.assertEqual(len(server.default_table.match_reservations), 1)
             finally:
                 if hasattr(client, "writer"):

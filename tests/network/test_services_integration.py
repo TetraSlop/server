@@ -106,7 +106,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         out = await self.request(TABLE_RAW, packet(0x14, body=rules))
         self.assertEqual([parse(p[5:])[-1].token for p in out[:2]], [b"PD", b"TD"])
         self.assertEqual(
-            [(decode(p).primary, decode(p).subtype) for p in out[2:]], [(0x41, 4), (0x1A, 0)]
+            [(decode(p).family, decode(p).subtype) for p in out[2:]], [(0x41, 4), (0x1A, 0)]
         )
         self.assertIn(b"@GameML=", out[2])
         self.assertIn(b"/Num=2", out[2])
@@ -132,7 +132,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         out = await self.request(TABLE_RAW, packet(0x41, 8, body="@GameOK="))
         self.assertEqual(parse(out[0][5:])[-1].token, b"TD")
         self.assertEqual(
-            [(decode(p).primary, decode(p).subtype) for p in out[1:]], [(0x41, 9), (0x43, 1)]
+            [(decode(p).family, decode(p).subtype) for p in out[1:]], [(0x41, 9), (0x43, 1)]
         )
         self.assertEqual(self.server.default_table.match.phase, "selection")
         await self.client.send(b"PART :" + TABLE_CHANNEL)
@@ -384,7 +384,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 payload = line.split(b" :", 1)[-1]
                 decoded = decode(payload)
                 self.assertFalse(
-                    decoded and decoded.primary == 0x43 and decoded.subtype == 13,
+                    decoded and decoded.family == 0x43 and decoded.subtype == 13,
                     "unsaved result was acknowledged",
                 )
             else:
@@ -431,7 +431,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(b"@PLAYACK=/EN=1", replies[0])
         replies = await self.request(TABLE_RAW, packet(0x41, 8, body="@GameOK="))
         self.assertEqual(
-            [(decode(x).primary, decode(x).subtype) for x in replies], [(0x41, 9), (0x43, 1)]
+            [(decode(x).family, decode(x).subtype) for x in replies], [(0x41, 9), (0x43, 1)]
         )
         cards = self.server.economy.inventory(self.key)[:5]
         body = "@CardSelect=/C=5" + "".join(

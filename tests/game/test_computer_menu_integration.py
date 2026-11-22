@@ -48,7 +48,7 @@ class ComputerMenuIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decode(replies[0]).subtype, 0x13)
         replies = await self.request(TABLE_RAW, packet(1, body=native_identity(view, "Req")))
         self.assertEqual(
-            [(decode(r).primary, decode(r).subtype) for r in replies], [(2, 0), (0x43, 2)]
+            [(decode(r).family, decode(r).subtype) for r in replies], [(2, 0), (0x43, 2)]
         )
         info = decode(replies[1]).sections
         self.assertEqual(info["ComGameInit"]["S"], "10")

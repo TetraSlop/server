@@ -53,7 +53,7 @@ class ObserverDepartureIntegration(unittest.IsolatedAsyncioTestCase):
             + b" :"
             + packet(1, body=f"@Req=/NN={player_id(self.observer.nick):016X}/HID=4")
         )
-        self.assertEqual((await self.read_watch()).primary, 2)
+        self.assertEqual((await self.read_watch()).family, 2)
         await self.observer.send(
             b"NOTICE " + target + b" :" + packet(0x43, 0x25, 0, "@Data=/Watch=0")
         )
@@ -74,12 +74,12 @@ class ObserverDepartureIntegration(unittest.IsolatedAsyncioTestCase):
         else:
             self.fail("missing observer departure result")
         expected = [
-            decode(p).argument
+            decode(p).session
             for p in self.received[0]
-            if decode(p).primary == 0x43 and decode(p).subtype == 9
+            if decode(p).family == 0x43 and decode(p).subtype == 9
         ]
         self.assertEqual(
-            [initial[-1].argument] + [m.argument for m in seen if m.subtype == 9], expected
+            [initial[-1].session] + [m.session for m in seen if m.subtype == 9], expected
         )
         self.assertEqual(sum(m.subtype == 0x23 for m in seen), int(not late))
         self.assertEqual(sum(m.subtype == 0x24 for m in seen), int(not late and rule == 0))

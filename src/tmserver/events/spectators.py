@@ -65,7 +65,7 @@ class EventSpectators:
         if msg is None:
             return False
         active = self.admissions.get(peer)
-        if active is not None and target != active[0] and msg.primary in (1, 0x41, 0x43, 0x98):
+        if active is not None and target != active[0] and msg.family in (1, 0x41, 0x43, 0x98):
             raise SpectatorError("leave the watched table before another event admission")
         if coordinator.participant(peer):
             return False
@@ -83,7 +83,7 @@ class EventSpectators:
                 return True
         context = coordinator.observer_context(target)
         if context is None:
-            if active is not None and msg.primary in (1, 0x41, 0x43):
+            if active is not None and msg.family in (1, 0x41, 0x43):
                 raise SpectatorError("watched event round has ended")
             return False
         event, epoch, config, engine = context
@@ -94,8 +94,8 @@ class EventSpectators:
             and not server.economy.is_busy(key)
             and engine.phase in ("turn", "battle")
         )
-        if msg.primary == 0x2D:
-            if msg.subtype or msg.argument or msg.sections != {"CheckJoinTable": {}}:
+        if msg.family == 0x2D:
+            if msg.subtype or msg.session or msg.sections != {"CheckJoinTable": {}}:
                 raise SpectatorError("invalid watch table discovery")
             self._queue(
                 peer,
@@ -105,12 +105,12 @@ class EventSpectators:
                 packet(0x2E, body=f"@CheckJoinTable_Ans=/Join={int(eligible)}/Mem=0"),
             )
             return True
-        if msg.primary == 1:
+        if msg.family == 1:
             if not eligible or config.channel.upper() not in {c.upper() for c in peer.channels}:
                 raise SpectatorError(
                     "event observer requires active table and authenticated room/channel membership"
                 )
-            if msg.subtype or msg.argument or set(msg.sections) != {"Req"}:
+            if msg.subtype or msg.session or set(msg.sections) != {"Req"}:
                 raise SpectatorError("invalid observer request")
             f = msg.sections["Req"]
             view = server.economy.account_view(key)
@@ -124,7 +124,7 @@ class EventSpectators:
             self.admissions[peer] = (target, engine)
             self._queue(peer, target, engine, None, engine.playack(engine.players[0].peer))
             return True
-        if msg.primary == 0x43 and (msg.subtype == 0x25 or active is not None):
+        if msg.family == 0x43 and (msg.subtype == 0x25 or active is not None):
             if active != (target, engine) or config.channel.upper() not in {
                 c.upper() for c in peer.channels
             }:
@@ -135,7 +135,7 @@ class EventSpectators:
                 raise SpectatorError("observer cannot submit event participant actions")
             self._deliveries(target, engine, service, out)
             return True
-        if active is not None and msg.primary == 0x41:
+        if active is not None and msg.family == 0x41:
             raise SpectatorError("observer cannot claim event seat")
         return False
 

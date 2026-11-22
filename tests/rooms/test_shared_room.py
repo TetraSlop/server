@@ -147,7 +147,7 @@ class SharedRoomIntegration(unittest.IsolatedAsyncioTestCase):
             + b" :"
             + packet(1, body=f"@Req=/NN={view.nn:016X}/HID={view.player_id}")
         )
-        self.assertEqual((await read_watch()).primary, 2)
+        self.assertEqual((await read_watch()).family, 2)
         await observer.send(b"NOTICE " + target + b" :" + packet(0x43, 0x25, 0, "@Data=/Watch=0"))
         self.assertEqual([(await read_watch()).subtype for _ in range(3)], [0x25, 0x26, 9])
         state = table.match.snapshot()
@@ -163,8 +163,8 @@ class SharedRoomIntegration(unittest.IsolatedAsyncioTestCase):
                 break
         else:
             self.fail("secondary observer never received result")
-        self.assertEqual([m.argument for m in seen if m.subtype == 9], list(range(1, 10)))
-        self.assertEqual([m.argument for m in seen if m.subtype == 10], list(range(10)))
+        self.assertEqual([m.session for m in seen if m.subtype == 9], list(range(1, 10)))
+        self.assertEqual([m.session for m in seen if m.subtype == 10], list(range(10)))
         self.assertFalse(any(m.subtype == 0x1A for m in seen))
         self.assertEqual(self.server.economy.profile_bytes(self.keys[2]), before)
         await self.leave_result(1)

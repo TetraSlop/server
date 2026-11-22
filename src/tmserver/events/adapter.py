@@ -81,7 +81,7 @@ class EventAdapter:
                 raise ValueError("event driver stopped; restart is required")
             key = self.server.ensure_account(peer.nick)
             message = decode(payload)
-            if message is not None and message.primary in (1, 0x98):
+            if message is not None and message.family in (1, 0x98):
                 binding = self.server.event_rooms.room_for_service(target)
                 if binding is not None:
                     validate_room_entry(self.server, peer, binding.room)

@@ -107,7 +107,7 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.result_messages = received
         for seat in range(self.player_count):
             self.assertEqual(
-                sum(decode(p).primary == 0x43 and decode(p).subtype == 13 for p in received[seat]),
+                sum(decode(p).family == 0x43 and decode(p).subtype == 13 for p in received[seat]),
                 1,
             )
             replies = await self.send(seat, packet(0x43, 14, match.sequence, f"@Ready=/Ans={seat}"))

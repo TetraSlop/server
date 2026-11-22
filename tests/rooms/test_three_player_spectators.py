@@ -54,12 +54,12 @@ class ThreePlayerSpectatorIntegration(unittest.IsolatedAsyncioTestCase):
             + b" :"
             + packet(1, body=f"@Req=/NN={player_id(observer.nick):016X}/HID=4")
         )
-        self.assertEqual(decode(await self.read_watch()).primary, 2)
+        self.assertEqual(decode(await self.read_watch()).family, 2)
         await observer.send(
             b"NOTICE " + self.target + b" :" + packet(0x43, 0x25, 0, "@Data=/Watch=0")
         )
         boot = decode(await self.read_watch())
-        self.assertEqual((boot.argument, boot.sections["WatchInfo"]["N"]), (0, "3"))
+        self.assertEqual((boot.session, boot.sections["WatchInfo"]["N"]), (0, "3"))
         self.assertFalse(self.server.economy.is_busy(key))
         await self.round()
         live = []
@@ -70,8 +70,8 @@ class ThreePlayerSpectatorIntegration(unittest.IsolatedAsyncioTestCase):
                 break
         else:
             self.fail("observer never received final result")
-        self.assertEqual([m.argument for m in live if m.subtype == 9], list(range(15)))
-        self.assertEqual([m.argument for m in live if m.subtype == 10], list(range(15)))
+        self.assertEqual([m.session for m in live if m.subtype == 9], list(range(15)))
+        self.assertEqual([m.session for m in live if m.subtype == 10], list(range(15)))
         self.assertFalse(any(m.subtype == 0x1A for m in live))
         self.assertEqual(self.server.economy.profile_bytes(key), before)
         profile = ProfileServer(Path(self.harness_temp.name) / "profile.jsonl", self.server)

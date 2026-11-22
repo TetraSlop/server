@@ -83,7 +83,7 @@ class SpectatorReentryTests(unittest.IsolatedAsyncioTestCase):
                 await self.clients[1].send(
                     b"NOTICE " + self.target + b" :" + packet(1, body=native_identity(view, "Req"))
                 )
-                self.assertEqual(decode(await self.read_watch()).primary, 2)
+                self.assertEqual(decode(await self.read_watch()).family, 2)
                 await self.request_watch()
                 await asyncio.wait_for(new_blocked.wait(), 2)
                 new_task = table.spectator_senders[peer][1]

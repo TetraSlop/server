@@ -65,7 +65,7 @@ class TableEligibilityIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.server.economy.is_reserved(self.keys[1]))
 
         replies = await self.send(1, packet(1, body=native_identity(guest, "Req")))
-        ack = next(decode(reply) for reply in replies[1] if decode(reply).primary == 2)
+        ack = next(decode(reply) for reply in replies[1] if decode(reply).family == 2)
         self.assertEqual(ack.sections["PLAYACK"]["EN"], "1")
         self.assertEqual((ack.sections["Tab"]["ll"], ack.sections["Tab"]["lu"]), (str(points),) * 2)
         self.assertEqual(self.server.snapshot(), before[0])

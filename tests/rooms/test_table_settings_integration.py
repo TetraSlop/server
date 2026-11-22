@@ -32,7 +32,7 @@ class TableSettingsIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.server.default_table.match.owner_id, int(owner, 16))
         for seat, identity in enumerate((owner, joiner)):
             replies = await self.send(seat, packet(1, body="@Req=/NN=" + identity))
-            playack = next(decode(p) for p in replies[seat] if decode(p).primary == 2)
+            playack = next(decode(p) for p in replies[seat] if decode(p).family == 2)
             self.assertEqual(playack.sections["PLAYACK"]["EN"], "1")
             self.assertEqual(playack.sections["Tab"]["pw"], password.hex().upper())
 

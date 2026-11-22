@@ -115,7 +115,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         self.finals = [match.final_cards(self.server.nicks[c.nick]) for c in self.clients]
         for side in range(2):
             self.assertEqual(
-                sum(decode(p).primary == 0x43 and decode(p).subtype == 13 for p in received[side]),
+                sum(decode(p).family == 0x43 and decode(p).subtype == 13 for p in received[side]),
                 1,
             )
             reply = await self.send(side, packet(0x43, 14, 10, f"@Ready=/Ans={side}"))

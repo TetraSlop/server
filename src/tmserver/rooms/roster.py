@@ -28,7 +28,7 @@ class TableRoster:
                 delivery.peer in waiting
                 and delivery.peer not in self.ready
                 and msg is not None
-                and (msg.primary, msg.subtype) == (0x41, 7)
+                and (msg.family, msg.subtype) == (0x41, 7)
             ):
                 # A third player may still be completing GameEA when the owner
                 # starts. That cleanup discards41/07 as well as the roster.

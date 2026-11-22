@@ -24,16 +24,6 @@ class Envelope(NamedTuple):
     session: int
     sections: dict
 
-    @property
-    def primary(self):
-        """Match-code name for family."""
-        return self.family
-
-    @property
-    def argument(self):
-        """Match-code name for session."""
-        return self.session
-
 
 def encode(family, subtype=0, session=0, body="", *, printable=True, error=ValueError):
     """Build one envelope. Strict bodies are printable 32..126; lenient ones exclude NUL, CR, LF."""

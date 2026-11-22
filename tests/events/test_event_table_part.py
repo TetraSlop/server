@@ -61,7 +61,7 @@ class EventTablePartTests(event_tests.EventMultiTableHelpers, unittest.IsolatedA
         await self.observer_send(
             table.table_id, packet(1, body=native_identity(self.observer_view, "Req"))
         )
-        self.assertEqual(decode(await self.observer_read(table.table_id)).primary, 2)
+        self.assertEqual(decode(await self.observer_read(table.table_id)).family, 2)
         await self.observer_send(table.table_id, packet(0x43, 0x25, body="@Data=/Watch=0"))
         bootstrap = [decode(await self.observer_read(table.table_id)).subtype for _ in range(3)]
         self.assertEqual(bootstrap, [0x25, 0x26, 9])

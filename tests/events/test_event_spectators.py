@@ -82,7 +82,7 @@ class EventSpectatorHelpers(event_tests.EventMatchHelpers):
         await event_tests.barrier(self, self.observer, b"observer-join")
         await self.observer_send(packet(1, body=native_identity(view, "Req")))
         admission = decode(await self.read_watch())
-        self.assertEqual(admission.primary, 2)
+        self.assertEqual(admission.family, 2)
         self.assertEqual(admission.sections["Tab"]["in"], "0")
 
     async def watch(self):
@@ -133,10 +133,10 @@ class EventSpectatorsIntegration(EventSpectatorHelpers, unittest.IsolatedAsyncio
         else:
             self.fail("missing event observer result")
         self.assertEqual(
-            [decode(p).argument for p in messages if decode(p).subtype == 9], list(range(1, 5 * n))
+            [decode(p).session for p in messages if decode(p).subtype == 9], list(range(1, 5 * n))
         )
         self.assertEqual(
-            [decode(p).argument for p in messages if decode(p).subtype == 10], list(range(5 * n))
+            [decode(p).session for p in messages if decode(p).subtype == 10], list(range(5 * n))
         )
         self.assertFalse(
             any(b"@EventCard=" in p or b"@TCList=" in p or b"@ResultData=" in p for p in messages)
@@ -192,7 +192,7 @@ class EventSpectatorsIntegration(EventSpectatorHelpers, unittest.IsolatedAsyncio
         self.assertFalse(engine.outcome.aborted)
         self.assertIsNone(self.server.event_matches.failure)
         for side, key in enumerate(self.keys):
-            turns = [decode(p).argument for _, p in self.inbox[side] if b"@TurnData=" in p]
+            turns = [decode(p).session for _, p in self.inbox[side] if b"@TurnData=" in p]
             self.assertEqual(turns, list(range(15)))
             self.assertEqual(sum(b"@EventResult=" in p for _, p in self.inbox[side]), 1)
             self.assertFalse(self.server.nicks[self.clients[side].nick].closed)
