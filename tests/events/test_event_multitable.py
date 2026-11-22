@@ -9,7 +9,7 @@ from pathlib import Path
 from tests.events import test_event_matches_integration as base
 from tests.events.test_event_rooms import presence
 from tests.support.irc import Client
-from tmserver.events.models import EventError
+from tmserver.economy.errors import EconomyError
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
 from tmserver.game.errors import MatchError
 from tmserver.game.packets import decode, packet
@@ -228,7 +228,7 @@ class EventMultiTable(EventMultiTableHelpers, unittest.IsolatedAsyncioTestCase):
                 ),
             ),
         ):
-            with self.assertRaises(EventError):
+            with self.assertRaises(EconomyError):
                 await self.server.event_matches.dispatch(peer, target, payload)
             self.assertEqual(
                 [c.snapshot("festival", table_id=t.table_id) for t in self.tables], before
@@ -265,7 +265,7 @@ class EventMultiTable(EventMultiTableHelpers, unittest.IsolatedAsyncioTestCase):
         before = coordinator.snapshot("festival", table_id=self.table.table_id)
         self.assertEqual(coordinator.cancel("festival", old_epoch), [])
         self.assertEqual(coordinator.advance("festival", old_epoch), [])
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             await self.server.event_matches.dispatch(
                 peer, self.cfg.init_id, packet(0xB2, 0x17, old_session, f"@Quit=/No={old_session}")
             )

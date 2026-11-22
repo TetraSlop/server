@@ -44,10 +44,6 @@ class EventMember:
     eligibility: int = 0
 
 
-class EventError(EconomyError):
-    """Malformed or unauthorized event input; no success should be sent."""
-
-
 @validated_dataclass(frozen=True, config=_CONFIG)
 class EventConfig:
     """Trusted local configuration, not a reconstructed historical tournament.
@@ -81,18 +77,18 @@ class EventConfig:
         integer(self.start, signed=True)
         integer(self.end, signed=True)
         if self.start < 0 or self.end <= self.start:
-            raise EventError("event needs a bounded positive time window")
+            raise EconomyError("event needs a bounded positive time window")
         ids = (self.room_id, self.init_id, self.card_id)
         if any(not 0 < i < 1 << 64 for i in ids) or len(set(ids)) != 3:
-            raise EventError("event services need distinct nonzero game identities")
+            raise EconomyError("event services need distinct nonzero game identities")
         for channel in (self.init_channel, self.card_channel):
             text(channel, 15, empty=False)
             if not re.fullmatch(rb"#[A-Za-z0-9_-]+", channel):
-                raise EventError("invalid event service channel")
+                raise EconomyError("invalid event service channel")
         if self.init_channel == self.card_channel:
-            raise EventError("event channels must differ")
+            raise EconomyError("event channels must differ")
         if self.entry_answer not in (1, 2):
-            raise EventError("unmapped event entry answer")
+            raise EconomyError("unmapped event entry answer")
 
     @property
     def mission_mask(self):
@@ -165,33 +161,33 @@ class EventTableConfig:
 
     def __post_init__(self):
         if self.player_count not in (2, 3):
-            raise EventError("event table needs two/three seats")
+            raise EconomyError("event table needs two/three seats")
         if self.cpu_cards is not None and (self.player_count != 2 or len(self.cpu_cards) != 5):
-            raise EventError("synthetic event CPU needs one human and five CPU cards")
+            raise EconomyError("synthetic event CPU needs one human and five CPU cards")
         if self.cpu_cards is not None:
             checked = []
             for card in self.cpu_cards:
                 try:
                     values = tuple(getattr(card, k) for k in Card.__dataclass_fields__)
                 except AttributeError as exc:
-                    raise EventError("invalid event CPU card") from exc
+                    raise EconomyError("invalid event CPU card") from exc
                 if any(type(v) is not int for v in values):
-                    raise EventError("event CPU card fields must be integers")
+                    raise EconomyError("event CPU card fields must be integers")
                 checked.append(Card(*values))
             object.__setattr__(self, "cpu_cards", tuple(checked))
         if not 0 <= self.turn_limit <= 5:
-            raise EventError("unsupported event turn limit")
+            raise EconomyError("unsupported event turn limit")
         if not 0 <= self.departure_rule <= 2:
-            raise EventError("unsupported event departure rule")
+            raise EconomyError("unsupported event departure rule")
         if not 0 <= self.seed <= 0xFFFFFFFF:
-            raise EventError("event seed must be an unsigned32-bit integer")
+            raise EconomyError("event seed must be an unsigned32-bit integer")
         if self.start_fields is not None:
             board = special.start_board(self.start_fields)
             size = (self.player_count + 2) ** 2
             if len(board.fields) != size:
-                raise EventError("event board has wrong dimensions")
+                raise EconomyError("event board has wrong dimensions")
             if 18 in board.fields:
-                raise EventError("event boards require original non-CBC tile values")
+                raise EconomyError("event boards require original non-CBC tile values")
             if board.blocks > size - 5 * self.player_count:
-                raise EventError("event board must leave five placement cells per player")
+                raise EconomyError("event board must leave five placement cells per player")
             object.__setattr__(self, "start_fields", board.fields)

@@ -10,6 +10,7 @@ import struct
 import time
 from dataclasses import dataclass, field, replace
 
+from tmserver.economy.errors import EconomyError
 from tmserver.protocol.admission import validate_admission
 from tmserver.cards.catalog import collection_points
 from tmserver.cards.edits import match_owned, parse_edit_records
@@ -20,7 +21,7 @@ from tmserver.events.matches import (
     event_session_init,
     event_session_quit,
 )
-from tmserver.events.models import EventDelivery, EventError, EventTableConfig
+from tmserver.events.models import EventDelivery, EventTableConfig
 from tmserver.game.models import Card
 from tmserver.game.errors import RulesExecutionError
 from tmserver.game.packets import decode, numbers, packet
@@ -159,27 +160,27 @@ class EventMatchmaking:
 
     def _entry(self, peer, key, event_id, payload):
         if peer is None:
-            raise EventError("authenticated peer required")
+            raise EconomyError("authenticated peer required")
         config = self.host.config(event_id)
         binding = self._binding(event_id)
         view = self.economy.account_view(key)
         if binding.room.members.get(peer, (None,))[0] != view.nn:
-            raise EventError("E entry requires this authenticated room presence")
+            raise EconomyError("E entry requires this authenticated room presence")
         old = self._entries.get(peer)
         if old is not None:
             self.host.authenticate_entry(key, payload, route="init")
             if old.key != key or old.event_id != event_id:
-                raise EventError("different active event admission")
+                raise EconomyError("different active event admission")
             return [EventDelivery(peer, config.init_id, p) for p in old.replies]
         if any(e.key == key for e in self._entries.values()):
-            raise EventError("account already has an event connection")
+            raise EconomyError("account already has an event connection")
         replies = self.host.handle(key, payload, event_id=event_id, route="init")
         admission = self.host.admission(key)
         if admission is None:
             return [EventDelivery(peer, config.init_id, p) for p in replies]
         if admission.mode != 4 or event_id not in self.event_ids:
             self.host.complete_admission(key)
-            raise EventError("event has no supported playable table")
+            raise EconomyError("event has no supported playable table")
         token = None
         try:
             token = self.economy.reserve_match(key)
@@ -329,10 +330,10 @@ class EventMatchmaking:
     @staticmethod
     def _section(msg, name, keys=None):
         if set(msg.sections) != {name}:
-            raise EventError("unexpected event control sections")
+            raise EconomyError("unexpected event control sections")
         fields = msg.sections[name]
         if keys is not None and set(fields) != set(keys):
-            raise EventError("unexpected event control fields")
+            raise EconomyError("unexpected event control fields")
         return fields
 
     def _identity(self, e, msg, name):
@@ -341,7 +342,7 @@ class EventMatchmaking:
         try:
             validate_admission(f, name, nn=view.nn, name=view.name, require_nn=True)
         except ValueError as exc:
-            raise EventError(str(exc)) from exc
+            raise EconomyError(str(exc)) from exc
 
     def session(self, peer):
         entry = self._entries.get(peer)
@@ -349,16 +350,16 @@ class EventMatchmaking:
 
     def _decks(self, key, msg, e=None):
         if set(msg.sections.get("Decks", {})) != {"C"}:
-            raise EventError("invalid event Decks header")
+            raise EconomyError("invalid event Decks header")
         values, names = parse_edit_records(
-            msg.sections, "Decks", number=lambda v: numbers(v, 1)[0], error=EventError
+            msg.sections, "Decks", number=lambda v: numbers(v, 1)[0], error=EconomyError
         )
         view = (
             self.economy.account_view(key)
             if e is None
             else self.economy.match_account(e.reservation)
         )
-        indices = match_owned(view.cards, (v[:6] for v in values), error=EventError)
+        indices = match_owned(view.cards, (v[:6] for v in values), error=EconomyError)
         changes = [replace(view.cards[i], deck=v[6]) for i, v in zip(indices, values)]
         if e is None:
             self.transactions.apply_deck_changes(key, changes, names)
@@ -395,9 +396,9 @@ class EventMatchmaking:
                 f = self._section(msg, "Quit", ("No",))
                 if msg.argument == old[2] and numbers(f["No"], 1) == [old[2]]:
                     return [EventDelivery(peer, config.init_id, old[3])]
-            raise EventError("no current event selection session")
+            raise EconomyError("no current event selection session")
         if e.key != key or e.event_id != event_id or msg.argument != e.session:
-            raise EventError("event selection session mismatch")
+            raise EconomyError("event selection session mismatch")
         # Init-route traffic bypasses table control. It must expire the same
         # waiting admission before saving decks, replaying Select or closing it.
         expired = self._expire_waiting_entry(e)
@@ -409,18 +410,18 @@ class EventMatchmaking:
             if set(msg.sections) != {"CardSelect", *(f"N{i}" for i in range(5))} or msg.sections[
                 "CardSelect"
             ] != {"C": "5"}:
-                raise EventError("event requires exactly five selection records")
+                raise EconomyError("event requires exactly five selection records")
             if any(set(msg.sections[f"N{i}"]) != {"D"} for i in range(5)):
-                raise EventError("invalid event selection fields")
+                raise EconomyError("invalid event selection fields")
             cards = tuple(Card.parse(msg.sections[f"N{i}"]["D"]) for i in range(5))
             if e.selected is not None:
                 if cards != e.selected_wire:
-                    raise EventError("event selection already accepted")
+                    raise EconomyError("event selection already accepted")
                 return [EventDelivery(peer, config.init_id, p) for p in e.selection_reply]
             if e.epoch is not None or not self.economy.validate_match_selection(
                 e.reservation, cards
             ):
-                raise EventError("event selection is not the reserved owned five")
+                raise EconomyError("event selection is not the reserved owned five")
             e.selected = e.selected_wire = cards
             # Original child consumes Select first, then its outer state5 waits
             # EQuit. Selection confirmation itself is not a match-ready scene.
@@ -432,7 +433,7 @@ class EventMatchmaking:
         if msg.subtype == 0x17:
             f = self._section(msg, "Quit", ("No",))
             if numbers(f["No"], 1) != [e.session]:
-                raise EventError("event Quit session mismatch")
+                raise EconomyError("event Quit session mismatch")
             reply = event_session_quit(e.session)
             self._closed_sessions[peer] = (key, event_id, e.session, reply)
             if e.epoch is None:
@@ -443,7 +444,7 @@ class EventMatchmaking:
                 out = self.cancel(event_id, e.epoch)
                 self._closures = [p for p in self._closures if p != peer]
             return [EventDelivery(peer, config.init_id, reply)] + out
-        raise EventError("unsupported event selection message")
+        raise EconomyError("unsupported event selection message")
 
     def handle(self, peer, key, target, payload, *, joined_channels=()):
         msg = decode(payload)
@@ -471,10 +472,10 @@ class EventMatchmaking:
                     return []
         if e is None or e.key != key or e.event_id != event_id or r is None or e.epoch != r.epoch:
             if msg.primary in (0xD3, 1, 0x41, 0x43):
-                raise EventError("no current event proposal/participant")
+                raise EconomyError("no current event proposal/participant")
             return None
         if target not in (self.host.config(event_id).room_id, r.config.table_id):
-            raise EventError("participant message targets a different event table")
+            raise EconomyError("participant message targets a different event table")
         # A final GameOK can arrive before the next poll and otherwise promote
         # an expired admission to a playing round with a fresh watchdog.
         if r.phase in ("proposal", "backoff", "admission") and self._admission_expired(
@@ -485,17 +486,17 @@ class EventMatchmaking:
             if msg.primary != 0xD3:
                 return None
             if msg.subtype or msg.argument:
-                raise EventError("invalid proposal response header")
+                raise EconomyError("invalid proposal response header")
             f = self._section(msg, "MuchMakeAns", ("Ans", "TblNo", "TblId"))
             if (
                 numbers(f["TblNo"], 1) != [self._slot(r.config).table_number]
                 or not re.fullmatch(r"[0-9a-fA-F]{16}", f["TblId"])
                 or int(f["TblId"], 16) != r.config.table_id
             ):
-                raise EventError("answer refers to another table")
+                raise EconomyError("answer refers to another table")
             answer = numbers(f["Ans"], 1)[0]
             if answer not in (0, 1):
-                raise EventError("unsupported proposal answer")
+                raise EconomyError("unsupported proposal answer")
             if r.phase != "proposal":
                 return []
             if not answer:
@@ -522,7 +523,7 @@ class EventMatchmaking:
         viewing = viewer_state(msg)
         if viewing is not None:
             if peer not in r.admitted:
-                raise EventError("Viewer requires admitted event membership")
+                raise EconomyError("Viewer requires admitted event membership")
             if viewing:
                 r.viewers.add(peer)
             else:
@@ -532,13 +533,13 @@ class EventMatchmaking:
             return self.cancel(event_id, r.epoch) if r.phase == "admission" else []
         if msg.primary == 0x43:
             if r.phase not in ("playing", "completed"):
-                raise EventError("event battle has not started")
+                raise EconomyError("event battle has not started")
             if msg.subtype in (5, 0x27):
                 seat = next(i for i, x in enumerate(r.entries) if x.peer == peer)
                 if msg.subtype == 5:
                     f = self._section(msg, "Quit", ("No",))
                     if numbers(f["No"], 1) != [seat]:
-                        raise EventError("cannot quit another event seat")
+                        raise EconomyError("cannot quit another event seat")
                     reply = packet(0x43, 5, msg.argument, f"@Quit=/No={seat}/B=0")
                     self._quit_replies[peer] = (key, event_id, target, payload, reply)
                     out = self.cancel(event_id, r.epoch)
@@ -546,7 +547,7 @@ class EventMatchmaking:
                     return [EventDelivery(peer, target, reply)] + out
                 f = self._section(msg, "Break", ("ID",))
                 if msg.argument != 3 or numbers(f["ID"], 1) != [e.reservation.account.player_id]:
-                    raise EventError("invalid event Break identity")
+                    raise EconomyError("invalid event Break identity")
                 return self.cancel(event_id, r.epoch)
             try:
                 out = self._emit(r, r.engine.handle(peer, payload))
@@ -560,9 +561,9 @@ class EventMatchmaking:
             name, reply = _EXITS[msg.subtype]
             f = self._section(msg, name)
             if set(f) - ({"ID"} if msg.subtype == 5 else set()):
-                raise EventError("invalid exit fields")
+                raise EconomyError("invalid exit fields")
             if "ID" in f and int(f["ID"], 16) != e.reservation.account.nn:
-                raise EventError("cannot eject another event participant")
+                raise EconomyError("cannot eject another event participant")
             if r.phase not in ("proposal", "admission", "completed"):
                 return []
             out = []
@@ -570,27 +571,27 @@ class EventMatchmaking:
                 out.append(EventDelivery(peer, target, packet(0x41, reply[0], body=reply[1])))
             return out + self.cancel(event_id, r.epoch)
         if r.phase in ("proposal", "backoff") and msg.primary in (1, 0x41):
-            raise EventError("table admission requires accepted proposal")
+            raise EconomyError("table admission requires accepted proposal")
         if r.phase != "admission":
             return []
         if msg.primary == 0x41 and msg.subtype == 1:
             if msg.argument not in (0, 1):
-                raise EventError("invalid GameEN argument")
+                raise EconomyError("invalid GameEN argument")
             self._identity(e, msg, "GameEN")
             r.admitted.add(peer)
             return [EventDelivery(peer, target, packet(0x41, 2, body="@GameEA=/EN=1"))]
         if msg.primary == 1:
             if msg.subtype or msg.argument or peer not in r.admitted:
-                raise EventError("Req before table admission")
+                raise EconomyError("Req before table admission")
             if r.config.channel.upper() not in {v.upper() for v in joined_channels}:
-                raise EventError("Req requires table channel membership")
+                raise EconomyError("Req requires table channel membership")
             self._identity(e, msg, "Req")
             r.requested.add(peer)
             return [EventDelivery(peer, target, r.engine.playack(peer))]
         if msg.primary == 0x41 and msg.subtype == 8:
             self._section(msg, "GameOK", ())
             if msg.argument or peer not in r.requested:
-                raise EventError("GameOK before Req")
+                raise EconomyError("GameOK before Req")
             r.accepted.add(peer)
             if len(r.accepted) < len(r.entries):
                 return []
@@ -677,7 +678,7 @@ class EventMatchmaking:
         if r is None or r.epoch != epoch:
             return []
         if r.phase != "completed":
-            raise EventError("event outcome has not completed")
+            raise EconomyError("event outcome has not completed")
         for seat, e in enumerate(r.entries):
             self._finished[e.peer] = (e.key, event_id, r.config.table_id, r.engine.sequence, seat)
             self._closed_sessions[e.peer] = (

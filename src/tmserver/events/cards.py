@@ -19,13 +19,9 @@ from tmserver.checks import uint
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_records
-from tmserver.events.models import EventError
 from tmserver.events.packets import _id, _keys, _number
 
-EventCardError = EventError
-
-
-_integer = partial(uint, error=EventCardError, what="event delivery integer")
+_integer = partial(uint, error=EconomyError, what="event delivery integer")
 
 
 @dataclass
@@ -56,7 +52,7 @@ class EventCardService:
 
     def __init__(self, economy, host):
         if host.economy is not economy:
-            raise EventCardError("event host uses a different economy")
+            raise EconomyError("event host uses a different economy")
         self.economy = economy
         self.host = host
         self._grants = {}
@@ -92,16 +88,16 @@ class EventCardService:
         self.host.config(event_id)
         _id(grant_id)
         if self.host.member(key, event_id) is None:
-            raise EventCardError("grant requires a registered event member")
+            raise EconomyError("grant requires a registered event member")
         cards = self.economy.catalog.validate_batch(
-            (Card.from_card(c) for c in cards), error=EventCardError
+            (Card.from_card(c) for c in cards), error=EconomyError
         )
         _integer(money, MAX_MONEY)
         identity = (key, event_id, grant_id)
         old = self._grants.get(identity)
         if old is not None:
             if (old.cards, old.money) != (cards, money):
-                raise EventCardError("grant ID replay differs")
+                raise EconomyError("grant ID replay differs")
             return False
         self._grants[identity] = _Grant(key, event_id, grant_id, cards, money)
         return True
@@ -127,14 +123,14 @@ class EventCardService:
     def _entry(self, key, payload, event_id):
         if event_id is None:
             if len(self.host.configs) != 1:
-                raise EventCardError("event card service identity is ambiguous")
+                raise EconomyError("event card service identity is ambiguous")
             event_id = next(iter(self.host.configs))
         self.host.config(event_id)
         current = self._active.get(key)
         if current is not None:
             self.host.authenticate_entry(key, payload, route="card")
             if current.event_id != event_id:
-                raise EventCardError("another event collection is active")
+                raise EconomyError("another event collection is active")
             return list(current.replies)
         replies = self.host.handle(key, payload, event_id=event_id, route="card")
         if int(parse_named(replies[0])[3]["CardEnt"]["Ans"]) <= 0:
@@ -207,22 +203,22 @@ class EventCardService:
                 and sections == {"Quit": {"No": str(number)}}
             ):
                 if event_id is not None and event_id != previous[2]:
-                    raise EventCardError("wrong event collection service")
+                    raise EconomyError("wrong event collection service")
                 return [previous[1]]
             return None
         if number != state.number or event_id is not None and event_id != state.event_id:
-            raise EventCardError("wrong event collection session/service")
+            raise EconomyError("wrong event collection session/service")
         if subtype in (0x15, 0x17):
             token = "Get" if subtype == 0x15 else "Quit"
             if sections != {token: {"No": str(number)}}:
-                raise EventCardError("invalid event collection barrier")
+                raise EconomyError("invalid event collection barrier")
             if subtype == 0x15:
                 if state.accepted:
                     return []
                 for ident, index in state.selected:
                     g = self._grants[ident]
                     if index < g.card_offset:
-                        raise EventCardError("stale event grant selection")
+                        raise EconomyError("stale event grant selection")
                 refreshed = self.economy.commit_auction(
                     state.token,
                     add=state.incoming,
@@ -242,7 +238,7 @@ class EventCardService:
                 )
                 return []
             if not state.accepted:
-                raise EventCardError("cards require Get before Quit")
+                raise EconomyError("cards require Get before Quit")
             reply = named(0xB2, 0x17, number, f"@Quit=/N={number}/D=0/B=0")
             self.economy.release_auction(state.token)
             del self._active[key]
@@ -260,7 +256,7 @@ class EventCardService:
                 )
             state.cards, state.names = cards, names
             return []
-        raise EventCardError("unsupported event collection operation")
+        raise EconomyError("unsupported event collection operation")
 
     @staticmethod
     def _edit(state, subtype, sections):
@@ -270,10 +266,10 @@ class EventCardService:
         fields = sections.get(token, {})
         _keys(fields, ("Mode", "C") if subtype == 0x10 else ("C",))
         if subtype == 0x10 and fields["Mode"] != "1":
-            raise EventCardError("invalid event Erase mode")
-        values, renamed = parse_edit_records(sections, token, number=_number, error=EventCardError)
+            raise EconomyError("invalid event Erase mode")
+        values, renamed = parse_edit_records(sections, token, number=_number, error=EconomyError)
         cards, _ = apply_card_edits(
-            state.cards, values, discard=subtype == 0x10, error=EventCardError
+            state.cards, values, discard=subtype == 0x10, error=EconomyError
         )
         return cards, state.names | renamed
 
@@ -309,12 +305,12 @@ class EventCardService:
         try:
             _keys(snapshot, ("version", "last_sessions", "grants"))
             if snapshot["version"] != 1:
-                raise EventCardError("unsupported event grant snapshot")
+                raise EconomyError("unsupported event grant snapshot")
             for key, value in snapshot["last_sessions"].items():
                 economy.account_view(key)
                 _integer(value, 255)
                 if value == 0:
-                    raise EventCardError("invalid saved event session")
+                    raise EconomyError("invalid saved event session")
                 result._last[key] = value
             for row in snapshot["grants"]:
                 _keys(
@@ -324,12 +320,12 @@ class EventCardService:
                 if not result.grant(
                     row["key"], row["event_id"], row["id"], cards=cards, money=row["money"]
                 ):
-                    raise EventCardError("duplicate saved grant")
+                    raise EconomyError("duplicate saved grant")
                 g = result._grants[(row["key"], row["event_id"], row["id"])]
                 g.card_offset = _integer(row["card_offset"], len(cards))
                 g.money_claimed = _integer(row["money_claimed"], g.money)
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
-            if isinstance(exc, EventCardError):
+            if isinstance(exc, EconomyError):
                 raise
-            raise EventCardError("invalid event card snapshot") from exc
+            raise EconomyError("invalid event card snapshot") from exc
         return result

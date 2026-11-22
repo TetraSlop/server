@@ -7,10 +7,11 @@ import re
 import struct
 from functools import partial
 
+from tmserver.economy.errors import EconomyError
 from tmserver.checks import decimal, exact_keys, stable_id
 from tmserver.game.packets import packet
 
-from .models import EventError, PrizeDisplay
+from .models import PrizeDisplay
 
 SIZES = {
     "b/g/TM0EventList": 0x2C08,
@@ -189,12 +190,12 @@ def announcement(identifier, contents, loops=1):
     )
 
 
-_id = partial(stable_id, error=EventError, what="stable event/update ID")
-_keys = partial(exact_keys, error=EventError, what="event fields")
-_number = partial(decimal, error=EventError, what="event decimal")
+_id = partial(stable_id, error=EconomyError, what="stable event/update ID")
+_keys = partial(exact_keys, error=EconomyError, what="event fields")
+_number = partial(decimal, error=EconomyError, what="event decimal")
 
 
 def _identity(value):
     if not isinstance(value, str) or not re.fullmatch(r"[0-9A-Fa-f]{16}", value):
-        raise EventError("event identity must be sixteen hex digits")
+        raise EconomyError("event identity must be sixteen hex digits")
     return int(value, 16)

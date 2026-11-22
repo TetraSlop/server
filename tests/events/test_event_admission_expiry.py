@@ -4,9 +4,9 @@ import unittest
 
 from tests.events import test_event_cards as card_tests
 from tests.events import test_event_matchmaking as match_tests
+from tmserver.economy.errors import EconomyError
 from tmserver.cards.catalog import Catalog
 from tmserver.economy.packets import parse_named
-from tmserver.events.models import EventError
 from tmserver.game.packets import packet
 
 
@@ -90,7 +90,7 @@ class EventAdmissionExpiryTests(unittest.TestCase):
         self.expire(fixture, "schedule")
         before = fixture.c.snapshot("festival"), fixture.economy.snapshot()
         self.assertIsNone(fixture.send("2", packet(0x41, 8, body="@GameOK="), target=123))
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             fixture.send("3", packet(0x41, 8, body="@GameOK="))
         self.assertEqual((fixture.c.snapshot("festival"), fixture.economy.snapshot()), before)
         self.assertEqual(fixture.c.take_closures(), ())

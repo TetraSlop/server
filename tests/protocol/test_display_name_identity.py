@@ -14,8 +14,8 @@ from tests.events.test_event_rooms import config
 from tests.game.test_match_service import finish_arrowless_round, select
 from tests.support.irc import Client
 from tests.support.memory_store import MemoryStore
+from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
-from tmserver.events.models import EventError
 from tmserver.events.service import EventHost
 from tmserver.protocol.identities import player_id
 from tmserver.game.errors import MatchError
@@ -72,7 +72,7 @@ class DisplayNameTests(unittest.TestCase):
             )
             host.authenticate_entry(key, packet(0x98, body=body), route="init")
             for forged in (PREFIX, NAMES[1 - seat]):
-                with self.subTest(seat=seat, forged=forged), self.assertRaises(EventError):
+                with self.subTest(seat=seat, forged=forged), self.assertRaises(EconomyError):
                     host.authenticate_entry(
                         key, packet(0x98, body=body.replace(name.hex(), forged.hex())), route="init"
                     )

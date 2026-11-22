@@ -7,7 +7,7 @@ only after authenticated DE succeeds, persist, then deliver D0 from that room.
 import struct
 from dataclasses import dataclass
 
-from tmserver.events.models import EventError
+from tmserver.economy.errors import EconomyError
 from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, SHOP_RAW, TABLE_RAW, TRADE_RAW, game_id
 from tmserver.rooms.packets import ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL
 from tmserver.rooms.records import build_room_record, build_zone_record
@@ -23,10 +23,10 @@ _RESERVED_CHANNELS = frozenset(c.upper() for c in (ROOM_CHANNEL, TABLE_CHANNEL, 
 
 def _raw(identity):
     if type(identity) is not int or not 0 < identity < 1 << 64:
-        raise EventError("event identity must be a nonzero game-domain qword")
+        raise EconomyError("event identity must be a nonzero game-domain qword")
     raw = identity ^ GAME_KEY
     if raw > 0x1FFFFFFFFFF:
-        raise EventError("event identity has no routable41-bit POL owner")
+        raise EconomyError("event identity has no routable41-bit POL owner")
     return raw
 
 
@@ -75,19 +75,19 @@ class EventRooms:
         for config in configs:
             region, name = config.listing.key_region, config.listing.key_event
             if not region or len(region) > 26 or b"\0" in region:
-                raise EventError("event zone key must fit its terminated27-byte directory field")
+                raise EconomyError("event zone key must fit its terminated27-byte directory field")
             if not name or len(name) > 30 or any(c in name for c in (b"\0", b"*")):
-                raise EventError(
+                raise EconomyError(
                     "event room key must fit before the RL rule overlap without an asterisk"
                 )
             if (region, name) == (_DEFAULT_REGION, _DEFAULT_ROOM):
-                raise EventError("event key collides with the default lobby room")
+                raise EconomyError("event key collides with the default lobby room")
             if config.listing.scalar == 0xFFFFFFFF:
-                raise EventError("event scalar collides with the original unmatched sentinel")
+                raise EconomyError("event scalar collides with the original unmatched sentinel")
             if region not in regions:
                 regions.append(region)
         if len(regions) > 32:
-            raise EventError("event zones exceed the original 32-zone file")
+            raise EconomyError("event zones exceed the original 32-zone file")
         self.regions = tuple(regions)
         self._by_service = {}
         self._by_channel = {}
@@ -103,12 +103,12 @@ class EventRooms:
             for identity in ids:
                 _raw(identity)
                 if identity in used_ids:
-                    raise EventError("event identity overlaps another local route")
+                    raise EconomyError("event identity overlaps another local route")
                 used_ids.add(identity)
             for value in channels:
                 key = value.upper()
                 if key in used_channels:
-                    raise EventError("event channel overlaps another local route")
+                    raise EconomyError("event channel overlaps another local route")
                 used_channels.add(key)
             room = RoomService(
                 room_id=config.room_id,
@@ -139,22 +139,22 @@ class EventRooms:
         """
         binding = next((b for b in self.rooms if b.event_id == event_id), None)
         if binding is None:
-            raise EventError("unknown event room")
+            raise EconomyError("unknown event room")
         room = binding.room
         _raw(table_id)  # Validate the service identity before binding it.
         for existing in room.tables:
             if existing.table_id == table_id:
                 if (existing.table_channel, existing.player_count) == (table_channel, player_count):
                     return []
-                raise EventError("event table is already bound with different settings")
+                raise EconomyError("event table is already bound with different settings")
         if table_id in self._by_service or table_id in _RESERVED_IDS:
-            raise EventError("event table identity overlaps a route")
+            raise EconomyError("event table identity overlaps a route")
         if (
             not isinstance(table_channel, bytes)
             or table_channel.upper() in self._by_channel
             or table_channel.upper() in _RESERVED_CHANNELS
         ):
-            raise EventError("event table channel overlaps a route")
+            raise EconomyError("event table channel overlaps a route")
         # Reuse all original record/channel/capacity validation before assignment.
         if room.table_id is None:
             checked = RoomService(
@@ -201,7 +201,7 @@ class EventRooms:
                 start = 0
             count = start + len(members)
             if count > 256:
-                raise EventError("event room directory exceeds its array")
+                raise EconomyError("event room directory exceeds its array")
             struct.pack_into("<I", rooms, 0x40, count)
             for row, binding in enumerate(members, start):
                 config = self.host.config(binding.event_id)
