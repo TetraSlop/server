@@ -11,7 +11,7 @@ import time
 from copy import copy
 from dataclasses import dataclass, replace
 
-from tmserver.economy.auctions.models import AuctionError, Listing
+from tmserver.economy.auctions.models import AuctionError
 from tmserver.economy.auctions.packets import (
     ACK,
     BID_PATH,
@@ -209,7 +209,7 @@ class AuctionService:
             if not commands or commands[0].token not in (b"ER", b"BR", b"SI", b"BH"):
                 return None
             operation = commands[0].token
-            account = self._actor(key, commands[0].payload)
+            self._actor(key, commands[0].payload)
             now = int(self.clock())
             if not 0 <= now <= 0xFFFFFFFF:
                 raise EconomyError("clock exceeds native auction timestamp width")
@@ -233,36 +233,11 @@ class AuctionService:
                         _number(v, 32 if i < 4 else 16 if i < 8 else 8) for i, v in enumerate(parts)
                     )
                     card = Card(item[0], item[8], item[10], item[9], item[11], item[12], item[13])
-                    # Validate response capacity before removing a card. An ID
-                    # with ten decimal digits bounds all allocated IDs.
-                    listing_reply(
-                        b"ES",
-                        Listing(
-                            0x80000000,
-                            account,
-                            card,
-                            opening,
-                            increment,
-                            hours,
-                            relists,
-                            now,
-                            now + hours * 3600,
-                            item,
-                        ),
-                    )
                     result = self.ledger.exhibit(
                         key, card, opening, increment, hours, relists, now=now, item_metadata=item
                     )
                 else:
                     auction_id, amount, revision = (_number(c.payload) for c in commands[1:])
-                    preview = replace(
-                        self.ledger.listing(auction_id),
-                        bidder=account,
-                        amount=amount,
-                        bid_at=now,
-                        revision=0x80000000,
-                    )
-                    listing_reply(b"BS", preview)  # Capacity before money escrow.
                     result = self.ledger.bid(key, auction_id, amount, revision, now=now)
             except AuctionError as error:
                 return self._error(b"EF" if operation == b"ER" else b"BF", error.code)
@@ -295,22 +270,17 @@ class AuctionService:
             raise EconomyError("collection already active; entry is not a replay")
         reservation = self.ledger.reserve_collection(key)
         session = self._sessions.get(key, 0) % 255 + 1
-        # Prepare bounded card messages before any durable credit.
-        try:
-            cards = self._card_messages(session, reservation.returned)
-            # Original 10105390 treats header1 as Init failure. /N establishes
-            # the later session; the Init header is success0, independently.
-            init = named(
-                0xB2,
-                0x13,
-                0,
-                f"@Init=/N={session}/RA={account.rating}/M={account.balance}"
-                f"/CP={collection_points(account.cards)}/S={len(account.cards)}/SP=0/SN=/CMP=0/HD=0",
-            )
-            paid = self.ledger.commit_payment(reservation)
-        except Exception:
-            self.ledger.release_collection(reservation)
-            raise
+        cards = self._card_messages(session, reservation.returned)
+        # Original 10105390 treats header1 as Init failure. /N establishes
+        # the later session; the Init header is success0, independently.
+        init = named(
+            0xB2,
+            0x13,
+            0,
+            f"@Init=/N={session}/RA={account.rating}/M={account.balance}"
+            f"/CP={collection_points(account.cards)}/S={len(account.cards)}/SP=0/SN=/CMP=0/HD=0",
+        )
+        paid = self.ledger.commit_payment(reservation)
         self._sessions[key] = session
         self._collections[key] = _Collection(
             reservation,

@@ -186,12 +186,7 @@ class AuctionEconomy:
             now + hours * 3600,
             metadata,
         )
-        token = self.economy.reserve_auction(key)
-        try:
-            self.economy.commit_auction(token, remove=(owned,))
-        except Exception:
-            self.economy.release_auction(token)
-            raise
+        self.economy.commit_auction(self.economy.reserve_auction(key), remove=(owned,))
         self._listings[listing.id] = listing
         self._history[listing.id] = ()
         self._next_id += 1
@@ -226,12 +221,7 @@ class AuctionEconomy:
             _uint(self._next_pending, minimum=1)
             pending += (Pending(self._next_pending, listing.bidder.key, "refund", listing.amount),)
         bid = Bid(auction_id, actor, amount, now, updated.revision)
-        token = self.economy.reserve_auction(key)
-        try:
-            self.economy.commit_auction(token, debit=amount)
-        except Exception:
-            self.economy.release_auction(token)
-            raise
+        self.economy.commit_auction(self.economy.reserve_auction(key), debit=amount)
         self._listings[auction_id] = updated
         self._history[auction_id] += (bid,)
         self._pending = pending
