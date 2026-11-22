@@ -17,8 +17,7 @@ from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_records
 
 
-class PrizeError(EconomyError):
-    pass
+PrizeError = EconomyError
 
 
 def _integer(value, maximum=0xFFFFFFFF):

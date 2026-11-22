@@ -16,8 +16,7 @@ from tmserver.economy.models import MAX_MONEY
 from tmserver.economy.errors import EconomyError
 
 
-class MatchEconomyError(EconomyError):
-    pass
+MatchEconomyError = EconomyError
 
 
 def _int(x, lo, hi):

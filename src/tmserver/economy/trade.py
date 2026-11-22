@@ -15,8 +15,7 @@ from tmserver.cards.edits import apply_card_edits, parse_edit_records
 from tmserver.cards.edits import match_owned as owned_indices
 
 
-class TradeError(ValueError):
-    """Rejected input, with no ownership mutation or completion acknowledgement."""
+TradeError = EconomyError
 
 
 @dataclass(frozen=True)
@@ -70,15 +69,12 @@ class _Trade:
 
 
 class TradeService:
-    def __init__(self, economy, *, first_session=1, transactions=None):
-        if not 1 <= first_session <= 255:
-            raise TradeError("session must fit a nonzero byte")
+    def __init__(self, economy, transactions):
+        """transactions commits exchanges and delayed edits: Commerce, or economy in tests."""
         self.economy = economy
-        # Pure-domain callers commit in memory; the server supplies Commerce.
-        self.transactions = economy if transactions is None else transactions
-        self._next_session = first_session
+        self.transactions = transactions
+        self._next_session = 1
         self._bindings = {}
-        self._consent = {}
         self._active = {}
         self._closed = {}
 
@@ -91,7 +87,6 @@ class TradeService:
             raise TradeError("account already bound to another peer")
         if self._bindings.get(peer) != account_key:
             self._closed.pop(peer, None)
-            self._consent = {p: q for p, q in self._consent.items() if p != peer and q != peer}
         self._bindings[peer] = account_key
 
     def _key(self, peer):
@@ -99,27 +94,12 @@ class TradeService:
             raise TradeError("unauthenticated trade peer")
         return self._bindings[peer]
 
-    def authorize_pair(self, initiator, recipient):
-        """Adapter calls only after positive, authenticated peer TrAns consent.
-
-        Side0 is the client which sends TrEnt (10015814..10015833), not a sort
-        of nickname strings. Do not call this just because TrEnt named a peer.
-        """
-        if initiator == recipient or self._key(initiator) == self._key(recipient):
-            raise TradeError("trade requires distinct peers")
-        if initiator in self._active or recipient in self._active:
-            raise TradeError("trade peer is already active")
-        self._consent[initiator] = recipient
-
     def begin(self, side0, side1):
         """Trusted adapter/test entry after mutual handshake; returns both Init."""
         keys = (self._key(side0), self._key(side1))
         if side0 == side1 or side0 in self._active or side1 in self._active:
             raise TradeError("trade peer is already active or duplicated")
-        try:
-            reservation = self.economy.reserve_exchange(keys)
-        except EconomyError as exc:
-            raise TradeError(str(exc)) from exc
+        reservation = self.economy.reserve_exchange(keys)
         trade = _Trade(
             (side0, side1),
             reservation,
@@ -131,9 +111,6 @@ class TradeService:
         for peer in trade.peers:
             self._active[peer] = trade
             self._closed.pop(peer, None)
-        self._consent = {
-            p: q for p, q in self._consent.items() if p not in trade.peers and q not in trade.peers
-        }
         body = f"@Init=/ID={trade.session}"
         for side, view in enumerate(reservation.accounts):
             body += f"@No{side}=/RA={view.rating}/M={view.balance}/CP={collection_points(view.cards)}/S={len(view.cards)}"
@@ -196,52 +173,54 @@ class TradeService:
             start += count
         return deliveries
 
-    def handle(self, peer, payload):
+    def handle(self, peer, payload, partner=None):
+        """Route A0/A2 traffic; partner is the peer that consented to this TrEnt.
+
+        Side0 is the client which sends TrEnt (10015814..10015833). Only the
+        router passes partner, after authenticated peer TrAns consent.
+        """
         if not payload.startswith((b"GTM0GA0", b"GTM0GA2", b"GTM0Ga0", b"GTM0Ga2")):
             return None
-        try:
-            family, subtype, session, sections = parse_named(payload)
-            if family == 0xA0:
-                if "TrID" in sections:
-                    return None  # Peer-directed service identity announcement, not registration.
-                return self._entry(peer, subtype, session, sections)
-            trade = self._active.get(peer)
-            if trade is None:
-                return self._late(peer, subtype, session, sections)
-            if trade.session != session:
-                raise TradeError("stale trade session")
-            side = trade.peers.index(peer)
-            token = {
-                0x19: "Quit",
-                0x1A: "Card",
-                0x1B: "Data",
-                0x1C: "Ans",
-                0x1D: "Get",
-                0x10: "Erase",
-                0x22: "Decks",
-            }.get(subtype)
-            if token is None or token not in sections:
-                raise TradeError("unsupported trade operation")
-            if integer(sections[token].get("P"), 1) != side:
-                raise TradeError("side does not match authenticated peer")
-            if subtype == 0x19:
-                fields(sections, ("Quit",))
-                fields(sections["Quit"], ("P",))
-                return self._abort(trade, 0x19, side)
-            if subtype == 0x1A:
-                return self._offer(trade, side, sections)
-            if subtype == 0x1B:
-                return self._selection(trade, side, sections)
-            if subtype == 0x1C:
-                return self._answer(trade, side, sections)
-            if subtype == 0x1D:
-                return self._get(trade, side, sections)
-            self._edit(trade, side, subtype, sections)
-            return []
-        except EconomyError as exc:
-            raise TradeError(str(exc)) from exc
+        family, subtype, session, sections = parse_named(payload)
+        if family == 0xA0:
+            if "TrID" in sections:
+                return None  # Peer-directed service identity announcement, not registration.
+            return self._entry(peer, partner, subtype, session, sections)
+        trade = self._active.get(peer)
+        if trade is None:
+            return self._late(peer, subtype, session, sections)
+        if trade.session != session:
+            raise TradeError("stale trade session")
+        side = trade.peers.index(peer)
+        token = {
+            0x19: "Quit",
+            0x1A: "Card",
+            0x1B: "Data",
+            0x1C: "Ans",
+            0x1D: "Get",
+            0x10: "Erase",
+            0x22: "Decks",
+        }.get(subtype)
+        if token is None or token not in sections:
+            raise TradeError("unsupported trade operation")
+        if integer(sections[token].get("P"), 1) != side:
+            raise TradeError("side does not match authenticated peer")
+        if subtype == 0x19:
+            fields(sections, ("Quit",))
+            fields(sections["Quit"], ("P",))
+            return self._abort(trade, 0x19, side)
+        if subtype == 0x1A:
+            return self._offer(trade, side, sections)
+        if subtype == 0x1B:
+            return self._selection(trade, side, sections)
+        if subtype == 0x1C:
+            return self._answer(trade, side, sections)
+        if subtype == 0x1D:
+            return self._get(trade, side, sections)
+        self._edit(trade, side, subtype, sections)
+        return []
 
-    def _entry(self, peer, subtype, session, sections):
+    def _entry(self, peer, other, subtype, session, sections):
         if subtype != 0 or session != 0 or set(sections) != {"TrEnt"}:
             raise TradeError("invalid trade registration")
         f = sections["TrEnt"]
@@ -254,7 +233,6 @@ class TradeService:
         own = self.economy.account_view(self._key(peer))
         if int(ids[0], 16) != own.nn:
             raise TradeError("registration sender identity mismatch")
-        other = self._consent.get(peer)
         if other is None or self.economy.account_view(self._key(other)).nn != int(ids[1], 16):
             raise TradeError("trade pair lacks authenticated consent")
         deliveries = self.begin(peer, other)
@@ -483,5 +461,4 @@ class TradeService:
         result = self.abort(peer)
         self._bindings.pop(peer, None)
         self._closed.pop(peer, None)
-        self._consent = {p: q for p, q in self._consent.items() if p != peer and q != peer}
         return [delivery for delivery in result if delivery.peer != peer]
