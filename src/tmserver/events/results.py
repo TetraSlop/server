@@ -5,8 +5,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from tmserver.checks import STABLE_ID
 
-_Identifier = Annotated[str, Field(pattern=r"\A[A-Za-z0-9_.:-]{1,128}\z")]
+
+_Identifier = Annotated[str, Field(pattern=rf"\A{STABLE_ID}\z")]
 _AccountKey = Annotated[str, Field(min_length=1, max_length=128)]
 
 

@@ -8,7 +8,9 @@ only later play in that week.
 """
 
 from collections.abc import Mapping
+from functools import partial
 
+from tmserver.checks import uint
 from tmserver.economy.errors import EconomyError
 
 POLICY = "local-utc-week-v1"
@@ -17,10 +19,7 @@ MONDAY_OFFSET = 3 * 24 * 60 * 60  # The Unix epoch was a Thursday.
 DWORD_MAX = 0xFFFFFFFF
 
 
-def _uint(value):
-    if type(value) is not int or not 0 <= value <= DWORD_MAX:
-        raise EconomyError("weekly values must be unsigned DWORDs")
-    return value
+_uint = partial(uint, maximum=DWORD_MAX, error=EconomyError, what="weekly value")
 
 
 def _key(value):

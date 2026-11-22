@@ -10,8 +10,10 @@ import json
 import re
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
+from functools import partial
 
 from tmserver.cards.model import Card, card_values
+from tmserver.checks import stable_id, uint
 from tmserver.economy.models import MAX_MONEY
 from tmserver.economy.errors import EconomyError
 
@@ -19,16 +21,8 @@ from tmserver.economy.errors import EconomyError
 MatchEconomyError = EconomyError
 
 
-def _int(x, lo, hi):
-    if type(x) is not int or not lo <= x <= hi:
-        raise MatchEconomyError("invalid match economy integer")
-    return x
-
-
-def _id(value):
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value):
-        raise MatchEconomyError("invalid durable round ID")
-    return value
+_uint = partial(uint, error=MatchEconomyError, what="match economy integer")
+_id = partial(stable_id, error=MatchEconomyError, what="durable round ID")
 
 
 def _trunc(n, d):
@@ -40,9 +34,9 @@ def _result(scores, ratings, n):
     if len(scores) != n or len(ratings) != n or n not in (2, 3):
         raise MatchEconomyError("invalid result extent")
     for x in scores:
-        _int(x, 0, 25)
+        _uint(x, 25)
     for x in ratings:
-        _int(x, 0, 99999)
+        _uint(x, 99999)
     if not 1 <= sum(scores) <= 25:
         raise MatchEconomyError("invalid ordinary board score total")
     return scores, ratings
@@ -55,8 +49,8 @@ def offline_payout(scores, ratings, stake, seat=0):
     The hosted policy credits max(0,value); online money animation ignores<=0.
     """
     scores, ratings = _result(scores, ratings, len(scores))
-    _int(stake, 0, 2000)
-    _int(seat, 0, len(scores) - 1)
+    _uint(stake, 2000)
+    _uint(seat, len(scores) - 1)
     if len(set(scores)) == 1:
         return stake
     lower = sum(value < scores[seat] for value in scores)
@@ -135,10 +129,9 @@ class MatchEconomy:
         return views
 
     def _cards(self, cards):
-        cards = tuple(self.economy.catalog.validate(Card.from_card(c)) for c in cards)
-        if len(cards) > 30 or any(c.deck != 255 for c in cards):
-            raise MatchEconomyError("invalid match reward batch")
-        return cards
+        return self.economy.catalog.validate_batch(
+            (Card.from_card(c) for c in cards), error=MatchEconomyError
+        )
 
     def begin(
         self, round_id, reservations, stake, *, mode="versus", player_count=2, money_enabled=True
@@ -150,8 +143,8 @@ class MatchEconomy:
         every Continue acceptance before beginning a rematch round.
         """
         _id(round_id)
-        _int(stake, 0, 2000)
-        _int(player_count, 2, 3)
+        _uint(stake, 2000)
+        _uint(player_count, 3, 2)
         if type(money_enabled) is not bool or not money_enabled and stake:
             raise MatchEconomyError("disabled match money requires zero stake")
         if mode not in ("versus", "computer"):
@@ -449,8 +442,8 @@ class MatchEconomy:
                 }:
                     raise MatchEconomyError("invalid saved round fields")
                 rid = _id(d["id"])
-                n = _int(d["player_count"], 2, 3)
-                stake = _int(d["stake"], 0, 2000)
+                n = _uint(d["player_count"], 3, 2)
+                stake = _uint(d["stake"], 2000)
                 seats = {int(s): k for s, k in d["seats"].items()}
                 if any(str(s) not in d["seats"] or not 0 <= s < n for s in seats) or len(
                     set(seats.values())
@@ -475,7 +468,7 @@ class MatchEconomy:
                 if row.money not in ("escrow", "paid", "refunded") or type(row.closed) is not bool:
                     raise MatchEconomyError("invalid saved money phase")
                 row.result = None if d["result"] is None else _result(*d["result"], n)
-                row.payouts = {int(s): _int(v, 0, MAX_MONEY) for s, v in d["payouts"].items()}
+                row.payouts = {int(s): _uint(v, MAX_MONEY) for s, v in d["payouts"].items()}
                 row.cbc = {
                     int(s): obj._cards(Card(*c) for c in cards) for s, cards in d["cbc"].items()
                 }

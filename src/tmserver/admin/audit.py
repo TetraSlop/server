@@ -6,12 +6,14 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from tmserver.checks import STABLE_ID
+
 
 class _ImmutableModel(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
 
-StableId = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.:-]{1,128}$")]
+StableId = Annotated[str, Field(pattern=f"^{STABLE_ID}$")]
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 AwardPoints = Annotated[int, Field(ge=0, le=65535)]
 PrizePoints = Annotated[int, Field(ge=0, le=99999)]

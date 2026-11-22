@@ -7,7 +7,9 @@ TetraPackets flows/trade.md and irc/G/A2.md.
 
 import re
 from dataclasses import dataclass, field, replace
+from functools import partial
 
+from tmserver.checks import decimal, exact_keys
 from tmserver.cards.catalog import collection_points
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
@@ -25,19 +27,8 @@ class Delivery:
     reload_profile: bool = False
 
 
-def integer(value, maximum=0xFFFFFFFF):
-    if (
-        not isinstance(value, str)
-        or not re.fullmatch(r"[0-9]{1,10}", value)
-        or int(value) > maximum
-    ):
-        raise TradeError("invalid unsigned decimal field")
-    return int(value)
-
-
-def fields(value, keys):
-    if set(value) != set(keys):
-        raise TradeError("unexpected or missing fields")
+integer = partial(decimal, error=TradeError, what="unsigned decimal field")
+fields = partial(exact_keys, error=TradeError)
 
 
 def numbers(value, count, maximum=255):

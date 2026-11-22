@@ -10,23 +10,16 @@ No account is enrolled implicitly. Save the snapshot with the result and profile
 commits before sending D2; a crash between separate saves is not atomic.
 """
 
-import re
 from dataclasses import dataclass
+from functools import partial
 
+from tmserver.checks import stable_id, uint
 from tmserver.game.departure_rules import result_classes
 from tmserver.economy.errors import EconomyError
 
 
-def _integer(value, low, high, label):
-    if type(value) is not int or not low <= value <= high:
-        raise EconomyError("invalid " + label)
-    return value
-
-
-def _identifier(value, label):
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value):
-        raise EconomyError("invalid " + label)
-    return value
+_uint = partial(uint, error=EconomyError)
+_identifier = partial(stable_id, error=EconomyError)
 
 
 def _scores(scores, seat):
@@ -34,10 +27,10 @@ def _scores(scores, seat):
         raise EconomyError("scores must contain two or three server seats")
     maximum = 16 if len(scores) == 2 else 25
     for score in scores:
-        _integer(score, 0, maximum, "score")
+        _uint(score, maximum, what="score")
     if not 1 <= sum(scores) <= maximum:
         raise EconomyError("score total exceeds the ordinary board")
-    _integer(seat, 0, len(scores) - 1, "server seat")
+    _uint(seat, len(scores) - 1, what="server seat")
     return tuple(scores)
 
 
@@ -56,16 +49,16 @@ class HistoryState:
         if type(self.entries) is not tuple or len(self.entries) != 32:
             raise EconomyError("history must be an immutable32-entry tuple")
         for item in self.entries:
-            _integer(item, 0, 4, "result class")
-        _integer(self.sequence, 0, 65535, "WORD sequence")
-        _integer(self.revision, 0, (1 << 63) - 1, "revision")
+            _uint(item, 4, what="result class")
+        _uint(self.sequence, 65535, what="WORD sequence")
+        _uint(self.revision, (1 << 63) - 1, what="revision")
 
     @property
     def rating(self):
         return sum(50 * (item + 2) for item in self.entries) // 32
 
     def next(self, result_class):
-        _integer(result_class, 0, 4, "result class")
+        _uint(result_class, 4, what="result class")
         entries = list(self.entries)
         entries[self.sequence & 31] = result_class
         return HistoryState(tuple(entries), (self.sequence + 1) & 65535, self.revision + 1)
@@ -94,7 +87,7 @@ class LocalRatingHistory:
         self._receipts = {}
 
     def enrolled(self, key):
-        _identifier(key, "account key")
+        _identifier(key, what="account key")
         return key in self._states
 
     def enroll(self, key, *, history=None, sequence=0):
@@ -104,7 +97,7 @@ class LocalRatingHistory:
         An imported history must be supplied by trusted local configuration.
         No existing enrollment can be reset through this method.
         """
-        _identifier(key, "account key")
+        _identifier(key, what="account key")
         if key in self._states:
             raise EconomyError("account already enrolled")
         if history is not None and not isinstance(history, (list, tuple)):
@@ -115,7 +108,7 @@ class LocalRatingHistory:
         return state
 
     def state(self, key):
-        _identifier(key, "account key")
+        _identifier(key, what="account key")
         try:
             return self._states[key]
         except KeyError as exc:
@@ -123,7 +116,7 @@ class LocalRatingHistory:
 
     def quote(self, key, match_id, scores, seat):
         before = self.state(key)
-        _identifier(match_id, "stable match ID")
+        _identifier(match_id, what="stable match ID")
         scores = _scores(scores, seat)
         completed = self._receipts[key].get(match_id)
         if completed is not None:
@@ -237,7 +230,7 @@ class LocalRatingHistory:
             for event in record["results"]:
                 if type(event) is not dict or set(event) != {"match_id", "scores", "seat"}:
                     raise EconomyError("invalid rating receipt")
-                _identifier(event["match_id"], "stable match ID")
+                _identifier(event["match_id"], what="stable match ID")
                 if event["match_id"] in service._receipts[key]:
                     raise EconomyError("duplicate durable rating receipt")
                 service.commit(

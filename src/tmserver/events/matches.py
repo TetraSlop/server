@@ -8,7 +8,9 @@ prizes and rewards alone. Layout: TetraPackets flows/event-matches.md.
 """
 
 from dataclasses import dataclass, replace
+from functools import partial
 
+from tmserver.checks import uint
 from tmserver.game import special_rules as special
 from tmserver.game.models import Card, Delivery
 from tmserver.game.errors import MatchError
@@ -16,10 +18,7 @@ from tmserver.game.match import MatchService
 from tmserver.game.packets import decode, numbers, packet
 
 
-def _uint(value, maximum, label):
-    if type(value) is not int or not 0 <= value <= maximum:
-        raise MatchError(label + " outside supported domain")
-    return value
+_uint = partial(uint, error=MatchError)
 
 
 def event_session_init(session, *, rating, balance, points, count, rt):
@@ -28,11 +27,11 @@ def event_session_init(session, *, rating, balance, points, count, rt):
     M is parsed but does not replace client balance. This builder cannot repair
     a stale profile balance. N (not header) is the session token.
     """
-    _uint(rating, 0x7FFFFFFF, "rating")
-    _uint(balance, 99999999, "balance")
-    _uint(points, 65535, "points")
-    _uint(count, 1000, "inventory count")
-    _uint(rt, 0x7FFFFFFF, "RT")
+    _uint(rating, 0x7FFFFFFF, what="rating")
+    _uint(balance, 99999999, what="balance")
+    _uint(points, 65535, what="points")
+    _uint(count, 1000, what="inventory count")
+    _uint(rt, 0x7FFFFFFF, what="RT")
     return packet(
         0xB2,
         0x13,

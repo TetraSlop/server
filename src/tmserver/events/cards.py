@@ -10,10 +10,12 @@ flows/event-cards.md.
 import struct
 from copy import copy
 from dataclasses import dataclass, replace
+from functools import partial
 
 from tmserver.cards.catalog import collection_points
 from tmserver.economy.models import MAX_MONEY
 from tmserver.cards.model import Card
+from tmserver.checks import uint
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_records
@@ -23,10 +25,7 @@ from tmserver.events.packets import _id, _keys, _number
 EventCardError = EventError
 
 
-def _integer(value, maximum):
-    if type(value) is not int or not 0 <= value <= maximum:
-        raise EventCardError("invalid event delivery integer")
-    return value
+_integer = partial(uint, error=EventCardError, what="event delivery integer")
 
 
 @dataclass
@@ -94,12 +93,9 @@ class EventCardService:
         _id(grant_id)
         if self.host.member(key, event_id) is None:
             raise EventCardError("grant requires a registered event member")
-        cards = tuple(
-            self.economy.catalog.validate(Card.from_card(c))
-            for c in cards
+        cards = self.economy.catalog.validate_batch(
+            (Card.from_card(c) for c in cards), error=EventCardError
         )
-        if len(cards) > 30 or any(c.deck != 255 for c in cards):
-            raise EventCardError("grant needs at most 30 undecked cards")
         _integer(money, MAX_MONEY)
         identity = (key, event_id, grant_id)
         old = self._grants.get(identity)

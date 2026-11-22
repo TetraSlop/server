@@ -6,11 +6,12 @@ your own listing. BC is a revision token chosen by this server. Layout:
 TetraPackets irc/A.md and file/auction-files.md.
 """
 
-import re
 from copy import copy
 from dataclasses import dataclass, replace
+from functools import partial
 
 from tmserver.cards.catalog import collection_points
+from tmserver.checks import stable_id, uint
 from tmserver.economy.models import MAX_MONEY
 from tmserver.economy.auctions.models import (
     Actor,
@@ -29,10 +30,7 @@ MAX_DELIVERY = 30
 _KINDS = ("payment", "returned", "won", "refund")
 
 
-def _uint(value, maximum=0xFFFFFFFF, minimum=0):
-    if type(value) is not int or not minimum <= value <= maximum:
-        raise AuctionError("auction integer outside supported range")
-    return value
+_uint = partial(uint, error=AuctionError, what="auction integer")
 
 
 @dataclass
@@ -106,11 +104,8 @@ class AuctionEconomy:
         Persist jointly with the source reward ledger before acknowledging it.
         """
         self.economy.account_view(key)
-        if not isinstance(source_id, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", source_id):
-            raise AuctionError("invalid external return source ID")
-        cards = tuple(self.economy.catalog.validate(c) for c in cards)
-        if len(cards) > 30 or any(c.deck != 255 for c in cards):
-            raise AuctionError("invalid external return card batch")
+        stable_id(source_id, error=AuctionError, what="external return source ID")
+        cards = self.economy.catalog.validate_batch(cards, error=AuctionError)
         value = (key, cards)
         if source_id in self._external_returns:
             if self._external_returns[source_id] != value:
@@ -512,15 +507,10 @@ class AuctionEconomy:
             for row in saved.external_returns:
                 source_id, key = row.id, row.key
                 economy.account_view(key)
-                if (
-                    not isinstance(source_id, str)
-                    or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", source_id)
-                    or source_id in result._external_returns
-                ):
-                    raise AuctionError("invalid duplicate external return ID")
-                cards = tuple(economy.catalog.validate(card) for card in row.cards)
-                if any(c.deck != 255 for c in cards):
-                    raise AuctionError("invalid stored external return cards")
+                stable_id(source_id, error=AuctionError, what="external return ID")
+                if source_id in result._external_returns:
+                    raise AuctionError("duplicate external return ID")
+                cards = economy.catalog.validate_batch(row.cards, error=AuctionError)
                 result._external_returns[source_id] = (key, cards)
         except (KeyError, TypeError, ValueError, OverflowError) as exc:
             if isinstance(exc, AuctionError):

@@ -11,7 +11,9 @@ import json
 import re
 from copy import copy
 from dataclasses import dataclass, replace
+from functools import partial
 
+from tmserver.checks import decimal, exact_keys, stable_id
 from tmserver.economy.models import AccountView, MatchReservation
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
@@ -23,25 +25,9 @@ class ResultRewardError(EconomyError):
     pass
 
 
-def _int(value, maximum=0xFFFFFFFF):
-    if (
-        not isinstance(value, str)
-        or not re.fullmatch(r"[0-9]{1,10}", value)
-        or int(value) > maximum
-    ):
-        raise ResultRewardError("invalid result edit integer")
-    return int(value)
-
-
-def _fields(value, names):
-    if set(value) != set(names):
-        raise ResultRewardError("unexpected result edit fields")
-
-
-def _id(value):
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value):
-        raise ResultRewardError("result requires a stable unique reward ID")
-    return value
+_int = partial(decimal, error=ResultRewardError, what="result edit integer")
+_fields = partial(exact_keys, error=ResultRewardError, what="result edit fields")
+_id = partial(stable_id, error=ResultRewardError, what="reward ID")
 
 
 def _digest(cards):
@@ -99,13 +85,9 @@ class ResultRewardService:
         self._accepted = staged._accepted
 
     def _cards(self, cards):
-        values = tuple(
-            self.economy.catalog.validate(Card.from_card(c))
-            for c in cards
+        return self.economy.catalog.validate_batch(
+            (Card.from_card(c) for c in cards), error=ResultRewardError
         )
-        if len(values) > 30 or any(c.deck != 255 for c in values):
-            raise ResultRewardError("generated reward batch exceeds native capacity or has a deck")
-        return values
 
     def stage(self, key, reservation, reward_id, seat, extras):
         """Trusted engine snapshot, after atomic original-five growth/stat commit.
