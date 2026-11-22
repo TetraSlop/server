@@ -79,9 +79,8 @@ the event-card and audit journals; account inventory, balance and event progress
 remain unchanged until normal collection. Restoration loads event grants before
 audit receipts so it can check their original facts even after collection.
 
-`game.backends.RulesBackend` describes the borrowed calculation dependency.
-It requires battle, growth, target choice and ordinary/special/three-player COM
-decisions. The CLI validates and opens native ABI 3 before any save or listener,
+`MatchService` borrows a `rules_backend` with the native battle, growth, target
+and COM placement calls. The CLI validates and opens native ABI 3 before any save or listener,
 then closes it after the services drain. Direct API users can supply an owned
 `NativeRules` context; the default loads the environment-configured process
 context on first calculation. There is no Python algorithm backend or capability

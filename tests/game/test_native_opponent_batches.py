@@ -9,7 +9,7 @@ from pathlib import Path
 
 from tests import FIXTURES
 from tmserver.cards.catalog import Catalog
-from tmserver.game.opponents import OpponentError, prepare_opponent, prepare_opponents
+from tmserver.game.opponents import OpponentError, prepare_opponents
 from tmserver.game.rules import CRTLCG
 
 
@@ -76,23 +76,6 @@ class OpponentBatchTests(unittest.TestCase):
                     case["rng_draws_sha256"],
                 )
 
-    def test_single_opponent_API_keeps_original_frozen_hands_and_stream(self):
-        singles = [case for case in self.fixture["cases"] if len(case["npc_ids"]) == 1]
-        self.assertEqual(len(singles), 2)
-        for case in singles:
-            with self.subTest(npc=case["npc_ids"][0], guild=case["guild"]):
-                rng = CRTLCG(case["seed"])
-                player = prepare_opponent(case["npc_ids"][0], self.catalog, rng, case["guild"])
-                self.assertEqual(
-                    tuple(map(card_bytes, player.hand)),
-                    tuple(map(original_card_bytes, case["hands_compact16"][0])),
-                )
-                self.assertEqual(
-                    tuple(map(card_bytes, player.unused)),
-                    tuple(map(original_card_bytes, case["unused_compact16"][0])),
-                )
-                self.assertEqual(rng.state, case["rng_final_state"])
-
     def test_invalid_batch_and_guild_do_not_generate_cards_or_consume_randomness(self):
         def unexpected_draw():
             self.fail("invalid input consumed randomness")
@@ -104,11 +87,9 @@ class OpponentBatchTests(unittest.TestCase):
             with self.subTest(guild=guild), self.assertRaises(OpponentError):
                 prepare_opponents((1, 3), self.catalog, unexpected_draw, guild)
 
-    def test_draw_contract_is_preserved_by_single_and_batch_helpers(self):
+    def test_draw_contract_is_preserved(self):
         for bad in (-1, 32768, True, 0.0, None):
             with self.subTest(draw=bad):
-                with self.assertRaisesRegex(OpponentError, "CRT draw"):
-                    prepare_opponent(1, self.catalog, lambda: bad)
                 with self.assertRaisesRegex(OpponentError, "CRT draw"):
                     prepare_opponents((1, 3), self.catalog, lambda: bad)
 

@@ -23,11 +23,6 @@ class Opponent:
     pack: int
     name: bytes
 
-    def known_name(self, collection_points):
-        if type(collection_points) is not int or not 0 <= collection_points <= 65535:
-            raise OpponentError("collection points must fit the original WORD")
-        return self.name if collection_points >= self.name_threshold else None
-
 
 @dataclass(frozen=True)
 class PreparedOpponent:
@@ -36,8 +31,6 @@ class PreparedOpponent:
     unused: tuple
 
 
-SOURCE_SHA256 = "b32c71431bf5857c5d2f3134b4ef0be924a02dae4f371aa7c8e706506206602c"
-DECODED_SHA256 = "356040c4c76d790db4a22447de7ef4eadba89ab99c6599df4988b2124772a7a3"
 ROWS = (
     (1, 0, 0, 300, 65, 1, 50, 25, b"Flower Girl Natasha"),
     (2, 100, 10, 293, 67, 3, 51, 26, b"Lumberjack Mick"),
@@ -122,7 +115,3 @@ def prepare_opponents(npc_ids, catalog, raw_rng, guild=0):
         prepared.append(PreparedOpponent(npc, tuple(hand), tuple(pool)))
     return tuple(prepared)
 
-
-def prepare_opponent(npc_id, catalog, raw_rng, guild=0):
-    """Single-NPC form, retaining the original pool10 then selection5 stream."""
-    return prepare_opponents((npc_id,), catalog, raw_rng, guild)[0]

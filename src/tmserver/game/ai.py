@@ -39,7 +39,6 @@ class _Blocked:
 
 
 BLOCKED = _Blocked()
-DIRECTIONS = ((0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1))
 
 
 def _card(card):
@@ -81,14 +80,3 @@ def _targets(candidates, board_size=16):
         raise AIError("battle candidates must be at most eight distinct fields")
     return candidates
 
-
-def choose_move(hand, board, owner, raw_rng, personality=Personality()):
-    from tmserver.game.original.runtime import default_rules
-
-    return default_rules().choose_move(hand, board, owner, raw_rng, personality)
-
-
-def choose_target(candidates, raw_rng, *, board_size=16):
-    from tmserver.game.original.runtime import default_rules
-
-    return default_rules().choose_target(candidates, raw_rng, board_size=board_size)

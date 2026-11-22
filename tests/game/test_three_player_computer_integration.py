@@ -15,7 +15,7 @@ from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, player_id, service
 from tmserver.economy.match_ledger import offline_payout
 from tmserver.game.packets import decode, packet
 from tmserver.game.rules import CRTLCG
-from tmserver.game.special_rules import choose_special_move
+from tmserver.game.original.runtime import default_rules
 from tmserver.rankings.stats import PracticeStats
 from tmserver.rooms.packets import ROOM_ID
 from tmserver.network.server import Server
@@ -106,7 +106,7 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
             if match.phase == "turn" and match.active == 0:
                 hand, field = 0, match.legal_fields()[0]
                 if strategic:
-                    move = choose_special_move(
+                    move = default_rules().choose_special_move(
                         match.players[0].hand, match.observer_snapshot().board, 0, choices
                     )
                     hand, field = move.hand_index, move.field

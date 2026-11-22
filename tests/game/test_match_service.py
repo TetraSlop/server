@@ -9,8 +9,10 @@ from tests import FIXTURES
 from tmserver.game.models import BoardCard, Card
 from tmserver.game.errors import MatchError
 from tmserver.game.match import MatchService
+from tmserver.game import special_rules as special
 from tmserver.game.packets import decode, packet
-from tmserver.game.rules import CRTLCG, calculate_battle, grow_card
+from tmserver.game.original.runtime import default_rules
+from tmserver.game.rules import CRTLCG
 from tmserver.rankings.stats import PracticeStats
 
 CARDS = tuple(Card(i, 50, 0, 40, 30, 1, 0) for i in range(5))
@@ -296,8 +298,9 @@ class MatchTests(unittest.TestCase):
 
     def test_nonwrapping_arrows(self):
         s = MatchService()
-        self.assertEqual(dict(s.neighbors(0)), {2: 1, 3: 5, 4: 4})
-        self.assertNotIn(4, dict(s.neighbors(3)).values())
+        board = s._effect_cells()
+        self.assertEqual(dict(special.neighbors(board, 0)), {2: 1, 3: 5, 4: 4})
+        self.assertNotIn(4, dict(special.neighbors(board, 3)).values())
 
     def board_case(self, arrows=4):
         s, _ = service()
@@ -576,7 +579,7 @@ class MatchTests(unittest.TestCase):
             aa, dd = s.battle_values(a, d)
             self.assertEqual(aa[0], 30 if kind == 3 else 10)
             self.assertEqual(dd[0], 15 if kind == 0 else 5)
-            reference = calculate_battle(a, d, CRTLCG(1))
+            reference = default_rules().calculate_battle(a, d, CRTLCG(1))
             self.assertEqual(
                 (aa, dd), (reference.attacker.wire(0)[1:], reference.defender.wire(0)[1:])
             )
@@ -783,7 +786,7 @@ class MatchTests(unittest.TestCase):
             self.assertEqual(s._final_order[seat], (0, 2, 3, 4, 1))
             for hand_slot, original_slot in enumerate(s._final_order[seat]):
                 c = final.original[original_slot]
-                expected = grow_card(
+                expected = default_rules().grow_card(
                     c, s.baselines[c.model], 1, shared[(hand_slot - 3 * seat + 2) & 7]
                 ).card
                 self.assertEqual(final.updated[original_slot], Card(*expected.full()))
@@ -1054,7 +1057,7 @@ class SpecialMatchTests(unittest.TestCase):
         defender = Card(1, 50, 0, 40, 30, 1, 64)
         s.board[6] = BoardCard(defender, 1, 1, 1, property=2, modifier=10)
         draws = [3, 2, 20, 21, 8, 9] + [255] * 8 + [0] * 8
-        expected = calculate_battle(
+        expected = default_rules().calculate_battle(
             cards[0],
             defender,
             iter(draws).__next__,
@@ -1299,7 +1302,7 @@ class SpecialMatchTests(unittest.TestCase):
         cards = (Card(0, 50, 0, 40, 30, 1, 4),) + CARDS[1:]
         s, _ = self.start(fields, cards, allow_cbc=True)
         expected_rng = CRTLCG(s.rng.state)
-        calculate_battle(cards[0], Card(0, 0, 0, 0, 0, 0, 0), expected_rng, defender_property=0x50)
+        default_rules().calculate_battle(cards[0], Card(0, 0, 0, 0, 0, 0, 0), expected_rng, defender_property=0x50)
         expected_R = tuple(expected_rng() & 255 for _ in range(8))
         model = s.catalog.select(75, 0, expected_rng)
         expected = Card(*s.catalog.generate(model, expected_rng).full())
@@ -1419,8 +1422,9 @@ class ThreePlayerTests(unittest.TestCase):
             MatchService(mode="versus", player_count=3, start_fields=[0] * 16)
         s, initial, out = self.start()
         self.assertEqual((len(s.board), s.last_sequence), (25, 14))
-        self.assertEqual(dict(s.neighbors(0)), {2: 1, 3: 6, 4: 5})
-        self.assertNotIn(5, dict(s.neighbors(4)).values())
+        board = s._effect_cells()
+        self.assertEqual(dict(special.neighbors(board, 0)), {2: 1, 3: 6, 4: 5})
+        self.assertNotIn(5, dict(special.neighbors(board, 4)).values())
         self.assertEqual(decode(initial[0].payload).sections["VsGameInit"]["N"], "3")
         start = next(
             decode(d.payload).sections["StartData"] for d in out if decode(d.payload).subtype == 8
@@ -1592,11 +1596,11 @@ class OriginalComputerTests(unittest.TestCase):
             self.assertEqual((s.snapshot(), s.computer_view, s.rng.state), before)
 
     def test_complete_original_NPC_round_rematch_and_menu_reconfiguration(self):
-        from tmserver.game.opponents import prepare_opponent
+        from tmserver.game.opponents import prepare_opponents
 
         for npc in (1, 3, 30):
             s, _ = self.menu(seed=20 + npc)
-            expected = prepare_opponent(npc, s.catalog, CRTLCG(s.rng.state))
+            expected = prepare_opponents((npc,), s.catalog, CRTLCG(s.rng.state))[0]
             s.handle("alice", self.choose(npc))
             self.assertEqual(
                 [c.full() for c in s.ai_cards],

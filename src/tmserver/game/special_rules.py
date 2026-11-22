@@ -329,8 +329,3 @@ def finish_turn(board, source):
         output.append(c)
     return tuple(output)
 
-
-def choose_special_move(hand, board, active, raw_rng, personality=None):
-    from tmserver.game.original.runtime import default_rules
-
-    return default_rules().choose_special_move(hand, board, active, raw_rng, personality)

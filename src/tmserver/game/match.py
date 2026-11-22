@@ -14,7 +14,6 @@ from typing import Callable
 from tmserver.cards.catalog import Catalog
 from tmserver.game import special_rules as special
 from tmserver.game.ai import Personality
-from tmserver.game.backends import RulesBackend
 from tmserver.game.boards import generate_board
 from tmserver.game.departure_rules import next_turn, result_ranking, result_slots
 from tmserver.game.errors import MatchError, RulesExecutionError
@@ -45,8 +44,6 @@ from tmserver.rankings.stats import PracticeStats
 from tmserver.rooms.metadata import TableMetadataError, table_info
 from tmserver.rooms.rules import RoomRules
 
-DIRECTIONS = ((0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1))
-
 
 class MatchService:
     def __init__(
@@ -72,16 +69,11 @@ class MatchService:
         flexible_seats=False,
         second_npc_nickname_id=None,
         room_rules=None,
-        rules_backend: RulesBackend | None = None,
+        rules_backend=None,
     ):
         if mode not in ("computer", "versus"):
             raise ValueError("mode must be computer or versus")
         self.mode = mode
-        if rules_backend is not None and any(
-            not callable(getattr(rules_backend, name, None))
-            for name in ("calculate_battle", "choose_move", "choose_special_move", "grow_card", "choose_target")
-        ):
-            raise ValueError("rules backend requires battle, growth, target, ordinary and special AI calculations")
         self.rules_backend = rules_backend if rules_backend is not None else NativeRuntime()
         self._rules_failure = None
         if type(npc_nickname_id) is not int or not 0 < npc_nickname_id < 1 << 64:
@@ -1342,14 +1334,6 @@ class MatchService:
             self.pending_move = (h, f)
             return []
         return self._place(h, f)
-
-    def neighbors(self, index):
-        width = self.board_width
-        x, y = index % width, index // width
-        for bit, (dx, dy) in enumerate(DIRECTIONS):
-            xx, yy = x + dx, y + dy
-            if 0 <= xx < width and 0 <= yy < width:
-                yield bit, yy * width + xx
 
     def _classify(self):
         source = self.board[self.source]
