@@ -264,7 +264,8 @@ def postgres_export(store, snapshot):
         source.write_text(document(snapshot), encoding="utf8", newline="\n")
         import_json(store, source, event_configs=(EVENT,))
         export_json(store, target)
-        return target.read_bytes().decode("utf8")
+        # export_json writes the platform newline; the document itself uses LF.
+        return target.read_text(encoding="utf8")
 
 
 def main():
