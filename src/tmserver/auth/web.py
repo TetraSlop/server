@@ -10,7 +10,7 @@ from starlette.routing import Route, WebSocketRoute
 
 from tmserver.accounts.provisioning import AccountCapacityError, import_bindings, provision_identity
 
-from .provider import InvalidToken, ProviderUnavailable
+from .provider import InvalidToken, ProviderUnavailable, header_value
 from .sessions import AccessError, SESSION_SECONDS, TICKET_SECONDS, Sessions
 from .streams import CHUNK_BYTES, relay
 
@@ -35,7 +35,7 @@ def bearer(connection):
     if len(values) != 1 or not values[0].startswith("Bearer "):
         raise AccessError("invalid_token")
     token = values[0][7:]
-    if not token or len(token) > 8192 or any(ord(c) < 33 or ord(c) > 126 for c in token):
+    if not header_value(token):
         raise AccessError("invalid_token")
     return token
 
@@ -64,7 +64,7 @@ def create_app(host, profile, config, verifier, *, public_origin=None):
     authority = urlsplit(origin).netloc
     websocket_origin = origin.replace("https://", "wss://", 1).replace("http://", "ws://", 1)
     import_bindings(host, verifier.issuer, config.account_bindings(host.account_specs))
-    sessions = Sessions(host.identities.bindings(verifier.issuer), verifier.issuer)
+    sessions = Sessions(lambda subject: host.identities.account(verifier.issuer, subject))
 
     def boundary(connection):
         if connection.headers.getlist("host") != [authority] or connection.url.query:
@@ -90,32 +90,34 @@ def create_app(host, profile, config, verifier, *, public_origin=None):
                 return response({"error": "request_timeout"}, 408)
         return handle
 
+    async def verified(request):
+        subject = await verifier.verify(bearer(request))
+        boundary(request)
+        if subject.issuer != verifier.issuer:
+            raise AccessError("account_not_linked", 403)
+        return subject
+
     async def configuration(request):
         return response(dict(protocol=1, provider="discord",
-                             supabase_url=verifier.issuer.removesuffix("/auth/v1"),
+                             supabase_url=config.supabase_url,
                              publishable_key=config.publishable_key,
                              ticket_ttl_seconds=TICKET_SECONDS, session_ttl_seconds=SESSION_SECONDS,
                              stream_subprotocol="tm-stream-v1", max_chunk_bytes=CHUNK_BYTES))
 
     async def issue(request):
         await read_model(request, TicketRequest)
-        subject = await verifier.verify(bearer(request))
-        boundary(request)
-        if subject.issuer != verifier.issuer:
-            raise AccessError("account_not_linked", 403)
-        key = host.identities.account(subject.issuer, subject.subject)
-        if key is None:
+        subject = await verified(request)
+        if host.identities.account(subject.issuer, subject.subject) is None:
             if not config.auto_register:
                 raise AccessError("account_not_linked", 403)
             if not subject.discord:
                 raise AccessError("discord_required", 403)
             try:
-                key = provision_identity(host, subject.issuer, subject.subject, name=subject.display_name)
+                provision_identity(host, subject.issuer, subject.subject, name=subject.display_name)
             except OSError:
                 raise AccessError("storage_unavailable", 503) from None
             except AccountCapacityError:
                 raise AccessError("capacity", 503) from None
-        sessions.bindings[subject.subject] = key
         return response(dict(ticket=sessions.issue(subject), expires_in=TICKET_SECONDS), 201)
 
     async def redeem(request):
@@ -139,8 +141,7 @@ def create_app(host, profile, config, verifier, *, public_origin=None):
 
     async def renew(request):
         command = await read_model(request, RenewRequest)
-        subject = await verifier.verify(bearer(request))
-        boundary(request)
+        subject = await verified(request)
         sessions.renew(subject, command.session_token)
         return response(dict(expires_in=SESSION_SECONDS))
 
@@ -149,9 +150,7 @@ def create_app(host, profile, config, verifier, *, public_origin=None):
         return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
     async def revoke_account(request):
-        subject = await verifier.verify(bearer(request))
-        boundary(request)
-        sessions.revoke_subject(subject)
+        sessions.revoke_subject(await verified(request))
         return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
     async def stream(websocket):

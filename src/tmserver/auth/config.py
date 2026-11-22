@@ -1,12 +1,11 @@
 """Hosted registration policy and optional import of existing account bindings."""
 
 from pathlib import Path
-from urllib.parse import urlsplit
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, TypeAdapter, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .provider import validate_project_url, validate_public_key
+from .provider import https_origin, validate_public_key
 
 
 class AuthConfig(BaseModel):
@@ -20,7 +19,7 @@ class AuthConfig(BaseModel):
     @field_validator("supabase_url")
     @classmethod
     def project(cls, value):
-        return validate_project_url(value).removesuffix("/auth/v1")
+        return https_origin(value, "Supabase requires a trusted HTTPS project origin")
 
     @field_validator("publishable_key")
     @classmethod
@@ -30,13 +29,7 @@ class AuthConfig(BaseModel):
     @field_validator("public_origin")
     @classmethod
     def origin(cls, value):
-        parts = urlsplit(value)
-        if (parts.scheme != "https" or not parts.hostname or parts.username or parts.password
-                or parts.path not in ("", "/") or parts.query or parts.fragment):
-            raise ValueError("public_origin must be an HTTPS origin without a path")
-        if parts.port is not None and not 1 <= parts.port <= 65535:
-            raise ValueError("invalid public port")
-        return str(TypeAdapter(HttpUrl).validate_python(value, strict=True)).rstrip("/")
+        return https_origin(value, "public_origin must be an HTTPS origin without a path")
 
     @field_validator("bindings")
     @classmethod

@@ -13,10 +13,6 @@ SESSION_SECONDS = 3600
 MAX_SESSIONS = 128
 
 
-def same_identity(left, right):
-    return (left.issuer, left.subject) == (right.issuer, right.subject)
-
-
 class AccessError(ValueError):
     def __init__(self, code, status=401):
         super().__init__(code)
@@ -37,14 +33,20 @@ class PlaySession:
 
 
 class Sessions:
-    def __init__(self, bindings, issuer, *, clock=time.monotonic):
-        self.bindings, self.issuer, self.clock = dict(bindings), issuer, clock
+    """Subjects come from one verifier, so the subject ID alone names a user.
+
+    lookup maps a subject ID to its linked account key, or None.
+    """
+
+    def __init__(self, lookup, *, clock=time.monotonic):
+        self.lookup, self.clock = lookup, clock
         self.tickets, self.sessions = {}, {}
 
     def account(self, subject):
-        if subject.issuer != self.issuer or subject.subject not in self.bindings:
+        key = self.lookup(subject.subject)
+        if key is None:
             raise AccessError("account_not_linked", 403)
-        return self.bindings[subject.subject]
+        return key
 
     def prune(self):
         now = self.clock()
@@ -58,7 +60,7 @@ class Sessions:
         self.account(subject)
         self.prune()
         self.tickets = {key: row for key, row in self.tickets.items()
-                        if not same_identity(row[0], subject)}
+                        if row[0].subject != subject.subject}
         if len(self.tickets) >= MAX_SESSIONS:
             raise AccessError("capacity", 503)
         ticket = secrets.token_urlsafe(32)
@@ -92,7 +94,7 @@ class Sessions:
 
     def renew(self, subject, token):
         session = self.get(token)
-        if not same_identity(session.subject, subject):
+        if session.subject.subject != subject.subject:
             raise AccessError("session_owner_mismatch", 403)
         session.access.deadline = self.clock() + SESSION_SECONDS
         return session
@@ -105,10 +107,10 @@ class Sessions:
     def revoke_subject(self, subject):
         self.account(subject)
         for session in self.sessions.values():
-            if same_identity(session.subject, subject):
+            if session.subject.subject == subject.subject:
                 session.access.revoke()
         self.tickets = {key: row for key, row in self.tickets.items()
-                        if not same_identity(row[0], subject)}
+                        if row[0].subject != subject.subject}
         self.prune()
 
     def close(self):

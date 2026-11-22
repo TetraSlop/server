@@ -11,7 +11,7 @@ class SessionsTests(unittest.TestCase):
         self.now = 100
         self.alice = SimpleNamespace(issuer="issuer", subject="alice")
         self.bob = SimpleNamespace(issuer="issuer", subject="bob")
-        self.sessions = Sessions({"alice": "A", "bob": "B"}, "issuer", clock=lambda: self.now)
+        self.sessions = Sessions({"alice": "A", "bob": "B"}.get, clock=lambda: self.now)
 
     def test_exact_owner_expiring_single_use_ticket(self):
         ticket = self.sessions.issue(self.alice)
@@ -25,15 +25,13 @@ class SessionsTests(unittest.TestCase):
             self.sessions.get(token)
         self.assertTrue(session.access.revoked.is_set())
 
-    def test_expired_ticket_unknown_identity_and_wrong_issuer(self):
+    def test_expired_ticket_and_unknown_identity(self):
         ticket = self.sessions.issue(self.alice)
         self.now += 61
         with self.assertRaisesRegex(AccessError, "invalid_ticket"):
             self.sessions.redeem(ticket)
-        for who in (SimpleNamespace(issuer="elsewhere", subject="alice"),
-                    SimpleNamespace(issuer="issuer", subject="unknown")):
-            with self.assertRaisesRegex(AccessError, "account_not_linked"):
-                self.sessions.issue(who)
+        with self.assertRaisesRegex(AccessError, "account_not_linked"):
+            self.sessions.issue(SimpleNamespace(issuer="issuer", subject="unknown"))
 
     def test_renewal_and_logout_cannot_target_another_user(self):
         token, session = self.sessions.redeem(self.sessions.issue(self.alice))
