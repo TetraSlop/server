@@ -14,7 +14,7 @@ from tmserver.profiles.characters import CharacterProfiles
 from tmserver.economy.service import EconomyService
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.network.server import Server
-from tmserver.storage.base import SERVICE_NAMES
+from tmserver.storage.validation import SERVICE_NAMES
 from tmserver.storage.json import JsonStateStore
 
 

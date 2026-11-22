@@ -53,7 +53,6 @@ from tmserver.rankings.policy import RatingPolicy
 from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.rooms.service import RoomService
 from tmserver.storage.validation import validate_snapshot_fields
-from tmserver.storage.base import StateStore
 from tmserver.storage.json import JsonStateStore
 from tmserver.profiles.preferences import TablePreferences
 from tmserver.economy.trade_router import TradeRouter
@@ -91,7 +90,7 @@ class Server:
         allow_departures=False,
         ordinary_rooms=(),
         flexible_seats=False,
-        store: StateStore | None = None,
+        store=None,
         rules_backend=None,
     ):
         if store is not None and state_path is not None:
@@ -150,7 +149,7 @@ class Server:
         )
         for link in self.identities.snapshot()["links"]:
             self.register_hosted_account(link["account_key"])
-        self.commerce = Commerce(self.economy, self.persist_accounts)
+        self.commerce = Commerce(self.economy, self.persist_changes)
         self.auction_ledger = AuctionEconomy.restore(
             self.economy, None if saved is None else saved.get("auction")
         )
@@ -436,11 +435,6 @@ class Server:
         with self.storage_write():
             if self.store is not None:
                 self.store.save(self.snapshot())
-
-    def persist_accounts(self, accounts):
-        with self.storage_write():
-            if self.store is not None:
-                self.store.save_accounts(accounts)
 
     def persist_changes(self, accounts, services):
         with self.storage_write():

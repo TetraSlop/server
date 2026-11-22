@@ -26,7 +26,7 @@ from tmserver.economy.prize_center import PrizeService
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.storage.validation import validate_snapshot
-from tmserver.storage.base import SERVICE_NAMES
+from tmserver.storage.validation import SERVICE_NAMES
 from tmserver.storage.json import JsonStateStore, writer_lease
 
 

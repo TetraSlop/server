@@ -38,7 +38,7 @@ class ScopedAccountStoreTests(DatabaseFixture, unittest.TestCase):
         self.store.snapshot["accounts"][two] = Untouched()
         self.store.snapshot["events"] = Untouched()
         with patch.object(self.store, "save", side_effect=AssertionError("full save")):
-            self.store.save_accounts({one: changed})
+            self.store.save_changes({one: changed}, {})
         restored = self.reopen().load()
         snapshot["accounts"][one] = changed
         self.assertEqual(restored, snapshot)
@@ -51,7 +51,7 @@ class ScopedAccountStoreTests(DatabaseFixture, unittest.TestCase):
         updates[one]["cards"].pop()
         updates[two]["balance"] = -1
         with self.assertRaises(OSError):
-            self.store.save_accounts(updates)
+            self.store.save_changes(updates, {})
         self.assertEqual(self.reopen().load(), snapshot)
 
     def test_scoped_commit_updates_baseline_for_later_full_save(self):
@@ -59,7 +59,7 @@ class ScopedAccountStoreTests(DatabaseFixture, unittest.TestCase):
         self.store.save(snapshot)
         key = next(iter(snapshot["accounts"]))
         snapshot["accounts"][key]["balance"] += 50
-        self.store.save_accounts({key: snapshot["accounts"][key]})
+        self.store.save_changes({key: snapshot["accounts"][key]}, {})
         revision = self.store.revision
         self.store.save(snapshot)
         self.assertEqual(self.store.revision, revision)
@@ -73,9 +73,9 @@ class ScopedAccountStoreTests(DatabaseFixture, unittest.TestCase):
         with self.admin.connect() as connection:
             connection.execute(sa.text("SELECT pg_terminate_backend(:pid)"), {"pid": pid})
         with self.assertRaises(OSError):
-            self.store.save_accounts(snapshot["accounts"])
+            self.store.save_changes(snapshot["accounts"], {})
         with self.assertRaises(OSError):
-            self.store.save_accounts(snapshot["accounts"])
+            self.store.save_changes(snapshot["accounts"], {})
         self.assertEqual(self.reopen().load(), snapshot)
 
     def test_scoped_lost_commit_acknowledgement_is_reloaded_without_reapplying(self):
@@ -92,7 +92,7 @@ class ScopedAccountStoreTests(DatabaseFixture, unittest.TestCase):
             raise psycopg.OperationalError("injected lost acknowledgement")
 
         with patch.object(psycopg.Connection, "commit", lose_ack), self.assertRaises(OSError):
-            self.store.save_accounts({key: snapshot["accounts"][key]})
+            self.store.save_changes({key: snapshot["accounts"][key]}, {})
         self.assertEqual(self.reopen().load(), snapshot)
 
 

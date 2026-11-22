@@ -38,7 +38,7 @@ def check(package_root):
     )
     if not modules:
         raise ValueError("no model/codec modules found")
-    for name in modules + ["tmserver.events.config", "tmserver.rankings.periods", "tmserver.storage.base"]:
+    for name in modules + ["tmserver.events.config", "tmserver.rankings.periods", "tmserver.storage.validation"]:
         importlib.import_module(name)
 
     from tmserver.game.models import Card

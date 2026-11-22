@@ -1,7 +1,22 @@
 """Validate saved domain state without database dependencies or startup recovery."""
 
-from tmserver.storage.base import SERVICE_NAMES
-
+# Journals a save may carry beside its accounts; PostgreSQL migrations freeze
+# their own copy of this list.
+SERVICE_NAMES = frozenset(
+    {
+        "auction",
+        "prize",
+        "admin_audit",
+        "identities",
+        "result_rewards",
+        "match_economy",
+        "ratings",
+        "character_profiles",
+        "events",
+        "event_cards",
+        "event_results",
+    }
+)
 ACCOUNT_FIELDS = frozenset(
     {
         "nn",

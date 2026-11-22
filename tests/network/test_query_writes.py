@@ -109,9 +109,8 @@ class QueryWriteBoundaryTests(unittest.IsolatedAsyncioTestCase):
         handled, replies = await self.send(payload, service_nick(SHOP_RAW))
         self.assertTrue(handled)
         self.assertTrue(replies)
-        self.store.save_changes.assert_not_called()
-        self.store.save_accounts.assert_called_once_with(
-            {self.key: self.host.snapshot()["accounts"][self.key]}
+        self.store.save_changes.assert_called_once_with(
+            {self.key: self.host.snapshot()["accounts"][self.key]}, {}
         )
 
     async def test_invalid_named_envelopes_and_forged_shop_identity_never_save(self):
@@ -218,15 +217,11 @@ class EncryptedQueryWriteBoundaryTests(unittest.IsolatedAsyncioTestCase):
             )
             with (
                 patch.object(
-                    self.host.store, "save_accounts", side_effect=OSError("unavailable")
-                ) as accounts,
-                patch.object(
                     self.host.store, "save_changes", side_effect=OSError("unavailable")
                 ) as changes,
             ):
                 for payload in requests:
                     await self.send(payload)
-                accounts.assert_not_called()
                 changes.assert_not_called()
             self.assertIsNone(self.host.storage_failed)
             self.assertEqual(self.path.read_bytes(), before)

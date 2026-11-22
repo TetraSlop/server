@@ -26,7 +26,7 @@ class ReceiptHistoryTests(unittest.IsolatedAsyncioTestCase):
         self.before = deepcopy(self.host.snapshot())
         for method in (
             "ensure_account", "advance_auctions", "advance_rankings", "persist",
-            "persist_accounts", "persist_changes",
+            "persist_changes",
         ):
             self.enterContext(patch.object(self.host, method, side_effect=AssertionError(method)))
         self.origin = "http://127.0.0.1:8765"

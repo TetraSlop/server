@@ -12,7 +12,6 @@ import sqlalchemy as sa
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
-from tmserver.storage.base import SERVICE_NAMES
 from tmserver.storage.schema import (
     CARD_FIELDS,
     SCHEMA_REVISION,
@@ -22,7 +21,7 @@ from tmserver.storage.schema import (
     service_state,
     state_meta,
 )
-from tmserver.storage.validation import ACCOUNT_FIELDS
+from tmserver.storage.validation import ACCOUNT_FIELDS, SERVICE_NAMES
 
 
 def database_engine(url):
@@ -126,10 +125,6 @@ class PostgresStateStore(AbstractContextManager):
         except (SQLAlchemyError, OSError, ValueError, KeyError, TypeError) as exc:
             self.failed = True
             raise OSError("database save failed; restart is required") from exc
-
-    def save_accounts(self, updates):
-        """Commit one shop account or both trade accounts without a world scan."""
-        self.save_changes(updates, {})
 
     def save_changes(self, updates, services):
         """Atomically replace supplied accounts and journals; retain all others."""

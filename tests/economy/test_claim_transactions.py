@@ -252,7 +252,7 @@ class ClaimTransactionTests(ClaimFixture, unittest.TestCase):
         token = self.server.economy.reserve_match(self.key)
         before = self.server.economy.snapshot()
         with (
-            patch.object(self.server.commerce, "save_accounts", side_effect=OSError("deck write")),
+            patch.object(self.server.commerce, "persist_changes", side_effect=OSError("deck write")),
             self.assertRaises(OSError),
         ):
             self.server.commerce.apply_match_deck_changes(token, (), {1: b"new"})

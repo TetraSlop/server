@@ -92,7 +92,7 @@ with writer_lease(sys.argv[1]):
             self.assertEqual(store.load(), snapshot)
             # Low-level stores still permit direct cooperative commits. Their
             # fingerprint rejects stale memory even while a launcher owns a lease.
-            JsonStateStore(self.path).save_accounts({"one": {"balance": 200}})
+            JsonStateStore(self.path).save_changes({"one": {"balance": 200}}, {})
             with self.assertRaises(OSError):
                 store.save(snapshot)
         self.assertEqual(JsonStateStore(self.path).load()["accounts"]["one"]["balance"], 200)
