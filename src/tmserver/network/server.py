@@ -12,38 +12,26 @@ from collections import deque
 from contextlib import contextmanager
 from pathlib import Path
 
-from tmserver.admin.audit import AdminAudit
-from tmserver.accounts.identities import IdentityRegistry
 from tmserver.accounts.provisioning import provision_account
-from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.auctions.models import AuctionError
 from tmserver.economy.auctions.service import AuctionService
-from tmserver.profiles.characters import CharacterProfiles
 from tmserver.network.chat import ChatService
 from tmserver.economy.claim_transactions import auction_transaction
 from tmserver.economy.commerce import Commerce
 from tmserver.network.diagnostics import report_failure, write_record
-from tmserver.economy.service import EconomyService
 from tmserver.events.adapter import EventAdapter
-from tmserver.events.cards import EventCardService
-from tmserver.events.results import EventResults
 from tmserver.events.rooms import EventRooms
-from tmserver.events.service import EventHost
 from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, TRADE_RAW, player_id, service_nick
 from tmserver.network.session import MAX_LINE, Session
 from tmserver.network.local_accounts import account_specs
 from tmserver.protocol.wire import polid_to_string, polid_unscramble
-from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.rooms.config import configure_rooms
 from tmserver.rooms.config import directory_files as ordinary_directory_files
 from tmserver.rooms.table import OrdinaryTable
-from tmserver.economy.prize_center import PrizeService
 from tmserver.rankings.packets import METADATA_PATH
 from tmserver.rankings.service import RankingService
-from tmserver.rankings.policy import RatingPolicy
-from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.rooms.service import RoomService
-from tmserver.storage.validation import validate_snapshot_fields
+from tmserver.storage.restore import JOURNALS, restore_state
 from tmserver.economy.trade_router import TradeRouter
 from tmserver.economy.trade import TradeService
 
@@ -114,48 +102,7 @@ class Server:
         self.chat = ChatService()
         # The store is owned by the caller, including constructor failures; None saves nothing.
         self.store = store
-        saved = self.store.load() if self.store is not None else None
-        if saved is not None:
-            validate_snapshot_fields(saved)
-            self.economy = EconomyService.restore(saved, seed=1, shop_offers=shop_offers)
-        else:
-            self.economy = EconomyService(seed=1, shop_offers=shop_offers)
-        self.account_keys = set(self.economy.snapshot()["accounts"])
-        self.identities = IdentityRegistry.restore(
-            self.economy, None if saved is None else saved.get("identities")
-        )
-        for link in self.identities.snapshot()["links"]:
-            self.register_hosted_account(link["account_key"])
-        self.commerce = Commerce(self.economy, self.persist_changes)
-        self.auction_ledger = AuctionEconomy.restore(
-            self.economy, None if saved is None else saved.get("auction")
-        )
-        self.auction_clock = auction_clock
-        self.auction = AuctionService(self.auction_ledger, clock=auction_clock)
-        self.prize = PrizeService.restore(
-            self.economy, None if saved is None else saved.get("prize"), seed=1
-        )
-        self.result_rewards = ResultRewardService.restore(
-            self.economy,
-            self.auction_ledger,
-            None if saved is None else saved.get("result_rewards"),
-        )
-        self.match_economy = MatchEconomy.restore(
-            self.economy, None if saved is None else saved.get("match_economy")
-        )
-        self.ratings = RatingPolicy(
-            self.economy,
-            mode=rating_mode,
-            weekly=weekly_rankings,
-            clock=ranking_clock,
-            snapshot=None if saved is None else saved.get("ratings"),
-        )
-        self.ratings.validate_profiles()
-        self.character_profiles = CharacterProfiles.restore(
-            self.economy, None if saved is None else saved.get("character_profiles")
-        )
-        self.ranking = RankingService(self.economy, rating_policy=self.ratings)
-        event_configs = tuple(event_configs)
+        event_configs, event_tables = tuple(event_configs), tuple(event_tables)
         account_ids = {player_id(key) for key in self.accounts}
         if any(
             identity in account_ids
@@ -163,29 +110,41 @@ class Server:
             for identity in (c.room_id, c.init_id, c.card_id)
         ):
             raise ValueError("event service identity collides with a synthetic account")
-        self.events = EventHost.restore(
-            self.economy,
-            event_configs,
-            None if saved is None else saved.get("events"),
-            clock=event_clock,
-        )
-        event_tables = tuple(event_tables)
         if any(c.table_id in account_ids for c in event_tables):
             raise ValueError("event table identity collides with a synthetic account")
         if any(c.cpu_cards is None and c.player_count > account_count for c in event_tables):
             raise ValueError("event table requires more enabled human accounts")
+        state = restore_state(
+            self.store.load() if self.store is not None else None,
+            event_configs=event_configs,
+            seed=1,
+            shop_offers=shop_offers,
+            rating_mode=rating_mode,
+            weekly_rankings=weekly_rankings,
+            ranking_clock=ranking_clock,
+            event_clock=event_clock,
+        )
+        self.economy = state.economy
+        self.identities = state.identities
+        self.auction_ledger = state.auction_ledger
+        self.prize = state.prize
+        self.result_rewards = state.result_rewards
+        self.match_economy = state.match_economy
+        self.ratings = state.ratings
+        self.character_profiles = state.character_profiles
+        self.events = state.events
+        self.event_cards = state.event_cards
+        self.admin_audit = state.admin_audit
+        self.event_results = state.event_results
+        self.ratings.validate_profiles()
+        self.account_keys = set(self.economy.snapshot()["accounts"])
+        for link in self.identities.snapshot()["links"]:
+            self.register_hosted_account(link["account_key"])
+        self.commerce = Commerce(self.economy, self.persist_changes)
+        self.auction_clock = auction_clock
+        self.auction = AuctionService(self.auction_ledger, clock=auction_clock)
+        self.ranking = RankingService(self.economy, rating_policy=self.ratings)
         self.event_rooms = EventRooms(self.events)
-        self.event_cards = EventCardService.restore(
-            self.economy,
-            self.events,
-            None if saved is None else saved.get("event_cards"),
-        )
-        self.admin_audit = AdminAudit.restore(
-            self.economy,
-            self.prize,
-            None if saved is None else saved.get("admin_audit"),
-            event_cards=self.event_cards,
-        )
         self.event_routes = {
             service_nick(identity ^ GAME_KEY): (c.id, route)
             for c in event_configs
@@ -195,9 +154,6 @@ class Server:
                 ("card", c.card_id),
             )
         }
-        self.event_results = EventResults.restore(
-            None if saved is None else saved.get("event_results")
-        )
         self.event_matches = EventAdapter(
             self,
             event_tables,
@@ -365,19 +321,7 @@ class Server:
         return snapshot
 
     def journal_snapshot(self):
-        return dict(
-            identities=self.identities.snapshot(),
-            auction=self.auction_ledger.snapshot(),
-            prize=self.prize.snapshot(),
-            admin_audit=self.admin_audit.snapshot(),
-            result_rewards=self.result_rewards.snapshot(),
-            match_economy=self.match_economy.snapshot(),
-            ratings=self.ratings.snapshot(),
-            character_profiles=self.character_profiles.snapshot(),
-            events=self.events.snapshot(),
-            event_cards=self.event_cards.snapshot(),
-            event_results=self.event_results.snapshot(),
-        )
+        return {name: getattr(self, attribute).snapshot() for name, attribute in JOURNALS}
 
     def persist(self):
         with self.storage_write():

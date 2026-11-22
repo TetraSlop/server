@@ -7,7 +7,6 @@ from pathlib import Path
 
 from tmserver.admin.actions import apply_event_grant, apply_event_member, apply_prize_award
 from tmserver.admin.audit import (
-    AdminAudit,
     EventEligibilityRequest,
     EventGrantCard,
     EventGrantRequest,
@@ -15,15 +14,9 @@ from tmserver.admin.audit import (
     PrizeAwardRequest,
 )
 from tmserver.admin.queries import account_summary
-from tmserver.economy.auctions.ledger import AuctionEconomy
-from tmserver.economy.match_ledger import MatchEconomy
-from tmserver.economy.prize_center import PrizeService
-from tmserver.economy.result_rewards import ResultRewardService
-from tmserver.events.cards import EventCardService
 from tmserver.events.config import load_event_setup
-from tmserver.events.service import EventHost
 from tmserver.storage import open_store
-from tmserver.storage.validation import validate_snapshot
+from tmserver.storage.restore import restore_state
 
 CARD_FIELDS = ("model", "attack", "kind", "physical", "magical", "arrows")
 
@@ -132,23 +125,20 @@ class AdminState:
     def __init__(self, store, snapshot, configs):
         self.store = store
         self.storage_failed = None
-        self.economy = validate_snapshot(snapshot, event_configs=configs)
+        if snapshot is None:
+            raise ValueError("administration requires an existing saved economy")
+        state = restore_state(snapshot, event_configs=configs)
         saved_events = {row["id"] for row in (snapshot.get("events") or {}).get("events", ())}
         if {config.id for config in configs} != saved_events:
             raise ValueError("--events must contain exactly the saved event IDs")
-        self.prize = PrizeService.restore(self.economy, snapshot.get("prize"))
-        self.events = EventHost.restore(self.economy, configs, snapshot.get("events"))
-        self.event_cards = EventCardService.restore(
-            self.economy, self.events, snapshot.get("event_cards")
-        )
-        self.admin_audit = AdminAudit.restore(
-            self.economy, self.prize, snapshot.get("admin_audit"), event_cards=self.event_cards,
-        )
-        self.auction_ledger = AuctionEconomy.restore(self.economy, snapshot.get("auction"))
-        self.match_economy = MatchEconomy.restore(self.economy, snapshot.get("match_economy"))
-        self.result_rewards = ResultRewardService.restore(
-            self.economy, self.auction_ledger, snapshot.get("result_rewards")
-        )
+        self.economy = state.economy
+        self.prize = state.prize
+        self.events = state.events
+        self.event_cards = state.event_cards
+        self.admin_audit = state.admin_audit
+        self.auction_ledger = state.auction_ledger
+        self.match_economy = state.match_economy
+        self.result_rewards = state.result_rewards
         self.saved_journals = {
             name: getattr(self, name).snapshot()
             for name in ("prize", "events", "event_cards", "admin_audit")
@@ -193,11 +183,8 @@ class AdminState:
 
 def execute(args):
     with open_store(args.database_url) as store:
-        snapshot = store.load()
-        if snapshot is None:
-            raise ValueError("administration requires an existing saved economy")
         configs = load_event_setup(args.events)[0] if args.events else ()
-        return AdminState(store, snapshot, configs).apply(args)
+        return AdminState(store, store.load(), configs).apply(args)
 
 
 def cli(argv=None):
