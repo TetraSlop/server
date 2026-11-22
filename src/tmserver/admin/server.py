@@ -2,7 +2,6 @@
 
 import time
 
-from tmserver.network.http import HttpListener as AdminListener  # noqa: F401
 from tmserver.network.http import serving_http
 
 from .web import create_app

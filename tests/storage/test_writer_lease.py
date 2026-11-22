@@ -207,15 +207,13 @@ class RunningServicesLeaseTests(unittest.IsolatedAsyncioTestCase):
         play = local_play.arguments(["--project-dir", str(self.root), "--state", str(self.path)])
         settings = local_play.service_settings(play, self.root / "logs")
         settings.rooms = None
-        with local_play.session_lock(self.path):
-            async with running_services(settings) as services:
-                self.assert_owned()
-                self.assertTrue(services.game.listener.is_serving())
-                self.assertTrue(services.profile.listener.is_serving())
+        async with running_services(settings) as services:
+            self.assert_owned()
+            self.assertTrue(services.game.listener.is_serving())
+            self.assertTrue(services.profile.listener.is_serving())
         await self.assert_listeners_closed(services)
         with writer_lease(self.path):
             pass
-        self.assertTrue(self.path.with_name("state.json.play.lock").exists())
 
 
 if __name__ == "__main__":

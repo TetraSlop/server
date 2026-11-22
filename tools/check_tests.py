@@ -15,13 +15,6 @@ from uuid import uuid4
 from tools.check_collection import validate_collection
 from tools.package import ROOT
 
-PORTABLE_SKIPS = {
-    (
-        "tests.cli.test_admin.AdminTests.test_snapshot_validation_public_imports_remain_compatible",
-        "optional database dependencies absent",
-    ),
-}
-
 
 def test_modules(lane, root=ROOT):
     manifest = root / "tests" / "native_modules.json"
@@ -93,16 +86,13 @@ def postgres_container():
 def run_suite(suite, *, lane, errors=(), stream=None):
     count = validate_collection(suite, errors)
     result = unittest.TextTestRunner(verbosity=2, stream=stream).run(suite)
-    allowed = PORTABLE_SKIPS if lane in ("portable", "native") else set()
-    unexpected = [(test.id(), reason) for test, reason in result.skipped
-                  if (test.id(), reason) not in allowed]
+    unexpected = [(test.id(), reason) for test, reason in result.skipped]
     report = {
         "lane": lane, "collected": count, "run": result.testsRun,
         "failures": len(result.failures), "errors": len(result.errors),
         "skipped": len(result.skipped),
         "unexpected_skips": unexpected,
     }
-    # The portable lane permits one documented optional-dependency import check.
     # Optional admin and database coverage must never become a successful skipped run.
     success = result.wasSuccessful() and not unexpected and result.testsRun == count
     return success, report

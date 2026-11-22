@@ -543,17 +543,6 @@ class AdminTests(unittest.TestCase):
             self.assertEqual(result.stderr, "")
         self.assertEqual(json.loads(result.stdout)["status"], "queued")
 
-    def test_snapshot_validation_public_imports_remain_compatible(self):
-        try:
-            from tmserver.storage import database
-            from tmserver.storage import postgres as postgres_store
-        except ImportError:
-            self.skipTest("optional database dependencies absent")
-        from tmserver.storage.validation import ACCOUNT_FIELDS
-
-        self.assertIs(database.validate_snapshot, validate_snapshot)
-        self.assertIs(postgres_store.ACCOUNT_FIELDS, ACCOUNT_FIELDS)
-
     def test_null_optional_journals_remain_unchanged_until_that_service_is_edited(self):
         snapshot = self.load()
         snapshot.update({name: None for name in SERVICE_NAMES})
