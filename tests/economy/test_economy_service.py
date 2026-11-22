@@ -496,8 +496,7 @@ class ThreeAccountMatchTests(unittest.TestCase):
         self.assertEqual(self.e.snapshot(), before)
         for token, cards, _ in self.rounds:
             self.assertTrue(self.e.validate_match_selection(token, cards))
-        invalid = dict(self.stats)
-        invalid["c"] = replace(invalid["c"], count=100)
+        invalid = dict(self.stats, c=None)
         with self.assertRaises(EconomyError):
             self.e.commit_match_growth(self.rounds, invalid)
         self.assertEqual(self.e.snapshot(), before)

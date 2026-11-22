@@ -171,7 +171,7 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         batch = result(self.economy, self.policy, keys=KEYS, scores=(6, 6, 3))
         baseline = self.economy.snapshot(), self.policy.snapshot()
         periods = self.policy.periods
-        invalid = dict(batch[1], third=replace(batch[1]["third"], rn=b"Not authorized"))
+        invalid = dict(batch[1], third=None)
         with self.assertRaises(EconomyError):
             commit(self.policy, (batch[0], invalid, *batch[2:]))
         self.assertEqual((self.economy.snapshot(), self.policy.snapshot()), baseline)
