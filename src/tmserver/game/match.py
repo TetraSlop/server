@@ -9,13 +9,14 @@ flows/results-and-prizes.md and irc/G/43.md.
 """
 
 import re
+from dataclasses import astuple
 from typing import Callable
 
 from tmserver.cards.catalog import Catalog
 from tmserver.game import special_rules as special
 from tmserver.game.ai import Personality
 from tmserver.game.boards import generate_board
-from tmserver.game.departure_rules import next_turn, result_ranking, result_slots
+from tmserver.game.departure_rules import next_turn, result_classes, result_slots
 from tmserver.game.errors import MatchError, RulesExecutionError
 from tmserver.game.models import (
     DEFAULT_GAME_RULES,
@@ -1232,7 +1233,7 @@ class MatchService:
 
     def result_classes(self):
         """Original 100CBD80 ordinary and departure-specific ranking."""
-        return result_ranking(self._scores(), self.game_rules["gs"], self.departure_seats).classes
+        return result_classes(self._scores(), self.game_rules["gs"], self.departure_seats)
 
     def legal_fields(self):
         """Ascending currently placeable cells, including unoccupied low tiles.
@@ -1376,7 +1377,7 @@ class MatchService:
 
     def battle_values(self, attacker, defender, **effects):
         result = self._backend_call("calculate_battle", attacker, defender, self.draw, **effects)
-        return result.attacker.wire(0)[1:], result.defender.wire(0)[1:]
+        return astuple(result.attacker), astuple(result.defender)
 
     def _choose_target(self):
         return self._backend_call("choose_target", self.targets, self.draw, board_size=self.board_size)
@@ -1386,8 +1387,7 @@ class MatchService:
         return self._backend_call("grow_card", card, baseline, mode, random_value)
 
     def _grow_board(self, board_card, mode, random_value):
-        result = self._grow_card(board_card.card, mode, random_value)
-        board_card.card = Card.from_card(result.card)
+        board_card.card = Card.from_card(self._grow_card(board_card.card, mode, random_value).card)
         if board_card.original_slot is not None:
             self.players[board_card.original_owner].updated[board_card.original_slot] = (
                 board_card.card

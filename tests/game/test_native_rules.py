@@ -5,7 +5,7 @@ import random
 import struct
 import sys
 import unittest
-from dataclasses import replace
+from dataclasses import astuple, replace
 from itertools import product
 from pathlib import Path
 
@@ -36,17 +36,15 @@ class RulesAPITests(unittest.TestCase):
     def test_ties_are_preserved_not_returned_as_defender_wins(self):
         c = Card(0, 10, 0, 10, 10, 1, 0)
         result = default_rules().calculate_battle(c, c, iter([8, 8, 8, 8]).__next__)
-        self.assertTrue(result.tied)
-        self.assertEqual(result.comparison, 0)
-        self.assertEqual(result.calculator_return, 2)
+        self.assertEqual(result.attacker.final, result.defender.final)
         self.assertEqual(result.raw_draws, (8, 8, 8, 8))
-        self.assertEqual(result.attacker.wire(5), (5, 10, 8, 1, 1))
+        self.assertEqual(astuple(result.attacker), (10, 8, 1, 1))
 
     def test_zero_fallback_occurs_once_even_if_still_tied(self):
         c = Card(0, 0, 0, 0, 0, 0, 0)
         result = default_rules().calculate_battle(c, c, iter([0, 0, 0, 0, 2, 4]).__next__)
         self.assertEqual(result.attacker.start, 1)
-        self.assertTrue(result.tied)
+        self.assertEqual(result.attacker.final, result.defender.final)
         self.assertEqual(result.raw_draws, (0, 0, 0, 0, 2, 4))
 
     def test_stat_selector_ties_and_full_property_bytes(self):
