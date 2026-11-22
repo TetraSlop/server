@@ -1,6 +1,6 @@
 """Local test accounts shared by the game and profile listeners."""
 
-from tmserver.protocol.wire import POLID_CHARS, polid_from_string, polid_scramble
+from tmserver.protocol.wire import polid_from_string, polid_scramble, polid_to_string
 
 MAX_ACCOUNTS = 128  # Bounded local fixture pool, below reserved service raw IDs.
 
@@ -8,12 +8,7 @@ MAX_ACCOUNTS = 128  # Bounded local fixture pool, below reserved service raw IDs
 def account_name(character_id):
     if type(character_id) is not int or not 1 <= character_id <= MAX_ACCOUNTS:
         raise ValueError("local character ID outside fixture pool")
-    digits = bytearray(8)
-    value = character_id
-    for index in range(7, -1, -1):
-        value, digit = divmod(value, 36)
-        digits[index] = POLID_CHARS[digit]
-    return digits.decode("ascii")
+    return polid_to_string(character_id)
 
 
 NAMES = tuple(account_name(i) for i in range(1, MAX_ACCOUNTS + 1))

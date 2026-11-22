@@ -41,33 +41,33 @@ def b32enc(data):
     return bytes(B32[(bits >> (5 * (n - 1 - i))) & 31] for i in range(n))
 
 
+def _base36(value):
+    digits = bytearray(8)
+    for index in range(7, -1, -1):
+        value, digit = divmod(value, 36)
+        digits[index] = POLID_CHARS[digit]
+    return bytes(digits)
+
+
 def polid_scramble(polid41):
     """__sqIrcScramblePolId encode: 41-bit POL id -> 'U' + 8 chars (IRC nick)."""
     v = (polid41 & 0x1FFFFFFFFFF) | 0xC00000000000
     for k in (4, 3, 2, 1, 0):
         v ^= (v >> 8) & (0xFF << (8 * k))
-    v &= 0xFFFF3FFFFFFFFFFF
-    chars = bytearray(8)
-    for i in range(7, -1, -1):
-        v, r = divmod(v, 36)
-        chars[i] = POLID_CHARS[r]
-    return b"U" + bytes(chars)
+    return b"U" + _base36(v & 0xFFFF3FFFFFFFFFFF)
 
 
 def polid_unscramble(nick):
-    v = 0
-    for c in nick[1:9]:
-        v = v * 36 + POLID_CHARS.index(c)
-    v |= 0xC00000000000
+    v = polid_from_string(nick[1:9]) | 0xC00000000000
     for k in (0, 1, 2, 3, 4):
         v ^= (v >> 8) & (0xFF << (8 * k))
     return v & 0x1FFFFFFFFFF
 
 
 def polid_from_string(s):
-    """8-char POL ID string -> 41-bit value (same digit map)."""
+    """8-char POL ID string or bytes -> 41-bit value (same digit map)."""
     v = 0
-    for c in s.encode():
+    for c in s.encode() if isinstance(s, str) else s:
         v = v * 36 + POLID_CHARS.index(c)
     return v
 
@@ -76,21 +76,21 @@ def polid_to_string(value):
     """Canonical eight-character login for a native 41-bit POL identity."""
     if type(value) is not int or not 0 <= value <= 0x1FFFFFFFFFF:
         raise ValueError("raw POL identity exceeds 41 bits")
-    digits = bytearray(8)
-    for index in range(7, -1, -1):
-        value, digit = divmod(value, 36)
-        digits[index] = POLID_CHARS[digit]
-    return digits.decode("ascii")
+    return _base36(value).decode("ascii")
+
+
+def checksum(data):
+    """sqCalcChecksum: little-endian dword sum, short tail in the high bytes."""
+    whole = len(data) & ~3
+    value = sum(struct.unpack_from("<%dI" % (whole // 4), data))
+    if whole < len(data):
+        value += int.from_bytes(data[whole:], "little") << (8 * (4 - len(data[whole:])))
+    return value & 0xFFFFFFFF
 
 
 def checksum_chars(msg):
     """sqCalcChecksum + 4-char encoding appended before CRLF on every line."""
-    n4 = len(msg) & ~3
-    cs = sum(struct.unpack_from("<%dI" % (n4 // 4), msg)) if n4 else 0
-    tail = 0
-    for b in msg[n4:]:
-        tail = (tail >> 8) | (b << 24)
-    cs = (cs + tail) & 0xFFFFFFFF
+    cs = checksum(msg)
     return bytes(((cs >> s) & 0x3F) + 0x3F for s in (26, 20, 14, 8))
 
 
@@ -188,4 +188,3 @@ def rsa_wrap_session_key(modulus_blob, bf_key, e=0xFFFF):
     block = b"\x00\x02" + pad + b"\x00" + data
     c = pow(int.from_bytes(block, "big"), e, n)
     return b64enc(c.to_bytes(32, "big"))
-

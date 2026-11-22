@@ -2,13 +2,7 @@
 
 import struct
 
-
-def checksum(data):
-    whole = len(data) & ~3
-    value = sum(struct.unpack("<" + "I" * (whole // 4), data[:whole]))
-    if whole < len(data):
-        value += int.from_bytes(data[whole:], "little") << (8 * (4 - len(data[whole:])))
-    return value & 0xFFFFFFFF
+from tmserver.protocol.wire import checksum
 
 
 def checked(data):
