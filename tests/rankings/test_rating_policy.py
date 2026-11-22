@@ -8,8 +8,9 @@ from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
 from tmserver.rankings.history import HistoryState, LocalRatingHistory
 from tmserver.economy.match_ledger import MatchEconomy
-from tmserver.rankings.policy import RatingPolicy, RatingPolicyError
-from tmserver.rankings.stats import PracticeStats, ResultStatsError
+from tmserver.rankings.errors import RankingError
+from tmserver.rankings.policy import RatingPolicy
+from tmserver.rankings.stats import PracticeStats
 
 KEYS = ("first", "second", "third")
 
@@ -220,7 +221,7 @@ class RatingPolicyTests(unittest.TestCase):
     def test_departures_and_profile_history_mismatch_require_explicit_action(self):
         service = economy(2)
         policy = RatingPolicy(service, mode="local-history")
-        with self.assertRaises(RatingPolicyError):
+        with self.assertRaises(RankingError):
             policy.quote("departed", {0: "first", 1: "second"}, (8, 2), departed_seats=(1,))
         self.assertEqual(policy.snapshot()["history"]["accounts"], {})
         rounds, stats, changes = prepare(service, policy, (7, 3))
@@ -231,7 +232,7 @@ class RatingPolicyTests(unittest.TestCase):
         )
         preserved.commit_growth(rounds, stats)
         enabled = RatingPolicy(service, mode="local-history", snapshot=preserved.snapshot())
-        with self.assertRaises(RatingPolicyError):
+        with self.assertRaises(RankingError):
             enabled.quote("reenabled", {0: "first", 1: "second"}, (7, 3))
 
     def test_quote_all_accounts_validate_before_any_enrollment(self):
@@ -252,14 +253,14 @@ class RatingPolicyTests(unittest.TestCase):
         quote = history.quote("a", "r", (6, 6, 3), 0)
         prior = PracticeStats(rating=300)
         for outcome, tied in ((-1, False), (0, False), (1, True)):
-            with self.assertRaises(ResultStatsError):
+            with self.assertRaises(RankingError):
                 prior.next_result(outcome, fully_tied=tied, rating_change=quote)
-        with self.assertRaises(ResultStatsError):
+        with self.assertRaises(RankingError):
             replace(prior, sequence=1).next_result(1, fully_tied=False, rating_change=quote)
         correct = prior.next_result(1, fully_tied=False, rating_change=quote)
         history.commit(quote)
         quote = history.quote("a", "r2", (7, 3), 0)
-        with self.assertRaises(ResultStatsError):
+        with self.assertRaises(RankingError):
             replace(correct, rating=300).next_result(1, fully_tied=False, rating_change=quote)
         self.assertEqual(
             correct.next_result(1, fully_tied=False, rating_change=quote).rating, quote.d2

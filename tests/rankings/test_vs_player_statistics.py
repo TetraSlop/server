@@ -9,7 +9,8 @@ from tests.rankings.test_result_stats import SEEDED, economy
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
 from tmserver.rankings.policy import RatingPolicy
-from tmserver.rankings.stats import PracticeStats, ResultStatsError
+from tmserver.rankings.errors import RankingError
+from tmserver.rankings.stats import PracticeStats
 
 
 class VsPlayerStatisticsTests(unittest.TestCase):
@@ -19,7 +20,7 @@ class VsPlayerStatisticsTests(unittest.TestCase):
             self.assertEqual(SEEDED.next_result(outcome, vs_player_game=True).vs_player_games, 9)
             self.assertEqual(SEEDED.next_result(outcome).vs_player_games, 8)
         for invalid in (None, 0, 1, "versus"):
-            with self.assertRaises(ResultStatsError):
+            with self.assertRaises(RankingError):
                 SEEDED.next_result(1, vs_player_game=invalid)
 
     def test_two_three_human_count_commits_with_both_rating_modes_and_restart(self):

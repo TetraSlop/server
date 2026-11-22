@@ -12,7 +12,8 @@ from tests.economy.test_match_transactions import TableFixture
 from tests.rankings.test_rating_policy import KEYS, economy, prepare
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
-from tmserver.rankings.policy import RatingPolicy, RatingPolicyError
+from tmserver.rankings.errors import RankingError
+from tmserver.rankings.policy import RatingPolicy
 from tmserver.rankings.periods import RankingPeriods
 from tmserver.rankings.stats import PracticeStats
 from tmserver.storage.json import JsonStateStore
@@ -71,9 +72,9 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         self.assertEqual(imported.snapshot(), baseline)
         self.assertTrue(imported.weekly)
         for mode, weekly in (("preserve", True), ("local-history", 1), ("local-history", None)):
-            with self.subTest(mode=mode, weekly=weekly), self.assertRaises(RatingPolicyError):
+            with self.subTest(mode=mode, weekly=weekly), self.assertRaises(RankingError):
                 RatingPolicy(self.economy, mode=mode, weekly=weekly)
-        with self.assertRaises(RatingPolicyError):
+        with self.assertRaises(RankingError):
             RatingPolicy(self.economy, clock=123)
         self.assertTrue(self.policy.advance_week())
         initialized = self.policy.snapshot()
@@ -96,7 +97,7 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
             {"version": 1},
         )
         for malformed in attempts:
-            with self.subTest(snapshot=malformed), self.assertRaises(RatingPolicyError):
+            with self.subTest(snapshot=malformed), self.assertRaises(RankingError):
                 RatingPolicy(self.economy, snapshot=malformed)
         for previous in (False, True):
             periods = RankingPeriods.restore()
@@ -190,9 +191,9 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         self.assertEqual((self.economy.snapshot(), self.policy.snapshot()), baseline)
         self.assertIs(self.policy.periods, periods)
         self.now = float("nan")
-        with self.assertRaises(RatingPolicyError):
+        with self.assertRaises(RankingError):
             commit(self.policy, batch)
-        with self.assertRaises(RatingPolicyError):
+        with self.assertRaises(RankingError):
             self.policy.advance_week()
         self.assertEqual((self.economy.snapshot(), self.policy.snapshot()), baseline)
         self.assertIs(self.policy.periods, periods)
