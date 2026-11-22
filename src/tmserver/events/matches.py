@@ -1,11 +1,10 @@
-"""Isolated event round for participants admitted by event_matchmaking.
+"""One event round for participants admitted by events.matchmaking.
 
-Original: EventGameInit01 -> EventCard07 -> ordinary08/09/0A/0C ->
-EventResult0D -> Ready0E -> Continue11(header2, local Ans3).
-This module delegates EInitReq/selection/admission routing to its coordinator.
-See EVENT_MATCH_NOTES.md for the adapter and mode8 distinction.
-Authenticated selections or explicit policy supply borrowed hands; no owned inventory, normal
-ratings, card prizes, durable rewards, or automatic second round are modified.
+Client order: EventGameInit01 -> EventCard07 -> ordinary 08/09/0A/0C ->
+EventResult0D -> Ready0E -> Continue11 (header 2, local Ans3). The coordinator
+routes EInitReq, selection and admission. Hands are borrowed from authenticated
+selections or configuration; the round leaves owned inventory, ratings, card
+prizes and rewards alone. Layout: TetraPackets flows/event-matches.md.
 """
 
 from dataclasses import dataclass, replace

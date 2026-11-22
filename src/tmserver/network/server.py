@@ -1,9 +1,6 @@
-"""Loopback-only Tetra Master legacy game IRC research server.
+"""Game (IRC) listener: owns connections, shared services and table runtimes.
 
-Wire crypto is the local PC reverse-engineering transcription in pol_wire.py.
-Includes local room, practice-match and shop services; native UI integration
-is still under validation.
-Only synthetic accounts listed below are accepted. No production credentials.
+Listens on loopback only. The wire encryption is in protocol/wire.py.
 """
 
 from tmserver.protocol.messages import service_notice

@@ -1,7 +1,7 @@
-"""Native room directory, table metadata and roster record codecs.
+"""Room directory, table metadata and roster record codecs.
 
-Layouts: protocol_map/ROOM_SEQUENCE.md, ROOM_CONTRACT_VECTORS.md and
-DIRECTORY_UI_CONTRACT.md. Default routes and capacities are local policy.
+Layout: TetraPackets irc/L.md and file/directory-files.md. Server choice: default
+routes and capacities.
 """
 
 import struct
@@ -69,8 +69,8 @@ def player_record(payload):
             struct.pack_into("<" + fmt, b, offset, int(fields[index], base))
         except (ValueError, struct.error) as exc:
             raise ValueError("invalid player field") from exc
-    # Info needs a terminator in its 32-byte native buffer; preserve the
-    # separate full-width canonical name contract. See ROOM_INFO_BOUNDARY.md.
+    # Info needs a terminator in its 32-byte client buffer; the canonical name
+    # keeps its full width. See TetraPackets irc/L.md.
     for index, offset, limit in [(4, 0x28, 16), (10, 0x38, 31)]:
         if len(fields[index]) > limit or b"\0" in fields[index]:
             raise ValueError("player string exceeds record")

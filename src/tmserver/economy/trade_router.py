@@ -1,7 +1,7 @@
-"""Authenticated invitation bookkeeping around the original peer trade flow.
+"""Trade invitations between authenticated players.
 
-The adapter relays the original messages unchanged; consent is checked again
-before the service accepts TrEnt. No fabricated accept, timer or UI event.
+The adapter relays the client's messages unchanged; consent is checked again
+before the service accepts TrEnt.
 """
 
 import re

@@ -1,5 +1,5 @@
 {
-  "evidence": "Original10106E30 sender executed in Unicorn; unchanged instructions, substituted transport and string runtime, seeded player count and NPC record IDs. No native process or GUI.",
+  "evidence": "Original 10106E30 sender executed in Unicorn; unchanged instructions, substituted transport and string runtime, seeded player count and NPC record IDs. No native process or GUI.",
   "image_sha256": "422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879",
   "entry": "0x10106E30",
   "menu_event_evidence": {

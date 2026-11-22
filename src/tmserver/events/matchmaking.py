@@ -1,8 +1,8 @@
-"""Opt-in event admission/matchmaking coordinator; no sockets or global enablement.
+"""Event admission and matchmaking (opt-in).
 
-Every returned batch is ordered. Persist outcomes before finish(), emit source
-identity exactly, and hold the adapter lock around all calls. Clock is injected
-monotonic time; configured event eligibility uses EventHost's epoch clock.
+Every returned batch is ordered. Save outcomes before finish(), send from the
+given source identity, and hold the adapter lock around all calls. The clock is
+injected monotonic time; event eligibility uses EventHost's epoch clock.
 """
 
 import math

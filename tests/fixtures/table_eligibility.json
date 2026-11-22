@@ -10,7 +10,7 @@
   },
   "boundaries": [
     "Current production metadata encoding; complete original PTL projection.",
-    "Synthetic collection count replaces100B8B30; player CP, rating, tier and balance are seeded.",
+    "Synthetic collection count replaces 100B8B30; player CP, rating, tier and balance are seeded.",
     "Join predicate executes for a nonmember; stops before rendering/widget calls.",
     "Earlier busy-state override is recorded separately, not bypassed as a claim of UI availability.",
     "Client gate evidence does not identify historical server rejection codes or retry policy.",

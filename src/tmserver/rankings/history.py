@@ -1,13 +1,13 @@
-"""Opt-in durable rating using original client-local 32-result arithmetic.
+"""Optional rating history using the client's offline 32-result ring.
 
-Constructor10100FD6..10101040 initializes32 neutral entries/rating200.
-Result100CC7E8..100CC840 replaces oldsequence&31, averages50*(entry+2),
-then increments the WORD sequence. Applying that offline algorithm to hosted
-matches is an explicit replacement-server policy, not historical server proof.
+The client's constructor (10100FD6..10101040) starts 32 neutral entries at rating
+200. Each result (100CC7E8..100CC840) replaces entry sequence & 31, averages
+50 * (entry + 2) and increments the WORD sequence. Server choice: applying this
+offline ring to hosted matches. Details: TetraPackets
+client/ratings-and-statistics.md.
 
-No account is enrolled implicitly. This module does not mutate profiles, RN,
-money or game state. Persist snapshot jointly with result/profile commits before
-sending D2. A process crash between separate saves is not an atomic commit.
+No account is enrolled implicitly. Save the snapshot with the result and profile
+commits before sending D2; a crash between separate saves is not atomic.
 """
 
 import re
@@ -119,7 +119,7 @@ class LocalRatingHistory:
     def enroll(self, key, *, history=None, sequence=0):
         """Explicit fresh enrollment; never infer old history from profile rating.
 
-        Default reproduces original constructor class2/rating200/sequence0.
+        Default reproduces original constructor class 2, rating 200, sequence 0.
         An imported history must be supplied by trusted local configuration.
         No existing enrollment can be reset through this method.
         """

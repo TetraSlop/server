@@ -1,4 +1,4 @@
-"""Durable event outcome receipts and explicit local step-counting policy."""
+"""Event outcome receipts and step counting (server choice)."""
 
 from copy import copy
 from typing import Annotated, Literal

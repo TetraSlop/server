@@ -230,7 +230,7 @@ def probe(image, *, bridge, repetitions=200):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--image", type=Path, required=True, help="unpacked TM_emulated_mapped.dll memory image"
+        "--image", type=Path, required=True, help="TM_emulated_mapped.dll memory image"
     )
     parser.add_argument(
         "--bridge",

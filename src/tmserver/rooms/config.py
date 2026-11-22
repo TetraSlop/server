@@ -1,4 +1,4 @@
-"""Explicit ordinary rooms and prepublished independent tables per room."""
+"""Configured ordinary rooms and their tables."""
 
 import re
 import struct

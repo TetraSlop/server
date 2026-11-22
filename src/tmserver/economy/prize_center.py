@@ -1,9 +1,10 @@
-"""Mapped Prize Center wire flow with explicit, durable local award policy.
+"""Prize Center requests and the award queue.
 
-Persist economy.snapshot() and this service's snapshot() jointly before sending
-responses. Awards redeem before ExcInit (native has no award acknowledgement).
-Purchases debit points and transfer cards only at Get. No automatic ranked or
-lucky awards are invented; grant_award is a trusted policy/administration API.
+Save economy.snapshot() and this service's snapshot() together before replying.
+Awards are redeemed before ExcInit, because the client has no award
+acknowledgement. Purchases debit points and transfer cards only at Get. Server
+choice: awards come only from grant_award, for administration. Layout:
+TetraPackets flows/prize-center.md.
 """
 
 import random

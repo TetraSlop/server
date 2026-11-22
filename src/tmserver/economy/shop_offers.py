@@ -1,4 +1,4 @@
-"""Explicit local shop offers using original Init catalogue flag semantics."""
+"""Configured shop offers, encoded with the client's Init catalogue flags."""
 
 import json
 from dataclasses import dataclass
@@ -21,7 +21,7 @@ class ShopOffers:
             or len(self.special_name) > 7
             or any(x < 32 or x > 126 for x in self.special_name)
         ):
-            raise ValueError("special pack name must contain at most7 printable bytes")
+            raise ValueError("special pack name must contain at most 7 printable bytes")
         if (
             type(self.highlighted) is not tuple
             or len(self.highlighted) > 78
@@ -51,7 +51,7 @@ class ShopOffers:
         return tuple(int(guild == 0 or x == guild + 6) if 7 <= x <= 9 else x for x in flags)
 
     def visible(self, catalog, guild, balance, card_count):
-        # 101190B0: pauper requires both fewer than5 cards and less than the
+        # 101190B0: pauper requires both fewer than 5 cards and less than the
         # native Beginner's Pack price, even if another pack is marked category2.
         pauper = balance < catalog.packs[1]["price"] and card_count < 5
         return tuple(

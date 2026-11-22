@@ -1,7 +1,6 @@
-"""Configured fixed room rules and their original seven-byte RL encoding.
+"""Configured fixed room rules and their seven-byte RL encoding.
 
-Enforcement is replacement-server policy. The native A-room projection displays
-these fields; that alone does not establish historical server enforcement.
+Server choice: enforcing these rules. The client only displays them.
 """
 
 from dataclasses import dataclass

@@ -1,9 +1,10 @@
-"""Explicit local UTC weeks, without rookie rules, awards or historical backfill.
+"""Weekly ranking periods.
 
-Only newly committed results belong here; RatingPolicy owns proof validation
-and replay protection. Weekly prize totals wrap DWORD, matching their native
-field width. A previous week's last recorded ratings remain frozen until the
-next rollover. First enablement records only subsequent play in that week.
+Server choice: UTC weeks, with no rookie rules, awards or backfill. Only newly
+committed results belong here; RatingPolicy validates proofs and prevents replay.
+Weekly prize totals wrap at 32 bits, the client's field width. A finished week's
+last ratings stay frozen until the next rollover. Turning the feature on records
+only later play in that week.
 """
 
 from collections.abc import Mapping

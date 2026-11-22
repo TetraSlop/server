@@ -339,7 +339,7 @@ class NativeRules:
         self, card, baseline: rules.GrowthBaseline, mode, random_value, *, x87_precision=64
     ) -> rules.GrowthResult:
         if rules._integer(x87_precision, "x87 precision") not in (53, 64):
-            raise rules.RulesError("supported x87 significands are53 or64 bits")
+            raise rules.RulesError("supported x87 significands are 53 or 64 bits")
         card = rules.Card.from_card(card)
         mode = rules._integer(mode, "growth mode") & 255
         random_value = rules._integer(random_value, "growth random") & 255

@@ -34,7 +34,7 @@ class OriginalImageTests(unittest.TestCase):
     def test_packed_or_corrupt_images_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "client.dll"
-            for data, message in ((b"MZ", "unpacked"), (bytes(IMAGE_SIZE), "SHA-256")):
+            for data, message in ((b"MZ", "memory image"), (bytes(IMAGE_SIZE), "SHA-256")):
                 path.write_bytes(data)
                 with self.assertRaisesRegex(OriginalCodeError, message):
                     read_image(path)

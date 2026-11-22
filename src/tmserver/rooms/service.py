@@ -1,7 +1,7 @@
-"""One local room with coherent PTL snapshots and sequenced roster updates.
+"""One room with coherent PTL snapshots and sequenced roster updates.
 
-Layouts and ordering: protocol_map/ROOM_SEQUENCE.md, ROOM_CONTRACT_VECTORS.md,
-DIRECTORY_UI_CONTRACT.md. Allocation and capacity are synthetic local policy.
+Layout and order: TetraPackets irc/L.md and flows/tables.md. Server choice: table
+allocation and capacity.
 """
 
 import re
@@ -53,7 +53,7 @@ class RoomService:
         ):
             raise ValueError("table channel must fit its terminated sixteen-byte field")
         if service_records is None:
-            # Original100156E5 selects the last D-prefix PTL service record.
+            # Original 100156E5 selects the last D-prefix PTL service record.
             service_records = (
                 build_table_record(
                     identity=game_id(TRADE_RAW),
@@ -73,7 +73,7 @@ class RoomService:
             channels.add(table_channel.upper())
         for record in records:
             if not isinstance(record, bytes) or len(record) != 0x68:
-                raise ValueError("service record must be exactly104 bytes")
+                raise ValueError("service record must be exactly 104 bytes")
             identity = struct.unpack_from("<Q", record)[0]
             field = record[0x18:0x28]
             channel = field.split(b"\0", 1)[0]
@@ -264,8 +264,8 @@ class RoomService:
         return deliveries
 
     def _opponent_payload(self, peer, opponent):
-        # Original10066950 projects info[23:25] to status/substatus. The
-        # table Start gate requires every roster member to exist here as3/1.
+        # Original 10066950 projects info[23:25] to status/substatus. The
+        # table Start gate requires every roster member to exist here as 3/1.
         info = bytearray(self.members[peer][1][0x38:0x58].rstrip(b"\0").ljust(31, b"A"))
         name = opponent.name[:15]  # Native CPU menu names may exceed the room name field.
         info[:15] = name.ljust(15, b" ")

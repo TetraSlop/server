@@ -1,4 +1,4 @@
-"""Load explicit local event fixtures; never derive historical award policies."""
+"""Load configured events from JSON."""
 
 import json
 from pathlib import Path

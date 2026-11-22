@@ -1,26 +1,23 @@
-"""Local ordinary-shop service; no sockets or implicit filesystem writes.
+"""Ordinary shop: B0/00 and B2 traffic.
 
-Mapped wire contracts: SHOP_INVENTORY, SHOP_SEQUENCE, ECONOMY_DETAILS,
-PACK_GENERATION and INVENTORY_BATCHING in ../protocol_map. This implements
-ordinary B0/00 and B2 shop traffic, not auction, trade, events or Prize Center.
+Layout and pack generation: TetraPackets flows/shop.md, irc/G/B2.md and
+client/catalogue.md.
 
-Explicit synthetic policy: provision defaults to 10,000 T and a ten-card
-Starter's Pack. Python's RNG supplies the recovered local generator; historical
-online randomness/entitlements are unknown. Ordinary catalogue categories 1/2,
-and the account's guild pack, are purchasable; free Pauper packs require <5
-cards. Rank/event packs are unavailable. No server-set price is sent: the
-native UI uses its own decoded catalogue prices and ignores Init /M.
+Server choice: a new account gets 10,000 T and a ten-card Starter's Pack, and
+Python's RNG drives the client's generator. Catalogue categories 1 and 2 and the
+account's guild pack are for sale; Pauper packs need fewer than 5 cards; rank and
+event packs are not sold. The server sends no prices: the client uses its own
+catalogue and ignores Init /M.
 
-Buy stages one transaction, including overflow up to 1030 cards. Same-pack
-retries replay its exact Card response. Get atomically commits debit, cards and
-intervening edits only after capacity <=1000. A disconnect discards that pending
-transaction; profile/snapshot expose the last committed state. Existing-account
-Sell/Erase/Decks commit immediately. Mode2 is only a marker, never erase-all.
-Duplicate edits cannot be distinguished from intentional identical-card edits
-on this wire; preserve ordered delivery and do not invent automatic retries.
-Malformed messages fail atomically with EconomyError; integration should log
-and close/resync the connection, not report success. Insufficient funds or an
-unavailable pack receive the mapped nonpositive Card response instead.
+Buy stages one transaction, including overflow up to 1030 cards. Retrying the
+same pack replays its Card response. Get commits the debit, the cards and any
+edits made in between, once the inventory holds at most 1000 cards. A disconnect
+discards the pending transaction. Sell/Erase/Decks on an existing account commit
+at once. Mode 2 is only a marker, never erase-all. The wire cannot tell a
+duplicate edit from two identical ones, so delivery stays ordered and nothing is
+retried automatically. A malformed message raises EconomyError and changes
+nothing; the caller should log it and close or resync the connection.
+Insufficient funds or an unavailable pack get the nonpositive Card response.
 """
 
 import re

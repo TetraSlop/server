@@ -1,4 +1,4 @@
-"""Independent opt-in observer delivery for configured event tables."""
+"""Spectator delivery for event tables (opt-in)."""
 
 from tmserver.protocol.messages import service_notice
 

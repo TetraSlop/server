@@ -1,4 +1,4 @@
-"""Generic profile partial updates, original71-field parser and socket save."""
+"""Generic profile partial updates, original 71-field parser and socket save."""
 
 import asyncio
 import copy
@@ -146,7 +146,7 @@ class CharacterProfileTests(unittest.TestCase):
                             self.assertEqual(
                                 (self.service.snapshot(), self.economy.snapshot()), before
                             )
-        # A single decimal alias remains valid, and6/14 are distinct fields.
+        # A single decimal alias remains valid, and 6/14 are distinct fields.
         self.service.handle(
             "alice",
             request(b"GR", extras=(Command(b"NO", b"006\x061"), Command(b"NO", b"014\x063"))),

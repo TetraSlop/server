@@ -1,7 +1,8 @@
-"""Synthetic service metadata for the recovered native bootstrap.
+"""Service metadata sent during client startup.
 
-Values describe our local dataset, not claimed historical retail values.
-Reply keys and pipe-separated elements come from TM 0x100812e0 and 0x100ab080.
+Server choice: the values describe this server's data, not the original
+service's. Reply keys and pipe-separated elements come from TM 0x100812e0 and
+0x100ab080.
 """
 
 from tmserver.protocol.messages import service_notice

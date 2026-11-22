@@ -44,7 +44,7 @@ class PrizeTests(unittest.TestCase):
             self.assertEqual((ledger.pending, ledger.transfers), before)
         a = ledger.select(p.winner, 1, choice_id=p.choice_id)
         self.assertEqual((a.loser, a.original_slot), (1, 1))
-        self.assertIsNotNone(ledger.pending)  # tied top seat2 can also win from1
+        self.assertIsNotNone(ledger.pending)  # tied top seat2 can also win from 1
         next_before = (ledger.pending, ledger.transfers)
         with self.assertRaises(PrizeError):
             ledger.select(ledger.pending.winner, 2, choice_id=p.choice_id)

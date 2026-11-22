@@ -1,8 +1,8 @@
-"""Pure original-client board effects; no hosted placement/distribution policy.
+"""Board effects from the client, for 16- and 25-cell boards.
 
-Source: SPECIAL_CARD_EFFECTS.md / COMBAT_SEQUENCE.md. Ordinary16/25-cell
-boards, valid F0..18, and nonnegative spinner display strengths only. Card
-payload/identity are opaque immutable objects; no inventory or RNG is owned.
+Valid fields F0..18 and nonnegative spinner strengths only. Cards are opaque
+immutable objects; this module owns no inventory or RNG. Layout: TetraPackets
+client/board.md and client/rules.md.
 """
 
 from dataclasses import dataclass, replace
@@ -76,7 +76,7 @@ class EffectResult:
 def _shape(board):
     size = {16: 4, 25: 5}.get(len(board))
     if size is None or any(not isinstance(c, Cell) for c in board):
-        raise SpecialRulesError("expected16 or25 native board cells")
+        raise SpecialRulesError("expected16 or 25 native board cells")
     return size, size - 2
 
 
@@ -114,7 +114,7 @@ def neighbors(board, index, wrapping=False):
 def start_board(fields):
     fields = tuple(fields)
     if len(fields) not in (16, 25) or any(type(f) is not int or not 0 <= f <= 18 for f in fields):
-        raise SpecialRulesError("StartData requires16/25 F values in0..18")
+        raise SpecialRulesError("StartData requires 16/25 F values in 0..18")
     cells = []
     for f in fields:
         if not f:

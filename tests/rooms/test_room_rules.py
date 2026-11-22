@@ -46,7 +46,7 @@ class RoomRulesValueTests(unittest.TestCase):
             rules.st = 1
 
     def test_native_packed_rule_vectors(self):
-        # Original1003BD30 fixtures in DIRECTORY_UI_CONTRACT.md: no native launch.
+        # Encodings produced by the client routine at 1003BD30.
         cases = (
             (RoomRules(gs=0, tl=0), b"AAAAAAA"),
             (RoomRules(gs=1, tl=0), b"AAAAAAB"),

@@ -1,4 +1,4 @@
-"""Authenticated event room and F-card adapters; no event match success stub."""
+"""Event room and F-card routing for authenticated connections."""
 
 from tmserver.protocol.messages import service_notice
 

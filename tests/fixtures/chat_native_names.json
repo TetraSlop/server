@@ -1,6 +1,6 @@
 {
   "scope": "Frozen original x86 name intake and extraction only. No glyph rendering or locale conversion.",
-  "source": "protocol_map/chat_lifecycle_vectors.py VM harness from research/migration.json source archive",
+  "source": "Original client chat routines run under an emulator; harness retired",
   "original_image_sha256": "422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879",
   "substitutions": "Heap allocation/free and lock calls only; original name consumers execute under Unicorn.",
   "roster": {

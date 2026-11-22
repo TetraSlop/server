@@ -1,8 +1,8 @@
-"""Original PC auction wire/file projection over the durable local ledger.
+"""Auction requests and files over the escrow ledger.
 
-No network or disk I/O. Caller advances the ledger clock, persists joint ledger
-and accounts before replies, and sends B2 from the taught Shm identity. Search
-snapshots and collection capabilities are deliberately connection-local.
+The caller advances the ledger clock, saves the ledger and accounts before
+replying, and sends B2 from the taught Shm identity. Search snapshots and
+collection capabilities belong to one connection.
 """
 
 import re
@@ -52,7 +52,7 @@ class AuctionService:
 
     def __init__(self, ledger, *, clock=time.time, max_snapshots=64):
         if type(max_snapshots) is not int or not 1 <= max_snapshots <= 1024:
-            raise ValueError("max_snapshots must be1..1024")
+            raise ValueError("max_snapshots must be 1..1024")
         self.ledger, self.economy, self.clock = ledger, ledger.economy, clock
         self.max_snapshots = max_snapshots
         self._snapshots, self._collections, self._sessions = {}, {}, {}
@@ -312,7 +312,7 @@ class AuctionService:
         # Prepare bounded card messages before any durable credit.
         try:
             cards = self._card_messages(session, reservation.returned)
-            # Original10105390 treats header1 as Init failure. /N establishes
+            # Original 10105390 treats header1 as Init failure. /N establishes
             # the later session; the Init header is success0, independently.
             init = named(
                 0xB2,

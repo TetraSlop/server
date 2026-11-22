@@ -1,4 +1,4 @@
-"""Replay unchanged application commands from the user's completed CPU match.
+"""Replay unchanged application commands from a completed CPU match capture.
 
 Fresh encrypted authentication replaces only the expired connection handshake.
 Archived profile supplies the original inventory. Replay ends after selection;

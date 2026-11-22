@@ -84,7 +84,7 @@ class BattleResult:
 
     @property
     def calculator_return(self):
-        """Original100D31D0 returns2 on ties too; not the presentation outcome."""
+        """Original 100D31D0 returns2 on ties too; not the presentation outcome."""
         return 1 if self.comparison > 0 else 2
 
 
@@ -103,7 +103,7 @@ class GrowthBaseline:
     price: int
 
     def __post_init__(self):
-        # All250 recovered catalogue baselines have positive three stats.
+        # All 250 recovered catalogue baselines have positive three stats.
         # Reject malformed zero denominators instead of emulating x87 faults.
         for name in ("attack", "physical", "magical"):
             _integer(getattr(self, name), f"baseline {name}", 1, 255)

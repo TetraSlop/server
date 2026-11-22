@@ -1,7 +1,7 @@
-"""Recovered original PlPrm NPC identities and local pool/hand construction.
+"""Computer opponents from the client's PlPrm data, with pool and hand building.
 
-Original local reference only; hosted ComGame menu orchestration is separate.
-No historical server deck distribution or availability policy is implied.
+Server choice: which opponents and decks the menu offers. Layout: TetraPackets
+client/computer-player.md.
 """
 
 from dataclasses import dataclass
@@ -79,7 +79,7 @@ OPPONENTS = tuple(
 
 def opponent(npc_id):
     if type(npc_id) is not int or not 1 <= npc_id <= 30:
-        raise OpponentError("named NPC selector must be1..30")
+        raise OpponentError("named NPC selector must be 1..30")
     return OPPONENTS[npc_id - 1]
 
 
@@ -102,12 +102,12 @@ def prepare_opponents(npc_ids, catalog, raw_rng, guild=0):
     if len(set(npc_ids)) != len(npc_ids):
         raise OpponentError("named NPC selectors must be distinct")
     if type(guild) is not int or guild not in range(4):
-        raise OpponentError("guild/filter must be0..3")
+        raise OpponentError("guild/filter must be 0..3")
 
     def draw():
         value = raw_rng()
         if type(value) is not int or not 0 <= value <= 32767:
-            raise OpponentError("CRT draw must be0..32767")
+            raise OpponentError("CRT draw must be 0..32767")
         return value
 
     pools = [

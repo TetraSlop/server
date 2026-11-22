@@ -2,18 +2,12 @@
 
 from dataclasses import dataclass
 
-from tmserver.protocol.identities import game_id
-
 
 @dataclass(frozen=True)
 class FileOwner:
     raw_identity: int
     directory: int
     volume: int
-
-    @property
-    def game_identity(self):
-        return game_id(self.raw_identity)
 
     @classmethod
     def decode(cls, value):

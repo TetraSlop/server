@@ -74,7 +74,7 @@ class NewProfileTests(unittest.TestCase):
         with self.assertRaises(EconomyError):
             economy.initialize_profile("a", request(economy, guild=1))
         self.assertEqual(economy.snapshot(), before)
-        # Native initial send commonly carries0 before its file read finishes.
+        # Native initial send commonly carries 0 before its file read finishes.
         self.assertEqual(
             economy.initialize_profile("a", request(economy)), named(0x81, 0, 0, "@InitAns=/Ans=1")
         )

@@ -1,8 +1,8 @@
-"""Durable match stakes and prize receipts, independent of sockets and UI.
+"""Match stakes and prize receipts.
 
-Persist this snapshot with economy, ResultRewardService and auction before any
-success packet. Versus payouts are an explicit zero-sum local policy; computer
-payouts reuse proved offline client arithmetic, not a historical online rule.
+Save this snapshot with the economy, ResultRewardService and auction state before
+any success packet. Server choice: versus payouts are zero-sum. Computer payouts
+use the client's offline formula.
 """
 
 import hashlib
@@ -50,7 +50,7 @@ def _result(scores, ratings, n):
 
 
 def offline_payout(scores, ratings, stake, seat=0):
-    """Original100CC712..100CC7A6 within ordinary board/rating bounds.
+    """Original 100CC712..100CC7A6 within ordinary board/rating bounds.
 
     Returns signed arithmetic, including a possible negative high-rating value.
     The hosted policy credits max(0,value); online money animation ignores<=0.

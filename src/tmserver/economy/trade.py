@@ -1,9 +1,8 @@
-"""Two-player A2 card exchange, using the public economy reservation API.
+"""Two-player A2 card exchange, through the economy reservation API.
 
-No networking, disk writes, NPC exchange recipes or hidden account creation.
-See TRADE_SERVICE_NOTES.md for adapter consent, identity, persistence and reload
-requirements. In particular Delivery.reload_profile means close/resync that
-client; Dead/Quit alone cannot undo an already displayed M4 reconciliation.
+Delivery.reload_profile means close and resync that client: Dead/Quit alone
+cannot undo an M4 reconciliation the client has already shown. Layout:
+TetraPackets flows/trade.md and irc/G/A2.md.
 """
 
 import re

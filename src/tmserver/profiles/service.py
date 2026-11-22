@@ -1,12 +1,11 @@
-"""Loopback PC PlayOnline profile service for synthetic test accounts.
+"""PlayOnline profile file service, on loopback.
 
-Layouts come from profile_ops_pc.md, not a modern web API. Unknown operations
-fail explicitly and are logged so incomplete protocol support stays visible.
+Layout: TetraPackets file/service.md. Unknown operations fail and are logged.
 
-Local authentication policy: the configured pool of synthetic fixtures
-use tm-local-test. Encrypted requests try each account's active authenticated IRC key
-and up to two previously nonce-validated profile contexts; the complete legacy
-MD5(ID8 + password + nonce) selects both identity and cipher. The opening packet
+Local test accounts use the password tm-local-test. Encrypted requests try each
+account's active authenticated IRC key and up to two previously nonce-validated
+profile contexts; the complete legacy MD5(ID8 + password + nonce) selects both
+identity and cipher. The opening packet
 does not select an account. Cached contexts are process-local, bounded, and have
 no expiry beyond replacement/restart; a restarted service needs a fresh IRC
 context before encrypted profile use. Plain mode uses the same full digest.

@@ -1,8 +1,7 @@
-"""Exact ordinary client card-prize order, separated from account persistence.
+"""Client card-prize order for ordinary matches, separate from account storage.
 
-Recovered blocks:100C90EA..100C93E2,100CAAE3..100CAC6E,
-100CAEDD..100CAF59,100CB117..100CB1BA. See MATCH_PRIZES_NOTES.md.
-This ledger does not modify MatchService, currency, inventories, or the network.
+Client routines: 100C90EA..100C93E2, 100CAAE3..100CAC6E, 100CAEDD..100CAF59 and
+100CB117..100CB1BA. Details: TetraPackets flows/results-and-prizes.md.
 """
 
 from dataclasses import dataclass, replace
@@ -55,7 +54,7 @@ class PrizeSettlement:
 
 
 def poll_computer_prize(choice, raw_rng, denominator=60):
-    """Original100CA258..100CA284 for an ambiguous simulated-player prize.
+    """Original 100CA258..100CA284 for an ambiguous simulated-player prize.
 
     The caller has already checked simulated-player/local-simulation flags.
     Sole/perfect prizes belong to PrizeLedger's automatic path and draw nothing.
@@ -134,7 +133,7 @@ class PrizeLedger:
                     ):
                         raise TypeError("card dataclass must be frozen")
                     if type(c.card.deck) is not int or c.card.deck not in (*range(50), 255):
-                        raise ValueError("deck must be0..49 or255")
+                        raise ValueError("deck must be 0..49 or 255")
                     replace(c.card, deck=255)
             except (AttributeError, TypeError, ValueError) as exc:
                 raise PrizeError("cards must support an immutable deck255 copy") from exc

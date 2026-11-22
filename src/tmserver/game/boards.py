@@ -1,8 +1,8 @@
-"""Exact ordinary local board generator100C0F16..100C11E5.
+"""Ordinary board generator, the client's routine at 100C0F16..100C11E5.
 
-This is the original client's simulation policy, not historical hosted policy.
-The caller chooses raw CRT seed/stream and when to use generated versus fixed
-boards. No assets, persistence, networking or presentation are owned here.
+This is the client's offline policy; the original server's is unknown. The caller
+picks the CRT seed and stream and decides when to use a generated board. Layout:
+TetraPackets client/board.md.
 """
 
 from dataclasses import dataclass
@@ -13,7 +13,7 @@ class BoardGenerationError(ValueError):
 
 
 # Exact100-entry lookup tables, including the trailing15 zero bytes in3p E.
-# Original100C0F33/100C0FA7 index these by raw_rand()%100 and mode*100.
+# Original 100C0F33/100C0FA7 index these by raw_rand()%100 and mode*100.
 BLOCK_COUNTS = (
     (0,) + (1,) * 2 + (2,) * 3 + (3,) * 5 + (4,) * 9 + (5,) * 30 + (6,) * 50,
     (0, 1, 2)

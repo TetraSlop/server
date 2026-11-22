@@ -13,7 +13,7 @@ UI_CATEGORIES = {0: 4, 1: 5, 2: 0, 3: 1, 4: 2}
 def encode_record(entry):
     """Only fields consumed by the audited rank UI are populated; rest zero."""
     output = bytearray(RECORD_SIZE)
-    # Original101752F7 copies until NUL, even though the source name field is16.
+    # Original 101752F7 copies until NUL, even though the source name field is 16.
     # Keep a guaranteed terminator; this display-only form does not rename saves.
     output[:16] = entry.name[:15].ljust(16, b"\0")
     struct.pack_into("<QI", output, 0x10, entry.identity, entry.character_id)
