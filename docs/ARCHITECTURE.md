@@ -47,7 +47,7 @@ load-test commands. `results/` and `var/` are ignored output and local state.
 | Auction records, protocol and escrow | [economy/auctions/](../src/tmserver/economy/auctions/), [economy/claim_transactions.py](../src/tmserver/economy/claim_transactions.py) |
 | Profile files and saved player settings | [profiles/service.py](../src/tmserver/profiles/service.py), [profiles/characters.py](../src/tmserver/profiles/characters.py), [profiles/preferences.py](../src/tmserver/profiles/preferences.py) |
 | Ratings, statistics and ranking files | [rankings/policy.py](../src/tmserver/rankings/policy.py), [rankings/stats.py](../src/tmserver/rankings/stats.py), [rankings/service.py](../src/tmserver/rankings/service.py) |
-| Save, validate or recover durable state | [storage/postgres.py](../src/tmserver/storage/postgres.py), [storage/validation.py](../src/tmserver/storage/validation.py) |
+| Save, validate or recover durable state | [storage/postgres.py](../src/tmserver/storage/postgres.py), [storage/restore.py](../src/tmserver/storage/restore.py), [storage/validation.py](../src/tmserver/storage/validation.py) |
 | Packaged immutable tables | [data/](../src/tmserver/data/), read through [data/resources.py](../src/tmserver/data/resources.py) |
 
 `cli.serve` constructs the two loopback listeners. `network.server.Server` owns
