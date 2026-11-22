@@ -19,7 +19,7 @@ class EventSelectionExpiryTests(unittest.TestCase):
         fixture = match_tests.CoordinatorTests()
         fixture.catalog = self.catalog
         fixture.setUp()
-        fixture.c.initial_updates()
+        fixture.c.poll()
         return fixture
 
     def selection_packet(self, fixture, key="1", session=None):

@@ -43,7 +43,6 @@ class EventAdapter:
             service_nick(identity ^ GAME_KEY): (event, identity, channel)
             for event, identity, channel in self.coordinator.routes()
         }
-        self.channels = {channel.upper() for _, _, channel in self.coordinator.routes()}
         self.lock = asyncio.Lock()
         self.task = None
         self.sender = None

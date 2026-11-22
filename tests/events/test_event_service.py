@@ -20,13 +20,13 @@ from tmserver.events.packets import (
     time_reply,
 )
 from tmserver.events.models import EventConfig, EventError, EventListing, EventMember, PrizeDisplay
-from tmserver.events.service import EventDirectory, EventHost
+from tmserver.events.service import EventHost
 
 
 
 class EventFileTests(unittest.TestCase):
     def test_empty_directory_has_complete_extents_and_no_events(self):
-        service = EventDirectory()
+        service = EventHost(EconomyService())
         for path, size in SIZES.items():
             self.assertEqual(len(service.file(path)), size)
         self.assertEqual(struct.unpack_from("<I", service.file("b/g/TM0EventList"), 4)[0], 0)

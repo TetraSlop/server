@@ -212,10 +212,6 @@ class EventMatchRound:
         return self._combat.sequence
 
     @property
-    def last_sequence(self):
-        return self._combat.last_sequence
-
-    @property
     def active(self):
         return self._combat.active
 
@@ -323,10 +319,6 @@ class EventMatchRound:
         self._combat.cancel_pending()
         self._aborted = True
         self._closed = True
-
-    def final_cards(self, peer):
-        """Borrowed event cards never become a normal inventory replacement."""
-        return None
 
     def snapshot(self):
         state = self._combat.snapshot()
