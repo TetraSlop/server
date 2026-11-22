@@ -1,15 +1,13 @@
-# Native original-code rules
+# Native rules
 
-The server executes original TM x86 instructions through the C++23 bridge and
-32-bit Windows Python. This is the required gameplay path. The Python battle,
-growth, target-choice and placement-scoring implementations and the Unicorn
-backend have been removed.
+The server runs the client's own x86 rules code through a C++23 bridge, from
+32-bit Windows Python. Gameplay requires it; there is no Python fallback.
 
 Native execution covers battles, card growth, target selection, and COM hand and
 placement decisions on ordinary, special-tile and three-player boards. Python
 retains match state, turn sequencing, board effects, room policy, transactions,
-rewards, authentication and transport. Calling client code does not recover
-historical hosted reward formulas.
+rewards, authentication and transport. The client code does not contain the
+original server's reward formulas.
 
 ## Build and configure
 
@@ -19,9 +17,9 @@ bridge links the MSVC runtime statically and has no third-party C++ dependencies
 
 The default JSON persistence needs no extra driver.
 For optional PostgreSQL on Windows x86, supply a **32-bit libpq** client library
-for plain Psycopg and retain MSVC build tools for Greenlet's source build. The
-current Psycopg binary extra has no Win32 wheel, so the Windows PostgreSQL extra
-intentionally uses plain Psycopg. PostgreSQL itself can run separately on any
+for plain Psycopg and keep the MSVC build tools for Greenlet's source build.
+Psycopg has no 32-bit Windows binary wheel, so on Windows the extra installs
+plain Psycopg. PostgreSQL itself can run separately on any
 supported server platform; only the client library must match Python's bitness.
 
 ```powershell
@@ -40,30 +38,22 @@ unsupported host architecture, the wrong ABI, or an invalid image fail before
 opening the game listener. Install `.[auth]` or `.[admin]` when enabling those
 optional services.
 
-The development checkout has an ignored x86 interpreter at
-`build/python-x86/python.exe`. Its existing external image can be located with:
-
-```powershell
-$archive = (Get-Content research/migration.json -Raw | ConvertFrom-Json).source
-$env:TM_ORIGINAL_IMAGE = Join-Path $archive 'TM_emulated_mapped.dll'
-```
-
-These paths describe this development machine, not a packaged distribution.
-Neither the server wheel nor the native bridge archive includes the original
-executable image. A native Linux gameplay deployment is not supported by this
-Windows bridge.
+Neither the server wheel nor the native bridge archive includes the game image.
+The bridge is Windows only, so gameplay cannot be hosted natively on Linux.
 
 ## Required image and ABI
 
-The adapter requires an already-unpacked, RVA-indexed memory image with exactly:
+The operator supplies their own copy of the game's TM.dll as an RVA-indexed
+memory image, `TM_emulated_mapped.dll`, with exactly:
 
 ```text
 Size:   3,518,464 bytes
 SHA256: 422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879
 ```
 
-The loader's packed `TM_native.dll` is not interchangeable with this image.
-The adapter checks size and SHA-256 before calling native code. The current
+The same line is in [retail-files.txt](../retail-files.txt). tmloader's
+`TM_native.dll` cannot be used in its place. The adapter checks size and SHA-256
+before calling native code. The current
 bridge ABI is **3**; rebuild the bridge when updating the adapter. ABI 2 cannot
 represent the special tile state and 25-cell boards now required for native COM.
 
@@ -137,9 +127,5 @@ Expectations are static data and hashes, not another rules implementation.
 The 17 acceptance tests also cover input guards before randomness, callback
 errors and partial consumption, reentry, concurrent busy rejection, context
 lifetime, global-state reset and x87 restoration. These checks run without
-launching the game. Ordinary CI does not include the copyrighted image, so the
-ABI check alone does not claim to execute the original routines.
-
-Earlier emulator comparisons and prototype timings remain historical evidence
-in Git history and `docs/research/`. Their runnable emulator harnesses were
-retired; there is no emulator dependency to install.
+launching the game. Ordinary CI does not have the image, so its ABI check does
+not run the client's routines.

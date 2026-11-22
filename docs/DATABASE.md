@@ -74,10 +74,6 @@ selects JSON instead, even if that environment variable is set. Supplying both
 `--state` and `--database-url` is rejected. All existing game options remain
 available; protocol listeners still bind only to loopback.
 
-The previous scratch-project launcher is external to this package and still uses
-its existing backend and save. Switching that launcher is a separate integration
-step; installing this package does not change it.
-
 ## Ownership and recovery
 
 One server process owns one database. A session advisory lock rejects a second

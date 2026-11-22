@@ -7,7 +7,7 @@ prepared. Start with **`tmserver/Play.cmd`**, rather than the earlier shortcut.
 ## First run
 
 The server now requires Windows x86 Python and the original-code bridge; follow
-[native setup](ORIGINAL_RULES_PROTOTYPE.md). `Play.cmd` uses `.venv` or the prepared
+[native setup](NATIVE_RULES.md). `Play.cmd` uses `.venv` or the prepared
 local `build/server-x86` environment; `TM_PYTHON` overrides its interpreter.
 Set `TM_ORIGINAL_IMAGE` and `TM_NATIVE_BRIDGE`, or place the verified image and
 bridge in the ignored `var/native` directory as prepared on this machine.
@@ -92,8 +92,8 @@ To enable the local rating policy and weekly rankings:
 
 Weekly rankings count only results committed while the option is enabled.
 Weeks begin Monday at 00:00 UTC: Weekly Prize Money shows this week's earned
-result rewards, and Top30 shows the previous week's last committed ratings.
-Best Rookies remains empty. This is an explicit local policy; existing progress
+result rewards, and Top 30 shows the previous week's last committed ratings.
+Best Rookies stays empty. This is a server choice; existing progress
 is not assigned to earlier weeks.
 
 To pause weekly tracking while keeping the local rating history consistent,
@@ -103,15 +103,15 @@ omit only `--weekly-rankings`:
 .\Play.cmd --ratings local-history
 ```
 
-Saved weekly history is retained while its weekly lists are hidden. Ordinary
+The server keeps weekly history but hides the weekly lists. Ordinary
 launch still defaults to `--ratings preserve`, which keeps saved ratings and
 does not record local rating results. After enabling local-history, keep passing
 `--ratings local-history` for continued play; playing in preserve mode can leave
 the saved rating history inconsistent with subsequent profile progress.
-Re-enabling local-history now checks all enrolled accounts before starting the
-services or recovering interrupted rounds. A mismatch reports the account keys
-and stops startup without changing the save; it requires an explicit history
-migration, which is not yet provided. Preserve mode remains available.
+If you turn local-history back on, the server checks every enrolled account
+before starting services or recovering interrupted rounds. If one does not match,
+it reports the account keys and stops without touching the save. There is no
+migration tool yet; preserve mode still works.
 Each session's `session.json` records both selected options.
 
 ## Where everything lives

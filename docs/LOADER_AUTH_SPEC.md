@@ -1,10 +1,9 @@
-# Loader authentication contract — prototype v1
+# Loader authentication contract, v1
 
-Status: Discord is the selected login provider, through Supabase Auth. Server
-implementation and local protocol tests exist. The user confirmed live
-Discord/Supabase sign-in through the separately owned loader and the imported
-Discord display name. Public TLS deployment and full native hosted-match
-acceptance remain pending. This document records the implemented loader contract.
+Login uses Discord through Supabase Auth. The server side is implemented and
+tested, and sign-in and display-name import work through tmloader. Public TLS
+deployment and a complete hosted match in the game client are still to do. This
+document is the contract between tmserver and tmloader; change both together.
 
 ## User experience and ownership
 
@@ -30,7 +29,7 @@ native account ID with a Discord username. No loader protocol change is required
 The loader needs no registration endpoint or account selector. The server saves
 ownership and starter inventory together; retries and restarts reuse that account.
 An operator can close new registration with `auto_register: false`. Existing
-pilot bindings can be imported without resetting saves. Returned
+manual bindings can be imported without resetting saves. Returned
 POL ID/account key are authoritative. Do not let a local account selector override
 them in hosted mode. The returned legacy password is a compatibility credential,
 not permission to enter the hosted service.
