@@ -49,5 +49,19 @@ jobs:
       - run: python -m tools.check_native_bridge $env:TM_NATIVE_BRIDGE
       - run: python -m unittest research.native_backend_tests -v
       - run: python -m tools.check_tests native
+      # No 32-bit libpq is published for Windows; build the client library with
+      # vcpkg and use the runner's preinstalled PostgreSQL server.
+      - name: Prepare 32-bit libpq and PostgreSQL
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install "libpq[core]:x86-windows"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "$env:VCPKG_INSTALLATION_ROOT/installed/x86-windows/bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          Set-Service postgresql-x64-14 -StartupType Manual
+          Start-Service postgresql-x64-14
+          python -m pip install -e ".[postgres]"
+      - name: Native PostgreSQL lane
+        env:
+          TM_TEST_DATABASE_URL: postgresql+psycopg://postgres:root@127.0.0.1:5432/postgres
+        run: python -m tools.check_tests native-postgres --worker
       - run: python -m build --wheel
       - run: python -m tools.check_wheel (Get-ChildItem dist/*.whl).FullName --native --admin --auth

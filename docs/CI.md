@@ -7,9 +7,8 @@ transactions/migrations against a disposable PostgreSQL 16 container. Unexpected
 skips fail the run. The aggregate **All checks** job fails if any required job
 fails or is cancelled, and can be selected as a branch-protection requirement.
 
-Packaging builds from fresh sources and checks exact wheel contents before
-installing in a new environment. The installed base, admin and auth flows are
-exercised where they do not execute original code. A
+Packaging checks exact wheel contents before installing in a new environment,
+then smokes the installed entry points, admin templates and auth imports. A
 separate Windows x86 job compiles the required C++23 rules bridge and validates
 its ABI without an original game image. Successful builds retain the
 `tmserver-wheel` and `tmserver-native-win32` artifacts for 14 days.
@@ -33,11 +32,13 @@ Locally, set `TM_ORIGINAL_IMAGE` and `TM_NATIVE_BRIDGE`, install
 `python -m unittest research.native_backend_tests`.
 
 Two complete-match PostgreSQL tests use the separate `native-postgres` lane;
-the hosted PostgreSQL job runs the other 78 tests without an image. Run the
-combined lane on Windows x86 with a matching libpq and a disposable PostgreSQL
-host. `python -m tools.check_tests native-postgres` creates a Docker test host;
-for an already prepared disposable host, set `TM_TEST_DATABASE_URL` and add
-`--worker`. This combined lane is currently verified locally, not on hosted CI.
+the hosted PostgreSQL job runs the other database tests without an image. The
+Native gameplay workflow runs the combined lane after the native lane: no
+32-bit libpq is published for Windows, so it builds the client library with
+vcpkg and uses the runner's preinstalled PostgreSQL server. Locally, run it on
+Windows x86 with a matching libpq on `PATH`;
+`python -m tools.check_tests native-postgres` creates a Docker test host, or set
+`TM_TEST_DATABASE_URL` to an already prepared disposable host and add `--worker`.
 
 ## Versioning
 
