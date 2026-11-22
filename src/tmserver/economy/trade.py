@@ -12,7 +12,7 @@ from functools import partial
 from tmserver.checks import decimal, exact_keys
 from tmserver.cards.catalog import collection_points
 from tmserver.economy.errors import EconomyError
-from tmserver.economy.packets import named, parse_named
+from tmserver.economy.packets import card_pages, named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
 from tmserver.cards.edits import match_owned as owned_indices
 
@@ -145,24 +145,10 @@ class TradeService:
                     trade.peers[1 - side], named(0xA2, 0x1A, trade.session, f"@Card=/P={side}/E=0")
                 )
             ]
-        deliveries = []
-        start = 0
-        while start < len(cards):
-            count = min(15, len(cards) - start)
-            while True:
-                chunk = cards[start : start + count]
-                body = f"@Card=/P={side}/E={len(cards)}/S={start}/C={count}"
-                body += "".join(
-                    f"@N{i}=/D=" + "|".join(map(str, c.reduced())) for i, c in enumerate(chunk)
-                )
-                if len(body) <= 447:
-                    break
-                count -= 1
-            deliveries.append(
-                Delivery(trade.peers[1 - side], named(0xA2, 0x1A, trade.session, body))
-            )
-            start += count
-        return deliveries
+        return [
+            Delivery(trade.peers[1 - side], named(0xA2, 0x1A, trade.session, body))
+            for body in card_pages(f"/P={side}", cards, limit=15)
+        ]
 
     def handle(self, peer, payload, partner=None):
         """Route A0/A2 traffic; partner is the peer that consented to this TrEnt.

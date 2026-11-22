@@ -28,7 +28,7 @@ from tmserver.economy.auctions.packets import (
 from tmserver.cards.catalog import collection_points
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
-from tmserver.economy.packets import named, parse_named
+from tmserver.economy.packets import card_pages, named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
 from tmserver.protocol.commands import Command, encode_service, parse
 
@@ -342,21 +342,7 @@ class AuctionService:
             raise EconomyError("auction card stage exceeds original temporary buffer")
         if not cards:
             return [named(0xB2, 0x21, session, "@Card=/E=0/S=0/C=0")]
-        output, start = [], 0
-        while start < len(cards):
-            tails = []
-            for card in cards[start:]:
-                tail = f"@N{len(tails)}=/D=" + "|".join(map(str, card.reduced()))
-                body = f"@Card=/E={len(cards)}/S={start}/C={len(tails)+1}" + "".join(tails) + tail
-                if len(body) > 447:
-                    break
-                tails.append(tail)
-            if not tails:
-                raise EconomyError("card cannot fit native page")
-            body = f"@Card=/E={len(cards)}/S={start}/C={len(tails)}" + "".join(tails)
-            output.append(named(0xB2, 0x21, session, body))
-            start += len(tails)
-        return output
+        return [named(0xB2, 0x21, session, body) for body in card_pages("", cards, limit=30)]
 
     def _accept_cards(self, key, state):
         reservation, session = state.reservation, state.session
