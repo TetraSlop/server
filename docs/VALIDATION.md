@@ -50,5 +50,4 @@ database is not tested.
 - Public hosting behind TLS.
 - Original server rules that the client does not contain, such as reward and
   rating formulas. See [rules provenance](RULES_PROVENANCE.md).
-- Player capacity. The [load tests](LOAD_TESTING.md) measure throughput and
-  storage stalls on one machine.
+- Player capacity. Throughput and storage stalls are not measured.

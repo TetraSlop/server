@@ -14,8 +14,7 @@ Running the server:
 Working on it:
 
 - [Architecture](ARCHITECTURE.md): where each feature lives, ownership and commit order.
-- [Checks and releases](CI.md), [validation](VALIDATION.md) and
-  [load testing](LOAD_TESTING.md).
+- [Checks and releases](CI.md) and [validation](VALIDATION.md).
 - [Native test checklist](NATIVE_TEST_CHECKLIST.md): checks that need a person at
   the game client.
 - [Rules provenance](RULES_PROVENANCE.md) and [coverage](EMULATION_COVERAGE.md):

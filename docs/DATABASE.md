@@ -163,8 +163,7 @@ that database on cleanup. The administrative database's tables are not changed.
 Without this environment variable, PostgreSQL tests are skipped.
 
 This is a complete alternative save backend for the existing single-process
-server. It is not a distributed architecture; the bounded measurements are documented
-in [load testing](LOAD_TESTING.md). Full administrative
+server. It is not a distributed architecture. Full administrative
 saves still visit all accounts; database I/O blocks the event loop.
 Each service journal is currently one versioned JSONB document. Ordered card
 slots preserve duplicate copies, but do not yet provide permanent per-copy IDs.
