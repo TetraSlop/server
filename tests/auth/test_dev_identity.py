@@ -9,7 +9,7 @@ import unittest
 
 from tests.auth.test_transport import local_bridge
 from tests.support.irc import Client
-from tests.support.memory_store import DATABASE, opened_by
+from tests.support.memory_store import DATABASE, MemoryStore
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -44,15 +44,25 @@ class DevIdentityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_browser_on_localhost_signs_in_and_opens_the_game_stream(self):
         import httpx
-        from tmserver.cli.serve import arguments, running_services
+        from tmserver.auth.config import load_auth_config
+        from tmserver.auth.server import serving_auth
+        from tmserver.cli.serve import arguments
+        from tmserver.network.server import Server
+        from tmserver.profiles.service import ProfileServer
 
+        args = arguments(["--auth-config", str(CONFIG), "--auth-insecure-loopback",
+                          "--auth-dev-identity", *DATABASE])
+        self.assertTrue(args.auth_dev_identity)
         with tempfile.TemporaryDirectory() as folder:
-            args = arguments(["--auth-config", str(CONFIG), "--auth-insecure-loopback",
-                              "--auth-dev-identity", "--auth-port", "0", "--game-port", "0",
-                              "--profile-port", "0", *DATABASE, "--log-dir", folder])
-            self.enterContext(opened_by("tmserver.cli.serve"))
-            async with running_services(args) as services:
-                gateway = f"http://127.0.0.1:{services.auth.port}"
+            host = Server(store=MemoryStore())
+            self.addAsyncCleanup(host.stop)
+            profile = ProfileServer(Path(folder) / "profile.jsonl", host)
+            self.addAsyncCleanup(profile.stop)
+            await host.start(0)
+            await profile.start(0)
+            async with serving_auth(host, profile, load_auth_config(CONFIG), port=0,
+                                    insecure_loopback=True, dev_identity=True) as auth:
+                gateway = f"http://127.0.0.1:{auth.port}"
                 page = {"Origin": PAGE}
                 async with httpx.AsyncClient(base_url=gateway, trust_env=False) as http:
                     issued = await http.post("/v1/play/tickets", json={"protocol": 1},
@@ -63,7 +73,7 @@ class DevIdentityTests(unittest.IsolatedAsyncioTestCase):
                                                json={"ticket": issued.json()["ticket"]})
                     self.assertEqual(redeemed.status_code, 201, redeemed.text)
                     play = redeemed.json()
-                    self.assertEqual(play["streams"]["game"], f"ws://127.0.0.1:{services.auth.port}"
+                    self.assertEqual(play["streams"]["game"], f"ws://127.0.0.1:{auth.port}"
                                                               "/v1/streams/game")
                     # A name other than the numeric loopback origin is refused, as a proxy would be.
                     proxied = await http.post("/v1/play/tickets", json={"protocol": 1},
@@ -79,5 +89,5 @@ class DevIdentityTests(unittest.IsolatedAsyncioTestCase):
                         self.assertIn(b" 422 ", await asyncio.wait_for(client.read(), 5))
                     finally:
                         await client.close()
-                self.assertEqual(services.game.economy.account_view(play["account_key"]).name,
+                self.assertEqual(host.economy.account_view(play["account_key"]).name,
                                  b"alice")
