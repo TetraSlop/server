@@ -126,6 +126,18 @@ class AuctionEconomy:
         self._external_returns[source_id] = value
         return True
 
+    def prune_external_returns(self):
+        """Startup only, after match and result recovery: forget every source ID.
+
+        Sources are match rounds (MatchEconomy.abort) and pending result rewards
+        (ResultRewardService.recover). Once startup recovery has closed every
+        round and recovered every pending row, neither can enqueue an old source
+        again. The returned cards themselves stay pending for collection.
+        """
+        count = len(self._external_returns)
+        self._external_returns = {}
+        return count
+
     def active_exhibits(self, key):
         return sum(v.status == "active" and v.seller.key == key for v in self._listings.values())
 

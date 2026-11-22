@@ -6,6 +6,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
+from tests.economy.test_journal_pruning import after_restart_auction
 from tests.game import test_three_player_integration as versus
 from tmserver.game.packets import decode, packet
 from tmserver.game.special_rules import DIRECTIONS
@@ -84,7 +85,8 @@ class ThreePlayerCBC(unittest.IsolatedAsyncioTestCase):
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
             self.assertEqual(
-                restored.auction_ledger.snapshot(), self.server.auction_ledger.snapshot()
+                restored.auction_ledger.snapshot(),
+                after_restart_auction(self.server.auction_ledger.snapshot()),
             )
         finally:
             await restored.stop()

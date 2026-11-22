@@ -4,6 +4,7 @@ import asyncio
 import unittest
 from contextlib import asynccontextmanager
 
+from tests.economy.test_journal_pruning import after_restart_rounds
 from tests.events.test_event_rooms import config, presence
 from tests.support.irc import Client
 from tests.rooms.harness import serve
@@ -405,7 +406,9 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
             restored = Server(store=self.store)
             try:
                 self.assertEqual(restored.economy.snapshot(), self.initial_accounts)
-                self.assertEqual(restored.match_economy.snapshot(), ledger)
+                self.assertEqual(
+                    restored.match_economy.snapshot(), after_restart_rounds(ledger)
+                )
             finally:
                 await restored.stop()
 
