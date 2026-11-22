@@ -14,9 +14,10 @@ templates.
 
 The first job also builds the Docker image with the GitHub Actions layer
 cache, without pushing it. It then starts `compose.yaml` (PostgreSQL 17, the
-schema upgrade and the server), waits for every service to be healthy, and runs
-`tools/check_container.py`. That script registers a new account with LOGIN and
-signs in to the game with it.
+schema upgrade and the server) on host ports Docker picks, waits for every
+service to be healthy, and runs `tools/check_container.py` against the game port
+that `docker compose port` reports. That script registers a new account with
+LOGIN and signs in to the game with it.
 
 The portable lane includes `tests/game/test_rules_vectors.py`, which checks the
 Python rules against the 8,067 results frozen from the client's own code in
