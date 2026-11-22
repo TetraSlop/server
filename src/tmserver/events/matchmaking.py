@@ -12,6 +12,8 @@ from dataclasses import dataclass, field, replace
 
 from tmserver.protocol.admission import validate_admission
 from tmserver.cards.catalog import collection_points
+from tmserver.cards.edits import match_owned, parse_edit_records
+from tmserver.cards.model import card_values
 from tmserver.events.matches import (
     EventMatchRound,
     EventParticipant,
@@ -346,46 +348,18 @@ class EventMatchmaking:
         return None if entry is None else entry.session
 
     def _decks(self, key, msg, e=None):
-        fields = msg.sections.get("Decks", {})
-        if set(fields) != {"C"}:
+        if set(msg.sections.get("Decks", {})) != {"C"}:
             raise EventError("invalid event Decks header")
-        count = numbers(fields["C"], 1)[0]
-        if not 0 <= count <= 13:
-            raise EventError("event Decks batch outside native bound")
-        expected = {"Decks", *(str(i) for i in range(count))}
-        renames = set(msg.sections) - expected
-        if not expected <= set(msg.sections) or renames - {"DN1", "DN2"} or len(renames) > 1:
-            raise EventError("invalid event Decks sections")
+        values, names = parse_edit_records(
+            msg.sections, "Decks", number=lambda v: numbers(v, 1)[0], error=EventError
+        )
         view = (
             self.economy.account_view(key)
             if e is None
             else self.economy.match_account(e.reservation)
         )
-        available = set(range(len(view.cards)))
-        changes = []
-        for i in range(count):
-            f = msg.sections[str(i)]
-            if set(f) != {"D"}:
-                raise EventError("invalid event Decks card")
-            values = numbers(f["D"], 7)
-            if values[-1] not in (*range(50), 255):
-                raise EventError("invalid event deck slot")
-            index = next(
-                (j for j in sorted(available) if view.cards[j].reduced() == tuple(values[:6])), None
-            )
-            if index is None:
-                raise EventError("event deck card is not owned or exceeds multiplicity")
-            available.remove(index)
-            changes.append(replace(view.cards[index], deck=values[-1]))
-        names = {}
-        for rename in renames:
-            f = msg.sections[rename]
-            if set(f) != {"S"} or not re.fullmatch(r"(?:[0-9a-fA-F]{2}){0,17}", f["S"]):
-                raise EventError("invalid event deck name")
-            name = bytes.fromhex(f["S"])
-            if b"\0" in name:
-                raise EventError("invalid event deck name")
-            names[int(rename[2:])] = name
+        indices = match_owned(view.cards, (v[:6] for v in values), error=EventError)
+        changes = [replace(view.cards[i], deck=v[6]) for i, v in zip(indices, values)]
         if e is None:
             self.transactions.apply_deck_changes(key, changes, names)
         else:
@@ -394,7 +368,7 @@ class EventMatchmaking:
             indices = []
             available = set(range(len(view.cards)))
             for card in e.selected or ():
-                values = tuple(getattr(card, k) for k in Card.__dataclass_fields__)
+                values = card_values(card)
                 index = next(j for j in sorted(available) if view.cards[j].full() == values)
                 indices.append(index)
                 available.remove(index)
