@@ -5,7 +5,7 @@ Client readers: 10104282..1010448F, profile importer 101011F0, result setup
 keeps reward totals unless a reward is passed, which updates the money statistics
 without choosing a payout formula. Rating changes only when a ring quote is
 supplied. Human matches advance VS. Player Games. RN (Memorable Win), RT (VS.
-Rating) and prize points do not change. Details: TetraPackets
+Rating, +128) and prize points (+134) are never written. Details: TetraPackets
 client/ratings-and-statistics.md.
 """
 
@@ -15,6 +15,32 @@ from dataclasses import dataclass, replace
 from tmserver.rankings.errors import RankingError
 
 ResultStatsError = RankingError  # Name still imported by economy/service.py.
+
+PROFILE_SIZE = 0x3028
+RN = slice(0x7D, 0x9D)
+# TM0DataFile statistics: field, profile offset, little-endian struct format.
+LAYOUT = (
+    ("rating", 0x30, "I"),
+    ("count", 0x40, "H"),
+    ("sequence", 0x44, "H"),
+    ("max_reward", 0x48, "I"),
+    ("average_reward", 0x4C, "I"),
+    ("reward_sum", 0x50, "I"),
+    ("streak", 0x78, "h"),
+    ("best_streak", 0x7A, "h"),
+    ("vs_player_games", 0x130, "H"),
+)
+_RANGES = {
+    "I": (0, 0xFFFFFFFF, "an unsigned DWORD"),
+    "H": (0, 65535, "an unsigned WORD"),
+    "h": (-32768, 32767, "a signed WORD"),
+}
+
+
+def _profile(profile):
+    if len(profile) != PROFILE_SIZE:
+        raise RankingError("expected canonical TM0DataFile size")
+    return profile
 
 
 def _signed_word(value):
@@ -32,31 +58,14 @@ class PracticeStats:
     streak: int = 0
     best_streak: int = 0
     rn: bytes = b""
-    rt_points: int = 0
-    event_count: int = 0  # Legacy API name: original label is VS. Player Games.
-    prize_points: int = 0
+    vs_player_games: int = 0
     current_reward: int = 0  # ResultData D1 only, not a field in TM0DataFile.
 
     def __post_init__(self):
-        for name in (
-            "rating",
-            "max_reward",
-            "average_reward",
-            "reward_sum",
-            "rt_points",
-            "prize_points",
-        ):
-            value = getattr(self, name)
-            if type(value) is not int or not 0 <= value <= 0xFFFFFFFF:
-                raise RankingError(name + " must be an unsigned DWORD")
-        for name in ("count", "sequence", "event_count"):
-            value = getattr(self, name)
-            if type(value) is not int or not 0 <= value <= 65535:
-                raise RankingError(name + " must be an unsigned WORD")
-        for name in ("streak", "best_streak"):
-            value = getattr(self, name)
-            if type(value) is not int or not -32768 <= value <= 32767:
-                raise RankingError(name + " must be a signed WORD")
+        for name, _, kind in LAYOUT:
+            value, (low, high, label) = getattr(self, name), _RANGES[kind]
+            if type(value) is not int or not low <= value <= high:
+                raise RankingError(f"{name} must be {label}")
         if not isinstance(self.rn, bytes) or len(self.rn) > 31 or b"\0" in self.rn:
             raise RankingError("RN must leave room for a terminator in its 32-byte buffer")
         if type(self.current_reward) is not int or not 0 <= self.current_reward <= 99_999_999:
@@ -64,47 +73,24 @@ class PracticeStats:
 
     @classmethod
     def from_profile(cls, profile):
-        if len(profile) != 0x3028:
-            raise RankingError("expected canonical TM0DataFile size")
-        u16 = lambda offset: struct.unpack_from("<H", profile, offset)[0]
-        u32 = lambda offset: struct.unpack_from("<I", profile, offset)[0]
+        _profile(profile)
         return cls(
-            rating=u32(0x30),
-            count=u16(0x40),
-            sequence=u16(0x44),
-            max_reward=u32(0x48),
-            average_reward=u32(0x4C),
-            reward_sum=u32(0x50),
-            streak=struct.unpack_from("<h", profile, 0x78)[0],
-            best_streak=struct.unpack_from("<h", profile, 0x7A)[0],
-            rn=bytes(profile[0x7D:0x9D]).split(b"\0", 1)[0][:31],
-            rt_points=u32(0x128),
-            event_count=u16(0x130),
-            prize_points=u32(0x134),
+            **{name: struct.unpack_from("<" + kind, profile, at)[0] for name, at, kind in LAYOUT},
+            rn=bytes(profile[RN]).split(b"\0", 1)[0][:31],
         )
-
-    @property
-    def vs_player_games(self):
-        return self.event_count
 
     def next_result(
         self, outcome, reward=0, *, fully_tied=None, rating_change=None, vs_player_game=False
     ):
-        """outcome=-1 loss,0 draw,+1 win; inputs/state remain immutable.
+        """outcome=-1 loss, 0 draw, +1 win; returns a new value.
 
-        Signed streak transitions and WORD sequence wrap match the original
-        offline bookkeeping. D5 saturates at 65535 instead of wrapping to 0:
-        the online client divides by D5 without a zero check. Zero reward leaves
-        the previous total/maximum intact; average must match total/new count.
-        Fully tied refunds do not increase reward sum or maximum, matching
-        100CC7B3..100CC7CB and 100CC8D3..100CC8EC. A three-player middle finish
-        may have outcome0 without being fully tied; callers must distinguish it.
-        Native cumulative sum wrapsDWORD. current_reward is transient D1 only.
-        Explicit rating_change is a validated original-ring RatingQuote from a
-        trusted policy. It changes only D2; default transitions retain rating.
-        vs_player_game is the trusted match mode, not a client field. It advances
-        T2/profile+130 with the original offline mode2 WORD wrap (100CC84F).
-        Online clients consume this final count without incrementing it again.
+        Streaks, the WORD sequence and the DWORD reward sum wrap as the original
+        offline bookkeeping does. D5 saturates at 65535: the online client
+        divides by it. Zero reward and fully tied refunds leave reward sum and
+        maximum alone (100CC7B3..100CC7CB, 100CC8D3..100CC8EC); a three-player
+        middle finish can be a draw without being fully tied. rating_change (a
+        RatingQuote) sets D2. vs_player_game advances T2/profile+130 (100CC84F);
+        online clients read that count without incrementing it again.
         """
         if type(outcome) is not int or outcome not in (-1, 0, 1):
             raise RankingError("outcome must be -1,0,1")
@@ -147,7 +133,7 @@ class PracticeStats:
             rating=rating,
             count=count,
             sequence=(self.sequence + 1) & 65535,
-            event_count=(self.event_count + int(vs_player_game)) & 65535,
+            vs_player_games=(self.vs_player_games + int(vs_player_game)) & 65535,
             streak=streak,
             best_streak=best,
             average_reward=reward_sum // count,
@@ -174,26 +160,14 @@ class PracticeStats:
         return (
             f"@No{seat}=/D="
             + "|".join(map(str, values))
-            + f"/T=0|0|{self.event_count}/RN="
+            + f"/T=0|0|{self.vs_player_games}/RN="
             + self.rn.hex().upper()
         )
 
     def apply_to_profile(self, profile):
         """Update mapped fields only; preserve unrelated bytes, cards and money."""
-        if len(profile) != 0x3028:
-            raise RankingError("expected canonical TM0DataFile size")
-        output = bytearray(profile)
-        for offset, value in (
-            (0x30, self.rating),
-            (0x48, self.max_reward),
-            (0x4C, self.average_reward),
-            (0x50, self.reward_sum),
-            (0x128, self.rt_points),
-            (0x134, self.prize_points),
-        ):
-            struct.pack_into("<I", output, offset, value)
-        for offset, value in ((0x40, self.count), (0x44, self.sequence), (0x130, self.event_count)):
-            struct.pack_into("<H", output, offset, value)
-        struct.pack_into("<hh", output, 0x78, self.streak, self.best_streak)
-        output[0x7D:0x9D] = self.rn.ljust(32, b"\0")
+        output = bytearray(_profile(profile))
+        for name, offset, kind in LAYOUT:
+            struct.pack_into("<" + kind, output, offset, getattr(self, name))
+        output[RN] = self.rn.ljust(32, b"\0")
         return bytes(output)

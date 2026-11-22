@@ -30,7 +30,7 @@ class VsPlayerStatisticsTests(unittest.TestCase):
                     service = rating_tests.economy(n)
                     policy = RatingPolicy(service, mode=mode)
                     rounds, stats, changes = rating_tests.prepare(service, policy, scores)
-                    stats = {k: replace(v, event_count=10) for k, v in stats.items()}
+                    stats = {k: replace(v, vs_player_games=10) for k, v in stats.items()}
                     policy.commit_growth(
                         rounds, stats, rating_changes_by_key=changes, vs_player_game=True
                     )
@@ -53,8 +53,8 @@ class VsPlayerStatisticsTests(unittest.TestCase):
             service = rating_tests.economy()
             policy = RatingPolicy(service, mode=mode)
             rounds, stats, changes = rating_tests.prepare(service, policy)
-            stats = {k: replace(v, event_count=10) for k, v in stats.items()}
-            stats["third"] = replace(stats["third"], event_count=11)
+            stats = {k: replace(v, vs_player_games=10) for k, v in stats.items()}
+            stats["third"] = replace(stats["third"], vs_player_games=11)
             saved = service.snapshot()
             journal = policy.snapshot()
             with self.assertRaises(EconomyError):

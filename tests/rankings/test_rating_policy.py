@@ -28,9 +28,7 @@ def economy(n=3, sequence=65535):
             streak=-2,
             best_streak=4,
             rn=b"Opaque Existing Rank",
-            rt_points=33,
-            event_count=9,
-            prize_points=55,
+            vs_player_games=9,
         )
         service.provision(
             key,
@@ -106,9 +104,9 @@ class RatingPolicyTests(unittest.TestCase):
             self.assertEqual(service.profile_bytes(key), stats[key].apply_to_profile(original[key]))
             self.assertEqual(stats[key].sequence, 0)
             self.assertEqual(stats[key].rn, b"Opaque Existing Rank")
-            self.assertEqual(
-                (stats[key].rt_points, stats[key].event_count, stats[key].prize_points), (33, 9, 55)
-            )
+            self.assertEqual(stats[key].vs_player_games, 9)
+            for at in (0x128, 0x134):  # RT points and prize points are never written.
+                self.assertEqual(service.profile_bytes(key)[at : at + 4], original[key][at : at + 4])
             self.assertEqual(policy.history.state(key).sequence, 0)
         with self.assertRaises(EconomyError):
             policy.commit_growth(rounds, stats, rating_changes_by_key=changes)
