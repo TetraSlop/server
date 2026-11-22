@@ -68,7 +68,8 @@ class TradeTests(unittest.TestCase):
         self.economy.provision(
             "right", nn=202, name=b"Right", cards=[card(self.catalog, i) for i in (3, 4, 8, 9)]
         )
-        self.trade = TradeService(self.economy, first_session=17)
+        self.trade = TradeService(self.economy, self.economy)
+        self.trade._next_session = 17  # Matches the recorded original fixtures.
         self.trade.bind("peer0", "left")
         self.trade.bind("peer1", "right")
         self.session = 17
@@ -119,8 +120,7 @@ class TradeTests(unittest.TestCase):
         )
         with self.assertRaises(TradeError):
             self.trade.handle("peer0", payload)
-        self.trade.authorize_pair("peer0", "peer1")
-        deliveries = self.trade.handle("peer0", payload)
+        deliveries = self.trade.handle("peer0", payload, partner="peer1")
         self.assertEqual(len(deliveries), 4)
         self.assertEqual(
             [parse_named(d.payload)[:2] for d in deliveries],
@@ -131,14 +131,15 @@ class TradeTests(unittest.TestCase):
         )
 
     def test_forged_registration_does_not_reserve(self):
-        self.trade.authorize_pair("peer0", "peer1")
         for identities in (
             "0000000000000066|00000000000000CA",
             "0000000000000065|00000000000000CB",
         ):
             with self.subTest(identities=identities), self.assertRaises(TradeError):
                 self.trade.handle(
-                    "peer0", named(0xA0, 0, 0, f"@TrEnt=/NN={identities}/HID=0|1/Dm=0|0/Vol=0|0")
+                    "peer0",
+                    named(0xA0, 0, 0, f"@TrEnt=/NN={identities}/HID=0|1/Dm=0|0/Vol=0|0"),
+                    partner="peer1",
                 )
         self.assertFalse(self.economy.is_reserved("left"))
 

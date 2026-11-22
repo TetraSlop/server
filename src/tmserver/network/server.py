@@ -258,7 +258,7 @@ class Server:
             flexible_seats=flexible_seats,
         )
         configure_rooms(self, ordinary_rooms)
-        self.trade = TradeService(self.economy, transactions=self.commerce)
+        self.trade = TradeService(self.economy, self.commerce)
         self.trade_router = TradeRouter(self.trade, self.trade_busy)
         # Validate the full host before acquiring its log. An unavailable log
         # must still fail before startup recovery changes the durable save.

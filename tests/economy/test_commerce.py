@@ -161,11 +161,8 @@ class TradeCommitTests(unittest.TestCase):
     def setUp(self):
         trade_tests.TradeTests.setUp(self)
         self.save = Mock()
-        self.trade = TradeService(
-            self.economy,
-            first_session=17,
-            transactions=Commerce(self.economy, self.save),
-        )
+        self.trade = TradeService(self.economy, Commerce(self.economy, self.save))
+        self.trade._next_session = 17
         self.trade.bind("peer0", "left")
         self.trade.bind("peer1", "right")
 

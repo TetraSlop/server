@@ -34,7 +34,7 @@ class TradeRouterTests(unittest.TestCase):
     def setUp(self):
         self.economy = EconomyService(seed=1)
         self.peers = tuple(Peer(key.encode()) for key in account_specs(5))
-        self.trade = TradeService(self.economy)
+        self.trade = TradeService(self.economy, self.economy)
         self.router = TradeRouter(self.trade, lambda peer: self.trade.status(peer) is not None)
         for peer in self.peers:
             key = peer.nick.decode()

@@ -103,8 +103,7 @@ class TradeRouter:
             )
             if other is None or self.busy(peer) or self.busy(other):
                 raise TradeError("trade entry lacks an available consenting pair")
-            self.service.authorize_pair(peer, other)
-            result = self.service.handle(peer, payload)
+            result = self.service.handle(peer, payload, partner=other)
             if result is not None:
                 # Admission consumes both participants' outstanding invitations,
                 # including approvals involving a third peer. Those approvals
