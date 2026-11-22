@@ -116,7 +116,7 @@ With the original image configured, run actual native acceptance checks:
 
 ```powershell
 & $python32 -B -m unittest research.native_backend_tests -v
-& $python32 -B -m tools.probe_original_rules --image $env:TM_ORIGINAL_IMAGE --bridge $env:TM_NATIVE_BRIDGE --output results/native-rules.json
+& $python32 -B -m research.probe_original_rules --image $env:TM_ORIGINAL_IMAGE --bridge $env:TM_NATIVE_BRIDGE --output results/native-rules.json
 ```
 
 The native-only regression corpus freezes 8,067 result/draw cases: 1,168 battles,

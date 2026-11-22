@@ -8,7 +8,7 @@ game image and 32-bit Windows Python; see the [native rules guide](../docs/NATIV
 - `native_vectors.json` stores result and draw digests and small explicit vectors.
 - `native_special_vectors.json` stores special-board and three-player placement
   vectors.
-- `tools/probe_original_rules.py` runs the corpus and reports timings.
+- `probe_original_rules.py` runs the corpus and reports timings.
 
 The protocol itself is documented in
 [TetraPackets](https://github.com/sruon/TetraPackets).

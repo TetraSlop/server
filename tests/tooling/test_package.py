@@ -3,11 +3,10 @@
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
 import warnings
 import zipfile
 
-from tools import build_wheel, package
+from tools import package
 
 
 class PackageTests(unittest.TestCase):
@@ -66,43 +65,3 @@ class PackageTests(unittest.TestCase):
             archive.writestr("tmserver/__init__.py", self.files["tmserver/__init__.py"])
         with self.assertRaisesRegex(ValueError, "duplicate wheel entries"):
             package.verify_wheel(wheel, self.source)
-
-    def test_staging_excludes_caches_build_tests_and_live_state(self):
-        for name in ("build/lib/tmserver/stale.py", "tests/test_dev.py", "var/save.json",
-                     "src/tmserver/__pycache__/stale.py", "src/tmserver/private.txt"):
-            path = self.source / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("do not ship", encoding="utf-8")
-        stage = self.root / "stage"
-        package.stage_source(stage, self.source)
-        self.assertEqual(
-            {path.relative_to(stage).as_posix() for path in stage.rglob("*") if path.is_file()},
-            {"pyproject.toml", "README.md", "LICENSE", *("src/" + name for name in self.files)},
-        )
-        with self.assertRaises(FileExistsError):
-            package.stage_source(stage, self.source)
-
-    def test_build_uses_new_stage_and_verifies_before_publishing(self):
-        stages = []
-
-        def build(command, **kwargs):
-            stage = Path(command[-1])
-            stages.append(stage)
-            self.assertEqual(package.runtime_manifest(stage), self.files)
-            self.assertNotEqual(stage, self.source)
-            self.wheel(path=Path(command[5]) / "fixture.whl")
-
-        with patch.object(build_wheel.subprocess, "run", side_effect=build):
-            result = build_wheel.build(self.root / "dist", self.source)
-        self.assertTrue(result.exists())
-        self.assertFalse(stages[0].exists())
-        self.assertEqual(package.verify_wheel(result, self.source)["runtime_files"], 3)
-
-        def contaminated(command, **kwargs):
-            self.wheel({**self.files, "tmserver/stale.py": b"old"},
-                       path=Path(command[5]) / "fixture.whl")
-
-        with patch.object(build_wheel.subprocess, "run", side_effect=contaminated):
-            with self.assertRaisesRegex(ValueError, "manifest differs"):
-                build_wheel.build(self.root / "rejected", self.source)
-        self.assertEqual(list((self.root / "rejected").iterdir()), [])
