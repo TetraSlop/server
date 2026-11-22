@@ -7,7 +7,7 @@ This is format validation, not permission to enable a gameplay feature.
 Format limits differ from the editor: bm fits 16 bits, lu/ll fit 20 bits,
 and only eight password bytes fit (the editor can send twelve). There are no
 au/al fields: the decoder substitutes 300/100. Unrepresentable settings raise
-TableMetadataError; values are never clamped or silently omitted. A trailing
+MatchError; values are never clamped or silently omitted. A trailing
 run of '*' password bytes is the client's padding, not part of the password.
 
 The decoder reads these rules for an occupied state-1 record. Empty/state-3
@@ -19,12 +19,9 @@ surrounding PTL/TD record and are deliberately not part of this function.
 import re
 from collections.abc import Mapping
 
+from tmserver.game.errors import MatchError
 from tmserver.rooms.records import alphahex
 from tmserver.rooms.rules import pack_game_rules
-
-
-class TableMetadataError(ValueError):
-    """The requested settings cannot be faithfully encoded in table metadata."""
 
 
 _GAME_KEYS = frozenset(("bm", "du", "st", "cb", "ca", "gs", "tl"))
@@ -33,17 +30,17 @@ _TABLE_KEYS = frozenset(("in", "lu", "ll", "au", "al", "co", "pa"))
 
 def _integer(name, value, minimum, maximum, *, boolean=False):
     if not isinstance(value, int) or (isinstance(value, bool) and not boolean):
-        raise TableMetadataError(f"{name} must be an integer")
+        raise MatchError(f"{name} must be an integer")
     if not minimum <= value <= maximum:
-        raise TableMetadataError(f"{name} must be in {minimum}..{maximum}")
+        raise MatchError(f"{name} must be in {minimum}..{maximum}")
     return int(value)
 
 
 def _mapping(name, values, keys, optional=frozenset()):
     if not isinstance(values, Mapping):
-        raise TableMetadataError(f"{name} must be a mapping")
+        raise MatchError(f"{name} must be a mapping")
     if not keys <= values.keys() or values.keys() - keys - optional:
-        raise TableMetadataError(
+        raise MatchError(
             f"{name} requires exactly {sorted(keys)}"
             + (f" and optional {sorted(optional)}" if optional else "")
         )
@@ -52,17 +49,17 @@ def _mapping(name, values, keys, optional=frozenset()):
 def _password(table, enabled):
     if not enabled:
         if "pw" in table:
-            raise TableMetadataError("pw is only representable when pa=1")
+            raise MatchError("pw is only representable when pa=1")
         return b"********"
     password = table.get("pw")
     if not isinstance(password, str) or not re.fullmatch(r"(?:[0-9A-Fa-f]{2}){0,8}", password):
-        raise TableMetadataError("pw must be a hex string containing at most eight bytes")
+        raise MatchError("pw must be a hex string containing at most eight bytes")
     raw = bytes.fromhex(password)
     if any(c in raw for c in (0, 6, 7, 10, 13)):
-        raise TableMetadataError("pw contains a NUL or PTL/TD/IRC framing delimiter")
+        raise MatchError("pw contains a NUL or PTL/TD/IRC framing delimiter")
     first_pad = raw.find(b"*")
     if first_pad >= 0 and raw[first_pad:] != b"*" * (len(raw) - first_pad):
-        raise TableMetadataError("pw cannot contain '*' except as trailing client padding")
+        raise MatchError("pw cannot contain '*' except as trailing client padding")
     return raw.ljust(8, b"*")
 
 
@@ -98,11 +95,11 @@ def table_info(number, count, owner, game_rules, table_rules):
     }
     table["pa"] = _integer("pa", table_rules["pa"], 0, 1, boolean=True)
     if (table["au"], table["al"]) != (300, 100):
-        raise TableMetadataError(
+        raise MatchError(
             "table metadata cannot encode au/al; original decoder fixes au=300, al=100"
         )
     if table["ll"] > table["lu"]:
-        raise TableMetadataError("ll must not exceed lu")
+        raise MatchError("ll must not exceed lu")
     password = _password(table_rules, table["pa"])
 
     # Native 10066FD8 and 10066F5D read the low nibble before the high nibble.
