@@ -32,12 +32,17 @@ jobs:
       - run: python -m ruff check src tests tools
       - run: python -m tools.check_collection
 
-  portable:
-    name: Portable (${{ matrix.os }})
+  lanes:
+    name: ${{ matrix.lane }} lane (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - {lane: portable, os: ubuntu-latest, extras: dev}
+          - {lane: portable, os: windows-latest, extras: dev}
+          - {lane: admin, os: ubuntu-latest, extras: "dev,admin"}
+          - {lane: auth, os: ubuntu-latest, extras: "dev,auth"}
+          - {lane: postgres, os: ubuntu-latest, extras: "dev,postgres"}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     steps:
@@ -49,44 +54,8 @@ jobs:
           python-version: '3.13'
           cache: pip
           cache-dependency-path: pyproject.toml
-      - run: python -m pip install -e ".[dev]"
-      - run: python -m tools.check_tests portable
-
-  web:
-    name: ${{ matrix.lane }} integration
-    strategy:
-      fail-fast: false
-      matrix:
-        lane: [admin, auth]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.13'
-          cache: pip
-          cache-dependency-path: pyproject.toml
-      - run: python -m pip install -e ".[dev,${{ matrix.lane }}]"
+      - run: python -m pip install -e ".[${{ matrix.extras }}]"
       - run: python -m tools.check_tests "${{ matrix.lane }}"
-
-  postgres:
-    name: PostgreSQL transactions and migrations
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.13'
-          cache: pip
-          cache-dependency-path: pyproject.toml
-      - run: python -m pip install -e ".[dev,postgres]"
-      - run: python -m tools.check_tests postgres
 
   package:
     name: Build and install wheel
@@ -140,7 +109,7 @@ jobs:
   required:
     name: All checks
     if: always()
-    needs: [quality, portable, web, postgres, package, native-bridge]
+    needs: [quality, lanes, package, native-bridge]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
