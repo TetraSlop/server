@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from tests.admin import test_event_actions as fixture
 from tests.admin.test_actions import AuditedActionCases
 from tests.support.memory_store import failing_commits
+from tmserver.economy.errors import EconomyError
 from tmserver.admin.actions import AdminActionConflict, AdminActionError, apply_event_member
 from tmserver.admin.audit import EventEligibilityRequest, EventProgressRequest
 from tmserver.admin.queries import receipt_rows
@@ -68,10 +69,10 @@ class EventMemberActionTests(AuditedActionCases, unittest.TestCase):
 
     def test_missing_and_excluded_members_reject_without_changes(self):
         for changes in (dict(event_id="missing"), dict(account_key="two", event_id="second")):
-            with self.subTest(changes=changes), self.assertRaises(AdminActionError):
+            with self.subTest(changes=changes), self.assertRaises(EconomyError):
                 self.correct(request(**changes))
         self.host.events.set_eligibility("two", "festival", -1)
-        with self.assertRaisesRegex(AdminActionError, "excluded"):
+        with self.assertRaisesRegex(EconomyError, "excluded"):
             self.correct(request(account_key="two"))
 
     def test_precommit_failure_keeps_the_live_event_admission(self):
@@ -128,8 +129,8 @@ class EventMemberActionTests(AuditedActionCases, unittest.TestCase):
                 request(**changes)
         with self.assertRaises(ValidationError):
             request(kind="eligibility", value=0x80000000)
-        with self.assertRaisesRegex(AdminActionError, "display domain"):
+        with self.assertRaisesRegex(EconomyError, "display domain"):
             self.correct(request(completed_missions=0x80000000))
         self.correct(request(steps_delta=0x7FFFFFFF))
-        with self.assertRaisesRegex(AdminActionError, "overflow"):
+        with self.assertRaisesRegex(EconomyError, "overflow"):
             self.correct(request(request_id="overflow", update_id="overflow"))

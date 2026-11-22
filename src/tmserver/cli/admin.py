@@ -28,7 +28,7 @@ def pol_id_of(key):
     """The POL ID a player types for this account key, if it is one."""
     try:
         return polid_to_string(polid_unscramble(key.encode("ascii")))
-    except (ValueError, UnicodeError):
+    except ValueError:  # UnicodeError is a ValueError
         return None
 
 

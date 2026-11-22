@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 from pydantic import ValidationError
 
 from tests.support.memory_store import MemoryStore, failing_commits
+from tmserver.economy.errors import EconomyError
 from tmserver.admin.actions import AdminActionConflict, AdminActionError, apply_prize_award
 from tmserver.admin.audit import AdminAudit, PrizeAwardReceipt, PrizeAwardRequest
 from tmserver.economy.claim_transactions import prize_transaction
@@ -171,7 +172,7 @@ class AuditedActionCases:
     def test_busy_unknown_and_memory_only_hosts_are_rejected_without_changes(self):
         before = self.host.snapshot()
         for key in ("ONE", " one ", "missing"):
-            with self.subTest(key=key), self.assertRaises(AdminActionError):
+            with self.subTest(key=key), self.assertRaises(EconomyError):
                 self.apply(self.host, self.request(account_key=key))
         token = self.host.economy.reserve_match("one")
         with self.assertRaisesRegex(AdminActionError, "busy"):
@@ -313,7 +314,7 @@ class PrizeAwardActionTests(AuditedActionCases, unittest.TestCase):
     def test_pending_bundle_prevents_a_second_award_and_receipt_reports_cap(self):
         receipt = self.award(top30=65535, lucky=65535, rookies=65535)
         self.assertEqual(receipt.points_on_redemption, 99999)
-        with self.assertRaisesRegex(AdminActionError, "pending award"):
+        with self.assertRaisesRegex(EconomyError, "pending award"):
             self.award(request_id="request.2", award_id="week.2")
 
     def test_missing_or_null_audit_journal_preserves_old_state(self):

@@ -13,6 +13,7 @@ from tests.events.test_event_rooms import config, presence
 from tests.network import test_services_integration as service_tests
 from tests.support.irc import Client
 from tests.support.memory_store import MemoryStore
+from tmserver.economy.errors import EconomyError
 from tmserver.admin.actions import (
     AdminActionConflict,
     AdminActionError,
@@ -207,12 +208,12 @@ class EventGrantActionTests(AuditedActionCases, unittest.TestCase):
 
     def test_new_grants_require_an_existing_member(self):
         for changes in (dict(event_id="missing"), dict(account_key="two", event_id="second")):
-            with self.subTest(changes=changes), self.assertRaises(AdminActionError):
+            with self.subTest(changes=changes), self.assertRaises(EconomyError):
                 apply_event_grant(self.host, request(**changes))
 
     def test_empty_card_stats_rejected_by_existing_catalog_without_changes(self):
         before = self.host.snapshot()
-        with self.assertRaisesRegex(AdminActionError, "empty card stats"):
+        with self.assertRaisesRegex(EconomyError, "empty card stats"):
             apply_event_grant(
                 self.host,
                 request(
