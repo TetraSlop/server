@@ -11,7 +11,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.economy import test_match_prizes_integration as prizes
 from tests.game.test_match_service import NATIVE_SETTINGS, finish_arrowless_round, select
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id
 from tmserver.game.errors import MatchError
 from tmserver.game.match import MatchService

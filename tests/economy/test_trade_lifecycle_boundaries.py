@@ -9,12 +9,13 @@ from pathlib import Path
 from tests import ROOT
 from tests.economy import test_trade_integration as trades
 from tests.economy import test_trade_service as trade_domain
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.economy.test_trade_service import card, data, edits, offer
 from tmserver.cards.catalog import Catalog
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import player_id
-from tmserver.network.server import ACCOUNTS, Server
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
 from tmserver.storage.json import JsonStateStore
 from tmserver.economy.trade import TradeError
 

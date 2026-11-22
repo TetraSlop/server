@@ -14,7 +14,8 @@ from tmserver.game.models import Card
 from tmserver.game.packets import packet
 from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.rooms.config import OrdinaryRoomConfig, OrdinaryTableConfig
-from tmserver.network.server import Server, Session
+from tmserver.network.server import Server
+from tmserver.network.session import Session
 from tmserver.protocol.commands import parse
 
 

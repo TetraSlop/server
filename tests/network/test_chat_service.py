@@ -6,13 +6,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.profiles.test_profile_accounts import file_request, transact
 from tmserver.network.chat import ChatService, Member, relay_text, roster_pages
 from tmserver.protocol.identities import ROOM_RAW, player_id, service_nick
 from tmserver.network.local_accounts import MAX_ACCOUNTS
 from tmserver.game.packets import decode, packet
-from tmserver.network.server import ACCOUNTS, Server
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
 from tmserver.profiles.packets import checked
 from tmserver.profiles.service import ProfileServer
 from tmserver.protocol.messages import FRAME_OVERHEAD, MAX_LINE

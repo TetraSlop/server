@@ -10,7 +10,7 @@ from unittest.mock import patch
 from tests.events import test_event_matches_integration as event_tests
 from tests.protocol.test_admission_identity import native_identity
 from tests.events.test_event_rooms import presence
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import GAME_KEY, service_nick
 from tmserver.game.errors import MatchError
 from tmserver.game.packets import decode, packet

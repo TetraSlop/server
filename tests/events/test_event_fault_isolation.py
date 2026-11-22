@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from tests.game import test_computer_menu_integration as computer
 from tests.events import test_event_matches_integration as events
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import TABLE_RAW
 from tmserver.game.packets import packet
 from tmserver.network.server import Server

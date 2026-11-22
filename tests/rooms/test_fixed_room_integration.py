@@ -9,7 +9,7 @@ from tests.rooms import test_ordinary_rooms as ordinary
 from tests.protocol.test_admission_identity import native_identity
 from tests.events.test_event_rooms import presence
 from tests.rooms.test_room_rules import settings
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.game.boards import generate_board
@@ -17,7 +17,7 @@ from tmserver.game.rules import CRTLCG
 from tmserver.rooms.config import OrdinaryRoomConfig, directory_files
 from tmserver.rooms.rules import RoomRules
 from tmserver.network.server import Server
-from tmserver.profiles.preferences import read_preferences
+from tests.support.profiles import read_preferences
 from tmserver.protocol.commands import Command, encode, parse
 
 

@@ -4,28 +4,15 @@ TM 0x101a2d50 validates; 0x101a3640 constructs; 0x10246298 is the
 command dictionary. Payloads stay opaque until each handler is understood.
 """
 
-import csv
-import re
 from dataclasses import dataclass
 
-from tmserver.data.resources import read_text
 from tmserver.protocol.messages import service_payload
-
-COMMANDS = [
-    (int(row["numeric_field"], 16), row["token"].encode("ascii"))
-    for row in csv.DictReader(read_text("lobby_commands.tsv").splitlines(), delimiter="\t")
-]
 
 
 @dataclass(frozen=True)
 class Command:
     token: bytes
     payload: bytes
-
-    @property
-    def ids(self):
-        # PO occurs twice. Native lookup returns the first, 0x60.
-        return tuple(number for number, token in COMMANDS if token == self.token)
 
 
 def parse(data: bytes) -> list[Command]:
@@ -63,20 +50,3 @@ def encode_service(family: bytes, commands: list[Command]) -> bytes:
     if family not in (b"A", b"L", b"P", b"R"):
         raise ValueError("unsupported BEL service family")
     return service_payload(b"GTM0" + family + encode(commands))
-
-
-def inspect_service(data: bytes):
-    """Observed TM service header. Keep the six-byte remainder uninterpreted.
-
-    Native startup captured GTM0GE1000000@TeachDV=. E1 is constructed at
-    0x10081203; the receive path waits for E2 at 0x10081311. Do not infer
-    the meaning of the six ASCII digits from this one request.
-    """
-    match = re.fullmatch(rb"GTM0G([0-9A-Fa-f]{2})(.{6})([^\x00\r\n]*)", data)
-    if match is None:
-        return None
-    return {
-        "opcode": int(match[1], 16),
-        "header_tail_hex": match[2].hex(),
-        "body": match[3].decode("latin1"),
-    }

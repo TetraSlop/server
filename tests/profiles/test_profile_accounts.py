@@ -263,8 +263,9 @@ class ProfileAccountsTests(unittest.IsolatedAsyncioTestCase):
 class ProfileRealGameContextTests(unittest.IsolatedAsyncioTestCase):
     async def test_two_real_irc_logins_and_profile_reconnect(self):
         # These imports belong in tests, not profile_service's import graph.
-        from tests.network.test_server import Client
-        from tmserver.network.server import ACCOUNTS, Server
+        from tests.support.irc import Client
+        from tests.support.irc import ACCOUNTS
+        from tmserver.network.server import Server
 
         asyncio.get_running_loop().slow_callback_duration = 1.0
         self.assertEqual(

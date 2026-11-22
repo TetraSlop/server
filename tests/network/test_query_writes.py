@@ -12,7 +12,7 @@ from tests.economy.auctions.test_auction_service import (
     exhibit_request,
     request as auction_request,
 )
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.profiles.test_new_profile import request as init_request
 from tmserver.economy.packets import named
 from tmserver.network.dispatch import dispatch

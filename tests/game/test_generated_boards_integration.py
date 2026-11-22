@@ -16,7 +16,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.game import test_versus_integration as versus
 from tests.game.test_match_service import NATIVE_SETTINGS
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.economy.match_ledger import offline_payout

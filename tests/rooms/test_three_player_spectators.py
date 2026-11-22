@@ -11,7 +11,7 @@ from tests import ROOT
 from tests.game import test_three_player_integration as versus
 from tests.game.test_match_service import CARDS, select
 from tests.profiles.test_profile_accounts import file_request, transact
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.network.local_accounts import account_specs
 from tmserver.game.models import Card

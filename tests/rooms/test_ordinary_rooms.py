@@ -13,7 +13,7 @@ from tests import ROOT
 from tests.events.test_event_rooms import config as event_config
 from tests.events.test_event_rooms import presence
 from tests.profiles.test_profile_accounts import file_request, transact
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import (
     GAME_KEY,
     ROOM_RAW,

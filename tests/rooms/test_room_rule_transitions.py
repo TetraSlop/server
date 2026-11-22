@@ -11,14 +11,14 @@ from tests import FIXTURES, ROOT
 from tests.rooms import test_room_transitions as transitions
 from tests.protocol.test_admission_identity import native_identity
 from tests.rooms.test_room_rules import settings
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import GAME_KEY, service_nick
 from tmserver.game.models import DEFAULT_GAME_RULES
 from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import directory_files, load_ordinary_rooms
 from tmserver.rooms.rules import RoomRules
 from tmserver.network.server import Server
-from tmserver.profiles.preferences import read_preferences
+from tests.support.profiles import read_preferences
 
 
 class RoomRuleTransitions(unittest.IsolatedAsyncioTestCase):

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.economy.packets import named
 from tmserver.protocol.identities import TRADE_RAW, game_id, player_id
 from tmserver.network.server import Server

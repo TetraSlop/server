@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from tests import ROOT
 from tests.events.test_event_rooms import config, presence
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.events.models import EventTableConfig
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
 from tmserver.game.packets import decode, packet

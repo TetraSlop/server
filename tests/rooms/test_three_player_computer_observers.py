@@ -14,7 +14,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.rooms import test_spectator_integration as observers
 from tests.protocol.test_admission_identity import native_identity
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import TABLE_RAW, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.game.opponents import opponent

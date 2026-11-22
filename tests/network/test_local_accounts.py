@@ -10,7 +10,7 @@ from pathlib import Path
 
 from tests import ROOT
 from tests.profiles.test_profile_accounts import file_request, transact
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import player_id
 from tmserver.network.local_accounts import MAX_ACCOUNTS, account_name, account_specs
 from tmserver.protocol.wire import polid_from_string, polid_unscramble

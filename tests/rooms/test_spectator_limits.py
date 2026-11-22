@@ -9,7 +9,7 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.game import test_three_player_integration as versus
 from tests.game.test_match_service import ack, put, select
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.protocol.test_admission_identity import native_identity
 from tmserver.cards.catalog import Catalog
 from tmserver.cards.model import Card as InventoryCard

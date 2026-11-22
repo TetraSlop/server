@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from tests.rooms import test_departure_integration as departures
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.rooms.packets import TABLE_CHANNEL

@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from tests.events import test_event_multitable as events
 from tests.game.test_rules_backend import recording_backend
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.rooms import test_ordinary_rooms as ordinary
 from tmserver.game import rules
 from tmserver.game.models import BoardCard

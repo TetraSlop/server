@@ -8,14 +8,15 @@ from pathlib import Path
 from tests import ROOT
 from tests.profiles.test_profile_accounts import file_request
 from tests.profiles.test_profile_accounts import transact as profile_request
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.economy.test_trade_router import entry_request, metadata
 from tests.economy.test_trade_service import data, offer
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import TRADE_RAW, game_id, player_id, service_nick
 from tmserver.profiles.service import ProfileServer
 from tmserver.profiles.packets import checked
-from tmserver.network.server import ACCOUNTS, Server
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
 
 
 class TradeIntegrationTests(unittest.IsolatedAsyncioTestCase):

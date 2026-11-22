@@ -36,7 +36,7 @@ tmserver-admin = "tmserver.cli.admin:cli"
 where = ["src"]
 
 [tool.setuptools.package-data]
-tmserver = ["data/*.json", "data/*.tsv", "storage/migrations/*.py", "storage/migrations/versions/*.py", "admin/templates/*.html"]
+tmserver = ["data/*.json", "storage/migrations/*.py", "storage/migrations/versions/*.py", "admin/templates/*.html"]
 
 [tool.ruff]
 target-version = "py313"

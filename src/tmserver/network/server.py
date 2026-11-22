@@ -28,18 +28,8 @@ from tmserver.events.cards import EventCardService
 from tmserver.events.results import EventResults
 from tmserver.events.rooms import EventRooms
 from tmserver.events.service import EventHost
-from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, player_id, service_nick
-
-# Keep the existing imports used by callers and integration fixtures.
-from tmserver.network.session import (
-    MAX_LINE as MAX_LINE,
-)
-from tmserver.network.session import (
-    Session as Session,
-)
-from tmserver.network.session import (
-    split_message as split_message,
-)
+from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, TRADE_RAW, player_id, service_nick
+from tmserver.network.session import MAX_LINE, Session
 from tmserver.network.local_accounts import account_specs, display_name
 from tmserver.protocol.wire import polid_to_string, polid_unscramble
 from tmserver.economy.match_ledger import MatchEconomy
@@ -54,11 +44,8 @@ from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.rooms.service import RoomService
 from tmserver.storage.validation import validate_snapshot_fields
 from tmserver.storage.json import JsonStateStore
-from tmserver.profiles.preferences import TablePreferences
 from tmserver.economy.trade_router import TradeRouter
 from tmserver.economy.trade import TradeService
-
-ACCOUNTS = {key.encode("ascii"): value[1] for key, value in account_specs().items()}
 
 
 class Server:
@@ -177,15 +164,8 @@ class Server:
         self.character_profiles = CharacterProfiles.restore(
             self.economy, None if saved is None else saved.get("character_profiles")
         )
-        self.table_preferences = TablePreferences(self.economy)
         self.ranking = RankingService(self.economy, rating_policy=self.ratings)
         event_configs = tuple(event_configs)
-        if any(
-            (identity ^ GAME_KEY) > 0x1FFFFFFFFFF
-            for c in event_configs
-            for identity in (c.room_id, c.init_id, c.card_id)
-        ):
-            raise ValueError("event identity cannot round-trip through original IRC")
         account_ids = {player_id(key) for key in self.accounts}
         if any(
             identity in account_ids
@@ -200,12 +180,6 @@ class Server:
             clock=event_clock,
         )
         event_tables = tuple(event_tables)
-        if {c.id for c in event_configs if c.match_enabled and c.entry_answer == 1} != {
-            c.event_id for c in event_tables
-        }:
-            raise ValueError(
-                "each enabled event match needs at least one configured playable table"
-            )
         if any(c.table_id in account_ids for c in event_tables):
             raise ValueError("event table identity collides with a synthetic account")
         if any(c.cpu_cards is None and c.player_count > account_count for c in event_tables):
@@ -302,8 +276,6 @@ class Server:
         )
 
     async def trade_updates(self, deliveries):
-        from tmserver.protocol.identities import TRADE_RAW, service_nick
-
         # Commerce has already committed final Get and delayed deck edits.
         # Negotiation and disconnect notifications contain no durable changes.
         reloads = []
@@ -386,12 +358,6 @@ class Server:
         data = self.event_rooms.profile_file(None if owner is None else owner.raw_identity, name)
         if data is not None:
             return data
-        if name == "b/g/PTL":
-            return (
-                self.room.snapshot()
-                if owner is None or owner.raw_identity in (0, ROOM_RAW)
-                else None
-            )
         if name in ("b/g/TM0EventDataList", "b/g/TM0EventMemberList") and self.events.configs:
             return None
         return self.events.file(name)

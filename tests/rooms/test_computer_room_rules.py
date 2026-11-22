@@ -9,12 +9,12 @@ from pathlib import Path
 from tests import FIXTURES
 from tests.game import test_computer_menu_integration as computer
 from tests.protocol.test_admission_identity import native_identity
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import OrdinaryRoomConfig, OrdinaryTableConfig, load_ordinary_rooms
 from tmserver.rooms.rules import RoomRules
 from tmserver.network.server import Server
-from tmserver.profiles.preferences import read_preferences
+from tests.support.profiles import read_preferences
 
 
 def room(*, mode="versus", rules=None, tables=()):

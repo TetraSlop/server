@@ -6,11 +6,12 @@ import unittest
 from pathlib import Path
 
 from tests import ROOT
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.rankings.stats import PracticeStats
-from tmserver.network.server import ACCOUNTS, Server
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
 
 
 class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):

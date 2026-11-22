@@ -6,10 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.profiles.test_character_profiles import request
 from tmserver.economy.service import EconomyService
-from tmserver.network.server import ACCOUNTS, Server
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
 from tmserver.profiles.characters import CharacterProfiles
 from tmserver.protocol.commands import Command, parse
 from tmserver.protocol.identities import player_id

@@ -5,7 +5,7 @@ import asyncio
 
 from tests.profiles.test_options_service import request
 from tests.profiles.test_profile_accounts import file_request, transact
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.economy.models import PROFILE_SIZE
 from tmserver.protocol.identities import SHOP_RAW, player_id, service_nick
 from tmserver.network.local_accounts import account_specs, display_name

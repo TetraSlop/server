@@ -13,7 +13,8 @@ from tmserver.protocol.identities import GAME_KEY, game_id
 from tmserver.game.models import Player
 from tmserver.game.packets import packet
 from tmserver.rooms.service import RoomService
-from tmserver.network.server import Server, Session
+from tmserver.network.server import Server
+from tmserver.network.session import Session
 from tmserver.protocol.commands import parse
 
 

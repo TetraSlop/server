@@ -11,7 +11,8 @@ from tmserver.protocol.identities import player_id
 from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import OrdinaryRoomConfig
 from tmserver.rooms.rules import RoomRules
-from tmserver.network.server import Server, Session
+from tmserver.network.server import Server
+from tmserver.network.session import Session
 from tmserver.rooms.spectators import SpectatorService
 
 CATALOG = Catalog()

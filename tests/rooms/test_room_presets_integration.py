@@ -26,7 +26,7 @@ from tmserver.profiles.service import ProfileServer
 from tmserver.profiles.packets import checked
 from tmserver.rooms.rules import RoomRules
 from tmserver.network.server import Server
-from tests.network.test_server import Client
+from tests.support.irc import Client
 
 
 PRESETS = ROOT / "examples/auto_rooms.example.json"

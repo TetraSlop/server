@@ -12,7 +12,7 @@ from tests.game import test_versus_integration as versus
 from tests.protocol.test_admission_identity import native_identity
 from tests.events.test_event_rooms import config
 from tests.game.test_match_service import finish_arrowless_round, select
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.economy.service import EconomyService
 from tmserver.events.models import EventError
 from tmserver.events.service import EventHost

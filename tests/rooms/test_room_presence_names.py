@@ -9,7 +9,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.protocol.test_display_name_identity import NAMES, provision_names
 from tests.events.test_event_rooms import config, presence
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import GAME_KEY, service_nick
 from tmserver.network.server import Server
 from tmserver.protocol.commands import parse

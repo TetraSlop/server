@@ -1,121 +1,27 @@
 """Protocol tests use real TCP and the legacy key exchange, not mocked sockets."""
 
 import asyncio
-import hashlib
 import json
-import math
 import unittest
-from pathlib import Path
 
 from tests import FIXTURES
 from tmserver.protocol import wire
-from tmserver.network.server import ACCOUNTS, Server
-from tmserver.protocol.commands import COMMANDS, Command, encode, inspect_service, parse
-
-
-def prime_below(value):
-    # Deterministic fixture search. Strong probable primes sufficient for a
-    # throwaway 256-bit legacy RSA test key; never production key generation.
-    while True:
-        value -= 2
-        if math.gcd(65535, value - 1) != 1:
-            continue
-        d, s = value - 1, 0
-        while d % 2 == 0:
-            d //= 2
-            s += 1
-        good = True
-        for a in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37):
-            x = pow(a, d, value)
-            if x in (1, value - 1):
-                continue
-            for _ in range(s - 1):
-                x = x * x % value
-                if x == value - 1:
-                    break
-            else:
-                good = False
-                break
-        if good:
-            return value
-
-
-P = prime_below((1 << 128) - 1)
-Q = prime_below(P - 2)
-N, D = P * Q, pow(65535, -1, (P - 1) * (Q - 1))
-MODULUS = N.to_bytes(32, "little")
-
-
-class Client:
-    async def open(self, port, account=b"UGITW5T4U", password=b"tm-local-test", fragmented=False):
-        self.reader, self.writer = await asyncio.open_connection("127.0.0.1", port)
-        self.cipher, self.iv, self.nick = None, 0, account
-        challenge = (await self.read()).split()[-1]
-        packet = wire.frame_line(b"USER x 8 * :" + wire.b64enc(MODULUS, pad=False))
-        if fragmented:
-            for offset in range(0, len(packet), 3):
-                self.writer.write(packet[offset : offset + 3])
-                await self.writer.drain()
-                await asyncio.sleep(0)
-        else:
-            self.writer.write(packet)
-        reply = await self.read()
-        encrypted = wire.b64dec(reply.split()[-1])[:32]
-        block = pow(int.from_bytes(encrypted, "big"), D, N).to_bytes(32, "big")
-        assert block[:2] == b"\0\2"
-        key = block[block.index(0, 2) + 1 :][::-1]
-        assert len(key) == 8
-        self.cipher = await asyncio.to_thread(wire.SqBlowfish, key)
-        self.iv = int.from_bytes(MODULUS[:8], "little")
-        digest = hashlib.md5(challenge + password).hexdigest().encode()
-        await self.send(b"NICK " + account + b":" + digest + b":test")
-
-    async def read(self, *, timeout=10):
-        # A hang guard, not a protocol deadline: legacy key setup can exceed
-        # three seconds under load. Timing regressions use explicit deadlines.
-        raw = await asyncio.wait_for(self.reader.readline(), timeout)
-        if not raw:
-            return b""
-        plain = wire.crypt64(self.cipher, self.iv, raw) if self.cipher else raw
-        assert plain.endswith(b"\r\n")
-        assert wire.checksum_chars(plain[:-6]) == plain[-6:-2]
-        return plain[:-6]
-
-    async def send(self, message):
-        self.writer.write(wire.frame_line(message, self.cipher, self.iv))
-        await self.writer.drain()
-
-    async def join(self, channel=b"#TM0-test"):
-        await self.send(b"JOIN " + channel)
-        replies = [await self.read() for _ in range(3)]
-        assert b"JOIN :" + channel in replies[0]
-        assert b" 353 " in replies[1] and b" 366 " in replies[2]
-
-    async def close(self):
-        self.writer.close()
-        await self.writer.wait_closed()
+from tests.support.irc import ACCOUNTS, Client
+from tmserver.network.server import Server
+from tmserver.protocol.commands import Command, encode, parse
 
 
 class CodecTests(unittest.TestCase):
-    def test_captured_first_game_request(self):
-        self.assertEqual(
-            inspect_service(b"GTM0GE1000000@TeachDV="),
-            {"opcode": 225, "header_tail_hex": "303030303030", "body": "@TeachDV="},
-        )
-        self.assertIsNone(inspect_service(b"chat"))
-
     def test_original_tm_constructor_and_parser_vectors(self):
         fixture = FIXTURES / "native_codec_vectors.jsonl"
         rows = [json.loads(line) for line in fixture.read_text().splitlines()]
         self.assertEqual(len(rows), 206)
         for row in rows:
-            token = COMMANDS[row["id"]][1]
-            command = Command(token, b"probe" if row["text"] else b"17")
             native_bytes = bytes.fromhex(row["hex"])
+            command = Command(native_bytes[1:3], b"probe" if row["text"] else b"17")
             self.assertEqual(encode([command]), native_bytes)
             self.assertEqual(parse(native_bytes), [command])
             self.assertEqual(row["valid"], 0)
-            self.assertEqual(command.ids[0], row["resolved"])
 
     def test_recovered_vectors(self):
         self.assertEqual(wire.checksum_chars(b"PING a"), b"iExH")
@@ -136,10 +42,6 @@ class CodecTests(unittest.TestCase):
         encrypted = wire.crypt64(bf, 12345, original)
         self.assertEqual(wire.crypt64(bf, 12345, encrypted), original)
         self.assertEqual([i for i, c in enumerate(encrypted) if c in (10, 13)], [10, 13])
-
-    def test_dictionary_duplicate(self):
-        self.assertEqual(len(COMMANDS), 103)
-        self.assertEqual(Command(b"PO", b"").ids, (0x60, 0x65))
 
     def test_command_payload_is_opaque(self):
         commands = [Command(b"RI", b"a b,17;42"), Command(b"NN", b"")]
@@ -219,11 +121,10 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             await client.read(), b":UUIRT71SR!p@local NOTICE UGITW5T4U :GTM0P<CS>\x07\x07"
         )
-        session = self.server.nicks[client.nick]
-        self.assertEqual(session.tm_player["name"], b"LocalPlayer")
+        record = self.server.character_profiles.records[client.nick.decode("ascii")]
+        self.assertEqual(record[2], "LocalPlayer")
         await client.send(b"QUIT :done")
         self.assertEqual(await client.read(), b"")
-        self.assertIsNone(session.tm_player)
 
     async def test_bad_checksum_dropped(self):
         client = await self.client()

@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from tests.admin.test_actions import request as prize_request
 from tests.events.test_event_rooms import config, presence
 from tests.network import test_services_integration as service_tests
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.admin.actions import (
     AdminActionConflict,
     AdminActionError,

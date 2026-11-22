@@ -14,7 +14,8 @@ from tmserver.game.rules import CRTLCG
 from tmserver.game.special_rules import start_board
 from tmserver.rooms.config import OrdinaryRoomConfig, directory_files
 from tmserver.rooms.rules import RoomRules
-from tmserver.network.server import Server, Session
+from tmserver.network.server import Server
+from tmserver.network.session import Session
 
 
 class FixedRoomLifecycleTests(unittest.IsolatedAsyncioTestCase):

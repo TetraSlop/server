@@ -11,7 +11,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.events.test_event_rooms import config, presence
 from tests.rooms.test_ordinary_rooms import EXTRA
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.network import dispatch as services
 from tmserver.events.models import EventTableConfig
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick

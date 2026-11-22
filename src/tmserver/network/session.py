@@ -14,7 +14,6 @@ import time
 
 from tmserver.protocol import wire
 from tmserver.network import dispatch as services
-from tmserver.protocol import commands as tm_protocol
 from tmserver.network.chat import relay_text
 from tmserver.protocol.identities import service_nick
 from tmserver.protocol.messages import FRAME_OVERHEAD, MAX_LINE, MAX_SERVICE_PAYLOAD
@@ -52,7 +51,6 @@ class Session:
         self.server, self.reader, self.writer, self.id = server, reader, writer, session_id
         self.access = access
         self.cipher, self.iv, self.nick = None, 0, None
-        self.tm_player = None
         self.channels = set()
         self.closed = False
         self.bad_checksums = 0
@@ -275,31 +273,6 @@ class Session:
                 and not peer_control
             ):
                 raise ValueError("game service messages cannot be relayed between players")
-            service = tm_protocol.inspect_service(payload)
-            if service:
-                self.server.log(
-                    "tm_service", session=self.id, target=target.decode("latin1"), **service
-                )
-            # Logging only: no invented command responses or guessed game state.
-            start = payload.find(b"<")
-            if start >= 0:
-                try:
-                    commands = tm_protocol.parse(payload[start:])
-                    self.server.log(
-                        "tm_commands",
-                        session=self.id,
-                        prefix_hex=payload[:start].hex(),
-                        commands=[
-                            {
-                                "token": c.token.decode("ascii"),
-                                "ids": c.ids,
-                                "payload_hex": c.payload.hex(),
-                            }
-                            for c in commands
-                        ],
-                    )
-                except ValueError:
-                    self.server.log("unparsed_payload", session=self.id, payload_hex=payload.hex())
             for peer in list(recipients):
                 await self.server.deliver(
                     peer, self.prefix + verb + b" " + target + b" :" + payload
@@ -393,7 +366,6 @@ class Session:
             self.access.game = None
         # Detach synchronously, before any notification can block. A reconnect
         # may bind the account while the old socket finishes closing.
-        self.tm_player = None
         for channel in list(self.channels):
             members = self.server.channels.get(channel, set())
             members.discard(self)

@@ -2,7 +2,7 @@
 
 import unittest
 
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.network.test_session_recovery import Writer
 from tmserver.protocol import wire
 from tmserver.network.session import MAX_LINE, Session

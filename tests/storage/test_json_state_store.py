@@ -294,7 +294,7 @@ class JsonClaimRecoveryTests(unittest.TestCase):
 class JsonProtocolFailureTests(unittest.IsolatedAsyncioTestCase):
     async def check_failure(self, action):
         from tests.profiles.test_options_service import request
-        from tests.network.test_server import Client
+        from tests.support.irc import Client
         from tmserver.protocol.identities import SHOP_RAW, player_id, service_nick
         from tmserver.network.server import Server
 

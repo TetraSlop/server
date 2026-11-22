@@ -12,7 +12,7 @@ from tests import ROOT
 from tests.game import test_computer_menu_integration as computer
 from tests.economy import test_match_prizes_integration as prizes
 from tests.economy import test_match_wagers_integration as wagers
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.rankings.history import HistoryState, classify_result
 from tmserver.game.packets import decode, packet
 from tmserver.rankings.packets import RECORD_SIZE

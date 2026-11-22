@@ -12,7 +12,7 @@ from unittest.mock import patch
 from tests.economy.auctions.test_auction_service import bid_request, exhibit_request
 from tests.economy.entries import collection_request, prize_entry
 from tests.events.test_event_rooms import config
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.economy.claim_transactions import (
     auction_transaction,
     event_transaction,

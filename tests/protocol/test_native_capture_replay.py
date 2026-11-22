@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 
 from tests import FIXTURES, ROOT
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.economy.models import PROFILE_SIZE
 from tmserver.cards.model import Card
 from tmserver.protocol.identities import player_id
