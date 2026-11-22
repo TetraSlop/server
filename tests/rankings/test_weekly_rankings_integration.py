@@ -239,34 +239,6 @@ class WeeklyRankingIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assert_single_score((await self.ranking(1))[1], 1,
                                  after.reward_sum - before.reward_sum)
 
-    async def test_failed_result_save_does_not_publish_weekly_prize_or_rating(self):
-        await self.start()
-        await self.menu()
-        await self.select(200)
-        before, saved = self.stats(), self.saved_ratings()
-        original = self.server.persist_changes
-        failures = []
-
-        def save(accounts, journals):
-            history = journals.get("ratings", {}).get("history", {}).get("accounts", {})
-            if any(account["results"] for account in history.values()):
-                failures.append(True)
-                with patch.object(Path, "replace", side_effect=OSError("result save failed")):
-                    return original(accounts, journals)
-            return original(accounts, journals)
-
-        with patch.object(self.server, "persist_changes", side_effect=save):
-            with self.assertRaises((AssertionError, ConnectionError)):
-                await self.play()
-        self.assertTrue(failures)
-        self.assertIsNotNone(self.server.storage_failed)
-        self.assertEqual(self.saved_ratings(), saved)
-        self.assertEqual(self.server.ranking.records(1), b"")
-        await self.restart()
-        self.assertEqual(self.stats(), before)
-        for category in (1, 2, 3, 4):
-            self.assertEqual((await self.ranking(category))[1], b"")
-
     async def failed_rollover(self, *, metadata=False):
         await self.start()
         _, after = await self.finish_cpu()

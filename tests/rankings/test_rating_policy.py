@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
+from tmserver.game.departure_rules import result_classes
 from tmserver.rankings.history import HistoryState, LocalRatingHistory
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.rankings.errors import RankingError
@@ -41,26 +42,25 @@ def economy(n=3, sequence=65535):
 
 
 def prepare(
-    service, policy, scores=(6, 6, 3), *, match_id="table:first", tokens=None, payouts=None
+    service, policy, scores=(6, 6, 3), *, keys=None, match_id="table:first", tokens=None,
+    payouts=None, vs_player_game=False,
 ):
-    keys = KEYS[: len(scores)]
+    """Quote a round for keys in seat order; returns (rounds, stats, rating changes)."""
+    keys = KEYS[: len(scores)] if keys is None else keys
     tokens = {key: service.reserve_match(key) for key in keys} if tokens is None else tokens
     quotes = policy.quote(match_id, dict(enumerate(keys)), scores)
     changes = None if quotes is None else {keys[seat]: value for seat, value in quotes.items()}
+    classes = result_classes(scores)
     stats = {}
     rounds = []
     for seat, key in enumerate(keys):
         prior = PracticeStats.from_profile(service.profile_bytes(key))
-        result_class = (
-            2
-            + sum(other > scores[seat] for other in scores)
-            - sum(other < scores[seat] for other in scores)
-        )
         stats[key] = prior.next_result(
-            (result_class < 2) - (result_class > 2),
+            (classes[seat] < 2) - (classes[seat] > 2),
             0 if payouts is None else payouts[key],
             fully_tied=len(set(scores)) == 1,
             rating_change=None if changes is None else changes[key],
+            vs_player_game=vs_player_game,
         )
         selected = service.inventory(key)[:5]
         rounds.append((tokens[key], selected, selected))
