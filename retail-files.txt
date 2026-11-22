@@ -1,0 +1,19 @@
+# Retail files tmserver needs, in sha256sum format.
+#
+# They come from your own PlayOnline install of Tetra Master and are not
+# distributed with tmserver. Put them at the paths below (Play.cmd looks there,
+# or set TM_ORIGINAL_IMAGE), then check them from the repository root:
+#
+#     sha256sum -c retail-files.txt
+#
+# Where each file comes from:
+#   var/native/TM_emulated_mapped.dll  the game's TM.dll, supplied by the
+#                                      operator as its in-memory image (mapped
+#                                      at 0x10000000, 3,518,464 bytes), not the
+#                                      file on disk
+#
+# The hash is the one pinned in src/tmserver/game/original/image.py; other
+# images are rejected. The card and pack catalogue the server uses is shipped in
+# src/tmserver/data/economy_catalog.json, decoded from the client's CardPrm.BIN,
+# CardPri.BIN and PackPrm.BIN; the server does not read those files itself.
+422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879  var/native/TM_emulated_mapped.dll
