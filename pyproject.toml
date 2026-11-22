@@ -5,10 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tmserver"
 version = "0.1.0"
-description = "Local Tetra Master protocol and game server"
+description = "Unofficial server for the PC version of Tetra Master"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = ["pydantic==2.13.5", "construct==2.10.70"]
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 
 [project.urls]
 Repository = "https://github.com/sruon/tmserver"

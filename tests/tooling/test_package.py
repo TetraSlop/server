@@ -29,6 +29,7 @@ class PackageTests(unittest.TestCase):
             '[tool.setuptools.package-data]\ntmserver = ["data/*.json"]\n', encoding="utf-8"
         )
         (self.source / "README.md").write_text("Package fixture\n", encoding="utf-8")
+        (self.source / "LICENSE").write_text("Licence fixture\n", encoding="utf-8")
 
     def wheel(self, files=None, path=None):
         path = path or self.root / "fixture.whl"
@@ -76,7 +77,7 @@ class PackageTests(unittest.TestCase):
         package.stage_source(stage, self.source)
         self.assertEqual(
             {path.relative_to(stage).as_posix() for path in stage.rglob("*") if path.is_file()},
-            {"pyproject.toml", "README.md", *("src/" + name for name in self.files)},
+            {"pyproject.toml", "README.md", "LICENSE", *("src/" + name for name in self.files)},
         )
         with self.assertRaises(FileExistsError):
             package.stage_source(stage, self.source)

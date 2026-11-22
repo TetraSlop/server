@@ -51,7 +51,7 @@ def stage_source(destination, source=ROOT):
     """Populate a new staging directory without copying caches or live state."""
     destination, source = Path(destination), Path(source)
     destination.mkdir()  # Refuse to reuse an existing build tree.
-    for name in ("pyproject.toml", "README.md"):
+    for name in ("pyproject.toml", "README.md", "LICENSE"):
         shutil.copy2(source / name, destination / name)
     for name, data in runtime_manifest(source).items():
         target = destination / "src" / name
