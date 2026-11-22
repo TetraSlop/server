@@ -11,9 +11,13 @@ import random
 from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, replace
 from functools import partial
+from typing import Annotated
+
+from pydantic import BaseModel, Field
 
 from tmserver.checks import decimal, exact_keys, stable_id
 from tmserver.economy.errors import EconomyError
+from tmserver.economy.models import SAVED, StableId, Version1
 from tmserver.economy.packets import check_entry, named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
 
@@ -292,21 +296,17 @@ class PrizeService:
 
     def snapshot(self):
         keys = set(self._known_awards) | set(self._last)
-        return {
-            "version": 1,
-            "accounts": {
-                key: {
-                    "last_session": self._last.get(key, 0),
-                    "known_awards": sorted(self._known_awards.get(key, ())),
-                    "pending": (
-                        None
-                        if key not in self._pending_awards
-                        else asdict(self._pending_awards[key])
-                    ),
-                }
+        return _Journal(
+            version=1,
+            accounts={
+                key: _SavedAccount(
+                    last_session=self._last.get(key, 0),
+                    known_awards=sorted(self._known_awards.get(key, ())),
+                    pending=_saved_award(self._pending_awards.get(key)),
+                )
                 for key in sorted(keys)
             },
-        }
+        ).model_dump()
 
     @classmethod
     def restore(cls, economy, snapshot=None, *, seed=None):
@@ -314,41 +314,15 @@ class PrizeService:
         if snapshot is None:
             return result
         try:
-            if not isinstance(snapshot, dict) or set(snapshot) != {"version", "accounts"}:
-                raise PrizeError("unsupported Prize Center snapshot fields")
-            if snapshot["version"] != 1 or not isinstance(snapshot["accounts"], dict):
-                raise PrizeError("unsupported Prize Center snapshot")
-            for key, data in snapshot["accounts"].items():
-                if not isinstance(data, dict) or set(data) != {
-                    "last_session",
-                    "known_awards",
-                    "pending",
-                }:
-                    raise PrizeError("unsupported Prize Center account fields")
+            for key, data in _Journal.model_validate(snapshot).accounts.items():
                 economy.account_view(key)
-                last = data["last_session"]
-                if type(last) is not int or not 0 <= last <= 255:
-                    raise PrizeError("invalid persisted prize session")
-                ids = data["known_awards"]
-                if not isinstance(ids, list) or len(ids) != len(set(ids)):
+                if len(data.known_awards) != len(set(data.known_awards)):
                     raise PrizeError("invalid persisted award IDs")
-                for award_id in ids:
-                    result._award(award_id, 0, 0, 0, (65535,) * 3)
-                result._known_awards[key] = set(ids)
-                result._last[key] = last
-                if data["pending"] is not None:
-                    a = data["pending"]
-                    if not isinstance(a, dict) or set(a) != {
-                        "id",
-                        "top30",
-                        "lucky",
-                        "rookies",
-                        "lucky_cards",
-                    }:
-                        raise PrizeError("unsupported pending prize award fields")
-                    award = result._award(
-                        a["id"], a["top30"], a["lucky"], a["rookies"], a["lucky_cards"]
-                    )
+                result._known_awards[key] = set(data.known_awards)
+                result._last[key] = data.last_session
+                if data.pending is not None:
+                    a = data.pending
+                    award = result._award(a.id, a.top30, a.lucky, a.rookies, a.lucky_cards)
                     if award.id not in result._known_awards[key]:
                         raise PrizeError("pending prize award lacks its durable ID")
                     result._pending_awards[key] = award
@@ -357,3 +331,31 @@ class PrizeService:
                 raise
             raise PrizeError("invalid Prize Center snapshot") from exc
         return result
+
+
+def _saved_award(award):
+    if award is None:
+        return None
+    return _SavedAward(**dict(asdict(award), lucky_cards=list(award.lucky_cards)))
+
+
+class _SavedAward(BaseModel):
+    model_config = SAVED
+    id: StableId
+    top30: int
+    lucky: int
+    rookies: int
+    lucky_cards: list[int]
+
+
+class _SavedAccount(BaseModel):
+    model_config = SAVED
+    last_session: Annotated[int, Field(ge=0, le=255)]
+    known_awards: list[StableId]
+    pending: _SavedAward | None
+
+
+class _Journal(BaseModel):
+    model_config = SAVED
+    version: Version1
+    accounts: dict[str, _SavedAccount]
