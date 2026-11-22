@@ -6,13 +6,13 @@ import asyncio
 import uuid
 from collections import deque
 
-from tmserver.economy.claim_transactions import event_transaction
 from tmserver.events.models import EventDelivery
 from tmserver.events.matchmaking import EventMatchmaking
 from tmserver.events.spectators import EventSpectators
 from tmserver.protocol.identities import GAME_KEY, service_nick
 from tmserver.game.packets import decode
 from tmserver.rooms.routing import validate_room_entry
+from tmserver.transactions import EVENT_SERVICES, transaction
 
 
 class EventAdapter:
@@ -54,9 +54,9 @@ class EventAdapter:
         results = self.coordinator.results()
         if results:
             participants = {key for _, _, _, keys in results for key in keys if key is not None}
-            with event_transaction(self.server, participants) as state:
+            with transaction(self.server, participants, *EVENT_SERVICES) as state:
                 for event, epoch, outcome, keys in results:
-                    state.results.record(
+                    state.event_results.record(
                         state.events,
                         event,
                         f"{self.instance}:{epoch}",

@@ -5,6 +5,7 @@ import secrets
 from tmserver.network.local_accounts import display_name
 from tmserver.protocol.identities import player_id
 from tmserver.protocol.wire import polid_scramble, polid_unscramble
+from tmserver.transactions import transaction
 
 # The client sends the raw POL ID as its GID, and the save and profile files hold
 # that player ID in 32 bits. polcore also writes it as a signed 32-bit decimal in
@@ -38,9 +39,7 @@ def register_account(host, key, credential):
     if host.store is None:
         raise ValueError("account registration requires persistent storage")
     character = polid_unscramble(key.encode("ascii"))  # GID, as polcore derives it.
-    staged = host.credentials.staged(key, credential)
-    with host.economy.edit_accounts(()) as accounts:
-        provision_account(accounts, key, character, credential.username.encode("ascii"))
-        host.persist_changes(accounts.snapshot()["accounts"], {"identities": staged.snapshot()})
-    host.credentials.publish_state(staged)
+    with transaction(host, (), "credentials") as tx:
+        tx.credentials.put(key, credential)
+        provision_account(tx.economy, key, character, credential.username.encode("ascii"))
     host.account_keys.add(key)

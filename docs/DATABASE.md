@@ -96,10 +96,10 @@ editing Python or JSON. For embedded administration, use the same transaction
 boundary as the protocol handler:
 
 ```python
-from tmserver.economy.claim_transactions import prize_transaction
+from tmserver.transactions import transaction
 
-with prize_transaction(game, account_key) as prize:
-    prize.grant_award(account_key, "local-award-001", top30=500)
+with transaction(game, (account_key,), "prize") as tx:
+    tx.prize.grant_award(account_key, "local-award-001", top30=500)
 ```
 
 The context saves the account and award journal before publishing the award.

@@ -64,21 +64,21 @@ class EventGrantPostgresTests(PostgresActionCases, DatabaseFixture, unittest.Tes
         self.host = Server(store=self.reopen(), **self.options)
 
     def collect_visit(self):
-        from tmserver.economy.claim_transactions import event_transaction
+        from tmserver.transactions import EVENT_SERVICES, transaction
         from tmserver.economy.packets import named, parse_named
 
         view = self.host.economy.account_view(self.key)
         request = named(
             0x90, 0, 0, f"@CardReq=/NN={view.nn:016X}/HID=0/Dm=1/Vol=1/CN={view.name.hex()}"
         )
-        with event_transaction(self.host, (self.key,)) as event:
-            replies = event.cards.handle(self.key, request, event_id="festival")
+        with transaction(self.host, (self.key,), *EVENT_SERVICES) as event:
+            replies = event.event_cards.handle(self.key, request, event_id="festival")
         self.assertEqual(parse_named(replies[0])[3]["CardEnt"]["Ans"], "1")
         init = parse_named(replies[1])[3]["EcmInit"]
         number = int(init["N"])
         for subtype, token in ((0x15, "Get"), (0x17, "Quit")):
-            with event_transaction(self.host, (self.key,)) as event:
-                event.cards.handle(self.key, named(0xB2, subtype, number, f"@{token}=/No={number}"))
+            with transaction(self.host, (self.key,), *EVENT_SERVICES) as event:
+                event.event_cards.handle(self.key, named(0xB2, subtype, number, f"@{token}=/No={number}"))
         return int(init["C"]), int(init["PM"])
 
     def protected_row_versions(self):

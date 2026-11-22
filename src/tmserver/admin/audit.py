@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from tmserver.checks import STABLE_ID
+from tmserver.staging import Staged
 
 
 class _ImmutableModel(BaseModel):
@@ -265,8 +266,10 @@ CHECKS = {
 }
 
 
-class AdminAudit:
+class AdminAudit(Staged):
     """Request IDs are global; award IDs remain scoped to their original account."""
+
+    _staged_fields = ("_receipts",)
 
     def __init__(self):
         self._receipts = {}
@@ -274,16 +277,11 @@ class AdminAudit:
     def get(self, request_id):
         return self._receipts.get(request_id)
 
-    def stage_receipt(self, receipt):
+    def record(self, receipt):
+        """Add a receipt to a staged journal."""
         if receipt.request.request_id in self._receipts:
             raise ValueError("administration request ID is already recorded")
-        staged = AdminAudit()
-        staged._receipts = dict(self._receipts)
-        staged._receipts[receipt.request.request_id] = receipt
-        return staged
-
-    def publish_state(self, staged):
-        self._receipts = staged._receipts
+        self._receipts[receipt.request.request_id] = receipt
 
     def snapshot(self):
         receipts = tuple(self._receipts.values())

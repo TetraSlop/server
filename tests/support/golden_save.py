@@ -35,7 +35,7 @@ from tmserver.admin.audit import (
     PrizeAwardRequest,
 )
 from tmserver.economy.auctions.ledger import AuctionEconomy
-from tmserver.economy.claim_transactions import prize_transaction
+from tmserver.transactions import transaction
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.economy.packets import named
 from tmserver.economy.prize_center import PrizeService
@@ -151,8 +151,8 @@ class GoldenRun(ClaimFixture, TableFixture):
         )
         apply_prize_award(self.server, award)
         self.prize(quit_request(self.enter_prize()))
-        with prize_transaction(self.server, self.buyer) as staged:
-            staged.grant_award(self.buyer, "award.pending", lucky=40)
+        with transaction(self.server, (self.buyer,), "prize") as staged:
+            staged.prize.grant_award(self.buyer, "award.pending", lucky=40)
 
     def auctions(self):
         # A sold listing whose seller collected and whose won card is pending,

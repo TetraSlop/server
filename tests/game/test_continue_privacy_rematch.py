@@ -9,7 +9,7 @@ from tests.economy import test_result_rewards as rewards
 from tests.economy.test_match_transactions import TableFixture
 from tmserver.cards.catalog import Catalog
 from tmserver.game.packets import packet
-from tmserver.economy.match_transactions import match_transaction
+from tmserver.transactions import MATCH_SERVICES, transaction
 from tmserver.economy.result_rewards import ResultRewardError
 
 
@@ -118,7 +118,7 @@ class ContinuePrivacyTransactions(TableFixture, unittest.TestCase):
                 self.server.default_table.commit_match_prizes(self.match)
                 key = self.keys[0]
                 if accepted:
-                    with match_transaction(self.server, (key,)) as state:
+                    with transaction(self.server, (key,), *MATCH_SERVICES) as state:
                         state.result_rewards.commit(key)
                 before = self.server.snapshot()
                 rewards = self.server.result_rewards
@@ -128,7 +128,7 @@ class ContinuePrivacyTransactions(TableFixture, unittest.TestCase):
                         self.server, "persist_changes", side_effect=OSError("save failed")
                     ),
                     self.assertRaises(OSError),
-                    match_transaction(self.server, (key,)) as state,
+                    transaction(self.server, (key,), *MATCH_SERVICES) as state,
                 ):
                     state.result_rewards.commit(key)
                     state.result_rewards.save_continue_privacy(key, 1)

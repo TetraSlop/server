@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from tests.economy.auctions.test_auction_service import bid_request, exhibit_request
 from tests.support.memory_store import MemoryStore
-from tmserver.economy.claim_transactions import auction_transaction
+from tmserver.transactions import transaction
 from tmserver.rooms.config import OrdinaryRoomConfig
 from tmserver.network.server import Server
 
@@ -56,16 +56,16 @@ class ServerMaintenanceTests(unittest.IsolatedAsyncioTestCase):
         )
 
     def exhibit(self, *, hours=1):
-        with auction_transaction(self.server, (self.seller,)) as auction:
-            auction.handle(
+        with transaction(self.server, (self.seller,), "auction") as auction:
+            auction.auction.handle(
                 self.seller,
                 exhibit_request(self.server.economy, self.seller, hours=hours),
             )
         return self.server.auction_ledger.listings()[-1]
 
     def bid(self, item):
-        with auction_transaction(self.server, (self.buyer,)) as auction:
-            auction.handle(
+        with transaction(self.server, (self.buyer,), "auction") as auction:
+            auction.auction.handle(
                 self.buyer,
                 bid_request(self.server.economy, self.buyer, item.id, 100, item.revision),
             )

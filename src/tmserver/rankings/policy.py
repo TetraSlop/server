@@ -5,7 +5,6 @@ delivering ResultData.
 """
 
 import time
-from copy import copy
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -14,6 +13,7 @@ from tmserver.economy.errors import EconomyError
 from tmserver.rankings.history import LocalRatingHistory
 from tmserver.rankings.periods import RankingPeriods
 from tmserver.rankings.stats import PracticeStats
+from tmserver.staging import Staged
 
 
 class _Envelope(BaseModel):
@@ -39,7 +39,10 @@ def _matches_profile(state, profile):
     )
 
 
-class RatingPolicy:
+class RatingPolicy(Staged):
+    # Commits replace history and periods with validated copies; nothing is edited in place.
+    _dependencies = ("economy",)
+
     def __init__(self, economy, *, mode="preserve", snapshot=None, weekly=False, clock=time.time):
         if mode not in ("preserve", "local-history"):
             raise EconomyError("rating mode must be preserve or local-history")
@@ -58,16 +61,6 @@ class RatingPolicy:
         self.periods = RankingPeriods.restore(saved.periods)
         for key in set(self.history.snapshot()["accounts"]) | self.periods.account_keys:
             self.economy.account_view(key)  # A journal cannot create accounts.
-
-    def stage_state(self, economy):
-        # Commits replace validated history/periods; shared originals stay intact.
-        staged = copy(self)
-        staged.economy = economy
-        return staged
-
-    def publish_state(self, staged):
-        self.history = staged.history
-        self.periods = staged.periods
 
     @property
     def enabled(self):

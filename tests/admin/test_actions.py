@@ -13,7 +13,7 @@ from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.economy.errors import EconomyError
 from tmserver.admin.actions import AdminActionConflict, AdminActionError, apply_prize_award
 from tmserver.admin.audit import AdminAudit, PrizeAwardReceipt, PrizeAwardRequest
-from tmserver.economy.claim_transactions import prize_transaction
+from tmserver.transactions import transaction
 from tmserver.economy.packets import named
 from tmserver.economy.prize_center import PrizeService
 from tmserver.economy.service import EconomyService
@@ -100,7 +100,9 @@ class AwardRequestTests(unittest.TestCase):
             current_points=0,
             points_on_redemption=99999,
         )
-        saved = AdminAudit().stage_receipt(receipt).snapshot()
+        audit = AdminAudit()
+        audit.record(receipt)
+        saved = audit.snapshot()
         self.assertEqual(AdminAudit.restore(economy, prize, saved).get("request.1"), receipt)
         for field in receipt.request.model_dump():
             corrupted = deepcopy(saved)
@@ -257,8 +259,8 @@ class PrizeAwardActionTests(AuditedActionCases, unittest.TestCase):
         payload = named(
             0x70, 0, 0, f"@CvReq=/NN={view.nn:016X}/HID=0/Dm=1/Vol=1/CN={view.name.hex()}"
         )
-        with prize_transaction(self.host, key) as prize:
-            prize.handle(key, payload)
+        with transaction(self.host, (key,), "prize") as prize:
+            prize.prize.handle(key, payload)
 
     def test_award_queues_points_without_crediting_them(self):
         receipt = self.award()
@@ -281,16 +283,16 @@ class PrizeAwardActionTests(AuditedActionCases, unittest.TestCase):
         self.assertIsNone(self.host.prize.snapshot()["accounts"]["one"]["pending"])
 
     def test_legacy_award_id_cannot_invent_an_audit_receipt(self):
-        with prize_transaction(self.host, "one") as prize:
-            prize.grant_award("one", "week.1", top30=12)
+        with transaction(self.host, ("one",), "prize") as prize:
+            prize.prize.grant_award("one", "week.1", top30=12)
         before = self.store.load()
         with self.assertRaisesRegex(AdminActionConflict, "without this audited request"):
             apply_prize_award(self.host, request())
         self.assertEqual(self.store.load(), before)
         self.assertEqual(self.host.admin_audit.snapshot()["receipts"], [])
         self.redeem()
-        with prize_transaction(self.host, "one") as prize:
-            prize.disconnect("one")
+        with transaction(self.host, ("one",), "prize") as prize:
+            prize.prize.disconnect("one")
         with self.assertRaises(AdminActionConflict):
             apply_prize_award(self.host, request())
 

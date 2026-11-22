@@ -21,7 +21,7 @@ from tmserver.admin.actions import (
     apply_prize_award,
 )
 from tmserver.admin.audit import AdminAudit, EventGrantCard, EventGrantRequest, GrantedEventCard
-from tmserver.economy.claim_transactions import event_transaction
+from tmserver.transactions import EVENT_SERVICES, transaction
 from tmserver.economy.packets import named, parse_named
 from tmserver.network.server import Server
 from tmserver.storage.validation import validate_snapshot
@@ -98,7 +98,8 @@ class EventGrantRequestTests(unittest.TestCase):
 class EventGrantActionTests(AuditedActionCases, unittest.TestCase):
     apply = staticmethod(apply_event_grant)
     request = staticmethod(request)
-    journals = {"event_cards"}
+    journals = {"event_cards", "events"}  # The grant stages events, which saves unchanged.
+    accounts = {"one"}
     changes = (
         dict(event_id="second"), dict(grant_id="different"), dict(money=26), dict(cards=()),
     )
@@ -129,8 +130,8 @@ class EventGrantActionTests(AuditedActionCases, unittest.TestCase):
 
     def enter_collection(self, key="one"):
         view = self.host.economy.account_view(key)
-        with event_transaction(self.host, (key,)) as state:
-            replies = state.cards.handle(
+        with transaction(self.host, (key,), *EVENT_SERVICES) as state:
+            replies = state.event_cards.handle(
                 key,
                 named(
                     0x90, 0, 0, f"@CardReq=/NN={view.nn:016X}/HID=0/Dm=1/Vol=1/CN={view.name.hex()}"
@@ -142,8 +143,8 @@ class EventGrantActionTests(AuditedActionCases, unittest.TestCase):
 
     def finish_collection(self, number, key="one"):
         for subtype, token in ((0x15, "Get"), (0x17, "Quit")):
-            with event_transaction(self.host, (key,)) as state:
-                state.cards.handle(
+            with transaction(self.host, (key,), *EVENT_SERVICES) as state:
+                state.event_cards.handle(
                     key, named(0xB2, subtype, number, f"@{token}=/No={number}"), event_id="festival"
                 )
 

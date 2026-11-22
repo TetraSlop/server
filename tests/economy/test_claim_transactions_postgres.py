@@ -11,7 +11,7 @@ from tests.economy.auctions.test_auction_service import exhibit_request
 from tests.economy.test_claim_transactions import ClaimFixture
 from tests.events.test_event_rooms import config
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture
-from tmserver.economy.claim_transactions import event_transaction, prize_transaction
+from tmserver.transactions import EVENT_SERVICES, transaction
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, service_nick
 from tmserver.network.server import Server
@@ -249,8 +249,8 @@ class ScopedClaimProtocolTests(protocol.ProtocolFixture):
         await self.assert_restart()
 
     async def test_encrypted_prize_redemption_and_purchase_use_scoped_writes(self):
-        with prize_transaction(self.server, self.key) as staged:
-            staged.grant_award(self.key, "wire-prize", top30=5000)
+        with transaction(self.server, (self.key,), "prize") as staged:
+            staged.prize.grant_award(self.key, "wire-prize", top30=5000)
         with patch.object(self.server, "persist", side_effect=AssertionError("full save")):
             number, _ = await self.enter_prize()
             for subtype, body in (
@@ -267,9 +267,9 @@ class ScopedClaimProtocolTests(protocol.ProtocolFixture):
     async def test_encrypted_event_membership_and_claim_use_scoped_writes(self):
         with patch.object(self.server, "persist", side_effect=AssertionError("full save")):
             await self.enter_room()
-            with event_transaction(self.server, (self.key,)) as staged:
-                card = staged.cards.economy.inventory(self.key)[0]
-                staged.cards.grant(self.key, "festival", "wire-event", cards=(card,), money=250)
+            with transaction(self.server, (self.key,), *EVENT_SERVICES) as staged:
+                card = staged.event_cards.economy.inventory(self.key)[0]
+                staged.event_cards.grant(self.key, "festival", "wire-event", cards=(card,), money=250)
             view = self.server.economy.account_view(self.key)
             replies = await self.request(
                 0x1002,

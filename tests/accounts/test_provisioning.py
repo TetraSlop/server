@@ -111,7 +111,9 @@ class RegistrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(b"account_connected", await self.login())
         del self.host.nicks[key.encode()]
         disabled = self.host.credentials.get(key).model_copy(update={"disabled": True})
-        self.host.credentials.publish_state(self.host.credentials.staged(key, disabled))
+        staged = self.host.credentials.stage_copy()
+        staged.put(key, disabled)
+        self.host.credentials.publish_staged(staged)
         self.assertIn(b"account_locked", await self.login())
 
     async def test_storage_failure_creates_neither_account_nor_credential(self):

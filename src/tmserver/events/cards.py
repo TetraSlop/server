@@ -8,7 +8,6 @@ flows/event-cards.md.
 """
 
 import struct
-from copy import copy
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Annotated
@@ -23,6 +22,7 @@ from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
 from tmserver.events.packets import _id
+from tmserver.staging import Staged
 
 _integer = partial(uint, error=EconomyError, what="event delivery integer")
 _SAVED = ConfigDict(strict=True, extra="forbid")
@@ -70,7 +70,9 @@ class _Collection:
     accepted: bool = False
 
 
-class EventCardService:
+class EventCardService(Staged):
+    _staged_fields = ("_grants", "_last", "_closed", "_active")
+    _dependencies = ("economy", "host")
 
     def __init__(self, economy, host):
         if host.economy is not economy:
@@ -82,28 +84,14 @@ class EventCardService:
         self._active = {}
         self._closed = {}
 
-    def stage_state(self, economy, host, keys):
-        """Copy claim offsets and editors only for participating accounts."""
-        keys = frozenset(keys)
-        staged = copy(self)
-        staged.economy, staged.host = economy, host
-        staged._grants = {
-            identity: replace(row) if row.key in keys else row
-            for identity, row in self._grants.items()
-        }
-        staged._last = dict(self._last)
-        staged._closed = dict(self._closed)
-        staged._active = dict(self._active)
+    def _stage_keys(self, staged, keys):
+        # Claim offsets and editors are copied only for the participating accounts.
+        for identity, row in self._grants.items():
+            if row.key in keys:
+                staged._grants[identity] = replace(row)
         for key in keys.intersection(self._active):
             row = self._active[key]
             staged._active[key] = replace(row, cards=list(row.cards), names=dict(row.names))
-        return staged
-
-    def publish_state(self, staged):
-        self._grants = staged._grants
-        self._last = staged._last
-        self._closed = staged._closed
-        self._active = staged._active
 
     def grant(self, key, event_id, grant_id, *, cards=(), money=0):
         """Trusted policy input only. Exact durable ID replay never pays twice."""

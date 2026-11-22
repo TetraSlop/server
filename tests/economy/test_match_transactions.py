@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from tmserver.game.prizes import PrizeAward
-from tmserver.economy.match_transactions import match_transaction
+from tmserver.transactions import MATCH_SERVICES, transaction
 from tmserver.rankings.stats import PracticeStats
 from tmserver.network.server import Server
 
@@ -178,7 +178,7 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
         self.server.default_table.commit_match_prizes(self.match)
         self.assertEqual(len(self.server.economy.inventory(self.keys[1])), 9)
         self.assertEqual(self.server.result_rewards.status(self.keys[0])["extra_count"], 2)
-        with match_transaction(self.server, (self.keys[0],)) as state:
+        with transaction(self.server, (self.keys[0],), *MATCH_SERVICES) as state:
             state.result_rewards.commit(self.keys[0])
         self.assertEqual(len(self.server.economy.inventory(self.keys[0])), 12)
         self.assertIs(self.server.result_rewards._pending[other], editor)
@@ -196,7 +196,7 @@ class MatchTransactionTests(TableFixture, unittest.TestCase):
         with (
             patch.object(self.server, "persist_changes", side_effect=OSError("Continue")),
             self.assertRaises(OSError),
-            match_transaction(self.server, (key,)) as state,
+            transaction(self.server, (key,), *MATCH_SERVICES) as state,
         ):
             state.result_rewards._pending[key].cards.pop()
             state.result_rewards.commit(key)

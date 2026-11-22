@@ -7,11 +7,7 @@ from unittest.mock import patch
 from tests.economy.auctions.test_auction_service import bid_request, exhibit_request
 from tests.economy.entries import collection_request, prize_entry
 from tests.events.test_event_rooms import config
-from tmserver.economy.claim_transactions import (
-    auction_transaction,
-    event_transaction,
-    prize_transaction,
-)
+from tmserver.transactions import EVENT_SERVICES, transaction
 from tmserver.economy.packets import named, parse_named
 from tmserver.events.matches import EventRoundOutcome
 from tmserver.network.server import Server
@@ -32,8 +28,8 @@ class ClaimFixture:
         self.key, self.buyer, self.other = self.keys
 
     def auction(self, key, payload):
-        with auction_transaction(self.server, (key,)) as staged:
-            return staged.handle(key, payload)
+        with transaction(self.server, (key,), "auction") as staged:
+            return staged.auction.handle(key, payload)
 
     def sell(self):
         self.auction(self.key, exhibit_request(self.server.economy, self.key))
@@ -49,12 +45,12 @@ class ClaimFixture:
         return self.auction(key, named(0xB2, 0x15, number, f"@Get=/No={number}"))
 
     def prize(self, payload):
-        with prize_transaction(self.server, self.key) as staged:
-            return staged.handle(self.key, payload)
+        with transaction(self.server, (self.key,), "prize") as staged:
+            return staged.prize.handle(self.key, payload)
 
     def prize_award(self):
-        with prize_transaction(self.server, self.key) as staged:
-            staged.grant_award(self.key, "award", top30=5000)
+        with transaction(self.server, (self.key,), "prize") as staged:
+            staged.prize.grant_award(self.key, "award", top30=5000)
 
     def enter_prize(self):
         replies = self.prize(prize_entry(self.server.economy, self.key))
@@ -62,26 +58,26 @@ class ClaimFixture:
 
     def event_grant(self):
         card = replace(self.server.economy.inventory(self.key)[0], deck=255)
-        with event_transaction(self.server, self.keys[:2]) as staged:
+        with transaction(self.server, self.keys[:2], *EVENT_SERVICES) as staged:
             for key in self.keys[:2]:
                 staged.events.admit_room(key, "festival")
-            staged.cards.grant(self.key, "festival", "earned", cards=(card,) * 12, money=250)
+            staged.event_cards.grant(self.key, "festival", "earned", cards=(card,) * 12, money=250)
 
     def event_entry(self):
         v = self.server.economy.account_view(self.key)
         return named(0x90, 0, 0, f"@CardReq=/NN={v.nn:016X}/HID=0/Dm=1/Vol=1/CN={v.name.hex()}")
 
     def event(self, payload):
-        with event_transaction(self.server, (self.key,)) as staged:
-            return staged.cards.handle(self.key, payload, event_id="festival")
+        with transaction(self.server, (self.key,), *EVENT_SERVICES) as staged:
+            return staged.event_cards.handle(self.key, payload, event_id="festival")
 
     def enter_event(self):
         return int(parse_named(self.event(self.event_entry())[1])[3]["EcmInit"]["N"])
 
     def record_result(self):
         ids = tuple(self.server.economy.account_view(key).player_id for key in self.keys[:2])
-        with event_transaction(self.server, self.keys[:2]) as staged:
-            staged.results.record(
+        with transaction(self.server, self.keys[:2], *EVENT_SERVICES) as staged:
+            staged.event_results.record(
                 staged.events,
                 "festival",
                 "round:1",
@@ -202,7 +198,7 @@ class ClaimTransactionTests(ClaimFixture, unittest.TestCase):
 
     def test_failed_event_membership_does_not_publish_member_or_presence(self):
         def enter():
-            with event_transaction(self.server, (self.key,)) as staged:
+            with transaction(self.server, (self.key,), *EVENT_SERVICES) as staged:
                 staged.events.admit_room(self.key, "festival")
 
         self.fails_unchanged(enter)
@@ -231,9 +227,9 @@ class ClaimTransactionTests(ClaimFixture, unittest.TestCase):
         before = list(row.cards), dict(row.names)
 
         def edit():
-            with event_transaction(self.server, (self.key,)) as staged:
-                staged.cards._active[self.key].cards.pop()
-                staged.cards._active[self.key].names[1] = b"new"
+            with transaction(self.server, (self.key,), *EVENT_SERVICES) as staged:
+                staged.event_cards._active[self.key].cards.pop()
+                staged.event_cards._active[self.key].names[1] = b"new"
 
         self.fails_unchanged(edit)
         self.assertEqual((row.cards, row.names), before)
@@ -252,7 +248,7 @@ class ClaimTransactionTests(ClaimFixture, unittest.TestCase):
         token = self.server.economy.reserve_match(self.key)
         before = self.server.economy.snapshot()
         with (
-            patch.object(self.server.commerce, "persist_changes", side_effect=OSError("deck write")),
+            patch.object(self.server, "persist_changes", side_effect=OSError("deck write")),
             self.assertRaises(OSError),
         ):
             self.server.commerce.apply_match_deck_changes(token, (), {1: b"new"})

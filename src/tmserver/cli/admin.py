@@ -20,6 +20,7 @@ from tmserver.events.config import load_event_setup
 from tmserver.storage import open_store
 from tmserver.protocol.wire import polid_to_string, polid_unscramble
 from tmserver.storage.restore import restore_state
+from tmserver.transactions import transaction
 
 CARD_FIELDS = ("model", "attack", "kind", "physical", "magical", "arrows")
 
@@ -166,7 +167,7 @@ class AdminState:
         # Keep original unrelated journal payloads, including absence/null in
         # older saves. The ordinary claim contexts may supply empty defaults.
         changed = {
-            name: value for name, value in journals.items() if value != self.saved_journals[name]
+            name: value for name, value in journals.items() if value != self.saved_journals.get(name)
         }
         self.store.save_changes(accounts, changed)
         self.saved_journals.update(changed)
@@ -216,9 +217,8 @@ class AdminState:
             )
         else:
             credential = current.model_copy(update={"disabled": command == "account-disable"})
-        staged = self.credentials.staged(key, credential)
-        self.store.save_changes({}, {"identities": staged.snapshot()})
-        self.credentials.publish_state(staged)
+        with transaction(self, (), "credentials") as tx:
+            tx.credentials.put(key, credential)
         return dict(account_key=key, username=current.username, disabled=credential.disabled)
 
 

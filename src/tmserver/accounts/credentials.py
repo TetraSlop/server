@@ -17,6 +17,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from tmserver.protocol.identities import player_id
+from tmserver.staging import Staged
 
 # About 16 MiB and tens of milliseconds per check; callers run it off the event loop.
 SCRYPT = dict(n=2**14, r=8, p=1, dklen=32, maxmem=64 * 1024 * 1024)
@@ -66,7 +67,9 @@ def verify_password(credential, password):
     return hmac.compare_digest(digest, bytes.fromhex(credential.hash))
 
 
-class CredentialRegistry:
+class CredentialRegistry(Staged):
+    _staged_fields = ("_credentials", "_names")
+
     def __init__(self, credentials=None):
         self._credentials = dict(credentials or {})
         # Usernames are unique ignoring ASCII case.
@@ -80,11 +83,10 @@ class CredentialRegistry:
     def account(self, username):
         return self._names.get(username.lower())
 
-    def staged(self, key, credential):
-        return CredentialRegistry({**self._credentials, key: credential})
-
-    def publish_state(self, staged):
-        self._credentials, self._names = staged._credentials, staged._names
+    def put(self, key, credential):
+        """Set one account's credential on a staged registry."""
+        updated = CredentialRegistry({**self._credentials, key: credential})
+        self._credentials, self._names = updated._credentials, updated._names
 
     def snapshot(self):
         rows = {key: self._credentials[key].model_dump() for key in sorted(self._credentials)}

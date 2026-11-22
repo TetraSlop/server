@@ -22,7 +22,6 @@ from tmserver.accounts.provisioning import (
 from tmserver.economy.auctions.models import AuctionError
 from tmserver.economy.auctions.service import AuctionService
 from tmserver.network.chat import ChatService
-from tmserver.economy.claim_transactions import auction_transaction
 from tmserver.economy.commerce import Commerce
 from tmserver.network.diagnostics import report_failure, write_record
 from tmserver.events.adapter import EventAdapter
@@ -40,6 +39,7 @@ from tmserver.rooms.service import RoomService
 from tmserver.storage.restore import JOURNALS, restore_state
 from tmserver.economy.trade_router import TradeRouter
 from tmserver.economy.trade import TradeService
+from tmserver.transactions import transaction
 
 
 class Server:
@@ -148,7 +148,7 @@ class Server:
         self.event_results = state.event_results
         self.ratings.validate_profiles()
         self.account_keys = set(self.economy.snapshot()["accounts"])
-        self.commerce = Commerce(self.economy, self.persist_changes)
+        self.commerce = Commerce(self)
         self.auction_clock = auction_clock
         self.auction = AuctionService(self.auction_ledger, clock=auction_clock)
         self.ranking = RankingService(self.economy, rating_policy=self.ratings)
@@ -260,8 +260,8 @@ class Server:
             raise AuctionError("clock exceeds native auction timestamp width")
         if not any(item.expires <= now for item in self.auction_ledger.listings()):
             return ()
-        with auction_transaction(self) as auction:
-            changes = auction.ledger.advance(now)
+        with transaction(self, (), "auction") as tx:
+            changes = tx.auction.ledger.advance(now)
         if changes:
             self.log("auction_expiry", count=len(changes))
         return changes
@@ -354,12 +354,9 @@ class Server:
         """Persist a weekly rollover before exposing its new ranking projection."""
         if not self.ratings.weekly:
             return False
-        staged = self.ratings.stage_state(self.economy)
-        if not staged.advance_week():
-            return False
-        self.persist_changes({}, {"ratings": staged.snapshot()})
-        self.ratings.publish_state(staged)
-        return True
+        with transaction(self, (), "ratings") as tx:
+            tx.save = tx.ratings.advance_week()
+        return tx.save
 
     def snapshot(self):
         snapshot = self.economy.snapshot()

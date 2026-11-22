@@ -7,12 +7,12 @@ to fields. Layout: TetraPackets irc/P.md.
 
 import re
 import struct
-from copy import copy
 from functools import partial
 
 from tmserver import checks
 from tmserver.data.resources import read_json
 from tmserver.protocol.commands import Command, encode_service, parse
+from tmserver.staging import Staged
 
 LAYOUT = tuple(read_json("profile_contract.json")["layout"]["wire_fields"])
 VISIBILITY = {b"FO": 8, b"VO": 40}
@@ -35,19 +35,13 @@ def bounded(value, size):
     return value.decode("latin1")
 
 
-class CharacterProfiles:
+class CharacterProfiles(Staged):
+    # Keeps the live economy: profile reads cross accounts. Records are immutable tuples.
+    _staged_fields = ("records",)
+
     def __init__(self, economy):
         self.economy = economy
         self.records = {}
-
-    def stage_state(self):
-        # Retain the full read-only economy for cross-account public lookups.
-        staged = copy(self)
-        staged.records = dict(self.records)  # Immutable record tuples.
-        return staged
-
-    def publish_state(self, staged):
-        self.records = staged.records
 
     def _default(self, key):
         account = self.economy.account_view(key)

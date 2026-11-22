@@ -12,7 +12,7 @@ from tests.support.memory_store import MemoryStore
 from tmserver.admin.actions import apply_event_grant, apply_prize_award
 from tmserver.admin.audit import AdminAudit, EventGrantRequest, PrizeAwardRequest
 from tmserver.admin.queries import receipt_rows
-from tmserver.economy.claim_transactions import event_transaction, prize_transaction
+from tmserver.transactions import EVENT_SERVICES, transaction
 from tmserver.economy.packets import named, parse_named
 from tmserver.network.server import Server
 
@@ -67,7 +67,8 @@ class ReceiptQueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.host.snapshot(), before)
         self.assertEqual(self.store.load(), disk)
         # Version 1 journals have no action discriminator on Prize receipts.
-        legacy = AdminAudit().stage_receipt(prize)
+        legacy = AdminAudit()
+        legacy.record(prize)
         self.assertEqual(legacy.snapshot()["version"], 1)
         self.assertEqual(
             receipt_rows(SimpleNamespace(storage_failed=None, admin_audit=legacy))[0]["action"],
@@ -79,17 +80,17 @@ class ReceiptQueryTests(unittest.IsolatedAsyncioTestCase):
         before = receipt_rows(self.host)
         view = self.host.economy.account_view(self.key)
         identity = f"/NN={view.nn:016X}/HID=0/Dm=1/Vol=1/CN={view.name.hex()}"
-        with prize_transaction(self.host, self.key) as prize:
-            replies = prize.handle(self.key, named(0x70, 0, 0, "@CvReq=" + identity))
+        with transaction(self.host, (self.key,), "prize") as prize:
+            replies = prize.prize.handle(self.key, named(0x70, 0, 0, "@CvReq=" + identity))
             number = int(parse_named(replies[1])[3]["ExcInit"]["N"])
-            prize.handle(self.key, named(0xB2, 0x17, number, f"@Quit=/No={number}"))
-        with event_transaction(self.host, (self.key,)) as event:
-            replies = event.cards.handle(
+            prize.prize.handle(self.key, named(0xB2, 0x17, number, f"@Quit=/No={number}"))
+        with transaction(self.host, (self.key,), *EVENT_SERVICES) as event:
+            replies = event.event_cards.handle(
                 self.key, named(0x90, 0, 0, "@CardReq=" + identity), event_id="festival"
             )
         number = int(parse_named(replies[1])[3]["EcmInit"]["N"])
-        with event_transaction(self.host, (self.key,)) as event:
-            event.cards.handle(
+        with transaction(self.host, (self.key,), *EVENT_SERVICES) as event:
+            event.event_cards.handle(
                 self.key, named(0xB2, 0x17, number, f"@Quit=/No={number}"), event_id="festival"
             )
         self.assertEqual(receipt_rows(self.host), before)

@@ -8,7 +8,6 @@ and this snapshot together before sending completion.
 
 import hashlib
 import json
-from copy import copy
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Annotated
@@ -29,6 +28,7 @@ from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
+from tmserver.staging import Staged
 
 
 class ResultRewardError(EconomyError):
@@ -65,32 +65,24 @@ class _Accepted:
     profile_basis: bytes
 
 
-class ResultRewardService:
+class ResultRewardService(Staged):
+    _staged_fields = ("_known", "_pending", "_accepted")
+    _dependencies = ("economy", "auction")
+
     def __init__(self, economy, auction):
         self.economy, self.auction = economy, auction
         self._known = {}
         self._pending = {}
         self._accepted = {}
 
-    def stage_state(self, economy, auction, keys):
-        staged = copy(self)
-        staged.economy, staged.auction = economy, auction
-        staged._known = dict(self._known)
-        staged._accepted = dict(self._accepted)
-        staged._pending = dict(self._pending)
-        for key in set(keys).intersection(self._pending):
+    def _stage_keys(self, staged, keys):
+        for key in keys.intersection(self._pending):
             row = self._pending[key]
             staged._pending[key] = replace(
                 row,
                 cards=None if row.cards is None else list(row.cards),
                 names=None if row.names is None else dict(row.names),
             )
-        return staged
-
-    def publish_state(self, staged):
-        self._known = staged._known
-        self._pending = staged._pending
-        self._accepted = staged._accepted
 
     def _cards(self, cards):
         return self.economy.catalog.validate_batch(

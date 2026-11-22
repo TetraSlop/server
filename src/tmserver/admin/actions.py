@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
+from tmserver.transactions import transaction
 
 from .audit import (
     EventEligibilityRequest,
@@ -60,12 +61,6 @@ def _now():
     return datetime.now(UTC).isoformat(timespec="microseconds")
 
 
-def _commit(host, accounts, services, receipt):
-    audit = host.admin_audit.stage_receipt(receipt)
-    host.persist_changes(accounts, services | {"admin_audit": audit.snapshot()})
-    host.admin_audit.publish_state(audit)
-
-
 def apply_prize_award(host, request):
     receipt = _committed(host, request)
     if receipt is not None:
@@ -86,16 +81,14 @@ def apply_prize_award(host, request):
             99999, current_points + request.top30 + request.lucky + request.rookies
         ),
     )
-    with host.economy.edit_accounts((key,)) as economy:
-        prize = host.prize.stage_state(economy, key)
-        added = prize.grant_award(
+    with transaction(host, (key,), "prize", "admin_audit") as tx:
+        added = tx.prize.grant_award(
             key, request.award_id, top30=request.top30, lucky=request.lucky,
             rookies=request.rookies, lucky_cards=request.lucky_cards,
         )
         if not added:
             raise AdminActionConflict("award ID already exists without this audited request")
-        _commit(host, economy.snapshot()["accounts"], {"prize": prize.snapshot()}, receipt)
-    host.prize.publish_state(prize)
+        tx.admin_audit.record(receipt)
     return receipt
 
 
@@ -137,13 +130,12 @@ def apply_event_grant(host, request):
         eligibility=member.eligibility,
         collection_enabled=config.card_service_enabled,
     )
-    staged = host.event_cards.stage_state(host.economy, host.events, (key,))
-    staged.grant(
-        key, event_id, request.grant_id,
-        cards=tuple(Card(*card.full()) for card in cards), money=request.money,
-    )
-    _commit(host, {}, {"event_cards": staged.snapshot()}, receipt)
-    host.event_cards.publish_state(staged)
+    with transaction(host, (key,), "event_cards", "admin_audit") as tx:
+        tx.event_cards.grant(
+            key, event_id, request.grant_id,
+            cards=tuple(Card(*card.full()) for card in cards), money=request.money,
+        )
+        tx.admin_audit.record(receipt)
     return receipt
 
 
@@ -158,27 +150,26 @@ def apply_event_member(host, request):
     member = host.events.member(key, event_id)
     if member is None:
         raise AdminActionError("event corrections require a registered event member")
-    staged = host.events.stage_state(host.economy)
-    if isinstance(request, EventEligibilityRequest):
-        staged.set_eligibility(key, event_id, request.value)
-    elif not staged.update_progress(
-        key, event_id, request.update_id,
-        steps_delta=request.steps_delta, completed_missions=request.completed_missions,
-    ):
-        raise AdminActionConflict("progress ID already exists without this audited request")
-    before = EventMemberState.from_member(member)
-    after = EventMemberState.from_member(staged.member(key, event_id))
-    receipt = EventMemberReceipt(
-        request=request,
-        preview_digest=_digest(
-            request, account=account, configuration=config.fingerprint(), member_identity=member.identity,
-            member_name=member.name.hex(), before=before.model_dump(), after=after.model_dump(),
-        ),
-        committed_at=_now(),
-        member_identity=member.identity,
-        before=before,
-        after=after,
-    )
-    _commit(host, {}, {"events": staged.snapshot()}, receipt)
-    host.events.publish_state(staged)
+    with transaction(host, (key,), "events", "admin_audit") as tx:
+        if isinstance(request, EventEligibilityRequest):
+            tx.events.set_eligibility(key, event_id, request.value)
+        elif not tx.events.update_progress(
+            key, event_id, request.update_id,
+            steps_delta=request.steps_delta, completed_missions=request.completed_missions,
+        ):
+            raise AdminActionConflict("progress ID already exists without this audited request")
+        before = EventMemberState.from_member(member)
+        after = EventMemberState.from_member(tx.events.member(key, event_id))
+        receipt = EventMemberReceipt(
+            request=request,
+            preview_digest=_digest(
+                request, account=account, configuration=config.fingerprint(), member_identity=member.identity,
+                member_name=member.name.hex(), before=before.model_dump(), after=after.model_dump(),
+            ),
+            committed_at=_now(),
+            member_identity=member.identity,
+            before=before,
+            after=after,
+        )
+        tx.admin_audit.record(receipt)
     return receipt

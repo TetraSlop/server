@@ -123,7 +123,7 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
         self.assertEqual(returned[1].card, award.card)
 
     def test_lost_continue_ack_does_not_recover_already_collected_awards(self):
-        from tmserver.economy.match_transactions import match_transaction
+        from tmserver.transactions import MATCH_SERVICES, transaction
 
         self.begin()
         self.result()
@@ -131,7 +131,7 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
         self.server.default_table.commit_match_prizes(self.match)
 
         def accept():
-            with match_transaction(self.server, (self.keys[0],)) as state:
+            with transaction(self.server, (self.keys[0],), *MATCH_SERVICES) as state:
                 state.result_rewards.commit(self.keys[0])
 
         self.lose_ack(accept)
