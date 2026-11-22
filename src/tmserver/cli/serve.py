@@ -58,6 +58,9 @@ def arguments(argv=None):
     parser.add_argument("--auth-port", type=port, help="loopback auth listener (default:8081)")
     parser.add_argument("--auth-insecure-loopback", action="store_true",
                         help="local loader testing only: advertise HTTP/WS on the bound loopback port")
+    parser.add_argument("--auth-dev-identity", action="store_true",
+                        help="local development only: accept any bearer name as a user, without "
+                             "Supabase (requires --auth-insecure-loopback)")
     parser.add_argument(
         "--admin-actions", action="store_true",
         help="enable audited awards, event grants and event corrections in the admin panel",
@@ -165,6 +168,8 @@ def arguments(argv=None):
         parser.error("auth listener options require --auth-config")
     if args.auth_config is not None and args.auth_port is None:
         args.auth_port = 8081
+    if args.auth_dev_identity and not args.auth_insecure_loopback:
+        parser.error("--auth-dev-identity requires --auth-insecure-loopback")
     if args.admin_password_file is not None and args.admin_port is None:
         parser.error("--admin-password-file requires --admin-port")
     if args.admin_actions and args.admin_port is None:
@@ -201,6 +206,9 @@ async def run(args):
             print(f"Admin panel ready: http://127.0.0.1:{services.admin.port}/admin/", flush=True)
         if services.auth is not None:
             print(f"Launcher gateway ready on 127.0.0.1:{services.auth.port}", flush=True)
+            if args.auth_dev_identity:
+                print("WARNING: dev identity enabled; any bearer name signs in without Supabase",
+                      flush=True)
         listeners = [item for item in (services.admin, services.auth) if item is not None]
         if listeners:
             waits = [asyncio.create_task(item.wait(args.seconds)) for item in listeners]
@@ -310,6 +318,7 @@ async def running_services(args):
                         gateway = await listeners.enter_async_context(serving_auth(
                             game, profile, auth, port=args.auth_port,
                             insecure_loopback=args.auth_insecure_loopback,
+                            dev_identity=args.auth_dev_identity,
                         ))
                     yield RunningServices(game, profile, game_port, profile_port, panel, gateway)
             finally:

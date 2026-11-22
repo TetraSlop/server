@@ -9,7 +9,7 @@ import base64
 import json
 import re
 import unicodedata
-from uuid import UUID
+from uuid import UUID, uuid5
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, TypeAdapter, ValidationError
@@ -119,6 +119,26 @@ def https_origin(value, error):
     ):
         raise ValueError(error)
     return str(url).rstrip("/")
+
+
+DEV_ISSUER = "https://dev-identity.invalid/auth/v1"  # Reserved TLD: never a Supabase project.
+DEV_NAMESPACE = UUID("6f1f6b0e-6c1d-4d43-9a54-6d2f3c2f7a10")
+
+
+class DevVerifier:
+    """Loopback development only: the bearer token is a user name and is not verified.
+
+    Names are 1-15 printable ASCII characters without spaces. Each name owns its own
+    account under a separate issuer, so dev users never match Supabase subjects.
+    """
+
+    issuer = DEV_ISSUER
+
+    async def verify(self, access_token: str) -> Subject:
+        if not header_value(access_token, 15):
+            raise InvalidToken("A dev identity is 1-15 printable characters")
+        return Subject(issuer=self.issuer, subject=str(uuid5(DEV_NAMESPACE, access_token)),
+                       discord=True, display_name=access_token)
 
 
 class SupabaseVerifier:

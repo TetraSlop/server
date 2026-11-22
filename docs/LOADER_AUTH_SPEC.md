@@ -276,6 +276,38 @@ tickets to `localStorage`, URLs or logs. Use Supabase's browser PKCE flow with a
 redirect back to the page in place of the loopback callback; allowlist that page's
 redirect URL in Supabase.
 
+### Local development without Supabase
+
+For development and screenshot tests, the server can replace Supabase with a dev
+identity. It is off by default and needs two flags together:
+
+```powershell
+$env:TM_DATABASE_URL = "postgresql+psycopg://..."
+tmserver --auth-config examples/auth-dev.json --auth-port 8081 `
+  --auth-insecure-loopback --auth-dev-identity
+```
+
+`examples/auth-dev.json` lists `http://localhost:5173` and `http://127.0.0.1:5173`
+as browser origins; copy it and edit `browser_origins` for another dev-server port.
+Its Supabase settings are placeholders and are never contacted.
+
+With the dev identity, skip Supabase sign-in and refresh. Wherever this contract
+sends the Supabase access token (`POST /v1/play/tickets`, `POST /v1/play/renew`,
+`DELETE /v1/play/account-session`), send `Authorization: Bearer <name>` instead.
+The name is 1–15 printable ASCII characters without spaces (e.g. `alice`), and
+nothing is verified. Each name gets its own account on first use and the same
+account afterwards, and the name becomes its display name. Everything else is
+unchanged: redeem the ticket at `POST /v1/play/sessions`, then open the returned
+`ws://127.0.0.1:8081/v1/streams/{game,profile}` URLs with the play token as the
+first message.
+
+The gateway always binds 127.0.0.1. `--auth-dev-identity` is refused without
+`--auth-insecure-loopback`, which makes the advertised origin
+`http://127.0.0.1:PORT`. The Host check then refuses requests forwarded under any
+other name, so a reverse proxy cannot expose a dev gateway as a public site. Dev
+users are saved under the issuer `https://dev-identity.invalid/auth/v1`, so they
+never match a Supabase user. Use a development database.
+
 ## Loader acceptance
 
 - Real browser sign-in, cancel, timeout, refresh and next-launch remembered login.
