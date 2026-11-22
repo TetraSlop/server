@@ -1,0 +1,6 @@
+{
+  "supabase_url": "https://dev.invalid",
+  "publishable_key": "sb_publishable_dev_identity_unused",
+  "public_origin": "https://dev.invalid",
+  "browser_origins": ["http://localhost:5173", "http://127.0.0.1:5173"]
+}

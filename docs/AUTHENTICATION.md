@@ -79,8 +79,11 @@ settlement in the selected save. It is independent of authentication.
 
 For an explicitly local loader test, add `--auth-insecure-loopback`. It advertises
 the actual numeric loopback address/port using HTTP/WS. Supabase verification
-still requires the real configured HTTPS project: there is no production fake
-identity endpoint, shared development bearer token or verification bypass.
+still requires the real configured HTTPS project unless `--auth-dev-identity` is
+also given. That development-only flag replaces Supabase with unverified user
+names and is refused without `--auth-insecure-loopback`; see "Local development
+without Supabase" in the [loader contract](LOADER_AUTH_SPEC.md). There is no
+production fake identity endpoint or verification bypass.
 
 ## Discord setup
 
