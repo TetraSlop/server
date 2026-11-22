@@ -5,9 +5,9 @@ See [DATABASE.md](DATABASE.md) for setup, import/export and verification.
 
 ## The boundary
 
-The game domain remains ordinary Python dataclasses and services. StateStore has
-four operations: load, save a full snapshot, save selected accounts, and save
-selected accounts with named service journals.
+The game domain remains ordinary Python dataclasses and services. A store has
+three operations: load, save a full snapshot, and save selected accounts with
+named service journals.
 Commerce coordinates ordinary purchases, trades and delayed trade deck edits.
 It stages just the affected accounts, calls the scoped save, then publishes their
 live state. The store owns SQL transactions; domain services own economic rules
@@ -64,7 +64,7 @@ amounts, operator, reason, source, confirmation digest and commit timestamp.
 `admin_audit` and the Prize Center award share one commit; receipts survive player
 redemption and make exact retries idempotent after restart. Startup validates
 their references before recovery. PostgreSQL migration `0002_admin_audit` adds
-the journal name and refuses a downgrade that would discard retained receipts.
+the journal name.
 
 Audited event grants commit `event_cards` and `admin_audit` together without an
 account write. Their receipts retain full canonical cards, queued money, the
