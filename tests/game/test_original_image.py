@@ -1,12 +1,14 @@
 """Native execution requires a verified image and a compatible host."""
 
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from tmserver.game.original.image import IMAGE_SIZE, OriginalCodeError, read_image
-from tmserver.game.original.native import NativeRules
+from tmserver.data.resources import read_json
+from tmserver.game.original.native import NativeRules, _card_record
 
 
 class OriginalImageTests(unittest.TestCase):
@@ -36,3 +38,10 @@ class OriginalImageTests(unittest.TestCase):
                 path.write_bytes(data)
                 with self.assertRaisesRegex(OriginalCodeError, message):
                     read_image(path)
+
+    def test_card_records_match_the_retail_catalogue_bytes(self):
+        records = b"".join(map(_card_record, read_json("economy_catalog.json")["cards"]))
+        self.assertEqual(
+            hashlib.sha256(records).hexdigest(),
+            "6ed8f9f731206935186bd3281ee690d5662324d59e463eedf1417602b523d18b",
+        )

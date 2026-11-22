@@ -70,7 +70,7 @@ class Catalog:
                 (
                     g
                     for g in p["generation_bins"]
-                    if g["inclusive_threshold"] and roll <= g["inclusive_threshold"]
+                    if g["threshold"] and roll <= g["threshold"]
                 ),
                 None,
             )
@@ -79,31 +79,31 @@ class Catalog:
                     (
                         e
                         for e in p["explicit_models"]
-                        if e["inclusive_threshold"]
-                        and roll <= e["inclusive_threshold"]
-                        and e["model_id"] < len(self.cards)
+                        if e["threshold"]
+                        and roll <= e["threshold"]
+                        and e["model"] < len(self.cards)
                     ),
                     None,
                 )
                 if entry is not None:
-                    return entry["model_id"]
+                    return entry["model"]
                 continue
-            lo, hi = p["model_range_inclusive_exclusive"]
+            lo, hi = p["range_first"], p["range_end"]
             choices = [
                 i
                 for i in range(lo, hi)
-                if self.cards[i]["filter_category_7"] not in excluded
+                if self.cards[i]["category_7"] not in excluded
                 and (
-                    group["price_tier_filter"] == 255
-                    or self.cards[i]["price_tier"] == group["price_tier_filter"]
+                    group["price_tier"] == 255
+                    or self.cards[i]["price_tier"] == group["price_tier"]
                 )
                 and (
-                    not group["category_6_filter"]
-                    or self.cards[i]["filter_category_6"] == group["category_6_filter"]
+                    not group["category_6"]
+                    or self.cards[i]["category_6"] == group["category_6"]
                 )
                 and (
-                    not group["category_7_filter"]
-                    or self.cards[i]["filter_category_7"] == group["category_7_filter"]
+                    not group["category_7"]
+                    or self.cards[i]["category_7"] == group["category_7"]
                 )
             ]
             if choices:
