@@ -1,10 +1,9 @@
-# Admin panel and remaining plan
+# Admin panel
 
-Requested 2026-09-27. The first deliverable is a local, authenticated operator
-panel for the running server. The read-only panel is implemented as an optional
-install extra; the CLI and panel share account/claim definitions. Audited Prize
-Center awards, event grants, eligibility and progress corrections use shared
-application functions.
+A local, authenticated operator panel for the running server, installed as an
+optional extra. It shares account and claim queries with the `tmserver-admin`
+CLI. Audited Prize Center awards, event grants, and eligibility and progress
+corrections use the same functions in both.
 
 ## Run it
 
@@ -166,41 +165,18 @@ Direct inventory editing, rating-history repair, arbitrary database editing and
 server restart controls are separate capabilities requiring their own semantics.
 The first panel does not need them to be useful.
 
-## Delivery checkpoints
+## Tests
 
-1. **Shared queries:** CLI and future routes agree on claims, partial collection,
-   account ownership and missing optional journals. Inspection changes no state.
-2. **Read-only panel:** overview, account list/details and claim views work on a
-   disposable JSON fixture and a disposable PostgreSQL fixture, while encrypted
-   game sessions continue normally. Authentication and session expiry are tested.
-3. **Packaged acceptance:** install the wheel without the checkout, load every
-   template/asset, and check the pages with a browser against disposable data.
-   An ordinary installation without the admin extra still starts normally.
-4. **Audited actions:** cover unauthorized/CSRF requests, duplicate submissions,
-   conflicting previews, busy accounts and storage failure. Test that failed
-   commits publish neither game state nor receipts. A lost commit acknowledgement
-   requires reload and exact retry because durable storage may already contain both.
+The admin lane covers sign-in and session expiry, unauthorized and CSRF requests,
+duplicate submissions, conflicting previews, busy accounts and storage failure:
+a failed commit publishes neither game state nor a receipt, and a lost commit
+acknowledgement needs a reload and exact retry. The PostgreSQL lane covers reads,
+atomic awards, rollback, lost acknowledgements, restart and retry, upgrades and
+downgrade protection. The wheel check installs the package without the checkout
+and loads every template. See [validation](VALIDATION.md). Checks in the game
+client are separate; see the [native test checklist](NATIVE_TEST_CHECKLIST.md).
 
-Checkpoints 1–4 have source, authentication, actual HTTP/encrypted-protocol and
-installed-wheel checks. Headless browser checks use disposable state. Disposable
-PostgreSQL checks cover reads, atomic awards, rollback, lost acknowledgements,
-restart/retry, upgrades and downgrade protection. See
-[VALIDATION.md](VALIDATION.md) for exact test results and outstanding checks.
-Native game acceptance remains separately user-operated.
+## Not included
 
-## Completed membership checkpoint and next boundary
-
-Eligibility and progress now use staged `EventHost` operations shared by CLI and
-panel. Previews bind the member identity, before/after state and configuration.
-Exclusion removes pending admission only after persistence succeeds. Progress
-preserves its event/account/update-ID scope, mission mask and overflow checks.
-Historical receipts survive subsequent corrections and restart; neither action
-edits accounts or rewards. JSON, real PostgreSQL and installed-package checks
-cover these contracts. See [validation](VALIDATION.md).
-
-The next hosted-account work is durable identity enrollment and provisioning,
-currently outside the operator panel. Define how a verified Discord user receives
-a new account and how an operator deliberately links an existing save before
-adding account-management forms. Never infer ownership from a display name.
-Keep public administration, multiple roles and rating repair separate from the
-completed local operator workflow.
+Public administration, multiple operator roles, linking an existing save to a
+Discord account from the panel, and rating-history repair.

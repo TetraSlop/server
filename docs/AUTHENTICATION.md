@@ -1,4 +1,4 @@
-# Hosted authentication prototype
+# Authentication
 
 Discord is the selected login method, using Supabase Auth for the browser flow.
 The server has an opt-in launcher gateway. It verifies access tokens
@@ -13,7 +13,7 @@ account for a verified Supabase user with a linked Discord identity. Browser
 sign-in alone does not contact tmserver. Ownership is stored by project issuer
 and Supabase UUID, alongside the account in one atomic commit. Returning users
 keep that account after server restarts and Discord name changes. A new account
-receives the existing starter policy: ten cards and 10,000 gil. Supabase identities
+receives the starting inventory: ten cards and 10,000 T. Supabase identities
 do not grant admin rights.
 
 Legacy operator bindings can be imported without changing an existing save.
@@ -23,7 +23,7 @@ Unbound local test accounts and the local operator panel keep their existing flo
 
 On Play, the server uses Discord's display name from the verified Supabase
 identity (`global_name`, falling back to the username). It saves the label before
-the native client reads its profiles, including for existing pilot accounts.
+the native client reads its profiles, including for accounts imported from bindings.
 The current gameplay name field is limited to 15 printable ASCII bytes: accents
 are normalized, unsupported glyphs are omitted, and longer names are shortened.
 If no usable Discord name exists, a new account uses `PlayerN` and an existing
@@ -49,7 +49,7 @@ origin. Never provide a service-role/secret key. `auto_register` defaults to
 and restart to close new registrations while allowing existing saved owners to
 play. `--accounts N` controls the local test pool, not hosted registrations.
 
-To retain an existing pilot save, keep its old `bindings` object for the first
+To keep a save that used manual bindings, keep its old `bindings` object for the first
 startup with this version. The gateway imports those links into the save; then
 the bindings may be removed from configuration. A link cannot reassign a saved
 owner or take another identity's account. Legacy bindings must refer to enabled
@@ -73,7 +73,7 @@ admin panel. The HTTP owner is shared with the existing admin listener, with
 bounded startup/shutdown; both can run in the same game-owner process.
 
 The ordinary server defaults to practice without stakes. Add `--wagers` when
-testing COM matches with a gil wager or double-up selected in the native menu;
+testing COM matches with a wager or double-up selected in the native menu;
 without it, nonzero stakes are rejected. Wager support persists deductions and
 settlement in the selected save. It is independent of authentication.
 
@@ -126,7 +126,7 @@ HTTP mock tests cover Supabase's exact endpoint/headers, public-key validation,
 rejected credentials, timeouts and provider failure. This does not constitute a
 live Supabase/browser sign-in or rendered-game acceptance.
 
-## Deliberate prototype limits
+## Limits
 
 - Ownership is durable, but identity linking/reassignment, account deletion and
   recovery administration remain future account-management work. Do not edit
@@ -139,10 +139,9 @@ live Supabase/browser sign-in or rendered-game acceptance.
 - Revoking a play session closes both transports. Supabase provider logout and
   game-session logout are separate operations; provider changes are checked on
   the next ticket or renewal, not continuously during every game message.
-- The user has confirmed real Discord sign-in and display-name import through
-  the separately owned loader. A captured wagered COM request completes an encrypted
-  hosted match replay, including settlement, exit and saved balance. A complete
-  native hosted match still needs user acceptance.
-- Hosted TLS/proxy configuration and public admission rate limits remain before
-  public deployment. The pilot uses the user's existing Supabase project; no
-  public server deployment has been created.
+- Discord sign-in and display-name import work through tmloader. A captured
+  wagered COM request replays as an encrypted hosted match, including
+  settlement, exit and saved balance. A complete hosted match in the game client
+  has not been checked.
+- Public deployment still needs TLS and proxy configuration and admission rate
+  limits. No public server has been deployed.

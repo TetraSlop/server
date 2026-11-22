@@ -71,17 +71,17 @@ The same preset supplies room advertisements, table advertisements and new match
 state, including after reset. Rule queries return it. Conflicting Apply or
 Computer configuration requests are rejected. Saving personal default settings
 is separate and does not change a fixed room. Table-level settings such as
-password and observation remain editable. Fixed-rule enforcement is explicit
-replacement-server policy; the original client's display alone does not prove
-the historical server's enforcement behavior.
+password and observation remain editable. Enforcing fixed rules is a server
+choice; the client only displays them, and the original server's behavior is
+unknown.
 
 The original initial-admission path also distinguishes these room types. Fixed
 rooms copy game rules from the selected table's PTL metadata and open only the
 table-options editor. Open Tables opens the game-rule editor with saved personal
-defaults first. Both can use personal table options. The
-[original editor trace](research/FIXED_ROOM_EDITOR.md) follows admission,
-editor selection, initialization and the actual Apply sender. Its four captured
-Apply messages pass encrypted replay against the corresponding supplied rooms.
+defaults first. Both can use personal table options. Four
+captured Apply messages from the client pass encrypted replay against the
+corresponding supplied rooms. The messages are described in
+[TetraPackets irc/G/14.md](https://github.com/sruon/TetraPackets/blob/main/irc/G/14.md).
 Changing between rooms and restarting preserves saved personal game defaults.
 
 Computer uses a separate rule editor that remains editable even in a fixed
@@ -90,9 +90,9 @@ client's double-up option. Direct opponent selection preserves the received
 double-up value, so the server does not prohibit that preset. Prefer custom
 rules for CPU rooms when players should freely change these options. The
 supplied lineup keeps Local Room custom and all fixed rooms human-only.
-[Computer-menu evidence](research/COMPUTER_ROOM_RULES.md) records the original
-constructor, initialization, editor and sender boundaries. Native presentation
-of custom fixed CPU rooms remains a review item.
+The client's Computer menu is described in
+[TetraPackets client/computer-player.md](https://github.com/sruon/TetraPackets/blob/main/client/computer-player.md). How the
+client shows custom fixed CPU rooms has not been checked.
 
 ## Computer availability
 
@@ -107,7 +107,7 @@ supports rooms containing separate human and CPU tables. A direct Computer
 admission to a human table receives a refusal without claiming the account or
 disconnecting it.
 
-[Original-client evidence](research/ROOM_COMPUTER_GATE.md) documents the room
+[TetraPackets irc/L.md](https://github.com/sruon/TetraPackets/blob/main/irc/L.md) documents the room
 flag at RL record `+0x29`, table prefix, card threshold and table-state guards.
 The frozen fixture includes all five actual launcher rooms passing through
 original directory parsing, room selection and action branches. Encrypted tests
@@ -125,7 +125,7 @@ this is local compatibility behavior, not a recovered historical IRC case policy
 Room presence uses the authenticated character name, separately from a handle
 alias. Entry and updates with another name are rejected before publication.
 Full 16-byte names have an existing native sender/receiver limitation despite
-server-wire support; see [the source evidence](research/ROOM_NAME_PROVENANCE.md).
+server-wire support; see [TetraPackets irc/L.md](https://github.com/sruon/TetraPackets/blob/main/irc/L.md).
 
 ## Table entry limits
 
@@ -144,6 +144,6 @@ spectators need no owned cards.
 
 An ineligible request receives the existing nonfatal unavailable/start-failure
 reply without reserving the account or changing the table. The same connection
-can retry when eligible. This response choice is replacement-server policy;
-[original eligibility evidence](research/TABLE_ELIGIBILITY_NOTES.md) establishes
-the client menu checks, not historical server error codes for these conditions.
+can retry when eligible. This response is a server choice: the client's menu checks are known
+([TetraPackets flows/tables.md](https://github.com/sruon/TetraPackets/blob/main/flows/tables.md)), but not the original
+server's error codes for these conditions.

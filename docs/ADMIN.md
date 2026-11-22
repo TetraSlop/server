@@ -241,7 +241,7 @@ enrolls a missing member nor changes progress. Output reports `updated` or
 tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json event-progress --account-key KEY --event festival --id local-progress-001 --steps 2 --completed-missions 1
 ```
 
-This records an operator's explicit local-policy decision for an existing,
+This records an operator's decision for an existing,
 eligible event member. `--steps` adds a nonnegative number of steps; the total
 must fit 0 through 2,147,483,647. `--completed-missions` is a decimal bitmask of
 additional completed missions: 1 for the first bit, 2 for the second, 4 for the
@@ -285,7 +285,7 @@ a new audit receipt. Legacy `event-progress` and `event-eligibility` commands re
 available, but do not record an operator/reason history.
 
 The opt-in live panel exposes the same operations under **Correct event membership**;
-see [panel setup](ADMIN_PANEL_PLAN.md). Its web operator comes from the authenticated
+see [panel setup](ADMIN_PANEL.md). Its web operator comes from the authenticated
 session. Existing audit journals upgrade to v3 on the first membership correction,
 preserving v1/v2 receipts. Older server versions cannot read v3 saves.
 

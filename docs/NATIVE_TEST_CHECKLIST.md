@@ -1,22 +1,18 @@
-# Native validation of the integrated projects
+# Native test checklist
 
-Status: **basic play confirmed by the user; current integrated candidate pending**.
-Earlier user reports confirmed a visible title screen, corrected mouse behavior,
-CPU play, working sound, and improved window/settings input behavior. Those
-reports establish that the local game has been playable; they do not certify
-later server rules, loader builds, or replacement assets.
+Status: basic play works (title screen, mouse, computer matches, sound and
+settings). The current build has not been checked.
 
-The checks below are acceptance steps for one recorded server/loader/asset
-combination. Headless checks validate startup plumbing and encrypted requests;
-screen appearance and interaction require the user to operate the game. Use
-`Play.cmd`, not an old shortcut. Record the server and loader revisions, deployed
-loader executable hash, selected texture-pack manifest, and launch session ID
-with the results. A newer build on disk is not evidence that it was deployed.
+These checks are for one recorded server and loader build. Headless tests cover
+startup and encrypted requests; what the client shows needs a person playing.
+Use `Play.cmd`, not an old shortcut. Record the server and loader revisions, the
+deployed loader executable's hash and the launch session ID with the results. A
+newer build on disk does not mean it was the one running.
 
-Start with Pass 1 and Pass 2 below: a CPU match/rematch, shop/deck change and
-reload, followed by a two-human match/trade and reload. Keep later event,
-auction, spectator and three-player checks separate so a successful basic pass
-does not imply they were exercised. No agent desktop or input control is needed.
+Start with Pass 1 and Pass 2 below: a computer match and rematch, a shop and deck
+change and a reload, then a two-player match, a trade and a reload. Keep the
+event, auction, spectator and three-player checks separate, so a passing basic
+run does not imply they were tried.
 
 ## Room discovery and rules
 
@@ -38,10 +34,8 @@ game-start paths; rendered menus and actual human input remain to be checked.
 
 ## Updated loader controls
 
-The original integrated run exposed sound, resizing, closing and focus problems.
-The loader now enables the native sound engine and handles desktop window
-commands. The user subsequently confirmed sound and improved input/settings
-behavior. Check the complete set below on the candidate being accepted:
+The loader enables the native sound engine and handles desktop window commands.
+Check the complete set below on the build being accepted:
 
 - Title/menu music and selection effects are audible (check game Options levels).
 - Drag the edges and maximize/restore; the game keeps 4:3 proportions and the
@@ -130,7 +124,7 @@ historical automatic reward formula.
 
 Launch with `.\Play.cmd --rewards --ratings local-history --weekly-rankings`.
 After completing ordinary matches, check the ranking menu's Weekly Prize Money
-and VS. Rating lists, including the hide-name option. Top30 is populated from
+and VS. Rating lists, including the hide-name option. Top 30 is populated from
 the preceding UTC week after Monday rollover; old saves are not backfilled and
 Best Rookies remains empty. This is a local policy, not a recovered retail rule.
 
