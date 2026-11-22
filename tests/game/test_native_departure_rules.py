@@ -1,20 +1,8 @@
 """Departure helper comparisons against original instructions; no native UI."""
 
-import random
-import sys
 import unittest
-from dataclasses import replace
-from pathlib import Path
 
-from tmserver.game.models import Card
-from tmserver.game.ai import Move, Personality
 from tmserver.game.departure_rules import DepartureError, next_turn, result_slots
-from tmserver.game.special_rules import (
-    Cell,
-    choose_special_move,
-    special_placement_scores,
-    start_board,
-)
 
 
 class OriginalDepartureTests(unittest.TestCase):

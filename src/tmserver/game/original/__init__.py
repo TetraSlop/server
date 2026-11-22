@@ -1,1 +1,1 @@
-"""Optional original-x86 rules prototype; never selected by the live server."""
+"""Native x86 execution of verified original game rules."""

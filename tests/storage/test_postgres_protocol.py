@@ -10,8 +10,6 @@ from typing import ClassVar
 
 from tests.economy.auctions import test_auction_prize_integration as auctions
 from tests.events import test_event_integration as events
-from tests.economy import test_match_prizes_integration as prizes
-from tests.economy import test_match_wagers_integration as wagers
 from tests.network import test_services_integration as services
 from tests.economy import test_trade_integration as trades
 from tests.profiles.test_options_service import request as options_request
@@ -20,7 +18,6 @@ from tests.profiles.test_profile_accounts import file_request, transact
 from tests.network.test_server import Client
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, player_id, service_nick
-from tmserver.game.packets import packet
 from tmserver.profiles.service import ProfileServer
 from tmserver.profiles.packets import checked
 from tmserver.network.server import Server
@@ -139,32 +136,6 @@ class PostgresTradeTests(ProtocolFixture):
         await self.assert_restart()
 
 
-@unittest.skipUnless(TEST_URL, "set TM_TEST_DATABASE_URL for real PostgreSQL tests")
-class PostgresMatchTests(ProtocolFixture):
-    player_count = 2
-    options: ClassVar[dict] = {
-        "match_mode": "versus",
-        "card_prizes": True,
-        "allow_wagers": True,
-        "rating_mode": "local-history",
-    }
-    flush = prizes.PrizeIntegrationTests.flush
-    send = prizes.PrizeIntegrationTests.send
-    play = prizes.PrizeIntegrationTests.play
-    choose = prizes.PrizeIntegrationTests.choose
-    admit = wagers.WagerIntegrationTests.admit
-
-    async def test_complete_match_prizes_stakes_ratings_and_restart(self):
-        await self.admit()
-        await self.play()
-        await self.choose()
-        self.assertEqual(sum(self.server.economy.balance(key) for key in self.keys), 20000)
-        for side in range(2):
-            await self.send(side, packet(0x43, 17, side, "@Continue=/Ans=1/PR=0/Conf=0"))
-        expected = await self.assert_restart()
-        self.assertTrue(expected["ratings"]["history"]["accounts"])
-        self.assertTrue(expected["match_economy"]["rounds"])
-        self.assertEqual(sum(len(self.server.economy.inventory(k)) for k in self.keys), 20)
 
 
 @unittest.skipUnless(TEST_URL, "set TM_TEST_DATABASE_URL for real PostgreSQL tests")

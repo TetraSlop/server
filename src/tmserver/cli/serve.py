@@ -59,12 +59,10 @@ def arguments(argv=None):
         "--admin-password-file", type=Path,
         help="operator password file; otherwise read TM_ADMIN_PASSWORD when admin is enabled",
     )
-    parser.add_argument(
-        "--rules-backend", choices=("python", "native-hybrid"), default="python",
-        help="native-hybrid uses original battle, growth, target and ordinary AI code on 32-bit Windows",
-    )
-    parser.add_argument("--rules-image", type=Path, help="verified unpacked TM memory image")
-    parser.add_argument("--rules-bridge", type=Path, help="Win32 tm_original_rules.dll bridge")
+    parser.add_argument("--rules-image", type=Path, default=os.environ.get("TM_ORIGINAL_IMAGE"),
+                        help="required unpacked TM image (or TM_ORIGINAL_IMAGE)")
+    parser.add_argument("--rules-bridge", type=Path, default=os.environ.get("TM_NATIVE_BRIDGE"),
+                        help="required Win32 bridge (or TM_NATIVE_BRIDGE)")
     storage = parser.add_mutually_exclusive_group()
     storage.add_argument("--state", type=Path, help="JSON save (default: var/local_state.json)")
     storage.add_argument(
@@ -175,11 +173,6 @@ def arguments(argv=None):
         parser.error("--admin-password-file requires --admin-port")
     if args.admin_actions and args.admin_port is None:
         parser.error("--admin-actions requires --admin-port")
-    if args.rules_backend == "native-hybrid":
-        if args.rules_image is None or args.rules_bridge is None:
-            parser.error("native-hybrid requires --rules-image and --rules-bridge")
-    elif args.rules_image is not None or args.rules_bridge is not None:
-        parser.error("--rules-image and --rules-bridge require --rules-backend native-hybrid")
     if not math.isfinite(args.seconds) or args.seconds < 0:
         parser.error("seconds must be finite and nonnegative")
     if args.players == 3:
@@ -205,7 +198,7 @@ async def run(args):
     async with running_services(args) as services:
         print(
             f"Tetra Master services ready: game 127.0.0.1:{services.game_port}, "
-            f"profile 127.0.0.1:{services.profile_port}",
+            f"profile 127.0.0.1:{services.profile_port}; rules: native x86",
             flush=True,
         )
         if services.admin is not None:
@@ -277,11 +270,9 @@ async def running_services(args):
         auth.account_bindings(account_specs(args.accounts))
     events, tables, progress = load_event_setup(args.events) if args.events else ((), (), "none")
     with ExitStack() as resources:
-        rules_backend = None
-        if getattr(args, "rules_backend", "python") == "native-hybrid":
-            from tmserver.game.original.native import NativeRules
+        from tmserver.game.original.runtime import configured_rules
 
-            rules_backend = resources.enter_context(NativeRules(args.rules_image, args.rules_bridge))
+        rules_backend = resources.enter_context(configured_rules(args.rules_image, args.rules_bridge))
         args.log_dir.mkdir(parents=True, exist_ok=True)
         store = None
         if args.database_url:

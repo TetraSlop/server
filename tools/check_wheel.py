@@ -308,6 +308,8 @@ def main():
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--admin", action="store_true", help="also install and smoke the admin extra")
     parser.add_argument("--auth", action="store_true", help="also install and smoke the auth extra")
+    parser.add_argument("--native", action="store_true",
+                        help="also launch services; requires Windows x86 and native image/bridge env")
     args = parser.parse_args()
     wheel = args.wheel.resolve(strict=True)
     manifest = verify_wheel(wheel)
@@ -340,7 +342,7 @@ def main():
             str(python), "-I", "-c",
             "import importlib.metadata as metadata, importlib.util, json\n"
             "assert all(importlib.util.find_spec(name) is None "
-            "for name in ('sqlalchemy', 'alembic', 'psycopg', 'unicorn', "
+            "for name in ('sqlalchemy', 'alembic', 'psycopg', "
             "'starlette_admin', 'starlette', 'uvicorn', 'httpx', 'websockets'))\n"
             "print(json.dumps([requirement for requirement in metadata.requires('tmserver') "
             "if 'extra ==' not in requirement]))\n",
@@ -461,20 +463,18 @@ def main():
         assert json.loads(admin_state.read_text())["accounts"] == granted["accounts"]
         accounts = run(str(cli), "--list-accounts")
         assert len(accounts.strip().splitlines()) == 2, accounts
-        ready = run(
-            str(python),
-            "-B",
-            "-m",
-            "tmserver",
-            "--game-port",
-            "0",
-            "--profile-port",
-            "0",
-            "--seconds",
-            "0.1",
-        )
-        assert "services ready" in ready, ready
-        assert (root / "var").is_dir(), "runtime output did not use the working directory"
+        if args.native:
+            ready = run(str(python), "-B", "-m", "tmserver", "--game-port", "0",
+                        "--profile-port", "0", "--seconds", "0.1")
+            assert "rules: native x86" in ready, ready
+            assert (root / "var").is_dir(), "runtime output did not use the working directory"
+        else:
+            no_native = {key: value for key, value in env.items()
+                         if key not in {"TM_ORIGINAL_IMAGE", "TM_NATIVE_BRIDGE"}}
+            refused = subprocess.run([str(python), "-m", "tmserver"], cwd=root,
+                                     env=no_native, capture_output=True, text=True, timeout=15)
+            assert refused.returncode != 0 and "Native rules require" in refused.stderr
+            assert not (root / "var").exists(), "missing native configuration created state"
         admin_report = {}
         if args.admin:
             run(str(python), "-m", "pip", "install", f"{wheel}[admin]")
@@ -484,7 +484,11 @@ def main():
         if args.auth:
             run(str(python), "-m", "pip", "install", f"{wheel}[auth]")
             run(str(python), "-m", "pip", "check")
-            auth_report = json.loads(run(str(python), "-I", "-c", AUTH_SMOKE))
+            if args.native:
+                auth_report = json.loads(run(str(python), "-I", "-c", AUTH_SMOKE))
+            else:
+                run(str(python), "-I", "-c", "import tmserver.auth.server")
+                auth_report = {"auth_imports": True, "auth_native_service_smoke": False}
         print(
             json.dumps(
                 {
@@ -500,7 +504,7 @@ def main():
                     "json_audited_event_members": True,
                     "json_admin_account": True,
                     "json_recovery_preview": True,
-                    "services_started_on_ephemeral_ports": True,
+                    "services_started_on_ephemeral_ports": args.native,
                     **admin_report,
                     **auth_report,
                 }

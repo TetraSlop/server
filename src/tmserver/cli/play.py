@@ -82,6 +82,10 @@ async def preflight(args):
             raise ValueError(f"Missing setup file: {path}. See docs/LOCAL_PLAY.md.")
     if args.state.exists():
         validate_snapshot(JsonStateStore(args.state).load())
+    from tmserver.game.original.runtime import configured_rules
+
+    with configured_rules():
+        pass  # Validate native architecture/image/ABI before any loader process is started.
     process = await asyncio.create_subprocess_exec(
         str(args.loader),
         "--config",

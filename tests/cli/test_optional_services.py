@@ -1,4 +1,4 @@
-"""Optional admin/native launch configuration and resource ownership."""
+"""Required native runtime, optional admin configuration and resource ownership."""
 
 import io
 import os
@@ -16,19 +16,25 @@ from tmserver.storage.json import writer_lease
 
 
 class OptionalConfigurationTests(unittest.TestCase):
-    def test_defaults_do_not_enable_an_admin_panel_or_load_original_code(self):
-        with patch.dict(os.environ, {"TM_ADMIN_PASSWORD": "must-not-enable-admin"}):
+    def test_argument_inspection_does_not_enable_admin_or_load_native_code(self):
+        with patch.dict(os.environ, {"TM_ADMIN_PASSWORD": "must-not-enable-admin"}, clear=True):
             args = arguments([])
             self.assertIsNone(admin_options(args))
-        self.assertEqual(args.rules_backend, "python")
+        self.assertIsNone(args.rules_image)
+        self.assertIsNone(args.rules_bridge)
         self.assertIsNone(args.admin_port)
 
-    def test_rejects_incomplete_or_conflicting_native_and_admin_options(self):
+    def test_native_paths_use_environment_and_explicit_arguments_override_them(self):
+        with patch.dict(os.environ, {"TM_ORIGINAL_IMAGE": "original.dll", "TM_NATIVE_BRIDGE": "native.dll"}):
+            args = arguments([])
+            self.assertEqual((args.rules_image, args.rules_bridge), (Path("original.dll"), Path("native.dll")))
+            args = arguments(["--rules-image", "other.dll", "--rules-bridge", "bridge.dll"])
+            self.assertEqual((args.rules_image, args.rules_bridge), (Path("other.dll"), Path("bridge.dll")))
+
+    def test_rejects_removed_backend_switch_and_invalid_admin_options(self):
         for options in (
             ["--rules-backend", "native-hybrid"],
-            ["--rules-backend", "native-hybrid", "--rules-image", "image.dll"],
-            ["--rules-image", "image.dll"],
-            ["--rules-bridge", "bridge.dll"],
+            ["--rules-backend", "python"],
             ["--admin-port", "-1"], ["--admin-port", "65536"],
             ["--admin-password-file", "password.txt"],
             ["--admin-actions"],
@@ -47,7 +53,7 @@ class OptionalLifetimeTests(unittest.IsolatedAsyncioTestCase):
         self.state = self.root / "state.json"
         self.args = arguments([
             "--state", str(self.state), "--log-dir", str(self.root / "logs"),
-            "--game-port", "0", "--profile-port", "0", "--rules-backend", "native-hybrid",
+            "--game-port", "0", "--profile-port", "0",
             "--rules-image", "image.dll", "--rules-bridge", "bridge.dll",
         ])
 
@@ -86,6 +92,22 @@ class OptionalLifetimeTests(unittest.IsolatedAsyncioTestCase):
                 backend.__exit__.assert_called_once()
                 with writer_lease(self.state):
                     pass
+
+    async def test_missing_native_paths_reject_before_any_server_side_effect(self):
+        for missing in ("rules_image", "rules_bridge"):
+            with (self.subTest(missing=missing), patch.object(self.args, missing, None),
+                  patch.dict(os.environ, {}, clear=True)):
+                with (
+                    patch("tmserver.cli.serve.Server") as create,
+                    patch("tmserver.cli.serve.writer_lease") as lease,
+                ):
+                    with self.assertRaisesRegex(OriginalCodeError, "Native rules require"):
+                        async with running_services(self.args):
+                            self.fail("server started without native rules")
+                    create.assert_not_called()
+                    lease.assert_not_called()
+        self.assertFalse(self.args.log_dir.exists())
+        self.assertFalse(self.state.exists())
 
     async def test_native_preflight_failure_never_opens_store_listeners_or_creates_logs(self):
         with (

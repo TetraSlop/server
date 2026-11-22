@@ -6,6 +6,13 @@ prepared. Start with **`tmserver/Play.cmd`**, rather than the earlier shortcut.
 
 ## First run
 
+The server now requires Windows x86 Python and the original-code bridge; follow
+[native setup](ORIGINAL_RULES_PROTOTYPE.md). `Play.cmd` uses `.venv` or the prepared
+local `build/server-x86` environment; `TM_PYTHON` overrides its interpreter.
+Set `TM_ORIGINAL_IMAGE` and `TM_NATIVE_BRIDGE`, or place the verified image and
+bridge in the ignored `var/native` directory as prepared on this machine.
+Missing or incompatible native code fails startup before any save or listener.
+
 Double-click `Play.cmd`. It checks the loader's files and DLL hashes, starts the
 packaged game/profile services on free loopback ports, and opens one native game
 window. Enter **Local Room**, select an empty table, then choose **COM Opponent**

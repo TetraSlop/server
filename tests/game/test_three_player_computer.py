@@ -3,11 +3,9 @@
 import copy
 import json
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from tests import FIXTURES
-from tmserver.game import special_rules as special
 from tmserver.game.models import BoardCard
 from tmserver.game.errors import MatchError
 from tmserver.game.match import MatchService
@@ -119,8 +117,8 @@ class ThreePlayerComputerTests(unittest.TestCase):
         self.assertEqual(decode(selection[0].payload).sections["CardSelect"]["Ans"], "1|1|1")
         start = decode(selection[1].payload).sections["StartData"]
         self.assertEqual(len(start["F"].split("|")), 25)
-        with patch(
-            "tmserver.game.match.special.choose_special_move", wraps=special.choose_special_move
+        with patch.object(
+            service.rules_backend, "choose_special_move", wraps=service.rules_backend.choose_special_move
         ) as chooser:
             out = finish(service)
         self.assertEqual(

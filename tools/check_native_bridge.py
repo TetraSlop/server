@@ -19,14 +19,14 @@ def require_equal(actual, expected, label):
 
 
 def check_layouts():
-    # ABI 2 sizes and field offsets from native/original_rules/api.h. The
+    # ABI 3 sizes and field offsets from native/original_rules/api.h. The
     # bridge build independently checks the public request/result sizes.
     layouts = (
         (native._BattleRequest, 48, (0, 16, 32, 36, 40, 44)),
         (native._BattleResult, 32, (0, 16)),
         (native._HandCard, 8, (0, 4)),
-        (native._BoardCell, 12, (0, 4, 8)),
-        (native._MoveRequest, 252, (0, 4, 8, 20, 60)),
+        (native._BoardCell, 20, (0, 4, 8, 12, 16)),
+        (native._MoveRequest, 564, (0, 4, 8, 12, 24, 64)),
         (native._MoveResult, 8, (0, 4)),
         (native._GrowthRequest, 64, (0, 32, 52, 56, 60)),
         (native._GrowthResult, 40, (0, 32, 36)),
@@ -45,7 +45,7 @@ def check_bridge(path):
         raise RuntimeError("Native bridge checks require 32-bit Windows Python")
     check_layouts()
     bridge = native._load_bridge(path)
-    require_equal(bridge.tm_rules_abi(), 2, "bridge ABI")
+    require_equal(bridge.tm_rules_abi(), 3, "bridge ABI")
     draws = []
 
     @native._Random
@@ -90,7 +90,7 @@ def check_bridge(path):
     ):
         require_equal(bridge.tm_rules_open(*arguments), 2, label)
         check_closed("after " + label)
-    require_equal(bridge.tm_rules_abi(), 2, "ABI after rejected calls")
+    require_equal(bridge.tm_rules_abi(), 3, "ABI after rejected calls")
 
 
 def main(argv=None):
@@ -98,7 +98,7 @@ def main(argv=None):
     parser.add_argument("bridge", type=Path, help="Built Win32 tm_original_rules.dll")
     args = parser.parse_args(argv)
     check_bridge(args.bridge)
-    print("Native ABI 2 passed: seven exports, ten record layouts, closed-state and open guards")
+    print("Native ABI 3 passed: seven exports, ten record layouts, closed-state and open guards")
     print("No original image loaded; original-routine parity is outside this check")
 
 

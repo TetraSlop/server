@@ -1,4 +1,4 @@
-"""Run portable, optional admin, or disposable PostgreSQL tests without skipped coverage."""
+"""Run image-free, native gameplay, web, or disposable PostgreSQL tests."""
 
 import argparse
 from contextlib import contextmanager
@@ -24,7 +24,19 @@ PORTABLE_SKIPS = {
 
 
 def test_modules(lane, root=ROOT):
+    manifest = root / "tests" / "native_modules.json"
+    native = set(json.loads(manifest.read_text())) if manifest.exists() else set()
+    paths = list((root / "tests").rglob("test_*.py"))
+    available = {".".join(path.with_suffix("").relative_to(root).parts) for path in paths}
+    if unknown := native - available:
+        raise ValueError(f"native test manifest names missing modules: {sorted(unknown)}")
+
     def selected_lane(path):
+        module = ".".join(path.with_suffix("").relative_to(root).parts)
+        if {"native", "postgres"} <= set(path.stem.split("_")):
+            return "native-postgres"
+        if module in native:
+            return "native"
         if path.is_relative_to(root / "tests" / "auth"):
             return "auth"
         if path.is_relative_to(root / "tests" / "admin" / "web"):
@@ -33,7 +45,7 @@ def test_modules(lane, root=ROOT):
 
     return sorted(
         ".".join(path.with_suffix("").relative_to(root).parts)
-        for path in (root / "tests").rglob("test_*.py")
+        for path in paths
         if selected_lane(path) == lane
     )
 
@@ -81,7 +93,7 @@ def postgres_container():
 def run_suite(suite, *, lane, errors=(), stream=None):
     count = validate_collection(suite, errors)
     result = unittest.TextTestRunner(verbosity=2, stream=stream).run(suite)
-    allowed = PORTABLE_SKIPS if lane == "portable" else set()
+    allowed = PORTABLE_SKIPS if lane in ("portable", "native") else set()
     unexpected = [(test.id(), reason) for test, reason in result.skipped
                   if (test.id(), reason) not in allowed]
     report = {
@@ -108,21 +120,21 @@ def run_worker(lane, url=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("lane", choices=("portable", "postgres", "admin", "auth"))
+    parser.add_argument("lane", choices=("portable", "native", "native-postgres", "postgres", "admin", "auth"))
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
-    if args.lane == "auth" and any(
+    if args.lane in ("auth", "native") and any(
         importlib.util.find_spec(name) is None
         for name in ("starlette", "uvicorn", "httpx", "websockets")
     ):
         parser.error('install ".[dev,auth]" before selecting the auth lane')
-    if args.lane == "admin" and any(
+    if args.lane in ("admin", "native") and any(
         importlib.util.find_spec(name) is None
         for name in ("starlette_admin", "starlette", "uvicorn", "httpx")
     ):
         parser.error('install ".[dev,admin]" before selecting the admin lane')
     if not args.worker:
-        if args.lane in ("portable", "admin", "auth"):
+        if args.lane in ("portable", "native", "admin", "auth"):
             return run_worker(args.lane)
         if any(importlib.util.find_spec(name) is None for name in ("sqlalchemy", "alembic", "psycopg")):
             parser.error('install ".[postgres]" before selecting the PostgreSQL lane')
@@ -132,10 +144,14 @@ def main():
         except (OSError, subprocess.SubprocessError, ValueError) as error:
             detail = getattr(error, "stderr", None) or str(error)
             parser.exit(1, f"PostgreSQL lane could not complete: {detail.strip()}\n")
-    if args.lane == "postgres" and not os.environ.get("TM_TEST_DATABASE_URL"):
+    if args.lane in ("postgres", "native-postgres") and not os.environ.get("TM_TEST_DATABASE_URL"):
         parser.error("PostgreSQL worker requires its disposable container")
     sys.path.insert(0, str(ROOT / "src"))
     os.chdir(ROOT)
+    if args.lane in ("native", "native-postgres"):
+        from tmserver.game.original.runtime import default_rules
+
+        default_rules()  # Fail before discovery if architecture/image/ABI is unsupported.
     subprocess.run(
         [sys.executable, "-I", str(ROOT / "tools/check_imports.py"),
          "--source-root", str(ROOT / "src")], check=True,

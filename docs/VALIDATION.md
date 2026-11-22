@@ -1,5 +1,43 @@
 # Packaging and transaction validation
 
+## Native authoritative rules, 2026-09-29
+
+The native-only change passes **1,475 non-database tests** on Windows x86
+(one documented optional PostgreSQL import check skipped), **78 image-free
+PostgreSQL tests**, and **2 native PostgreSQL match tests**, covering all
+**1,555 maintained test cases**. Focused launcher checks also pass after adding
+native preflight to `Play.cmd`'s Python entry point. Test lanes now separate
+image-dependent modules explicitly instead of falling back to Python rules.
+
+Hosted Linux CI caught one additional native dependency after the final launcher
+preflight change: `tests.storage.test_startup_snapshot_validation` also checks
+successful local setup. That module now runs in the native lane. Its seven tests
+and twelve lane-tooling tests pass with the real bridge
+(`results/native-ci-lane-correction.log`); all 1,555 tests remain assigned once.
+
+Native ABI 3 builds with MSVC x86 and passes its image-free layout/guard check.
+Seventeen native acceptance tests verify 8,067 frozen original-code results and
+random-draw sequences, including special and three-player COM decisions. The
+extended AI shim also matched 768 comparison cases before deleting the Python
+scorer. No emulator is installed or imported by these native checks.
+
+A fresh standard 32-bit Python environment installs the exact current wheel
+(160 files, 155 runtime files), starts native services, and verifies the admin
+panel plus mocked-provider Discord registration, WebSocket sessions and
+revocation. The live local pilot was restarted with native ABI 3 and its existing
+save; its gateway returns HTTP 200. This does not substitute for user-operated
+game-screen acceptance.
+
+The PostgreSQL combined checks use official PostgreSQL 16.15 libpq built for
+x86 and plain Psycopg 3.3.6 against a disposable loopback PostgreSQL 16.15 server.
+That test client has TLS disabled; deployment TLS is not verified by this run.
+Hosted native CI needs the operator-supplied image URL secret documented in
+[CI](CI.md); no original image is uploaded with the source or release artifacts.
+
+Local evidence: `results/native-classification.log`,
+`results/native-postgres-portable.log`, `results/native-postgres-validation.json`,
+`results/native-clean-wheel-final.log`, and `results/native-retirement-probe.json`.
+
 ## Automatic Discord accounts, 2026-09-28
 
 The auth lane passes **56 tests in 24.558 seconds**; the admin lane passes

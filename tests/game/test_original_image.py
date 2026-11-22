@@ -1,11 +1,10 @@
-"""The optional original-code backend must stay inert without its verified image."""
+"""Native execution requires a verified image and a compatible host."""
 
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tmserver.game.original.backend import OriginalRules
 from tmserver.game.original.image import IMAGE_SIZE, OriginalCodeError, read_image
 from tmserver.game.original.native import NativeRules
 
@@ -37,24 +36,3 @@ class OriginalImageTests(unittest.TestCase):
                 path.write_bytes(data)
                 with self.assertRaisesRegex(OriginalCodeError, message):
                     read_image(path)
-
-    def test_execution_limits_cannot_disable_bounding(self):
-        for value in (0, -1, True, 1.5, 2**32, 2**64):
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                OriginalRules("unused.dll", instruction_limit=value)
-
-    def test_optional_dependency_has_actionable_error(self):
-        with patch("tmserver.game.original.backend.read_image", return_value=b""):
-            # Simulate the missing dependency at the lazy import boundary.
-            import builtins
-
-            original_import = builtins.__import__
-
-            def missing(name, *args, **kwargs):
-                if name == "tmserver.game.original.machine":
-                    raise ModuleNotFoundError("unicorn", name="unicorn")
-                return original_import(name, *args, **kwargs)
-
-            with patch("builtins.__import__", side_effect=missing):
-                with self.assertRaisesRegex(OriginalCodeError, r"tmserver\[original\]"):
-                    OriginalRules("unused.dll")

@@ -161,10 +161,11 @@ void Engine::battle(const BattleRequest& request, BattleResult& result)
 void Engine::move(const MoveRequest& request, MoveResult& result)
 {
     reset();
-    result = MoveResult{ -1, -1 };
-    if (request.count == 0 || std::ranges::none_of(request.board, [](const auto& cell)
+    result           = MoveResult{ -1, -1 };
+    const auto board = std::span{ request.board }.first(request.boardSize);
+    if (request.count == 0 || std::ranges::none_of(board, [](const auto& cell)
                                                    {
-                                                       return cell.model == 0xFFFF;
+                                                       return cell.owner == 8;
                                                    }))
     {
         return;
@@ -172,6 +173,8 @@ void Engine::move(const MoveRequest& request, MoveResult& result)
 
     auto* const player = image_.get() + playerRva;
     auto* const game   = game_.data();
+    mode_              = request.boardSize == 25 ? 1 : 0;
+    write<std::uint8_t>(player, 0xE5, mode_ + 2);
     write<std::uint8_t>(game, 0x178, static_cast<std::uint8_t>(request.owner));
     write<std::uint8_t>(game, 0x171, 1);
     write<std::uint8_t>(game, 0x16F, 0x22);
@@ -184,12 +187,14 @@ void Engine::move(const MoveRequest& request, MoveResult& result)
         write<std::uint8_t>(player, 0x184 + index + request.owner * 0x30, static_cast<std::uint8_t>(request.personality[index]));
     }
 
-    for (auto index = std::size_t{}; index < 16; ++index)
+    for (auto index = std::size_t{}; index < request.boardSize; ++index)
     {
         const auto& cell = request.board[index];
         auto* const card = game + 0x344 + index * 0x9C;
         write<std::uint16_t>(card, 14, static_cast<std::uint16_t>(cell.model));
         write<std::uint8_t>(card, 13, static_cast<std::uint8_t>(cell.arrows));
+        write<std::uint8_t>(card, 0x24, static_cast<std::uint8_t>(cell.property));
+        write<std::uint8_t>(card, 0x28, static_cast<std::uint8_t>(cell.direction));
         for (auto offset = std::size_t{ 0x1C }; offset < 0x1F; ++offset)
         {
             write<std::uint8_t>(card, offset, static_cast<std::uint8_t>(cell.owner));
@@ -285,10 +290,12 @@ auto valid(const BattleRequest& request) noexcept -> bool
 
 auto valid(const MoveRequest& request) noexcept -> bool
 {
-    if (request.count > 5 || request.owner > 1 || std::ranges::any_of(request.personality, [](auto value)
-                                                                      {
-                                                                          return value > 255;
-                                                                      }))
+    const auto players = request.boardSize == 16 ? 2U : request.boardSize == 25 ? 3U
+                                                                                : 0U;
+    if (request.count > 5 || request.owner >= players || std::ranges::any_of(request.personality, [](auto value)
+                                                                             {
+                                                                                 return value > 255;
+                                                                             }))
     {
         return false;
     }
@@ -301,11 +308,13 @@ auto valid(const MoveRequest& request) noexcept -> bool
         }
     }
 
-    return std::ranges::all_of(request.board, [](const auto& cell)
+    return std::ranges::all_of(std::span{ request.board }.first(request.boardSize), [players](const auto& cell)
                                {
-                                   return cell.arrows <= 255 && ((cell.model < 250 && cell.owner <= 1) ||
-                                                                 (cell.model == 0xFFFF && cell.owner == 8) ||
-                                                                 (cell.model == 0x8000 && cell.owner == 9));
+                                   return cell.arrows <= 255 && cell.property <= 255 && cell.direction <= 7 &&
+                                          ((cell.model < 250 && cell.owner < players) ||
+                                           (cell.model == 0xFFFF && cell.owner == 8) ||
+                                           (cell.model >= 0x8000 && cell.model <= 0x800B &&
+                                            (cell.owner == 4 || cell.owner == 8 || cell.owner == 9)));
                                });
 }
 

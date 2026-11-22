@@ -34,15 +34,18 @@ struct BoardCell
     std::uint32_t model;
     std::uint32_t arrows;
     std::uint32_t owner;
+    std::uint32_t property;
+    std::uint32_t direction;
 };
 
 struct MoveRequest
 {
     std::uint32_t count;
     std::uint32_t owner;
+    std::uint32_t boardSize;
     std::uint32_t personality[3];
     HandCard      hand[5];
-    BoardCell     board[16];
+    BoardCell     board[25];
 };
 
 struct MoveResult

@@ -1,30 +1,18 @@
 """Original x86 board-effect comparisons; no game process or desktop control."""
 
-import random
-import struct
-import sys
 import unittest
 from dataclasses import replace
-from pathlib import Path
 
 from tests import ROOT
 from tmserver.game.rules import Card
 from tmserver.game.special_rules import (
     Cell,
     SpecialRulesError,
-    adjacent_ownership,
     apply_special,
     choose_special_move,
-    classify,
-    combo,
-    direct_captures,
     finish_turn,
-    modify_strength,
-    ownership_beneficiary,
     place,
-    poll_special_placement,
     shuffle,
-    special_placement_scores,
     spinner_chain,
     start_board,
 )
@@ -79,38 +67,30 @@ class SpecialAPITests(unittest.TestCase):
         with self.assertRaises(SpecialRulesError):
             shuffle(b, (1, 2))
 
-    def test_special_AI_is_pure_and_includes_bare_low_tiles(self):
-        fields = [0] * 16
+
+    def test_native_AI_can_place_on_an_unoccupied_low_property_tile(self):
+        from tests.game.test_native_ai import Draws
+        from tmserver.game.ai import Move
+
+        fields = [1] * 16
         fields[5] = 5
-        fields[6] = 9
-        b = list(start_board(fields).cells)
-        b[1] = Cell.ordinary(replace(CARD, arrows=0), 1)
-        before = tuple(b)
-        scores = dict(special_placement_scores(replace(CARD, arrows=0), b, 0))
-        self.assertIn(5, scores)
-        self.assertNotIn(6, scores)
-        self.assertEqual(scores[5], 1)
-        self.assertEqual(tuple(b), before)
-        self.assertEqual(
-            special_placement_scores(CARD, start_board([0] * 25).cells, 0),
-            tuple((i, 0) for i in range(25)),
-        )
+        board = start_board(fields).cells
+        before = tuple(board)
+        self.assertEqual(choose_special_move((CARD,), board, 0, Draws([0] * 6)), Move(0, 5))
+        self.assertEqual(board, before)
 
     def test_special_AI_adapter_no_move_and_validation_boundaries(self):
         from tests.game.test_native_ai import Draws
-        from tmserver.game.ai import Personality
+        from tmserver.game.ai import AIError, Personality
 
         empty = start_board([0] * 16).cells
         self.assertIsNone(choose_special_move((), empty, 0, Draws([])))
         self.assertIsNone(choose_special_move((CARD,), start_board([1] * 16).cells, 0, Draws([])))
-        with self.assertRaises(SpecialRulesError):
+        with self.assertRaises(AIError):
             choose_special_move((CARD,) * 6, empty, 0, Draws([]))
-        for denominator in (0, -1, True, 0x80000000):
-            with self.assertRaises(SpecialRulesError):
-                poll_special_placement(CARD, empty, 0, Draws([]), denominator=denominator)
         for raw in (-1, True, 32768):
-            with self.assertRaises(SpecialRulesError):
-                poll_special_placement(CARD, empty, 0, Draws([raw]))
+            with self.assertRaises(AIError):
+                choose_special_move((CARD,), empty, 0, Draws([raw]))
         move = choose_special_move((CARD,), empty, 0, Draws([0, 0, 0, 0, 0, 5]), Personality())
         self.assertEqual((move.hand_index, move.field), (0, 5))
 

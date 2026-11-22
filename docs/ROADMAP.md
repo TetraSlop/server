@@ -26,8 +26,11 @@ and event card/money grants, eligibility and progress corrections shared with
 offline administration. Read-only receipt
 history preserves operator facts after collection and restart.
 Pydantic handles configuration and auction save shapes, and Construct owns
-directory records. An opt-in native-hybrid backend now connects the original
-battle, growth, target selection and ordinary AI routines to the server without an emulator.
+directory records. Native ABI 3 is now the required rules path: original battle,
+growth, target selection and ordinary/special/three-player COM decisions. The
+duplicated Python algorithms and emulator have been removed. Board effects,
+generation, departure rules and server policy retain their single Python
+implementations; moving those into native code is separate, uncompleted work.
 
 See [VALIDATION.md](VALIDATION.md) for current test and package results. Live
 PostgreSQL validation now runs against an isolated local PostgreSQL instance. R5 native

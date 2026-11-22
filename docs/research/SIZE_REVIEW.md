@@ -1,5 +1,26 @@
 # Server size and structure review
 
+## Native-only gameplay, 2026-09-29
+
+Runtime Python falls from **25,146 to 24,279 physical lines**, a net removal of
+**867 lines**. The C++ bridge grows from 770 to 782 lines, so the combined runtime
+reduction is **855 lines**. Counts include blank lines and comments and exclude
+tests, tools and static data. These counts compare the published `08f047d` tree
+with the native-only change.
+
+Native ABI 3 now owns battle, growth, target choice and all supported COM
+placement decisions, including special boards and three players. The matching
+Python algorithms, optional capability fallbacks and emulator backend are
+deleted. Python retains result models, validation, random state, board effects,
+generation, departure handling and server transactions; these do not yet have
+equivalent bridge operations.
+
+Separately, research Python falls from 24,673 to 805 lines: **23,868 lines removed**
+from the obsolete emulator harness and archived duplicate tests. This is not a
+server-runtime reduction. Compact frozen outputs retain native arithmetic and
+random-draw regression coverage without retaining another rules implementation.
+The detailed local count is `results/native-retirement-size.json`.
+
 ## Hosted authentication prototype, 2026-09-28
 
 The current tree has **24,460 physical Python lines across 139 runtime files**.

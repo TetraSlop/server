@@ -120,13 +120,13 @@ auto __cdecl tm_rules_abi() noexcept -> std::uint32_t
     static_assert(sizeof(void*) == 4);
     static_assert(sizeof(tmserver::original::BattleRequest) == 48);
     static_assert(sizeof(tmserver::original::BattleResult) == 32);
-    static_assert(sizeof(tmserver::original::MoveRequest) == 252);
+    static_assert(sizeof(tmserver::original::MoveRequest) == 564);
     static_assert(sizeof(tmserver::original::MoveResult) == 8);
     static_assert(sizeof(tmserver::original::GrowthRequest) == 64);
     static_assert(sizeof(tmserver::original::GrowthResult) == 40);
     static_assert(sizeof(tmserver::original::TargetRequest) == 40);
     static_assert(sizeof(tmserver::original::TargetResult) == 4);
-    return 2;
+    return 3;
 }
 
 auto __cdecl tm_rules_open(const std::uint8_t* image, std::uint32_t size, const std::uint8_t* catalog, std::uint32_t catalogSize) noexcept -> std::uint32_t
