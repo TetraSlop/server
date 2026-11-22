@@ -47,7 +47,19 @@ only takes effect when the `db` volume is created.
 Server options go in the server service's `command`, for example
 `command: ["--mode", "versus", "--players", "auto"]` in a `compose.override.yaml`.
 Run `docker compose run --rm --no-deps --entrypoint tmserver server --help` for
-rooms, events, human tables, prizes and ratings. `docker compose logs server`
+rooms, events, human tables, prizes and ratings.
+
+Wagers and double-up, card prizes, CBC generated-card rewards and departures
+are on by default; turn one off with `--no-wagers`, `--no-card-prizes`,
+`--no-allow-cbc` or `--no-departures`. Departures only apply to rounds with no
+wager, card prize or local-history rating, so with the defaults they take
+effect only once those are off. Local-history ratings and weekly rankings stay
+off until you pass `--ratings local-history` (and `--weekly-rankings`): a save
+that has used local-history and was then played without it refuses to start,
+and no migration tool exists yet. When an option is off and a player picks it
+anyway, the server drops the choice and keeps the session; a chosen stake plays
+as a round without one. The startup output names the options that are on.
+`docker compose logs server`
 shows the server's output; its traffic logs are in `/var/lib/tmserver/var` in
 the container. Stop the server with `docker compose stop server` before you run
 an offline tool, such as `docker compose run --rm --entrypoint tmserver-admin server --help`.

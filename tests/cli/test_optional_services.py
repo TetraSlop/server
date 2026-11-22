@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from tests.support.memory_store import DATABASE, MemoryStore, opened_by
-from tmserver.cli.serve import admin_options, arguments, running_services
+from tmserver.cli.serve import admin_options, arguments, enabled_options, running_services
 from tmserver.network.server import Server
 from tmserver.profiles.service import ProfileServer
 
@@ -37,6 +37,14 @@ class OptionalConfigurationTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as raised:
                     arguments([*DATABASE, *options])
                 self.assertEqual(raised.exception.code, 2)
+
+    def test_gameplay_options_default_on_and_each_turns_off(self):
+        args = arguments(DATABASE)
+        self.assertTrue(all((args.wagers, args.card_prizes, args.allow_cbc, args.departures)))
+        self.assertEqual((args.ratings, args.weekly_rankings), ("preserve", False))
+        self.assertEqual(enabled_options(args), "wagers, card_prizes, cbc, departures")
+        off = ["--no-wagers", "--no-card-prizes", "--no-allow-cbc", "--no-departures"]
+        self.assertEqual(enabled_options(arguments([*DATABASE, *off])), "none")
 
     def test_database_url_is_required_except_to_list_accounts(self):
         with patch.dict(os.environ, {}, clear=True):

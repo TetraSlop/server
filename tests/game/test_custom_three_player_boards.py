@@ -117,8 +117,8 @@ class BoardConfiguration(unittest.TestCase):
         invalid = (
             ["--board", ",".join(["0"] * 25)],
             ["--mode", "versus", "--players", "3", "--board", ",".join(["0"] * 16)],
-            ["--board", ",".join(["18"] + ["0"] * 15)],
-            ["--mode", "versus", "--players", "3", "--board", ",".join(["18"] + ["0"] * 24)],
+            ["--no-allow-cbc", "--board", ",".join(["18"] + ["0"] * 15)],
+            ["--no-allow-cbc", "--mode", "versus", "--players", "3", "--board", ",".join(["18"] + ["0"] * 24)],
         )
         for command in invalid:
             with (
