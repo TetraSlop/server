@@ -3,38 +3,36 @@
 Server choice: enforcing these rules. The client only displays them.
 """
 
-from dataclasses import dataclass
+from dataclasses import asdict
+from typing import Annotated
+
+from pydantic import ConfigDict, Field
+from pydantic.dataclasses import dataclass
+
+from tmserver.rooms.records import alphahex
+
+Flag = Annotated[int, Field(ge=0, le=1)]
 
 
-@dataclass(frozen=True)
+def pack_game_rules(bm, du, st, cb, ca, tl, gs):
+    """Four wager nibbles, rule flags, time limit, departure rule."""
+    flags = du | st << 1 | cb << 2 | ca << 3
+    return alphahex(bm, 4) + bytes((65 + flags, 65 + tl, 65 + gs))
+
+
+@dataclass(frozen=True, config=ConfigDict(strict=True, extra="forbid"))
 class RoomRules:
-    bm: int = 0
-    du: int = 0
-    st: int = 0
-    cb: int = 0
-    ca: int = 0
-    gs: int = 1
-    tl: int = 2
-
-    def __post_init__(self):
-        for key, maximum in (
-            ("bm", 2000),
-            ("du", 1),
-            ("st", 1),
-            ("cb", 1),
-            ("ca", 1),
-            ("gs", 2),
-            ("tl", 5),
-        ):
-            value = getattr(self, key)
-            if type(value) is not int or not 0 <= value <= maximum:
-                raise ValueError(f"room rule {key} must be an integer in 0..{maximum}")
+    bm: Annotated[int, Field(ge=0, le=2000)] = 0
+    du: Flag = 0
+    st: Flag = 0
+    cb: Flag = 0
+    ca: Flag = 0
+    gs: Annotated[int, Field(ge=0, le=2)] = 1
+    tl: Annotated[int, Field(ge=0, le=5)] = 2
 
     def as_dict(self):
-        return {key: getattr(self, key) for key in ("bm", "du", "st", "cb", "ca", "gs", "tl")}
+        return asdict(self)
 
     def packed(self):
-        """RL+49: four wager nibbles, rule flags, time limit, departure rule."""
-        wager = bytes(65 + int(nibble, 16) for nibble in f"{self.bm:04X}")
-        flags = self.du | self.st << 1 | self.cb << 2 | self.ca << 3
-        return wager + bytes((65 + flags, 65 + self.tl, 65 + self.gs))
+        """RL+49."""
+        return pack_game_rules(**self.as_dict())

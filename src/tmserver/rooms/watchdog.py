@@ -133,7 +133,7 @@ class MatchWatchdog:
         humans = tuple(
             p.peer
             for p in match.players
-            if p.peer is not None and not getattr(p, "departed", False)
+            if p.peer is not None and not p.departed
         )
         phase, round_id, sequence = match.phase, match.completed_matches, match.sequence
         if humans and phase == "lobby" and match.start_pending:
@@ -197,7 +197,7 @@ class MatchWatchdog:
             if not 0 <= match.active < len(match.players):
                 raise ValueError("active seat outside current player list")
             peer = match.players[match.active].peer
-            if peer is None or getattr(match.players[match.active], "substitute", 0):
+            if peer is None or match.players[match.active].substitute:
                 # CPU decisions normally happen synchronously on the final ack.
                 # If the adapter leaves one pending, diagnose server processing.
                 return self._arm(
