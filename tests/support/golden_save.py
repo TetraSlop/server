@@ -49,7 +49,8 @@ from tmserver.profiles.characters import CharacterProfiles
 from tmserver.profiles.transactions import character_profile_request
 from tmserver.protocol.commands import Command
 from tmserver.rankings.policy import RatingPolicy
-from tmserver.storage.validation import validate_snapshot, validate_snapshot_fields
+from tmserver.storage.restore import restore_state
+from tmserver.storage.validation import validate_snapshot
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "storage"
 SNAPSHOT = FIXTURES / "golden_snapshot.json"
@@ -199,36 +200,14 @@ def build(store=None):
 
 def restore_document(snapshot):
     """Restore every journal without startup recovery, then snapshot it again."""
-    validate_snapshot_fields(snapshot)
-    economy = EconomyService.restore(snapshot)
-    identities = IdentityRegistry.restore(economy, snapshot.get("identities"))
-    auction = AuctionEconomy.restore(economy, snapshot.get("auction"))
-    prize = PrizeService.restore(economy, snapshot.get("prize"))
-    rewards = ResultRewardService.restore(economy, auction, snapshot.get("result_rewards"))
-    rounds = MatchEconomy.restore(economy, snapshot.get("match_economy"))
-    ratings = RatingPolicy(
-        economy, mode="local-history", weekly=True, clock=lambda: EPOCH + WEEK,
-        snapshot=snapshot.get("ratings"),
-    )
-    profiles = CharacterProfiles.restore(economy, snapshot.get("character_profiles"))
-    events = EventHost.restore(economy, (EVENT,), snapshot.get("events"), clock=lambda: EPOCH)
-    cards = EventCardService.restore(economy, events, snapshot.get("event_cards"))
-    audit = AdminAudit.restore(economy, prize, snapshot.get("admin_audit"), event_cards=cards)
-    # Same section order as Server.snapshot().
-    return dict(
-        economy.snapshot(),
-        identities=identities.snapshot(),
-        auction=auction.snapshot(),
-        prize=prize.snapshot(),
-        admin_audit=audit.snapshot(),
-        result_rewards=rewards.snapshot(),
-        match_economy=rounds.snapshot(),
-        ratings=ratings.snapshot(),
-        character_profiles=profiles.snapshot(),
-        events=events.snapshot(),
-        event_cards=cards.snapshot(),
-        event_results=EventResults.restore(snapshot.get("event_results")).snapshot(),
-    )
+    return restore_state(
+        snapshot,
+        event_configs=(EVENT,),
+        rating_mode="local-history",
+        weekly_rankings=True,
+        ranking_clock=lambda: EPOCH + WEEK,
+        event_clock=lambda: EPOCH,
+    ).snapshot()
 
 
 def postgres_export(store, snapshot):
