@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 from tests.economy import test_match_economy as fixture
 from tmserver.cards.catalog import Catalog
+from tmserver.admin.queries import account_summary
 from tmserver.cli.admin import AdminState
 from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.match_ledger import MatchEconomy
@@ -40,7 +41,7 @@ class AccountQueryTests(unittest.TestCase):
             patch.object(ResultRewardService, "recover_all", side_effect=AssertionError("recovery")),
         ):
             state = AdminState(store, saved, ())
-            summary = state.account_summary(key)
+            summary = account_summary(state, key)
         self.assertEqual(store.method_calls, [])
         self.assertEqual(saved, before)
         return summary
@@ -145,7 +146,7 @@ class AccountQueryTests(unittest.TestCase):
         before = deepcopy(saved)
         store = Mock()
         state = AdminState(store, saved, ())
-        summary = state.account_summary("a")
+        summary = account_summary(state, "a")
         self.assertEqual(summary["auction_claims"], dict(
             payments=0, refunds=0, returned_cards=0, won_cards=0, receipts=[]
         ))

@@ -116,7 +116,8 @@ class JournalFieldsTests(unittest.IsolatedAsyncioTestCase):
     def test_admin_inspection_and_mutation_reject_without_rewriting(self):
         for command in (
             ["accounts"],
-            ["prize-award", "--account-key", "b", "--id", "award-2", "--top30", "5"],
+            ["prize-award", "--account-key", "b", "--id", "award-2", "--top30", "5",
+             "--request-id", "request-2", "--operator", "fixture", "--reason", "Fixture"],
         ):
             for parts in LOSSY_PATHS:
                 with self.subTest(command=command[0], path=parts):

@@ -5,27 +5,20 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
 
 from pydantic import ValidationError
 
-from tests.admin.test_actions import request as prize_request
+from tests.admin.test_actions import AuditedActionCases, request as prize_request
 from tests.events.test_event_rooms import config, presence
 from tests.network import test_services_integration as service_tests
 from tests.support.irc import Client
 from tmserver.admin.actions import (
     AdminActionConflict,
     AdminActionError,
-    apply_prize_award,
-    preview_prize_award,
-)
-from tmserver.admin.audit import AdminAudit, GrantedEventCard
-from tmserver.admin.event_actions import (
-    EventGrantCard,
-    EventGrantRequest,
     apply_event_grant,
-    preview_event_grant,
+    apply_prize_award,
 )
+from tmserver.admin.audit import AdminAudit, EventGrantCard, EventGrantRequest, GrantedEventCard
 from tmserver.economy.claim_transactions import event_transaction
 from tmserver.economy.packets import named, parse_named
 from tmserver.network.server import Server
@@ -100,7 +93,14 @@ class EventGrantRequestTests(unittest.TestCase):
             GrantedEventCard(**CARD.model_dump(), points=1, deck=255.0)
 
 
-class EventGrantActionTests(unittest.TestCase):
+class EventGrantActionTests(AuditedActionCases, unittest.TestCase):
+    apply = staticmethod(apply_event_grant)
+    request = staticmethod(request)
+    journals = {"event_cards"}
+    changes = (
+        dict(event_id="second"), dict(grant_id="different"), dict(money=26), dict(cards=()),
+    )
+
     def setUp(self):
         self.folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.path = self.folder / "state.json"
@@ -123,9 +123,7 @@ class EventGrantActionTests(unittest.TestCase):
 
     def grant(self, **changes):
         value = request(**changes)
-        preview = preview_event_grant(self.host, value)
-        receipt = apply_event_grant(self.host, value, preview.digest)
-        return value, preview, receipt
+        return value, apply_event_grant(self.host, value)
 
     def enter_collection(self, key="one"):
         view = self.host.economy.account_view(key)
@@ -147,57 +145,25 @@ class EventGrantActionTests(unittest.TestCase):
                     key, named(0xB2, subtype, number, f"@{token}=/No={number}"), event_id="festival"
                 )
 
-    def test_preview_is_read_only_and_apply_only_commits_grant_and_audit(self):
-        before, disk = self.host.snapshot(), self.path.read_bytes()
-        value = request()
-        preview = preview_event_grant(self.host, value)
-        self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), disk)
-        self.assertEqual(preview.cards[0].points, self.host.economy.catalog.points(0, 10, 20, 30))
-        self.assertEqual(preview.cards[0].deck, 255)
-        self.assertEqual((preview.eligibility, preview.collection_enabled), (0, True))
-        self.assertIsNone(preview.already_committed)
-        original_save = self.host.store.save_changes
-
-        def save_before_publication(accounts, journals):
-            self.assertEqual(self.host.snapshot(), before)
-            original_save(accounts, journals)
-
-        with patch.object(
-            self.host.store, "save_changes", side_effect=save_before_publication
-        ) as save:
-            receipt = apply_event_grant(self.host, value, preview.digest)
-        save.assert_called_once()
-        self.assertEqual(save.call_args.args[0], {})
-        self.assertEqual(set(save.call_args.args[1]), {"event_cards", "admin_audit"})
-        self.assertEqual(receipt.cards, preview.cards)
+    def test_grant_queues_canonical_cards_without_touching_the_account(self):
+        before = self.host.economy.account_view("one")
+        _, receipt = self.grant()
+        self.assertEqual(receipt.cards[0].points, self.host.economy.catalog.points(0, 10, 20, 30))
+        self.assertEqual(receipt.cards[0].deck, 255)
+        self.assertEqual((receipt.eligibility, receipt.collection_enabled), (0, True))
         self.assertEqual((receipt.action, receipt.status), ("event-grant", "queued"))
-        after = self.host.snapshot()
-        for name in before.keys() - {"event_cards", "admin_audit"}:
-            self.assertEqual(after[name], before[name])
+        self.assertEqual(self.host.economy.account_view("one"), before)
         self.assertEqual(
             self.host.event_cards.pending("one", "festival"), {"cards": 1, "money": 25}
         )
         self.assertEqual(
-            after["admin_audit"], dict(version=2, receipts=[receipt.model_dump(mode="json")])
+            self.host.admin_audit.snapshot(),
+            dict(version=2, receipts=[receipt.model_dump(mode="json")]),
         )
-        self.assertEqual(json.loads(self.path.read_text()), after)
-
-    def test_exact_retry_precedes_busy_and_stale_checks_without_writes(self):
-        value, preview, receipt = self.grant()
-        token = self.host.economy.reserve_match("one")
-        with patch.object(
-            self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
-        ):
-            self.assertIs(apply_event_grant(self.host, value, "stale"), receipt)
-            replay = preview_event_grant(self.host, value)
-        self.assertEqual(replay.already_committed, receipt)
-        self.assertEqual(replay.digest, preview.digest)
-        self.assertIs(self.host.economy._reservations["one"], token)
 
     def test_partial_and_full_collection_restart_keep_original_receipt(self):
         before = self.host.economy.account_view("one")
-        value, preview, receipt = self.grant(cards=(CARD,) * 12)
+        value, receipt = self.grant(cards=(CARD,) * 12)
         number, cards, money = self.enter_collection()
         self.assertEqual((cards, money), (9, 25))
         self.assertEqual(self.host.economy.inventory("one"), before.cards)
@@ -205,70 +171,48 @@ class EventGrantActionTests(unittest.TestCase):
         self.finish_collection(number)
         self.assertEqual(len(self.host.economy.inventory("one")), len(before.cards) + 9)
         self.host = self.server()
-        self.assertEqual(apply_event_grant(self.host, value, "ignored"), receipt)
-        self.assertEqual(preview_event_grant(self.host, value).digest, preview.digest)
+        self.assertEqual(apply_event_grant(self.host, value), receipt)
         number, cards, money = self.enter_collection()
         self.assertEqual((cards, money), (3, 0))
         self.finish_collection(number)
         self.host = self.server()
-        self.assertEqual(apply_event_grant(self.host, value, "ignored"), receipt)
+        self.assertEqual(apply_event_grant(self.host, value), receipt)
         self.assertEqual(len(self.host.economy.inventory("one")), len(before.cards) + 12)
         self.assertEqual(self.host.economy.balance("one"), before.balance + 25)
         self.assertEqual(self.host.event_cards.pending("one", "festival"), {"cards": 0, "money": 0})
 
-    def test_cross_action_request_ids_and_changed_facts_conflict(self):
+    def test_request_ids_are_shared_with_prize_awards(self):
         self.grant()
-        for changes in (
-            dict(account_key="two"),
-            dict(event_id="second"),
-            dict(grant_id="different"),
-            dict(operator="different"),
-            dict(source="web"),
-            dict(reason="Different reason"),
-            dict(money=26),
-            dict(cards=()),
-        ):
-            with self.subTest(changes=changes), self.assertRaises(AdminActionConflict):
-                apply_event_grant(self.host, request(**changes), "ignored")
         with self.assertRaises(AdminActionConflict):
-            preview_prize_award(self.host, prize_request(request_id="event.request.1"))
-        prize = prize_request()
-        apply_prize_award(self.host, prize, preview_prize_award(self.host, prize).digest)
+            apply_prize_award(self.host, prize_request(request_id="event.request.1"))
+        prize = apply_prize_award(self.host, prize_request())
         with self.assertRaises(AdminActionConflict):
-            preview_event_grant(self.host, request(request_id=prize.request_id, grant_id="new"))
+            apply_event_grant(
+                self.host, request(request_id=prize.request.request_id, grant_id="new")
+            )
 
     def test_legacy_grant_ids_never_gain_invented_audit_receipts(self):
         self.host.event_cards.grant("one", "festival", "grant.1", money=25)
         self.host.persist()
         for money in (25, 26):
             with self.subTest(money=money), self.assertRaises(AdminActionConflict):
-                preview_event_grant(self.host, request(cards=(), money=money))
+                apply_event_grant(self.host, request(cards=(), money=money))
         number, _, _ = self.enter_collection()
         self.finish_collection(number)
         self.host = self.server()
         with self.assertRaises(AdminActionConflict):
-            preview_event_grant(self.host, request(cards=()))
+            apply_event_grant(self.host, request(cards=()))
         self.assertEqual(self.host.admin_audit.snapshot(), dict(version=1, receipts=[]))
 
-    def test_new_grants_require_existing_member_idle_account_and_persistence(self):
-        for changes in (
-            dict(account_key="missing"),
-            dict(event_id="missing"),
-            dict(account_key="two", event_id="second"),
-        ):
+    def test_new_grants_require_an_existing_member(self):
+        for changes in (dict(event_id="missing"), dict(account_key="two", event_id="second")):
             with self.subTest(changes=changes), self.assertRaises(AdminActionError):
-                preview_event_grant(self.host, request(**changes))
-        preview = preview_event_grant(self.host, request())
-        self.host.economy.reserve_match("one")
-        with self.assertRaisesRegex(AdminActionError, "busy"):
-            apply_event_grant(self.host, request(), preview.digest)
-        with self.assertRaisesRegex(AdminActionError, "persistent"):
-            preview_event_grant(Server(), request())
+                apply_event_grant(self.host, request(**changes))
 
     def test_empty_card_stats_rejected_by_existing_catalog_without_changes(self):
         before = self.host.snapshot()
         with self.assertRaisesRegex(AdminActionError, "empty card stats"):
-            preview_event_grant(
+            apply_event_grant(
                 self.host,
                 request(
                     cards=(
@@ -282,55 +226,9 @@ class EventGrantActionTests(unittest.TestCase):
         self.host.events.set_eligibility("one", "second", -1)
         self.now = 600
         self.host.persist()
-        _, preview, receipt = self.grant(event_id="second")
-        self.assertEqual((preview.eligibility, preview.collection_enabled), (-1, False))
+        _, receipt = self.grant(event_id="second")
         self.assertEqual((receipt.eligibility, receipt.collection_enabled), (-1, False))
         self.assertEqual(self.host.event_cards.pending("one", "second"), {"cards": 1, "money": 25})
-
-    def test_preview_ignores_unrelated_grants_progress_preferences_and_balance(self):
-        value = request()
-        preview = preview_event_grant(self.host, value)
-        self.host.event_cards.grant("two", "festival", "other.account", money=1)
-        self.host.event_cards.grant("one", "second", "other.event", money=2)
-        self.host.events.update_progress("one", "festival", "progress", steps_delta=1)
-        self.host.economy.save_table_preferences(
-            "one", game=dict(bm=100, du=0, st=0, cb=0, ca=0, gs=0, tl=0)
-        )
-        token = self.host.economy.reserve_auction("one")
-        self.host.economy.commit_auction(token, credit=3)
-        self.host.persist()
-        self.assertEqual(preview_event_grant(self.host, value).digest, preview.digest)
-        apply_event_grant(self.host, value, preview.digest)
-
-    def test_same_event_history_and_collection_invalidate_preview(self):
-        self.grant(request_id="first.request", grant_id="first.grant")
-        value = request()
-        preview = preview_event_grant(self.host, value)
-        number, _, _ = self.enter_collection()
-        self.finish_collection(number)
-        with self.assertRaisesRegex(AdminActionConflict, "stale"):
-            apply_event_grant(self.host, value, preview.digest)
-        preview = preview_event_grant(self.host, value)
-        self.grant(request_id="empty.request", grant_id="empty.grant", money=0, cards=())
-        with self.assertRaisesRegex(AdminActionConflict, "stale"):
-            apply_event_grant(self.host, value, preview.digest)
-
-    def test_request_and_member_eligibility_are_bound_to_confirmation(self):
-        preview = preview_event_grant(self.host, request())
-        with self.assertRaises(AdminActionConflict):
-            apply_event_grant(self.host, request(money=26), preview.digest)
-        self.host.events.set_eligibility("one", "festival", -1)
-        with self.assertRaises(AdminActionConflict):
-            apply_event_grant(self.host, request(), preview.digest)
-
-    def test_account_identity_is_bound_to_confirmation(self):
-        preview = preview_event_grant(self.host, request())
-        saved = json.loads(self.path.read_text())
-        saved["accounts"]["one"]["name_hex"] = b"renamed".hex()
-        self.path.write_text(json.dumps(saved))
-        self.host = self.server()
-        with self.assertRaisesRegex(AdminActionConflict, "stale"):
-            apply_event_grant(self.host, request(), preview.digest)
 
     def test_other_accounts_active_collection_and_reservation_keep_identity(self):
         self.enter_collection("two")
@@ -342,7 +240,7 @@ class EventGrantActionTests(unittest.TestCase):
 
     def test_v1_prize_receipts_remain_unchanged_in_mixed_v2_history(self):
         value = prize_request()
-        old = apply_prize_award(self.host, value, preview_prize_award(self.host, value).digest)
+        old = apply_prize_award(self.host, value)
         v1 = self.host.admin_audit.snapshot()
         self.assertEqual(v1["version"], 1)
         self.assertEqual(AdminAudit.restore(self.host.economy, self.host.prize, v1).snapshot(), v1)
@@ -351,52 +249,7 @@ class EventGrantActionTests(unittest.TestCase):
         saved = self.host.admin_audit.snapshot()
         self.assertEqual(saved["version"], 2)
         self.assertEqual(saved["receipts"][0], old.model_dump(mode="json"))
-        self.assertEqual(apply_prize_award(self.host, value, "ignored"), old)
-
-    def test_precommit_failure_publishes_neither_journal_and_closes_owner(self):
-        value = request()
-        preview = preview_event_grant(self.host, value)
-        before, disk = self.host.snapshot(), self.path.read_bytes()
-        self.host.listener = Mock()
-        peer = Mock()
-        self.host.sessions.add(peer)
-        with patch.object(Path, "replace", side_effect=OSError("injected replacement failure")):
-            with self.assertRaises(OSError):
-                apply_event_grant(self.host, value, preview.digest)
-        self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), disk)
-        self.host.listener.close.assert_called_once()
-        peer.writer.close.assert_called_once()
-        with self.assertRaisesRegex(OSError, "restart"):
-            apply_event_grant(self.host, value, preview.digest)
-        self.host = self.server()
-        self.assertEqual(apply_event_grant(self.host, value, preview.digest).request, value)
-
-    def test_lost_acknowledgement_requires_reload_then_exact_retry(self):
-        value = request()
-        preview = preview_event_grant(self.host, value)
-        before = self.host.snapshot()
-        save = self.host.store.save_changes
-
-        def committed_then_failed(accounts, journals):
-            save(accounts, journals)
-            raise OSError("commit acknowledgement lost")
-
-        with patch.object(self.host.store, "save_changes", side_effect=committed_then_failed):
-            with self.assertRaises(OSError):
-                apply_event_grant(self.host, value, preview.digest)
-        self.assertEqual(self.host.snapshot(), before)
-        saved = json.loads(self.path.read_text())
-        self.assertEqual(len(saved["event_cards"]["grants"]), 1)
-        self.assertEqual(len(saved["admin_audit"]["receipts"]), 1)
-        with self.assertRaises(OSError):
-            preview_event_grant(self.host, value)
-        self.host = self.server()
-        receipt = self.host.admin_audit.get(value.request_id)
-        with patch.object(
-            self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
-        ):
-            self.assertEqual(apply_event_grant(self.host, value, "ignored"), receipt)
+        self.assertEqual(apply_prize_award(self.host, value), old)
 
     def test_restore_rejects_missing_normalized_fields_even_after_collection(self):
         self.grant()
@@ -485,8 +338,7 @@ class EncryptedEventGrantTests(unittest.IsolatedAsyncioTestCase):
             0x1000, presence(event.room_id, before.nn, before.player_id, before.name)
         )
         value = request(account_key=key)
-        preview = preview_event_grant(self.server, value)
-        receipt = apply_event_grant(self.server, value, preview.digest)
+        receipt = apply_event_grant(self.server, value)
         self.assertEqual(self.server.economy.account_view(key), before)
 
         replies = await self.request(
@@ -510,7 +362,7 @@ class EncryptedEventGrantTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.request(0x1002, named(0xB2, 0x17, number, f"@Quit=/No={number}"))
         self.assertEqual(len(self.server.economy.inventory(key)), len(before.cards) + 1)
-        self.assertEqual(apply_event_grant(self.server, value, "ignored"), receipt)
+        self.assertEqual(apply_event_grant(self.server, value), receipt)
         saved = json.loads(path.read_text())
         self.assertEqual(saved["event_cards"]["grants"][0]["card_offset"], 1)
         self.assertEqual(saved["event_cards"]["grants"][0]["money_claimed"], 25)

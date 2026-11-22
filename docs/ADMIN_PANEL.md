@@ -25,34 +25,33 @@ The panel is read-only by default. Add `--admin-actions` to enable **Queue prize
 award**, **Queue event grant** and **Correct event membership**, also linked from
 account details. For Prize
 Center, choose an exact account, point amounts,
-optional Lucky Card displays and a reason. Preview shows the exact request before
-confirmation. A successful commit displays a durable receipt with its request ID,
-operator and facts. Refreshing or retrying that request returns the same receipt.
+optional Lucky Card displays and a reason, then submit once. A successful commit
+displays a durable receipt with its request ID, operator, facts and the points
+after redemption. Refreshing or resubmitting that request returns the same receipt.
 New awards require an idle account; this is an explicit administration policy.
 Lucky Card displays do not grant inventory cards, and prize points are not money.
 See [offline administration](ADMIN.md) for the equivalent audited CLI commands.
 
 Event grants select an existing member's exact account and configured event.
 Enter money and optional cards through named fields; **Add card row** preserves
-the draft and request ID. Preview shows canonical card names, stats and points,
-plus the member's eligibility and whether collection is enabled. Confirmation
-queues the grant for normal game collection. The account's balance and inventory
+the draft and request ID. Submitting queues the grant for normal game
+collection; the receipt shows canonical card names, stats and points, plus the
+member's eligibility and whether collection was enabled. The account's balance and inventory
 do not change at this step. Exact retries keep the same receipt after partial or
 complete collection. No automatic event schedule or reward formula is added.
 
 Membership corrections select **Eligibility** or **Progress**. Eligibility sets
 the signed status; negative values exclude entry and collection. Progress adds
-trusted steps and completed mission bits with a stable progress reference. The
-preview shows every member field before and after; confirmation commits the event
-change and its audit receipt together. Corrections require an idle, registered
-member. They do not award assets. A changed member or event configuration invalidates
-an unconfirmed preview. Exact retries return the original receipt even after later
-corrections or restart, without applying it again.
+trusted steps and completed mission bits with a stable progress reference.
+Submitting commits the event change and its audit receipt together; the receipt
+shows every member field before and after. Corrections require an idle,
+registered member. They do not award assets. Exact retries return the original
+receipt even after later corrections or restart, without applying it again.
 
 **Receipt history** is available even when actions are disabled. Search by exact
 request ID, account, action, operator, source or reason; sort by saved time or
 open a read-only detail page. With actions enabled, **Open receipt** shows the
-original typed confirmation. History survives collection and restart. After a
+original typed receipt. History survives collection and restart. After a
 storage failure, history reports that reload is required instead of presenting
 an empty or potentially stale result.
 
@@ -108,8 +107,8 @@ Under `src/tmserver/admin/`, `server.py` attaches the panel to the shared
 `network/http.py` listener owner, `web.py` owns the application
 and origin boundary, `auth.py` operator access, `views.py` framework projections,
 and `templates/` the page extensions. Static assets come from the framework.
-`awards.py` and `event_grants.py` adapt forms; `actions.py` and `event_actions.py`
-perform shared preview/commit operations. `audit.py` validates immutable requests
+`awards.py`, `event_grants.py` and `event_members.py` adapt forms; `actions.py`
+performs the shared audited operations. `audit.py` validates immutable requests
 and durable receipts with Pydantic.
 HTTP routes translate inputs and errors; feature services own game rules and
 transaction coordinators own commits. Package templates/static files as runtime
@@ -125,8 +124,8 @@ logout revokes copied cookies too; at most 64 sessions are retained. Host/Origin
 must match the actual loopback address and port. Responses are private/no-store.
 Login and logout require same-origin POSTs with framework CSRF protection.
 Generic game write/import/export routes are disabled, including direct API calls.
-Explicit action enablement permits only Prize Center, event grant and membership
-preview and confirmation POSTs, under the same login, origin and CSRF checks.
+Explicit action enablement permits only the Prize Center, event grant and
+membership form POSTs, under the same login, origin and CSRF checks.
 Remote administration and multiple operator roles belong to a later hosted
 deployment milestone with TLS and a deliberate identity provider.
 
@@ -136,8 +135,8 @@ The authenticated session supplies the web operator; forms cannot substitute
 another actor. Routes never edit SQL tables, profile byte
 arrays or journals directly.
 
-Every action needs an exact account key, a preview, a reason, a stable request ID,
-and an audit receipt committed with the change. Prize Center now commits its
+Every action needs an exact account key, a reason, a stable request ID, and an
+audit receipt committed with the change. Prize Center now commits its
 award and `admin_audit` journal together; event grants commit `event_cards` and
 `admin_audit` without writing accounts or progress. Eligibility and progress commit
 `events` and `admin_audit` without changing accounts, cards or queued rewards. Audit
@@ -147,17 +146,16 @@ commit rule; a separate audit write after the feature commit would not suffice.
 Existing receipt rules continue
 to control retries; a browser retry must not issue a fresh grant. Show success
 only after durable commit. Reject or defer actions incompatible with an account's
-active match/trade/reservations using the same feature rules. A stale preview
-must be detected or regenerated before application.
+active match/trade/reservations using the same feature rules.
 
 A storage error means the process cannot confirm the outcome. The page retains
 the request ID and gives no success or false "not found" result. Restart the
 server to reload its save, then inspect the same receipt or retry exactly the
 same request. Do not create a fresh award to compensate for an uncertain result.
-For an event grant, keep the failure page open and use its sign-in link after
-restart. Sign in in that separate tab, then return to check the receipt or retry
-the original request. The form retains its facts and updates its form token;
-old tokens remain invalid.
+For an event grant or correction, keep the failure page open and use its sign-in
+link after restart. Sign in in that separate tab, then return to check the
+receipt or resubmit the original request. The form retains its facts and request
+ID and updates its form token; old tokens remain invalid.
 Receipts remain available after player redemption, and downgrading the database
 cannot silently discard them.
 
@@ -168,7 +166,7 @@ The first panel does not need them to be useful.
 ## Tests
 
 The admin lane covers sign-in and session expiry, unauthorized and CSRF requests,
-duplicate submissions, conflicting previews, busy accounts and storage failure:
+duplicate submissions, conflicting retries, busy accounts and storage failure:
 a failed commit publishes neither game state nor a receipt, and a lost commit
 acknowledgement needs a reload and exact retry. The PostgreSQL lane covers reads,
 atomic awards, rollback, lost acknowledgements, restart and retry, and upgrades. The wheel check installs the package without the checkout

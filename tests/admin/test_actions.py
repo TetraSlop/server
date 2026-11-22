@@ -1,4 +1,4 @@
-"""Audited awards commit once, with their receipts, or force a fresh owner."""
+"""Audited actions commit once, with their receipts, or force a fresh owner."""
 
 from copy import deepcopy
 import json
@@ -9,14 +9,8 @@ from unittest.mock import Mock, patch
 
 from pydantic import ValidationError
 
-from tmserver.admin.actions import (
-    AdminActionConflict,
-    AdminActionError,
-    PrizeAwardRequest,
-    apply_prize_award,
-    preview_prize_award,
-)
-from tmserver.admin.audit import AdminAudit, PrizeAwardReceipt
+from tmserver.admin.actions import AdminActionConflict, AdminActionError, apply_prize_award
+from tmserver.admin.audit import AdminAudit, PrizeAwardReceipt, PrizeAwardRequest
 from tmserver.economy.claim_transactions import prize_transaction
 from tmserver.economy.packets import named
 from tmserver.economy.prize_center import PrizeService
@@ -50,7 +44,7 @@ class AwardRequestTests(unittest.TestCase):
         reason = "First line\nSecond line\twith details"
         self.assertEqual(request(reason=reason).reason, reason)
 
-    def test_strict_bounded_inputs_and_json_confirmation_round_trip(self):
+    def test_strict_bounded_inputs_and_json_round_trip(self):
         valid = request()
         self.assertEqual(PrizeAwardRequest.model_validate_json(valid.model_dump_json()), valid)
         for fields in (
@@ -116,20 +110,145 @@ class AwardRequestTests(unittest.TestCase):
             AdminAudit.restore(economy, prize, saved)
 
 
-class PrizeAwardActionTests(unittest.TestCase):
+class AuditedActionCases:
+    """Shared contract for every audited action; subclasses supply the fixture.
+
+    Subclasses define ``apply``, ``request(**changes)``, ``server()``, the
+    journals and accounts each commit writes, and ``changes`` that must conflict
+    with an already recorded request ID.
+    """
+
+    accounts = frozenset()
+
+    def test_apply_saves_change_and_receipt_in_one_commit_before_publishing(self):
+        before, value = self.host.snapshot(), self.request()
+        original_save = self.host.store.save_changes
+
+        def save_before_publication(accounts, journals):
+            self.assertEqual(self.host.snapshot(), before)
+            original_save(accounts, journals)
+
+        with patch.object(
+            self.host.store, "save_changes", side_effect=save_before_publication
+        ) as save:
+            receipt = self.apply(self.host, value)
+        save.assert_called_once()
+        self.assertEqual(set(save.call_args.args[0]), self.accounts)
+        self.assertEqual(set(save.call_args.args[1]), self.journals | {"admin_audit"})
+        self.assertEqual(receipt.request, value)
+        self.assertRegex(receipt.preview_digest, "^[0-9a-f]{64}$")
+        after = self.host.snapshot()
+        for name in before.keys() - self.journals - {"admin_audit", "accounts"}:
+            self.assertEqual(after[name], before[name])
+        saved = json.loads(self.path.read_text())
+        self.assertEqual(saved, json.loads(json.dumps(after)))
+        self.assertEqual(saved["admin_audit"]["receipts"][-1], receipt.model_dump(mode="json"))
+        with self.assertRaises(ValidationError):
+            receipt.status = "changed"
+        self.host = self.server()
+        self.assertEqual(self.host.admin_audit.get(value.request_id), receipt)
+
+    def test_exact_retry_precedes_busy_check_and_never_writes(self):
+        receipt = self.apply(self.host, self.request())
+        self.host.economy.reserve_match("one")
+        with patch.object(
+            self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
+        ):
+            self.assertEqual(self.apply(self.host, self.request()), receipt)
+
+    def test_recorded_request_id_rejects_changed_facts(self):
+        self.apply(self.host, self.request())
+        before = self.host.snapshot()
+        for changes in self.changes + (
+            dict(account_key="two"), dict(operator="different"), dict(source="web"),
+            dict(reason="Different reason"),
+        ):
+            with self.subTest(changes=changes), self.assertRaises(AdminActionConflict):
+                self.apply(self.host, self.request(**changes))
+        self.assertEqual(self.host.snapshot(), before)
+
+    def test_busy_unknown_and_memory_only_hosts_are_rejected_without_changes(self):
+        before = self.host.snapshot()
+        for key in ("ONE", " one ", "missing"):
+            with self.subTest(key=key), self.assertRaises(AdminActionError):
+                self.apply(self.host, self.request(account_key=key))
+        token = self.host.economy.reserve_match("one")
+        with self.assertRaisesRegex(AdminActionError, "busy"):
+            self.apply(self.host, self.request())
+        self.host.economy.release_match(token)
+        self.assertEqual(self.host.snapshot(), before)
+        self.host.store = None
+        with self.assertRaisesRegex(AdminActionError, "persistent"):
+            self.apply(self.host, self.request())
+
+    def test_precommit_failure_publishes_nothing_and_closes_the_owner(self):
+        value = self.request()
+        before, disk = self.host.snapshot(), self.path.read_bytes()
+        self.host.listener = Mock()
+        peer = Mock()
+        self.host.sessions.add(peer)
+        with patch.object(Path, "replace", side_effect=OSError("injected replacement failure")):
+            with self.assertRaises(OSError):
+                self.apply(self.host, value)
+        self.assertEqual(self.host.snapshot(), before)
+        self.assertEqual(self.path.read_bytes(), disk)
+        self.assertIsNotNone(self.host.storage_failed)
+        self.host.listener.close.assert_called_once()
+        peer.writer.close.assert_called_once()
+        with self.assertRaisesRegex(OSError, "restart"):
+            self.apply(self.host, value)
+        self.host = self.server()
+        self.assertEqual(self.apply(self.host, value).request, value)
+
+    def test_lost_commit_ack_needs_reload_then_returns_the_saved_receipt(self):
+        value = self.request()
+        before = self.host.snapshot()
+        original_save = self.host.store.save_changes
+
+        def committed_then_failed(accounts, journals):
+            original_save(accounts, journals)
+            raise OSError("commit acknowledgement lost")
+
+        with patch.object(self.host.store, "save_changes", side_effect=committed_then_failed):
+            with self.assertRaises(OSError):
+                self.apply(self.host, value)
+        self.assertEqual(self.host.snapshot(), before)
+        saved = json.loads(self.path.read_text())
+        self.assertEqual(len(saved["admin_audit"]["receipts"]), 1)
+        with self.assertRaises(OSError):
+            self.apply(self.host, value)
+        self.host = self.server()
+        receipt = self.host.admin_audit.get(value.request_id)
+        self.assertEqual(receipt.model_dump(mode="json"), saved["admin_audit"]["receipts"][0])
+        with patch.object(
+            self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
+        ):
+            self.assertEqual(self.apply(self.host, value), receipt)
+
+
+class PrizeAwardActionTests(AuditedActionCases, unittest.TestCase):
+    apply = staticmethod(apply_prize_award)
+    request = staticmethod(request)
+    journals = {"prize"}
+    accounts = {"one"}
+    changes = (
+        dict(award_id="week.2"), dict(top30=13), dict(lucky=24), dict(rookies=35),
+        dict(lucky_cards=(1, 2, 3)),
+    )
+
     def setUp(self):
         self.folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.path = self.folder / "state.json"
-        self.host = Server(state_path=self.path)
+        self.host = self.server()
         for number, key in enumerate(("one", "two"), 1):
             self.host.economy.provision(key, nn=number, player_id=number, name=key.encode())
         self.host.persist()
 
+    def server(self):
+        return Server(state_path=self.path)
+
     def award(self, **changes):
-        value = request(**changes)
-        preview = preview_prize_award(self.host, value)
-        receipt = apply_prize_award(self.host, value, preview.digest)
-        return value, preview, receipt
+        return apply_prize_award(self.host, request(**changes))
 
     def redeem(self, key="one"):
         view = self.host.economy.account_view(key)
@@ -139,155 +258,46 @@ class PrizeAwardActionTests(unittest.TestCase):
         with prize_transaction(self.host, key) as prize:
             prize.handle(key, payload)
 
-    def test_preview_is_read_only_and_apply_writes_award_and_receipt_together(self):
-        before = self.host.snapshot()
-        disk = self.path.read_bytes()
-        value = request()
-        preview = preview_prize_award(self.host, value)
-        self.assertEqual((preview.current_points, preview.points_on_redemption), (0, 69))
-        self.assertIsNone(preview.already_committed)
-        self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), disk)
-        with patch.object(
-            self.host.store, "save_changes", wraps=self.host.store.save_changes
-        ) as save:
-            receipt = apply_prize_award(self.host, value, preview.digest)
-        save.assert_called_once()
-        self.assertEqual(set(save.call_args.args[1]), {"prize", "admin_audit"})
-        self.assertEqual(set(save.call_args.args[0]), {"one"})
-        self.assertEqual(receipt.request, value)
-        self.assertEqual(receipt.preview_digest, preview.digest)
+    def test_award_queues_points_without_crediting_them(self):
+        receipt = self.award()
+        self.assertEqual((receipt.current_points, receipt.points_on_redemption), (0, 69))
         self.assertEqual(receipt.status, "queued")
         self.assertEqual(self.host.economy.prize_points("one"), 0)
         saved = json.loads(self.path.read_text())
-        self.assertEqual(saved["admin_audit"]["receipts"], [receipt.model_dump(mode="json")])
         self.assertEqual(saved["prize"]["accounts"]["one"]["pending"]["top30"], 12)
-        self.assertEqual(saved["accounts"]["two"], before["accounts"]["two"])
-        with self.assertRaises(ValidationError):
-            receipt.status = "changed"
 
-    def test_exact_retry_precedes_busy_and_stale_checks_and_never_writes(self):
-        value, preview, receipt = self.award()
-        self.host.economy.reserve_match("one")
-        with patch.object(
-            self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
-        ):
-            self.assertIs(apply_prize_award(self.host, value, "old digest"), receipt)
-            replay = preview_prize_award(self.host, value)
-        self.assertEqual(replay.already_committed, receipt)
-        self.assertEqual(replay.digest, preview.digest)
-
-    def test_retry_after_redemption_and_restart_keeps_original_receipt_and_preview(self):
-        value, preview, receipt = self.award()
+    def test_retry_after_redemption_and_restart_keeps_original_receipt(self):
+        receipt = self.award()
         self.redeem()
         self.assertEqual(self.host.economy.prize_points("one"), 69)
         self.host = Server(state_path=self.path)
         with patch.object(
             self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
         ):
-            self.assertEqual(apply_prize_award(self.host, value, "ignored"), receipt)
-            replay = preview_prize_award(self.host, value)
-        self.assertEqual(replay.already_committed, receipt)
-        self.assertEqual((replay.current_points, replay.points_on_redemption), (0, 69))
+            self.assertEqual(apply_prize_award(self.host, request()), receipt)
         self.assertEqual(self.host.economy.prize_points("one"), 69)
         self.assertIsNone(self.host.prize.snapshot()["accounts"]["one"]["pending"])
-
-    def test_global_request_id_rejects_changed_facts_including_actor(self):
-        self.award()
-        before = self.host.snapshot()
-        for fields in (
-            dict(account_key="two"),
-            dict(award_id="week.2"),
-            dict(top30=13),
-            dict(lucky=24),
-            dict(rookies=35),
-            dict(lucky_cards=(1, 2, 3)),
-            dict(operator="different"),
-            dict(source="web"),
-            dict(reason="Different reason"),
-        ):
-            with self.subTest(fields=fields), self.assertRaises(AdminActionConflict):
-                apply_prize_award(self.host, request(**fields), "ignored")
-        self.assertEqual(self.host.snapshot(), before)
 
     def test_legacy_award_id_cannot_invent_an_audit_receipt(self):
         with prize_transaction(self.host, "one") as prize:
             prize.grant_award("one", "week.1", top30=12)
         before = self.path.read_bytes()
-        for operation in (
-            lambda: preview_prize_award(self.host, request()),
-            lambda: apply_prize_award(self.host, request(), "ignored"),
-        ):
-            with self.assertRaisesRegex(AdminActionConflict, "without this audited request"):
-                operation()
+        with self.assertRaisesRegex(AdminActionConflict, "without this audited request"):
+            apply_prize_award(self.host, request())
         self.assertEqual(self.path.read_bytes(), before)
         self.assertEqual(self.host.admin_audit.snapshot()["receipts"], [])
         self.redeem()
         with prize_transaction(self.host, "one") as prize:
             prize.disconnect("one")
         with self.assertRaises(AdminActionConflict):
-            preview_prize_award(self.host, request())
-
-    def test_other_request_id_cannot_reuse_an_audited_award_id(self):
-        self.award()
-        with self.assertRaises(AdminActionConflict):
-            preview_prize_award(self.host, request(request_id="request.2"))
+            apply_prize_award(self.host, request())
 
     def test_award_ids_are_account_scoped_while_request_ids_are_global(self):
         self.award()
+        with self.assertRaises(AdminActionConflict):
+            self.award(request_id="request.2")
         self.award(account_key="two", request_id="request.2")
         self.assertEqual(len(self.host.admin_audit.snapshot()["receipts"]), 2)
-
-    def test_busy_account_rejected_both_before_preview_and_after_confirmation(self):
-        value = request()
-        preview = preview_prize_award(self.host, value)
-        token = self.host.economy.reserve_match("one")
-        before = self.path.read_bytes()
-        with self.assertRaisesRegex(AdminActionError, "busy"):
-            preview_prize_award(self.host, value)
-        with self.assertRaisesRegex(AdminActionError, "busy"):
-            apply_prize_award(self.host, value, preview.digest)
-        self.assertEqual(self.path.read_bytes(), before)
-        self.host.economy.release_match(token)
-        self.assertEqual(preview_prize_award(self.host, value).digest, preview.digest)
-
-    def test_unknown_account_is_exact_and_is_not_provisioned(self):
-        before = self.host.snapshot()
-        for key in ("ONE", " one ", "missing"):
-            with self.subTest(key=key), self.assertRaises(AdminActionError):
-                preview_prize_award(self.host, request(account_key=key))
-        self.assertEqual(self.host.snapshot(), before)
-
-    def test_new_actions_require_persistent_storage(self):
-        self.host.store = None
-        with self.assertRaisesRegex(AdminActionError, "persistent"):
-            preview_prize_award(self.host, request())
-        with self.assertRaisesRegex(AdminActionError, "persistent"):
-            apply_prize_award(self.host, request(), "ignored")
-
-    def test_stale_confirmation_after_point_change_rejects_without_queuing(self):
-        value = request()
-        preview = preview_prize_award(self.host, value)
-        token = self.host.economy.reserve_prize("one")
-        self.host.economy.commit_prize(token, credit=100, keep_reserved=False)
-        self.host.persist()
-        before = self.path.read_bytes()
-        with self.assertRaisesRegex(AdminActionConflict, "stale"):
-            apply_prize_award(self.host, value, preview.digest)
-        self.assertEqual(self.path.read_bytes(), before)
-        self.assertEqual(self.host.admin_audit.snapshot()["receipts"], [])
-
-    def test_preview_ignores_unrelated_account_and_unrelated_target_profile_changes(self):
-        value = request()
-        preview = preview_prize_award(self.host, value)
-        with prize_transaction(self.host, "two") as prize:
-            prize.grant_award("two", "other.week", lucky=1)
-        self.host.economy.save_table_preferences(
-            "one",
-            game=dict(bm=100, du=0, st=0, cb=0, ca=0, gs=0, tl=0),
-        )
-        self.assertEqual(preview_prize_award(self.host, value).digest, preview.digest)
-        apply_prize_award(self.host, value, preview.digest)
 
     def test_award_preserves_other_accounts_live_session_and_reservation_identity(self):
         self.redeem("two")
@@ -299,82 +309,11 @@ class PrizeAwardActionTests(unittest.TestCase):
         self.assertIs(self.host.economy._reservations["two"], reservation)
         self.assertEqual(self.host.economy.account_view("two"), before)
 
-    def test_zero_point_redemption_still_invalidates_an_older_preview(self):
-        value = request()
-        preview = preview_prize_award(self.host, value)
-        self.award(request_id="other.request", award_id="other.award", top30=0, lucky=0, rookies=0)
-        self.redeem()
-        with prize_transaction(self.host, "one") as prize:
-            prize.disconnect("one")
-        self.assertEqual(self.host.economy.prize_points("one"), preview.current_points)
-        self.assertFalse(self.host.economy.is_busy("one"))
-        with self.assertRaisesRegex(AdminActionConflict, "stale"):
-            apply_prize_award(self.host, value, preview.digest)
-
-    def test_request_facts_and_account_identity_are_bound_to_confirmation(self):
-        preview = preview_prize_award(self.host, request())
-        with self.assertRaises(AdminActionConflict):
-            apply_prize_award(self.host, request(top30=13), preview.digest)
-        saved = self.host.economy.snapshot()
-        saved["accounts"]["one"]["name_hex"] = b"renamed".hex()
-        self.host.economy = EconomyService.restore(saved)
-        with self.assertRaises(AdminActionConflict):
-            apply_prize_award(self.host, request(), preview.digest)
-
-    def test_pending_bundle_prevents_a_second_award_and_preview_reports_cap(self):
-        value, preview, receipt = self.award(top30=65535, lucky=65535, rookies=65535)
-        self.assertEqual(preview.points_on_redemption, 99999)
+    def test_pending_bundle_prevents_a_second_award_and_receipt_reports_cap(self):
+        receipt = self.award(top30=65535, lucky=65535, rookies=65535)
         self.assertEqual(receipt.points_on_redemption, 99999)
         with self.assertRaisesRegex(AdminActionError, "pending award"):
-            preview_prize_award(self.host, request(request_id="request.2", award_id="week.2"))
-
-    def test_precommit_failure_leaves_disk_and_live_state_unchanged_and_fails_closed(self):
-        value = request()
-        preview = preview_prize_award(self.host, value)
-        before, disk = self.host.snapshot(), self.path.read_bytes()
-        self.host.listener = Mock()
-        peer = Mock()
-        self.host.sessions.add(peer)
-        with patch.object(Path, "replace", side_effect=OSError("injected replacement failure")):
-            with self.assertRaises(OSError):
-                apply_prize_award(self.host, value, preview.digest)
-        self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), disk)
-        self.assertIsNotNone(self.host.storage_failed)
-        self.host.listener.close.assert_called_once()
-        peer.writer.close.assert_called_once()
-        with self.assertRaisesRegex(OSError, "restart"):
-            apply_prize_award(self.host, value, preview.digest)
-        self.host = Server(state_path=self.path)
-        self.assertEqual(apply_prize_award(self.host, value, preview.digest).request, value)
-
-    def test_lost_commit_ack_keeps_joint_durable_state_then_recovers_original_receipt(self):
-        value = request()
-        preview = preview_prize_award(self.host, value)
-        before = self.host.snapshot()
-        original_save = self.host.store.save_changes
-
-        def committed_then_failed(accounts, journals):
-            original_save(accounts, journals)
-            raise OSError("commit acknowledgement lost")
-
-        with patch.object(self.host.store, "save_changes", side_effect=committed_then_failed):
-            with self.assertRaises(OSError):
-                apply_prize_award(self.host, value, preview.digest)
-        self.assertEqual(self.host.snapshot(), before)
-        self.assertIsNotNone(self.host.storage_failed)
-        saved = json.loads(self.path.read_text())
-        self.assertEqual(saved["prize"]["accounts"]["one"]["pending"]["top30"], value.top30)
-        self.assertEqual(len(saved["admin_audit"]["receipts"]), 1)
-        with self.assertRaises(OSError):
-            preview_prize_award(self.host, value)
-        self.host = Server(state_path=self.path)
-        receipt = self.host.admin_audit.get(value.request_id)
-        with patch.object(
-            self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
-        ):
-            self.assertEqual(apply_prize_award(self.host, value, "ignored"), receipt)
-        self.assertEqual(receipt.model_dump(mode="json"), saved["admin_audit"]["receipts"][0])
+            self.award(request_id="request.2", award_id="week.2")
 
     def test_missing_or_null_audit_journal_preserves_old_state(self):
         saved = json.loads(self.path.read_text())
@@ -449,3 +388,7 @@ class PrizeAwardActionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             Server(state_path=self.path)
         self.assertEqual(self.path.read_bytes(), before)
+
+
+if __name__ == "__main__":
+    unittest.main()

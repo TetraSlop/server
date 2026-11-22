@@ -1,4 +1,4 @@
-"""Operator forms for previewing and queuing audited event claims."""
+"""Operator form for queuing audited event claims."""
 
 import re
 from uuid import uuid4
@@ -8,10 +8,9 @@ from starlette.responses import RedirectResponse
 from starlette_admin import CustomView
 from starlette_admin.routing import route
 
-from .actions import AdminActionConflict, AdminActionError
+from .actions import AdminActionConflict, AdminActionError, apply_event_grant
 from .audit import EventGrantCard, EventGrantReceipt, EventGrantRequest
 from .awards import _fields
-from .event_actions import apply_event_grant, preview_event_grant
 from .queries import account_rows
 
 
@@ -33,16 +32,6 @@ def _exact_fields(form, expected):
         raise AdminActionError("The form is incomplete. Review the fields and try again.")
 
 
-def _draft_values(command):
-    values = {name: str(getattr(command, name)) for name in DRAFT_FIELDS}
-    values["row_count"] = max(1, len(command.cards))
-    for index, card in enumerate(command.cards):
-        values.update(
-            {f"card_{index}_{name}": str(value) for name, value in card.model_dump().items()}
-        )
-    return values
-
-
 class EventGrantsView(CustomView):
     menu_label = "Queue event grant"
     path = "/event-grants"
@@ -62,7 +51,7 @@ class EventGrantsView(CustomView):
             ),
         )
 
-    def draft(self, request, *, values=None, error=None, status_code=200):
+    def draft(self, request, *, values=None, status_code=200, **context):
         identifier = str(uuid4())
         values = dict(
             request_id=identifier,
@@ -90,18 +79,19 @@ class EventGrantsView(CustomView):
             request,
             status_code=status_code,
             values=values,
-            error=error,
             accounts=account_rows(self.host),
             events=events,
+            **context,
         )
 
     @route("")
     async def index(self, request):
         return self.draft(request)
 
-    @route("/preview", methods=["POST"], name="event-grant-preview")
-    async def preview(self, request):
+    @route("/apply", methods=["POST"], name="event-grant-apply")
+    async def apply(self, request):
         form = await request.form()
+        values = dict(form)
         try:
             count = _number(form.get("row_count"))
             if not 1 <= count <= 30:
@@ -113,8 +103,8 @@ class EventGrantsView(CustomView):
             if form["intent"] == "add-card":
                 if count == 30:
                     raise AdminActionError("A grant can contain at most thirty cards.")
-                return self.draft(request, values=dict(form) | {"row_count": count + 1})
-            if form["intent"] != "preview":
+                return self.draft(request, values=values | {"row_count": count + 1})
+            if form["intent"] != "apply":
                 raise AdminActionError("Unknown event grant form action.")
             cards = []
             for index in range(count):
@@ -130,61 +120,27 @@ class EventGrantsView(CustomView):
                 operator=request.state.admin_user.username,
                 source="web",
             )
-            preview = preview_event_grant(self.host, command)
-        except (ValueError, KeyError) as error:
-            return self.draft(request, values=dict(form), error=str(error), status_code=400)
-        except OSError:
-            return self.draft(
-                request,
-                values=dict(form),
-                status_code=503,
-                error="Storage is unavailable. Wait for the server to recover before previewing "
-                "or confirming a grant.",
-            )
-        if preview.already_committed is not None:
-            return self.receipt_redirect(request, command.request_id)
-        return self.render(request, preview=preview, command_json=command.model_dump_json())
-
-    @route("/apply", methods=["POST"], name="event-grant-apply")
-    async def apply(self, request):
-        form = await request.form()
-        try:
-            _exact_fields(form, {"command", "digest"})
-            document = form["command"]
-            if not isinstance(document, str) or len(document) > 16384:
-                raise AdminActionError("The confirmed grant is missing or too large.")
-            command = EventGrantRequest.model_validate_json(document)
-            if document != command.model_dump_json():
-                raise AdminActionError("The confirmed grant has changed. Preview it again.")
-            if command.operator != request.state.admin_user.username or command.source != "web":
-                raise AdminActionError("The confirmed grant belongs to another operator.")
-            receipt = apply_event_grant(self.host, command, form["digest"])
+            receipt = apply_event_grant(self.host, command)
         except AdminActionConflict as error:
-            return self.draft(
-                request, values=_draft_values(command), error=str(error), status_code=409
-            )
+            return self.draft(request, values=values, error=str(error), status_code=409)
         except (ValueError, KeyError) as error:
-            return self.render(request, error=str(error), status_code=400)
+            return self.draft(request, values=values, error=str(error), status_code=400)
         except OSError:
-            return self.render(
+            return self.draft(
                 request,
+                values=values,
                 status_code=503,
                 failed_request_id=command.request_id,
-                command_json=command.model_dump_json(),
-                digest=form["digest"],
-                receipt_url=request.url_for("admin:event-grant-receipt").include_query_params(
-                    id=command.request_id
-                ),
+                receipt_url=self.receipt_url(request, command.request_id),
                 error="Storage did not confirm this request. Keep its request ID and retry the "
-                "same confirmed grant after recovery; do not create a new grant.",
+                "same grant after recovery; do not create a new grant.",
             )
-        return self.receipt_redirect(request, receipt.request.request_id)
-
-    def receipt_redirect(self, request, request_id):
         return RedirectResponse(
-            request.url_for("admin:event-grant-receipt").include_query_params(id=request_id),
-            status_code=303,
+            self.receipt_url(request, receipt.request.request_id), status_code=303
         )
+
+    def receipt_url(self, request, request_id):
+        return request.url_for("admin:event-grant-receipt").include_query_params(id=request_id)
 
     @route("/receipt", name="event-grant-receipt")
     async def receipt(self, request):

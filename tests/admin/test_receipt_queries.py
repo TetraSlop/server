@@ -8,9 +8,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 from tests.events.test_event_rooms import config
-from tmserver.admin.actions import apply_prize_award, preview_prize_award
+from tmserver.admin.actions import apply_event_grant, apply_prize_award
 from tmserver.admin.audit import AdminAudit, EventGrantRequest, PrizeAwardRequest
-from tmserver.admin.event_actions import apply_event_grant, preview_event_grant
 from tmserver.admin.queries import receipt_rows
 from tmserver.economy.claim_transactions import event_transaction, prize_transaction
 from tmserver.economy.packets import named, parse_named
@@ -29,8 +28,8 @@ def seed_receipts(host, key):
         reason='Event <script>alert("reason")</script>',
     )
     return (
-        apply_prize_award(host, prize, preview_prize_award(host, prize).digest),
-        apply_event_grant(host, event, preview_event_grant(host, event).digest),
+        apply_prize_award(host, prize),
+        apply_event_grant(host, event),
     )
 
 

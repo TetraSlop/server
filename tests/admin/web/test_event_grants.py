@@ -1,7 +1,6 @@
 """Authenticated event forms queue audited grants without collecting them."""
 
 from copy import deepcopy
-from dataclasses import replace
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,8 +9,8 @@ from urllib.parse import urlencode
 
 from tests.admin.web.test_awards import Inputs
 from tests.events.test_event_rooms import config
-from tmserver.admin.actions import apply_prize_award, preview_prize_award
-from tmserver.admin.audit import EventGrantRequest, PrizeAwardRequest
+from tmserver.admin.actions import apply_prize_award
+from tmserver.admin.audit import PrizeAwardRequest
 from tmserver.economy.claim_transactions import event_transaction
 from tmserver.economy.packets import named, parse_named
 from tmserver.network.server import Server
@@ -41,7 +40,7 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
             event_id="festival",
             money="250",
             row_count="1",
-            intent="preview",
+            intent="apply",
             reason='Fixture <script>alert("reason")</script>',
             card_0_model="1",
             card_0_attack="50",
@@ -87,11 +86,6 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.status_code, 303)
 
-    async def confirmation(self, command=None):
-        response = await self.post("/admin/event-grants/preview", command or self.command)
-        self.assertEqual(response.status_code, 200, response.text[:600])
-        return response, Inputs(response.text).values
-
     async def restart(self):
         await self.host.stop()
         self.host = Server(state_path=self.directory / "state.json", **self.options)
@@ -117,42 +111,29 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
                 )
         return int(fields["C"]), int(fields["PM"])
 
+    async def submit(self, command=None):
+        return await self.post("/admin/event-grants/apply", command or self.command)
+
     async def test_default_readonly_does_not_mount_or_permit_grants(self):
         browser = await self.browser(actions=False)
         await self.login(browser)
         self.assertEqual((await browser.get("/admin/event-grants")).status_code, 404)
-        self.assertEqual(
-            (
-                await self.post(
-                    "/admin/event-grants/preview",
-                    self.command,
-                    client=browser,
-                )
-            ).status_code,
-            403,
-        )
+        response = await self.post("/admin/event-grants/apply", self.command, client=browser)
+        self.assertEqual(response.status_code, 403)
         self.assertNotIn("Queue event grant", (await browser.get("/admin/")).text)
 
-    async def test_authentication_csrf_origin_and_methods_guard_both_steps(self):
+    async def test_authentication_csrf_origin_and_methods_guard_the_form(self):
         before = deepcopy(self.host.snapshot())
         for path in ("/admin/event-grants", "/admin/event-grants/receipt?id=unknown"):
             self.assertEqual((await self.client.get(path)).status_code, 303)
-        self.assertEqual(
-            (
-                await self.post(
-                    "/admin/event-grants/preview",
-                    self.command,
-                    csrf=False,
-                )
-            ).status_code,
-            403,
-        )
+        response = await self.post("/admin/event-grants/apply", self.command, csrf=False)
+        self.assertEqual(response.status_code, 403)
         await self.login()
-        for path in ("/admin/event-grants/preview", "/admin/event-grants/apply"):
-            self.assertEqual((await self.post(path, self.command, csrf=False)).status_code, 403)
-            response = await self.client.post(path, data=self.command, headers={"Origin": "null"})
-            self.assertEqual(response.status_code, 403)
-            self.assertEqual((await self.client.get(path)).status_code, 405)
+        path = "/admin/event-grants/apply"
+        self.assertEqual((await self.post(path, self.command, csrf=False)).status_code, 403)
+        response = await self.client.post(path, data=self.command, headers={"Origin": "null"})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual((await self.client.get(path)).status_code, 405)
         self.assertEqual(self.host.snapshot(), before)
 
     async def test_account_shortcut_selects_only_the_account_and_requires_actions(self):
@@ -178,10 +159,7 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Festival", page.text)
         self.assertIn(self.host.economy.catalog.cards[1]["name"], page.text)
         before = deepcopy(self.host.snapshot())
-        response = await self.post(
-            "/admin/event-grants/preview",
-            self.command | {"intent": "add-card"},
-        )
+        response = await self.submit(self.command | {"intent": "add-card"})
         self.assertEqual(response.status_code, 200)
         values = Inputs(response.text).values
         self.assertEqual(values["request_id"], self.command["request_id"])
@@ -191,21 +169,16 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(values["card_1_attack"], "")
         self.assertEqual(self.host.snapshot(), before)
         money_only = self.command | {name: "" for name in self.command if name.startswith("card_")}
-        preview, confirmation = await self.confirmation(money_only)
-        self.assertIn("No cards in this grant", preview.text)
-        self.assertEqual(EventGrantRequest.model_validate_json(confirmation["command"]).cards, ())
+        applied = await self.submit(money_only)
+        self.assertEqual(applied.status_code, 303)
+        receipt = await self.client.get(applied.headers["location"])
+        self.assertIn("No cards in this grant", receipt.text)
+        self.assertEqual(self.host.admin_audit.get(self.command["request_id"]).cards, ())
 
-    async def test_preview_canonical_cards_apply_receipt_refresh_and_retry(self):
+    async def test_canonical_cards_receipt_refresh_and_retry(self):
         await self.login()
         before = deepcopy(self.host.snapshot())
-        page, confirmation = await self.confirmation()
-        self.assertIn(self.host.economy.catalog.cards[1]["name"], page.text)
-        self.assertIn("Current event eligibility: Eligible", page.text)
-        self.assertIn("Collection is enabled", page.text)
-        self.assertIn("Points", page.text)
-        self.assertNotIn('<script>alert("reason")</script>', page.text)
-        self.assertEqual(self.host.snapshot(), before)
-        response = await self.post("/admin/event-grants/apply", confirmation)
+        response = await self.submit()
         self.assertEqual(response.status_code, 303, response.text[:600])
         receipt = self.host.admin_audit.get(self.command["request_id"])
         self.assertEqual(receipt.request.operator, "operator")
@@ -219,16 +192,14 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
             page = await self.client.get(response.headers["location"])
             self.assertEqual(page.status_code, 200)
             self.assertIn("Event grant queued and audit receipt saved", page.text)
+            self.assertIn(self.host.economy.catalog.cards[1]["name"], page.text)
+            self.assertIn("Event eligibility was Eligible", page.text)
             self.assertIn("&lt;script&gt;", page.text)
+            self.assertNotIn('<script>alert("reason")</script>', page.text)
         with patch.object(
             self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
         ):
-            self.assertEqual(
-                (await self.post("/admin/event-grants/apply", confirmation)).status_code, 303
-            )
-            self.assertEqual(
-                (await self.post("/admin/event-grants/preview", self.command)).status_code, 303
-            )
+            self.assertEqual((await self.submit()).status_code, 303)
         self.assertEqual(self.host.snapshot(), saved)
         self.assertEqual(self.host.store.load(), saved)
 
@@ -242,8 +213,7 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
                     for name in ("model", "attack", "kind", "physical", "magical", "arrows")
                 }
             )
-        _, confirmation = await self.confirmation(command)
-        applied = await self.post("/admin/event-grants/apply", confirmation)
+        applied = await self.submit(command)
         self.assertEqual(applied.status_code, 303)
         for visit in ((9, 250), (3, 0)):
             self.assertEqual(self.collect_visit(), visit)
@@ -252,9 +222,7 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(
                 self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
             ):
-                self.assertEqual(
-                    (await self.post("/admin/event-grants/apply", confirmation)).status_code, 303
-                )
+                self.assertEqual((await self.submit(command)).status_code, 303)
             page = await self.client.get(applied.headers["location"])
             self.assertEqual(page.status_code, 200)
             self.assertIn("including after collection", page.text)
@@ -263,36 +231,28 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
             self.host.event_cards.pending(self.key, "festival"), {"cards": 0, "money": 0}
         )
 
-    async def test_stale_preview_preserves_request_and_shows_collection_blockers(self):
+    async def test_receipt_shows_collection_blockers(self):
         await self.login()
-        _, confirmation = await self.confirmation()
         self.host.events.set_eligibility(self.key, "festival", -7)
-        self.host.events.configs["festival"] = replace(
-            self.options["event_configs"][0], card_service_enabled=False
-        )
-        before = deepcopy(self.host.snapshot())
-        stale = await self.post("/admin/event-grants/apply", confirmation)
-        self.assertEqual(stale.status_code, 409)
-        self.assertEqual(Inputs(stale.text).values["request_id"], self.command["request_id"])
-        self.assertEqual(Inputs(stale.text).values["card_0_attack"], "50")
-        page, fresh = await self.confirmation()
-        self.assertIn("Current event eligibility: Excluded", page.text)
-        self.assertIn("Collection is currently disabled", page.text)
+        applied = await self.submit()
+        self.assertEqual(applied.status_code, 303)
+        page = await self.client.get(applied.headers["location"])
+        self.assertIn("Event eligibility was Excluded", page.text)
         self.assertIn("cannot collect while excluded", page.text)
-        self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual((await self.post("/admin/event-grants/apply", fresh)).status_code, 303)
 
     async def test_form_fields_and_whole_numbers_are_exact(self):
         await self.login()
         before = deepcopy(self.host.snapshot())
         for changes in (
             {"operator": "forged"},
+            {"source": "cli"},
             {"money": "01"},
             {"money": "1.0"},
             {"money": "+1"},
             {"money": "1e2"},
             {"money": "100000000"},
             {"row_count": "31"},
+            {"intent": "preview"},
             {"card_0_model": "250"},
             {"card_0_kind": "4"},
             {"card_0_attack": "256"},
@@ -303,79 +263,33 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
             {"account_key": "unknown"},
         ):
             with self.subTest(changes=changes):
-                response = await self.post("/admin/event-grants/preview", self.command | changes)
+                response = await self.submit(self.command | changes)
                 self.assertEqual(response.status_code, 400)
                 self.assertEqual(
                     Inputs(response.text).values["request_id"], self.command["request_id"]
                 )
         missing = dict(self.command)
         del missing["card_0_arrows"]
-        self.assertEqual((await self.post("/admin/event-grants/preview", missing)).status_code, 400)
+        self.assertEqual((await self.submit(missing)).status_code, 400)
         duplicated = list(self.command.items()) + [
             ("card_0_attack", "60"),
             ("csrftoken", self.client.cookies["starlette_admin_csrftoken"]),
         ]
         response = await self.client.post(
-            "/admin/event-grants/preview",
+            "/admin/event-grants/apply",
             content=urlencode(duplicated),
             headers={"Origin": self.origin, "Content-Type": "application/x-www-form-urlencoded"},
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self.host.snapshot(), before)
 
-    async def test_confirmation_binds_actor_source_facts_and_digest(self):
+    async def test_changed_facts_under_a_recorded_request_id_conflict(self):
         await self.login()
-        _, confirmation = await self.confirmation()
-        command = EventGrantRequest.model_validate_json(confirmation["command"])
-        for changes in ({"operator": "someone-else"}, {"source": "cli"}):
-            forged = command.model_copy(update=changes).model_dump_json()
-            response = await self.post(
-                "/admin/event-grants/apply", confirmation | {"command": forged}
-            )
-            self.assertEqual(response.status_code, 400)
-        self.assertEqual(
-            (
-                await self.post(
-                    "/admin/event-grants/apply",
-                    confirmation | {"digest": "0" * 64},
-                )
-            ).status_code,
-            409,
-        )
-        self.assertEqual(
-            (
-                await self.post(
-                    "/admin/event-grants/apply",
-                    confirmation | {"extra": "ignored?"},
-                )
-            ).status_code,
-            400,
-        )
-        # Even duplicate JSON keys that would parse to the same value are not a confirmed document.
-        repeated = confirmation["command"].replace('"money":250', '"money":250,"money":250')
-        self.assertEqual(
-            (
-                await self.post(
-                    "/admin/event-grants/apply",
-                    confirmation | {"command": repeated},
-                )
-            ).status_code,
-            400,
-        )
-        self.assertEqual(
-            (await self.post("/admin/event-grants/apply", confirmation)).status_code, 303
-        )
+        self.assertEqual((await self.submit()).status_code, 303)
         before = deepcopy(self.host.snapshot())
-        conflict = command.model_copy(update={"money": 251}).model_dump_json()
-        self.assertEqual(
-            (
-                await self.post(
-                    "/admin/event-grants/apply",
-                    confirmation | {"command": conflict},
-                )
-            ).status_code,
-            409,
-        )
+        conflict = await self.submit(self.command | {"money": "251"})
+        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(Inputs(conflict.text).values["card_0_attack"], "50")
         self.assertEqual(self.host.snapshot(), before)
 
     async def test_receipt_routes_cannot_confuse_prize_and_event_actions(self):
@@ -389,62 +303,31 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
             reason="fixture",
             top30=1,
         )
-        apply_prize_award(self.host, prize, preview_prize_award(self.host, prize).digest)
-        self.assertEqual(
-            (
-                await self.client.get(
-                    "/admin/event-grants/receipt?id=prize-request",
-                )
-            ).status_code,
-            404,
-        )
-        _, confirmation = await self.confirmation()
-        self.assertEqual(
-            (await self.post("/admin/event-grants/apply", confirmation)).status_code, 303
-        )
-        self.assertEqual(
-            (
-                await self.client.get(
-                    "/admin/awards/receipt?id=event-request-1",
-                )
-            ).status_code,
-            404,
-        )
-        self.assertEqual(
-            (
-                await self.client.get(
-                    "/admin/event-grants/receipt?id=unknown",
-                )
-            ).status_code,
-            404,
-        )
+        apply_prize_award(self.host, prize)
+        receipt = await self.client.get("/admin/event-grants/receipt?id=prize-request")
+        self.assertEqual(receipt.status_code, 404)
+        self.assertEqual((await self.submit()).status_code, 303)
+        for path in ("/admin/awards/receipt?id=event-request-1",
+                     "/admin/event-grants/receipt?id=unknown"):
+            self.assertEqual((await self.client.get(path)).status_code, 404)
 
-    async def test_storage_failure_preserves_retry_without_claiming_success(self):
+    async def test_storage_failure_preserves_the_request_without_claiming_success(self):
         await self.login()
-        _, confirmation = await self.confirmation()
         before = deepcopy(self.host.snapshot())
         with patch.object(
             self.host.store, "save_changes", side_effect=OSError("secret database URL")
         ):
-            response = await self.post("/admin/event-grants/apply", confirmation)
+            response = await self.submit()
         self.assertEqual(response.status_code, 503)
         self.assertIn(self.command["request_id"], response.text)
         self.assertNotIn("secret database URL", response.text)
         self.assertNotIn("Event grant queued and audit receipt saved", response.text)
-        self.assertEqual(Inputs(response.text).values["command"], confirmation["command"])
-        self.assertEqual(Inputs(response.text).values["digest"], confirmation["digest"])
+        self.assertEqual(Inputs(response.text).values["request_id"], self.command["request_id"])
+        self.assertEqual(Inputs(response.text).values["card_0_attack"], "50")
         self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(
-            (await self.post("/admin/event-grants/preview", self.command)).status_code, 503
-        )
-        self.assertEqual(
-            (
-                await self.client.get(
-                    "/admin/event-grants/receipt?id=event-request-1",
-                )
-            ).status_code,
-            503,
-        )
+        self.assertEqual((await self.submit()).status_code, 503)
+        receipt = await self.client.get("/admin/event-grants/receipt?id=event-request-1")
+        self.assertEqual(receipt.status_code, 503)
 
     async def test_ambiguous_commit_requires_reload_then_exact_retry_finds_saved_receipt(self):
         await self.assert_restart_retry(fail_after_commit=True)
@@ -460,7 +343,6 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             (await self.post("/admin/login", old_login, csrf=False)).status_code, 303
         )
-        _, confirmation = await self.confirmation()
         save = self.host.store.save_changes
 
         def save_then_fail(*args):
@@ -469,23 +351,17 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
             raise OSError("simulated lost acknowledgement")
 
         with patch.object(self.host.store, "save_changes", side_effect=save_then_fail):
-            failed = await self.post("/admin/event-grants/apply", confirmation)
+            failed = await self.submit()
         self.assertEqual(failed.status_code, 503)
-        preserved_form = Inputs(failed.text).values
-        self.assertEqual(preserved_form, confirmation)
-        self.assertIn('id="event-grant-retry"', failed.text)
+        preserved = Inputs(failed.text).values
+        self.assertEqual(preserved["request_id"], self.command["request_id"])
+        self.assertIn('id="event-grant-form"', failed.text)
         self.assertIn(f'href="{self.origin}/admin/login" target="_blank"', failed.text)
         self.assertIn(
             'this.elements.csrftoken.value = Cookies.get("starlette_admin_csrftoken")', failed.text
         )
-        self.assertEqual(
-            (
-                await self.client.get(
-                    "/admin/event-grants/receipt?id=event-request-1",
-                )
-            ).status_code,
-            503,
-        )
+        receipt = await self.client.get("/admin/event-grants/receipt?id=event-request-1")
+        self.assertEqual(receipt.status_code, 503)
         cookies = self.httpx.Cookies(self.client.cookies)
         await self.host.stop()
         self.host = Server(state_path=self.directory / "state.json", **self.options)
@@ -506,23 +382,17 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
             (await self.post("/admin/login", new_login, csrf=False)).status_code, 303
         )
         # The old page remains invalid even after login. No HTTP helper substitutes its token.
+        stale = self.command | {"csrftoken": preserved["csrftoken"]}
         with patch.object(
             self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
         ):
-            stale_retry = await self.post(
-                "/admin/event-grants/apply", preserved_form, csrf=False
-            )
+            stale_retry = await self.post("/admin/event-grants/apply", stale, csrf=False)
         self.assertEqual(stale_retry.status_code, 403)
         # Model the page's submit handler: only its CSRF field reads the current cookie.
-        retry = preserved_form | {
-            "csrftoken": self.client.cookies["starlette_admin_csrftoken"]
-        }
-        self.assertEqual(retry["command"], confirmation["command"])
-        self.assertEqual(retry["digest"], confirmation["digest"])
         with patch.object(
             self.host.store, "save_changes", wraps=self.host.store.save_changes
         ) as saves:
-            applied = await self.post("/admin/event-grants/apply", retry, csrf=False)
+            applied = await self.submit()
         self.assertEqual(saves.call_count, 0 if fail_after_commit else 1)
         self.assertEqual(applied.status_code, 303)
         receipt = await self.client.get(applied.headers["location"])
