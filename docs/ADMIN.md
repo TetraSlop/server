@@ -32,9 +32,8 @@ tmserver-admin account-enable --account-key UGIRSKKH3
 standard input so the password stays out of the command line. It keeps the
 account's disabled flag. Disabling stops new LOGINs; a player already connected
 keeps playing until the server restarts. These commands are not audited. They
-apply only to accounts whose POL ID is in the registrable range, so not to the
-built-in test accounts or to accounts from the retired Discord sign-in, whose
-POL IDs the client cannot use.
+apply only to accounts that registered with LOGIN, so not to the built-in test
+accounts or to accounts from the retired Discord sign-in.
 
 ## Select the saved account
 
@@ -42,8 +41,10 @@ POL IDs the client cannot use.
 tmserver-admin accounts
 ```
 
-The JSON output contains `account_key`, `pol_id`, `player_id`, `name`, and
-`guild` for each saved account. `pol_id` is what the player types into tmloader. Copy the exact `account_key` into the commands below.
+The JSON output contains `account_key`, `username`, `pol_id`, `player_id`,
+`name`, and `guild` for each saved account. `username` is what the player types
+into tmloader, or null for accounts without a login. Copy the exact
+`account_key` into the commands below.
 Character names are display information and cannot select an owner. The saved
 key can differ from the synthetic login ID shown by `tmserver --list-accounts`.
 

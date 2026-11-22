@@ -7,7 +7,7 @@ owning package rather than a generic service layer.
 | --- | --- |
 | `cli` | Server, local-play and offline-admin entry points. |
 | `admin` | Shared read projections and the optional authenticated operator panel. |
-| `accounts` | Self-registered POL ID accounts, password hashes and login limits. |
+| `accounts` | Self-registered usernames, password hashes and login limits. |
 | `network` | Server ownership, connections, dispatch, chat and diagnostics. |
 | `protocol` | Encryption, command envelopes, identities and table controls. |
 | `cards` | Card values, catalogue and inventory edits. |
@@ -61,10 +61,10 @@ the panel never opens storage or enrolls accounts. `cli.serve` stops HTTP first,
 then profiles and game, before releasing storage. The base installation never imports the web framework.
 
 A loader's LOGIN line arrives on the game listener after the key exchange.
-`Server.login` registers an unknown POL ID through `accounts.provisioning`, so the
-account (player ID = the raw POL ID, which polcore sends as GID) and its scrypt
-hash commit together through the existing store, or checks
-the saved hash off the event loop. It then mints a game password that lives only
+`Server.login` registers an unknown username through `accounts.provisioning`: it
+assigns a free POL ID whose raw value is also the player ID (polcore sends it as
+GID), and the account, username and scrypt hash commit together through the
+existing store. A known username has its saved hash checked off the event loop. It then mints a game password that lives only
 in `account_specs`. The game NICK and the profile digests check that password
 exactly as they check a built-in test account's, so profiles need no separate
 login. Hashes are saved in the `identities` journal (version 2); a version 1

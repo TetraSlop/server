@@ -1,11 +1,11 @@
-"""LOGIN over the game port mints the game password polcore then uses on both ports."""
+"""LOGIN over the game port assigns a POL ID and the game password polcore uses on both ports."""
 
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from tests.accounts.test_provisioning import KEY, POL_ID, granted
+from tests.accounts.test_provisioning import granted
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.support.irc import Client
 from tests.support.memory_store import MemoryStore
@@ -28,22 +28,22 @@ class LoginTransportTests(unittest.IsolatedAsyncioTestCase):
         self.profile_port = await self.profile.start(0)
 
     async def test_login_then_game_and_encrypted_profile_with_the_game_password(self):
-        reply, closed = await Client().login(self.port, POL_ID, b"my password")
-        game_password, outcome = granted(reply)
+        reply, closed = await Client().login(self.port, b"Alice", b"my password")
+        pol_id, key, game_password, outcome = granted(reply)
         self.assertEqual((outcome, closed), (b"created", b""))
         client = Client()
-        await client.open(self.port, KEY.encode(), game_password)
+        await client.open(self.port, key.encode(), game_password)
         try:
             self.assertIn(b" 422 ", await client.read())
             error, data = await transact(
-                self.profile_port, KEY, 3, 0, file_request(), context=(client.cipher, client.iv),
-                password=game_password, account_id=POL_ID,
+                self.profile_port, key, 3, 0, file_request(), context=(client.cipher, client.iv),
+                password=game_password, account_id=pol_id,
             )
             self.assertEqual((error, len(data)), (0, 0x302C))
             # Init80 with the identities polcore derives from the POL ID alone.
             init = named(0x80, 0, 0, (
-                f"@Init=/NN={player_id(KEY.encode()):016X}/HID=0/Dm=0/Vol=0/CN={POL_ID.hex()}"
-                f"/GID={polid_from_string(POL_ID):016X}/L=1/GLD=0"))
+                f"@Init=/NN={player_id(key.encode()):016X}/HID=0/Dm=0/Vol=0/CN={b'Alice'.hex()}"
+                f"/GID={polid_from_string(pol_id):016X}/L=1/GLD=0"))
             await client.send(b"NOTICE " + service_nick(ROOM_RAW) + b" :" + init)
             self.assertTrue((await client.read()).endswith(b"@InitAns=/Ans=1"))
         finally:
@@ -53,16 +53,16 @@ class LoginTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(game_password.decode(), log)
         # The player's own password never works as a game password.
         refused = Client()
-        await refused.open(self.port, KEY.encode(), b"my password")
+        await refused.open(self.port, key.encode(), b"my password")
         self.assertEqual(await refused.read(), b"")
         await refused.close()
 
     async def test_a_second_line_or_a_bad_login_gets_one_error_then_closes(self):
-        reply, closed = await Client().login(self.port, b"EEEEEEEF", b"tm-local-test")
-        self.assertEqual((reply, closed), (b":srv 901 pol_id_unavailable :login refused", b""))
+        reply, closed = await Client().login(self.port, b"two words", b"tm-local-test")
+        self.assertEqual((reply, closed), (b":srv 901 invalid_request :login refused", b""))
 
     async def test_built_in_accounts_sign_in_from_loopback_only(self):
-        game_password, _ = granted((await Client().login(self.port, POL_ID, b"pw"))[0])
+        _, key, game_password, _ = granted((await Client().login(self.port, b"Alice", b"pw"))[0])
         with patch("tmserver.network.session.loopback", return_value=False), \
                 patch("tmserver.profiles.service.loopback", return_value=False):
             fixture = Client()
@@ -71,7 +71,7 @@ class LoginTransportTests(unittest.IsolatedAsyncioTestCase):
             await fixture.close()
             self.assertEqual((await transact(self.profile_port, "UGITW5T4U", 0, 9))[0], 0xE4)
             registered = Client()
-            await registered.open(self.port, KEY.encode(), game_password)
+            await registered.open(self.port, key.encode(), game_password)
             try:
                 self.assertIn(b" 422 ", await registered.read())
             finally:

@@ -196,14 +196,12 @@ class AccountPoolTests(unittest.TestCase):
         )
 
     def test_every_legacy_password_fits_polcores_15_character_game_irc_limit(self):
-        from tests.accounts.test_provisioning import nth
-
         self.assertEqual(MAX_LEGACY_PASSWORD, 15)
         game = Server(store=MemoryStore())
 
         async def logins():
             for index in range(8):
-                await game.login(f"192.0.2.{index}", nth(index), b"password")
+                await game.login(f"192.0.2.{index}", b"user%d" % index, b"password")
             await game.stop()
 
         asyncio.run(logins())

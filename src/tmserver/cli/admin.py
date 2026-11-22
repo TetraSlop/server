@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 from tmserver.accounts.credentials import hash_password, valid_password
-from tmserver.accounts.provisioning import MAX_REGISTERED_RAW, MIN_REGISTERED_RAW
 from tmserver.admin.actions import apply_event_grant, apply_event_member, apply_prize_award
 from tmserver.admin.audit import (
     EventEligibilityRequest,
@@ -177,6 +176,7 @@ class AdminState:
             return [
                 dict(
                     account_key=key,
+                    username=getattr(self.credentials.get(key), "username", None),
                     pol_id=pol_id_of(key),
                     player_id=row["player_id"],
                     name=bytes.fromhex(row["name_hex"]).decode("latin1"),
@@ -204,25 +204,22 @@ class AdminState:
 
 
     def set_login(self, key, command):
-        if pol_id_of(key) is None or not (
-            MIN_REGISTERED_RAW <= polid_unscramble(key.encode("ascii")) <= MAX_REGISTERED_RAW
-        ):
-            raise ValueError("only accounts with a registrable POL ID can have a password")
         current = self.credentials.get(key)
+        if current is None:
+            raise ValueError("account has no login; players create one with LOGIN")
         if command == "account-password":
             password = sys.stdin.readline().rstrip("\r\n").encode("ascii", "replace")
             if not valid_password(password):
                 raise ValueError("password must be 1-15 printable ASCII characters")
-            disabled = current is not None and current.disabled
-            credential = hash_password(password).model_copy(update={"disabled": disabled})
-        elif current is None:
-            raise ValueError("account has no password; set one with account-password first")
+            credential = hash_password(current.username, password).model_copy(
+                update={"disabled": current.disabled}
+            )
         else:
             credential = current.model_copy(update={"disabled": command == "account-disable"})
         staged = self.credentials.staged(key, credential)
         self.store.save_changes({}, {"identities": staged.snapshot()})
         self.credentials.publish_state(staged)
-        return dict(account_key=key, pol_id=pol_id_of(key), disabled=credential.disabled)
+        return dict(account_key=key, username=current.username, disabled=credential.disabled)
 
 
 def execute(args):

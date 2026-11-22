@@ -1,9 +1,8 @@
-"""Self-registered POL ID accounts: scrypt password hashes and login limits.
+"""Self-registered accounts: usernames, scrypt password hashes and login limits.
 
-Saved under the ``identities`` journal as version 2. Version 1 held Supabase
-identity links; those restore as no credentials and are replaced on the next
-write. Their accounts stay saved but cannot sign in until an operator sets a
-password.
+Saved under the ``identities`` journal as version 2, keyed by account. Version 1
+held Supabase identity links; those restore as no credentials and are replaced
+on the next write. Their accounts stay saved but cannot sign in.
 """
 
 from collections import deque
@@ -11,19 +10,21 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from tmserver.protocol.identities import player_id
-from tmserver.protocol.wire import POLID_CHARS, polid_from_string, polid_to_string
 
 # About 16 MiB and tens of milliseconds per check; callers run it off the event loop.
 SCRYPT = dict(n=2**14, r=8, p=1, dklen=32, maxmem=64 * 1024 * 1024)
 MAX_PASSWORD = 15  # polcore's Game IRC open copies at most 15 bytes plus NUL.
 
 Hex = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]+$")]
+# Also the default display name, so it stays within the client's 15-byte field.
+USERNAME = r"[A-Za-z0-9_.-]{1,15}"
 
 
 def check_native_identity(economy, key):
@@ -34,6 +35,7 @@ def check_native_identity(economy, key):
 
 class Credential(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+    username: Annotated[str, StringConstraints(pattern="^" + USERNAME + "$")]
     salt: Annotated[Hex, Field(min_length=32, max_length=32)]
     hash: Annotated[Hex, Field(min_length=64, max_length=64)]
     disabled: bool = False
@@ -45,21 +47,18 @@ class _Journal(BaseModel):
     credentials: dict[str, Credential]
 
 
-def valid_pol_id(value):
-    """Eight POL ID characters whose value fits polcore's 41 bits."""
-    return (len(value) == 8 and all(c in POLID_CHARS for c in value)
-            and polid_from_string(value) <= 0x1FFFFFFFFFF
-            and polid_to_string(polid_from_string(value)).encode("ascii") == value)
+def valid_username(value):
+    return re.fullmatch(USERNAME.encode("ascii"), value) is not None
 
 
 def valid_password(value):
     return 1 <= len(value) <= MAX_PASSWORD and all(0x20 <= c <= 0x7E for c in value)
 
 
-def hash_password(password, salt=None):
+def hash_password(username, password, salt=None):
     salt = os.urandom(16) if salt is None else salt
     digest = hashlib.scrypt(password, salt=salt, **SCRYPT)
-    return Credential(salt=salt.hex(), hash=digest.hex())
+    return Credential(username=username, salt=salt.hex(), hash=digest.hex())
 
 
 def verify_password(credential, password):
@@ -70,15 +69,22 @@ def verify_password(credential, password):
 class CredentialRegistry:
     def __init__(self, credentials=None):
         self._credentials = dict(credentials or {})
+        # Usernames are unique ignoring ASCII case.
+        self._names = {row.username.lower(): key for key, row in self._credentials.items()}
+        if len(self._names) != len(self._credentials):
+            raise ValueError("duplicate username")
 
     def get(self, key):
         return self._credentials.get(key)
+
+    def account(self, username):
+        return self._names.get(username.lower())
 
     def staged(self, key, credential):
         return CredentialRegistry({**self._credentials, key: credential})
 
     def publish_state(self, staged):
-        self._credentials = staged._credentials
+        self._credentials, self._names = staged._credentials, staged._names
 
     def snapshot(self):
         rows = {key: self._credentials[key].model_dump() for key in sorted(self._credentials)}

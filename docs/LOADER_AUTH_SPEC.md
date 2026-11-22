@@ -1,9 +1,10 @@
 # Loader login contract
 
-Players sign in with a POL ID and a password of their own choosing, over the
+Players sign in with a username and password of their own choosing, over the
 game's own TCP port. There is no HTTPS gateway, sign-in provider or invite
-step: the first LOGIN for an unknown POL ID creates the account. This document
-is the contract between tmserver and tmloader; change both together.
+step: the first LOGIN for an unknown username creates the account and the
+server assigns it a POL ID. This document is the contract between tmserver and
+tmloader; change both together.
 
 ## Why the loader logs in first
 
@@ -11,10 +12,11 @@ The original client never sends its password to the server. The Game IRC NICK
 carries `md5(challenge + password)` and each profile request carries
 `md5(ID8 + password + nonce)`. The server cannot learn a new player's password
 from those, and a stored password hash cannot check them. So the loader sends
-the password itself, once, on a short LOGIN connection. The server checks it
-against a salted scrypt hash, or registers the POL ID, and answers with a random
-**game password**. polcore then logs in with the POL ID and that game password,
-exactly as it does with a local account.
+the username and password itself, once, on a short LOGIN connection. The server
+checks the password against a salted scrypt hash, or registers the username,
+and answers with the account's POL ID and a random **game password**. polcore
+then logs in with that POL ID and game password, exactly as it does with a
+local account.
 
 ## Sequence
 
@@ -31,8 +33,8 @@ One short TCP connection to the game port (default 51241), before polcore starts
    `SqBlowfish(key)` with `iv` = the first 8 modulus bytes as a little-endian
    u64. Every later line in both directions is crypt64-encrypted with the usual
    checksum framing.
-4. Send `LOGIN <POL_ID> :<password>`. It must be the first encrypted line, within
-   30 seconds of connecting. One LOGIN per connection.
+4. Send `LOGIN <USERNAME> :<password>`. It must be the first encrypted line,
+   within 30 seconds of connecting. One LOGIN per connection.
 5. Read one line. The server then closes the connection.
    - `:srv 900 <POL_ID> <GAME_PASSWORD> :created`: a new account was registered.
    - `:srv 900 <POL_ID> <GAME_PASSWORD> :signed_in`: the password matched.
@@ -43,42 +45,46 @@ One short TCP connection to the game port (default 51241), before polcore starts
 `src/tmserver/protocol/wire.py` implements the framing, RSA wrap and cipher;
 `tests/support/irc.py` (`Client.exchange` and `Client.login`) does steps 1 to 5.
 
-The game password is 14 hex characters. The server keeps it in memory only. It
-stays valid for game and profile reconnects until the next LOGIN for that POL ID
-or a server restart. Never store it. If polcore's login is refused or the
-connection closes during NICK, run LOGIN again.
+The POL ID is assigned once per username and never changes, but the loader need
+not store it: every LOGIN returns it. The game password is 14 hex characters,
+kept in server memory only. It stays valid for game and profile reconnects until
+the next LOGIN for that account or a server restart. Never store it. If polcore's
+login is refused or the connection closes during NICK, run LOGIN again.
 
 ## Limits
 
-- **POL ID:** exactly 8 characters from `EFKAOYMJVNGTDSWBQLPCIRHZXU6328401795`
-  (uppercase; each character is a base-36 digit in that order). polcore sends the
-  POL ID's value as the profile's GID, and the save holds that player ID in 32
-  bits, so only values from 2^16 to 2^32 - 1 can register: `EEEEFWIQ` through
-  `EF5FOF5A`, in practice POL IDs that start with `EE`. Others return
-  `pol_id_unavailable`; values below the range belong to the built-in test
-  accounts and services. Malformed POL IDs return `invalid_request`.
+- **Username:** 1 to 15 characters from `A-Z a-z 0-9 _ - .`, so no spaces (it is
+  a middle IRC argument). Unique ignoring ASCII case: `Alice` and `alice` are the
+  same account, and the spelling from registration is kept. It is also the
+  account's display name, which every allowed username fits.
 - **Password:** 1 to 15 printable ASCII characters (0x20 to 0x7E). Spaces are
   allowed because it is the trailing argument. polcore takes at most 15
   characters: its Game IRC open (Viewer entry 132) copies the password and its
   NUL into a 16-byte buffer.
+- **Assigned POL ID:** random and unused, with a raw value from 2^16 to 2^32 - 1
+  (`EEEEFWIQ` to `EF5FOF5A`). polcore sends that value as the profile GID and
+  derives NN from it, and the save holds the player ID in 32 bits, so the account
+  stores the raw value as its player ID. It never collides with the built-in
+  test accounts or service identities.
 - **Rate limits** (per server process, reset on restart): 5 failed logins per
-  POL ID and 20 per IP address in 15 minutes, and 5 new accounts per IP address
+  username and 20 per IP address in 15 minutes, and 5 new accounts per IP address
   per hour.
 
 ## Error codes
 
 | Code | Loader behavior |
 | --- | --- |
-| `invalid_request` | Malformed line, POL ID or password. Fix the input; do not retry. |
-| `invalid_credentials` | Wrong password for an existing POL ID. |
-| `pol_id_unavailable` | Outside the registrable range or reserved. Choose another. |
-| `account_locked` | The account has no password or an operator disabled it. Contact the operator. |
-| `account_connected` | That POL ID already has a live game session. Retry after it disconnects; a dead session times out within about two minutes. |
-| `rate_limited` | Too many failures or new accounts from this address or for this POL ID. Back off. |
-| `unavailable` | Storage or capacity problem on the server. Retry with bounded backoff. |
+| `invalid_request` | Malformed line, username or password. Fix the input; do not retry. |
+| `invalid_credentials` | The username exists and the password is wrong. |
+| `account_locked` | An operator disabled the account. Contact the operator. |
+| `account_connected` | That account already has a live game session. Retry after it disconnects; a dead session times out within about two minutes. |
+| `rate_limited` | Too many failures or new accounts from this address or for this username. Back off. |
+| `unavailable` | Storage problem on the server. Retry with bounded backoff. |
 
-An unknown POL ID is registered on its first LOGIN, so a mistyped POL ID creates
-a new account. Show the player the `created` result.
+There is no separate "username taken" code. LOGIN both registers and signs in,
+so a taken username means the password is checked, and a wrong one returns
+`invalid_credentials`. A mistyped username creates a new account, so show the
+player the `created` result.
 
 ## Security
 

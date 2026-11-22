@@ -1,11 +1,13 @@
 """Synchronous account provisioning under the game's existing writer lease."""
 
+import secrets
+
 from tmserver.network.local_accounts import display_name
 from tmserver.protocol.identities import player_id
-from tmserver.protocol.wire import polid_from_string, polid_scramble, polid_to_string, polid_unscramble
+from tmserver.protocol.wire import polid_scramble, polid_unscramble
 
 # The client sends the raw POL ID as its GID, and the save and profile files hold
-# that player ID in 32 bits. Registered POL IDs start above the fixture accounts
+# that player ID in 32 bits. Assigned POL IDs start above the fixture accounts
 # and service raw IDs: EEEEFWIQ through EF5FOF5A.
 MIN_REGISTERED_RAW = 1 << 16
 MAX_REGISTERED_RAW = 0xFFFFFFFF
@@ -17,27 +19,27 @@ def provision_account(accounts, key, character, name=None):
                        name=display_name(character) if name is None else name)
 
 
-def registered_key(host, pol_id):
-    """The account key a POL ID would own, or None when it is reserved."""
-    raw = polid_from_string(pol_id)
-    key = polid_scramble(raw).decode("ascii")
-    reserved = set()
+def free_key(host):
+    """A random unused account key whose POL ID is in the registrable range."""
+    reserved = set(host.account_keys) | set(host.account_specs)
     for routes in (host.ordinary_room_routes, host.ordinary_table_routes,
                    host.event_routes, host.event_matches.routes):
         reserved.update(nick.decode("ascii") for nick in routes)
-    if not MIN_REGISTERED_RAW <= raw <= MAX_REGISTERED_RAW or key in reserved:
-        return None
-    return key
+    while True:  # About 4 billion values; collisions stay rare for any real save.
+        raw = MIN_REGISTERED_RAW + secrets.randbelow(MAX_REGISTERED_RAW - MIN_REGISTERED_RAW + 1)
+        key = polid_scramble(raw).decode("ascii")
+        if key not in reserved:
+            return key
 
 
 def register_account(host, key, credential):
-    """Create one account and its password hash in a single commit."""
+    """Create one account and its username and password hash in a single commit."""
     if host.store is None:
         raise ValueError("account registration requires persistent storage")
     character = polid_unscramble(key.encode("ascii"))  # GID, as polcore derives it.
     staged = host.credentials.staged(key, credential)
     with host.economy.edit_accounts(()) as accounts:
-        provision_account(accounts, key, character, polid_to_string(character).encode("ascii"))
+        provision_account(accounts, key, character, credential.username.encode("ascii"))
         host.persist_changes(accounts.snapshot()["accounts"], {"identities": staged.snapshot()})
     host.credentials.publish_state(staged)
     host.account_keys.add(key)
