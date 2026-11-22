@@ -77,10 +77,10 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
             self.server.default_table.reset_match()
         if full:
             for key in self.keys:
-                token = self.server.economy.reserve_delivery(key)
+                token = self.server.economy.reserve_auction(key)
                 filler = replace(token.account.cards[-1], deck=255)
                 extras = (filler,) * (1000 - len(token.account.cards))
-                self.server.economy.commit_delivery(token, add=extras, keep_reserved=False)
+                self.server.economy.commit_auction(token, add=extras)
         self.server.persist()
 
     async def play(self, *, cbc=False, seed=0):

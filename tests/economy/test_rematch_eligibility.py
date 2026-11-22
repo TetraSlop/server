@@ -28,9 +28,9 @@ class RematchEligibilityTests(unittest.IsolatedAsyncioTestCase):
                     token = self.server.economy.reserve_auction(key)
                     self.server.economy.commit_auction(token, debit=9800)
                 else:
-                    token = self.server.economy.reserve_delivery(key)
-                    self.server.economy.commit_delivery(
-                        token, cards=token.account.cards[:5], keep_reserved=False
+                    token = self.server.economy.reserve_auction(key)
+                    self.server.economy.commit_auction(
+                        token, cards=token.account.cards[:5], allow_discard=True
                     )
             self.server.persist()
             yield

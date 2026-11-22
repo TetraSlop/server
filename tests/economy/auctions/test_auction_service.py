@@ -223,7 +223,7 @@ class AuctionServiceTests(unittest.TestCase):
         )
 
     def test_snapshot_capacity_and_account_scoped_cleanup(self):
-        self.s = AuctionService(self.a, clock=lambda: self.now, max_snapshots=2)
+        self.s.MAX_SNAPSHOTS = 2
         first, old, _ = self.query()
         second, _, _ = self.query(b"BH")
         other, _, _ = self.query(key="buyer")

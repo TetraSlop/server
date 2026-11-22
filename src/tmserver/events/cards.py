@@ -179,7 +179,7 @@ class EventCardService:
         replies = self.host.handle(key, payload, event_id=event_id, route="card")
         if int(parse_named(replies[0])[3]["CardEnt"]["Ans"]) <= 0:
             return replies
-        token = self.economy.reserve_delivery(key)
+        token = self.economy.reserve_auction(key)
         view = token.account
         try:
             number = self._last.get(key, 0) % 255 + 1
@@ -214,9 +214,9 @@ class EventCardService:
                     incoming = candidate
                     selected.append((ident, index))
                     init = message
-            token = self.economy.commit_delivery(token, credit=money)
+            token = self.economy.commit_auction(token, credit=money, keep_reserved=True)
         except Exception:
-            self.economy.release_delivery(token)
+            self.economy.release_auction(token)
             self.host.complete_admission(key)
             raise
         for ident, amount in credits:
@@ -269,8 +269,13 @@ class EventCardService:
                     g = self._grants[ident]
                     if index < g.card_offset:
                         raise EventCardError("stale event grant selection")
-                refreshed = self.economy.commit_delivery(
-                    state.token, add=state.incoming, cards=state.cards, deck_names=state.names
+                refreshed = self.economy.commit_auction(
+                    state.token,
+                    add=state.incoming,
+                    cards=state.cards,
+                    deck_names=state.names,
+                    allow_discard=True,
+                    keep_reserved=True,
                 )
                 for ident, index in state.selected:
                     self._grants[ident].card_offset = index + 1
@@ -285,15 +290,15 @@ class EventCardService:
             if not state.accepted:
                 raise EventCardError("cards require Get before Quit")
             reply = named(0xB2, 0x17, number, f"@Quit=/N={number}/D=0/B=0")
-            self.economy.release_delivery(state.token)
+            self.economy.release_auction(state.token)
             del self._active[key]
             self._closed[key] = (number, reply, state.event_id)
             return [reply]
         if subtype in (0x10, 0x22):
             cards, names = self._edit(state, subtype, sections)
             if state.accepted:
-                state.token = self.economy.commit_delivery(
-                    state.token, cards=cards, deck_names=names
+                state.token = self.economy.commit_auction(
+                    state.token, cards=cards, deck_names=names, allow_discard=True, keep_reserved=True
                 )
                 state.replies = (
                     state.replies[0],
@@ -321,7 +326,7 @@ class EventCardService:
     def disconnect(self, key):
         state = self._active.pop(key, None)
         if state is not None:
-            self.economy.release_delivery(state.token)
+            self.economy.release_auction(state.token)
         self._closed.pop(key, None)
 
     def snapshot(self):

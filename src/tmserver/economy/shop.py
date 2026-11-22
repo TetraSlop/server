@@ -30,7 +30,7 @@ from tmserver.economy.models import MAX_MONEY, _Pending, _State, check_inventory
 from tmserver.economy.packets import _hex, _int, _keys, named
 
 
-def _initial_reply(account):
+def _initial_reply(account, offers):
     s = account.committed
     # Original Init treats header byte1 as failure; /N carries the session.
     return named(
@@ -39,7 +39,7 @@ def _initial_reply(account):
         0,
         f"@Init=/N={account.session}/RA={struct.unpack_from('<I', account.template, 0x30)[0]}"
         f"/M={s.balance}/CP={collection_points(s.cards)}/S={len(s.cards)}"
-        + account.offers.fields(),
+        + offers.fields(),
     )
 
 def handle(account, family, subtype, session, sections, *, catalog, offers, draw):
@@ -64,8 +64,7 @@ def handle(account, family, subtype, session, sections, *, catalog, offers, draw
         if account.session is None:
             account.last_session = account.last_session % 255 + 1
             account.session = account.last_session
-            account.offers = offers
-        return [named(0xB1, 0, session, "@ShEnter=/EN=1"), _initial_reply(account)]
+        return [named(0xB1, 0, session, "@ShEnter=/EN=1"), _initial_reply(account, offers)]
     if account.session is None:
         # A retry of the last completed Quit is harmless; all edits stay closed.
         if (
@@ -88,7 +87,7 @@ def handle(account, family, subtype, session, sections, *, catalog, offers, draw
             return [named(0xB2, 0x14, session, "@Card=/S=0")]
         state = account.committed
         pack = catalog.packs[pack_id] if pack_id < len(catalog.packs) else None
-        available = pack_id in account.offers.visible(
+        available = pack_id in offers.visible(
             catalog, account.guild, state.balance, len(state.cards)
         )
         if not available or pack["price"] > state.balance:

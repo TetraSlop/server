@@ -15,7 +15,6 @@ from tmserver.economy.errors import EconomyError
 from tmserver.economy.match_ledger import (
     MatchEconomy,
     MatchEconomyError,
-    next_stake,
     offline_payout,
 )
 from tmserver.game.prizes import PrizeAward, PrizeCard, PrizeLedger
@@ -317,7 +316,7 @@ class MatchEconomyTests(unittest.TestCase):
         for s in self.tokens:
             self.tokens[s] = self.r.commit(("a", "b")[s])
         before = self.snapshot()
-        stake = next_stake(100, 1)
+        stake = 200  # Doubled by Continue.
         self.assertEqual(self.snapshot(), before)  # Merely opening Continue charges nothing.
         self.tokens = self.m.begin("r2", self.tokens, stake)
         self.assertEqual([self.e.balance(k) for k in ("a", "b")], [800, 800])
@@ -392,9 +391,10 @@ class MatchEconomyTests(unittest.TestCase):
             )
             count += 1
         self.assertEqual(count, 588)
+        # game/match.py doubles and caps the next wager with this rule.
         for row in data["stakes"]:
             if row["kind"] == "continue_wager" and row["wager"] <= 2000:
-                self.assertEqual(next_stake(row["wager"], row["double"]), row["after"])
+                self.assertEqual(min(2000, row["wager"] * (1 + row["double"])), row["after"])
 
     def test_cpu_card_prizes_do_not_imply_money_capability(self):
         tokens = {0: self.e.reserve_match("a")}

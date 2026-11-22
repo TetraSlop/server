@@ -239,9 +239,10 @@ class MatchTests(unittest.TestCase):
             Card(*(getattr(c, n) for n in Card.__dataclass_fields__)) for c in owned[:5]
         )
         before = economy.snapshot()
+        token = economy.reserve_match("account")
         s = MatchService(
             ai_cards=owned[:5],
-            selected_card_validator=lambda peer, c: economy.validate_selection("account", c),
+            selected_card_validator=lambda peer, c: economy.validate_match_selection(token, c),
         )
         s.register("alice")
         s.begin()
@@ -255,7 +256,7 @@ class MatchTests(unittest.TestCase):
         bad[0] = Card(
             c.model, (c.attack + 1) % 256, c.kind, c.physical, c.magical, c.points, c.arrows, c.deck
         )
-        self.assertFalse(economy.validate_selection("account", bad))
+        self.assertFalse(economy.validate_match_selection(token, bad))
 
     def test_both_humans_gate_early_move(self):
         s, _ = service("versus")

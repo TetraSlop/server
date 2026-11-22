@@ -25,7 +25,7 @@ class MatchState:
 
     @classmethod
     def stage(cls, host, economy, keys):
-        auction = host.auction_ledger.stage_returns(economy)
+        auction = host.auction_ledger.stage_state(economy, ())
         return cls(
             economy,
             host.match_economy.stage_state(economy, keys),
@@ -46,7 +46,7 @@ class MatchState:
         host.match_economy.publish_state(self.match_economy)
         host.result_rewards.publish_state(self.result_rewards)
         host.ratings.publish_state(self.ratings)
-        host.auction_ledger.publish_returns(self.auction_ledger)
+        host.auction_ledger.publish_state(self.auction_ledger)
 
 
 @contextmanager

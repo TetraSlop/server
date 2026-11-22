@@ -191,9 +191,8 @@ class EventIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_native_overflow_edits_and_get_preserve_inventory_cap(self):
         await self.enter_room()
         card = replace(self.server.economy.inventory(self.key)[0], deck=255)
-        token = self.server.economy.reserve_delivery(self.key)
-        token = self.server.economy.commit_delivery(token, add=(card,) * 990)
-        self.server.economy.release_delivery(token)
+        token = self.server.economy.reserve_auction(self.key)
+        self.server.economy.commit_auction(token, add=(card,) * 990)
         self.server.event_cards.grant(self.key, "festival", "overflow", cards=(card, card))
         self.server.persist()
         session, init, _ = await self.collection()

@@ -50,11 +50,10 @@ class AuctionService:
     disconnect. No client request exists for cancelling an active exhibit.
     """
 
-    def __init__(self, ledger, *, clock=time.time, max_snapshots=64):
-        if type(max_snapshots) is not int or not 1 <= max_snapshots <= 1024:
-            raise ValueError("max_snapshots must be 1..1024")
+    MAX_SNAPSHOTS = 64  # Search files kept per connection.
+
+    def __init__(self, ledger, *, clock=time.time):
         self.ledger, self.economy, self.clock = ledger, ledger.economy, clock
-        self.max_snapshots = max_snapshots
         self._snapshots, self._collections, self._sessions = {}, {}, {}
         self._next_id = 1
 
@@ -173,7 +172,7 @@ class AuctionService:
     def _query(self, key, operation, filters, now):
         snapshots = self._snapshots.setdefault(key, {})
         failure = b"SF" if operation == b"SI" else b"HF"
-        if len(snapshots) >= self.max_snapshots or self._next_id > 0xFFFFFFFF:
+        if len(snapshots) >= self.MAX_SNAPSHOTS or self._next_id > 0xFFFFFFFF:
             return self._error(failure, -8621)
         rows = []
         for item in sorted(

@@ -337,15 +337,6 @@ class EconomyTests(unittest.TestCase):
         self.assertEqual(saved[0x90:0x98], b"opaque!!")
         self.assertEqual(saved[0xB0:0xB7], bytes(range(7)))
 
-    def test_practice_selection_validates_full_multiset_without_mutation(self):
-        cards = self.shop.inventory("alice")[:5]
-        before = self.shop.snapshot()
-        self.assertTrue(self.shop.validate_selection("alice", cards))
-        self.assertFalse(self.shop.validate_selection("alice", [cards[0]] * 20))
-        self.assertFalse(self.shop.validate_selection("alice", [replace(cards[0], points=255)]))
-        self.assertFalse(self.shop.validate_selection("alice", [replace(cards[0], deck=3)]))
-        self.assertEqual(self.shop.snapshot(), before)
-
     def test_named_parser_limits_and_unrelated_payload(self):
         self.assertIsNone(self.shop.handle("alice", b"GTM0Lanything"))
         self.assertEqual(len(named(0xB2, 0x14, 1, "@X=/A=" + "a" * 441)), 460)
@@ -384,7 +375,7 @@ class ExchangeReservationTests(unittest.TestCase):
 
     def test_reservation_blocks_shop_and_match_and_rollback_is_idempotent(self):
         ticket = self.shop.reserve_exchange(("a", "b"))
-        self.assertFalse(self.shop.validate_selection("a", self.shop.inventory("a")[:5]))
+        self.assertTrue(self.shop.is_reserved("a"))
         with self.assertRaises(EconomyError):
             self.shop.handle(
                 "a", named(0xB0, 0, 0, "@ShReq=/NN=0000000000000001/HID=0/Dm=0/Vol=0/CN=61")
@@ -392,7 +383,7 @@ class ExchangeReservationTests(unittest.TestCase):
         self.assertEqual(self.shop.snapshot(), self.before)
         self.assertTrue(self.shop.release_exchange(ticket))
         self.assertFalse(self.shop.release_exchange(ticket))
-        self.assertTrue(self.shop.validate_selection("a", self.shop.inventory("a")[:5]))
+        self.assertFalse(self.shop.is_reserved("a"))
 
     def test_partial_busy_reservation_does_not_lock_idle_account(self):
         self.shop.reserve_exchange(("a", "b"))

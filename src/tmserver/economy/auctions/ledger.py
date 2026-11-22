@@ -56,7 +56,9 @@ class AuctionEconomy:
 
     def stage_state(self, economy, keys):
         """Isolate selected collection editors; retain their capability identity."""
-        staged = self.stage_returns(economy)
+        staged = copy(self)
+        staged.economy = economy
+        staged._external_returns = dict(self._external_returns)
         staged._listings = dict(self._listings)  # Frozen rows.
         staged._history = dict(self._history)  # Tuples of frozen bids.
         staged._collections = dict(self._collections)
@@ -65,23 +67,13 @@ class AuctionEconomy:
         return staged
 
     def publish_state(self, staged):
-        self.publish_returns(staged)
+        self._pending = staged._pending
+        self._next_pending = staged._next_pending
+        self._external_returns = staged._external_returns
         self._listings = staged._listings
         self._history = staged._history
         self._next_id = staged._next_id
         self._collections = staged._collections
-
-    def stage_returns(self, economy):
-        """Match recovery appends returns without editing listings or collections."""
-        staged = copy(self)
-        staged.economy = economy
-        staged._external_returns = dict(self._external_returns)
-        return staged
-
-    def publish_returns(self, staged):
-        self._pending = staged._pending
-        self._next_pending = staged._next_pending
-        self._external_returns = staged._external_returns
 
     def _actor(self, key):
         v = self.economy.account_view(key)
@@ -277,21 +269,6 @@ class AuctionEconomy:
             changed.append(item)
         self._listings, self._pending, self._next_pending = listings, tuple(pending), next_pending
         return tuple(changed)
-
-    def cancel(self, key, auction_id, *, now):
-        """Trusted local administration only; native code exposes no cancel wire."""
-        _uint(now)
-        item = self.listing(auction_id)
-        if item.seller.key != key or item.status != "active" or item.bidder is not None:
-            raise AuctionError("only an unbid active own listing can be cancelled", -680)
-        if now < item.created or now >= item.expires:
-            raise AuctionError("auction is not open", -680)
-        _uint(self._next_pending, minimum=1)
-        updated = replace(item, status="cancelled", closed_at=now)
-        self._pending += (Pending(self._next_pending, key, "returned", card=item.card),)
-        self._listings[auction_id] = updated
-        self._next_pending += 1
-        return updated
 
     def reserve_collection(self, key):
         if key in self._collections:

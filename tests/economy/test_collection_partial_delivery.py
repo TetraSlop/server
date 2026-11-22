@@ -138,7 +138,7 @@ class CollectionPartialDeliveryTests(unittest.IsolatedAsyncioTestCase):
     async def assert_witness(self):
         self.assertIs(self.game.economy._reservations[self.other], self.witness_token)
         self.assertEqual(self.game.economy.snapshot()["accounts"][self.other], self.witness_account)
-        self.assertEqual(self.game.prize.status(self.other)["session"], self.witness_number)
+        self.assertEqual(self.game.prize._active[self.other].number, self.witness_number)
         await self.witness.send(b"PING :unrelated-collection")
         self.assertEqual(await self.witness.read(), b"PONG unrelated-collection")
 
