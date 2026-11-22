@@ -7,14 +7,16 @@ use the client's offline formula.
 
 import hashlib
 import json
-import re
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
 from functools import partial
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, Field
 
 from tmserver.cards.model import Card, card_values
 from tmserver.checks import stable_id, uint
-from tmserver.economy.models import MAX_MONEY
+from tmserver.economy.models import MAX_MONEY, SAVED, Digest, SavedCard, StableId, Version1
 from tmserver.economy.errors import EconomyError
 
 
@@ -77,6 +79,31 @@ class _Round:
     handed: set = field(default_factory=set)
     recovered: set = field(default_factory=set)
     closed: bool = False
+
+
+class _SavedRound(BaseModel):
+    model_config = SAVED
+    id: StableId
+    seats: dict[str, str]
+    mode: Literal["versus", "computer"]
+    player_count: Annotated[int, Field(ge=2, le=3)]
+    stake: Annotated[int, Field(ge=0, le=2000)]
+    money_enabled: bool = True  # Absent in rounds saved before money capabilities.
+    money: Literal["escrow", "paid", "refunded"]
+    payouts: dict[str, Annotated[int, Field(ge=0, le=MAX_MONEY)]]
+    result: Annotated[list[list[int]], Field(min_length=2, max_length=2)] | None
+    cbc: dict[str, list[SavedCard]]
+    transfer_digest: Digest | None
+    extras: dict[str, list[SavedCard]]
+    handed: list[int]
+    recovered: list[int]
+    closed: bool
+
+
+class _Journal(BaseModel):
+    model_config = SAVED
+    version: Version1
+    rounds: list[_SavedRound]
 
 
 class MatchEconomy:
@@ -389,31 +416,31 @@ class MatchEconomy:
         return len(closed)
 
     def snapshot(self):
-        return {
-            "version": 1,
-            "rounds": [
-                {
-                    "id": r.id,
-                    "seats": {str(s): k for s, k in r.seats.items()},
-                    "mode": r.mode,
-                    "player_count": r.player_count,
-                    "stake": r.stake,
-                    "money_enabled": r.money_enabled,
-                    "money": r.money,
-                    "payouts": {str(s): v for s, v in r.payouts.items()},
-                    "result": r.result,
-                    "cbc": {str(s): [list(c.full()) for c in cards] for s, cards in r.cbc.items()},
-                    "transfer_digest": r.transfer_digest,
-                    "extras": {
+        return _Journal(
+            version=1,
+            rounds=[
+                _SavedRound(
+                    id=r.id,
+                    seats={str(s): k for s, k in r.seats.items()},
+                    mode=r.mode,
+                    player_count=r.player_count,
+                    stake=r.stake,
+                    money_enabled=r.money_enabled,
+                    money=r.money,
+                    payouts={str(s): v for s, v in r.payouts.items()},
+                    result=None if r.result is None else [list(part) for part in r.result],
+                    cbc={str(s): [list(c.full()) for c in cards] for s, cards in r.cbc.items()},
+                    transfer_digest=r.transfer_digest,
+                    extras={
                         str(s): [list(c.full()) for c in cards] for s, cards in r.extras.items()
                     },
-                    "handed": sorted(r.handed),
-                    "recovered": sorted(r.recovered),
-                    "closed": r.closed,
-                }
+                    handed=sorted(r.handed),
+                    recovered=sorted(r.recovered),
+                    closed=r.closed,
+                )
                 for r in self._rounds.values()
             ],
-        }
+        ).model_dump()
 
     @classmethod
     def restore(cls, economy, snapshot=None):
@@ -421,65 +448,36 @@ class MatchEconomy:
         if snapshot is None:
             return obj
         try:
-            if set(snapshot) != {"version", "rounds"} or snapshot["version"] != 1:
-                raise MatchEconomyError("invalid match economy snapshot")
-            for d in snapshot["rounds"]:
-                if set(d) - {"money_enabled"} != {
-                    "id",
-                    "seats",
-                    "mode",
-                    "player_count",
-                    "stake",
-                    "money",
-                    "payouts",
-                    "result",
-                    "cbc",
-                    "transfer_digest",
-                    "extras",
-                    "handed",
-                    "recovered",
-                    "closed",
-                }:
-                    raise MatchEconomyError("invalid saved round fields")
-                rid = _id(d["id"])
-                n = _uint(d["player_count"], 3, 2)
-                stake = _uint(d["stake"], 2000)
-                seats = {int(s): k for s, k in d["seats"].items()}
-                if any(str(s) not in d["seats"] or not 0 <= s < n for s in seats) or len(
+            for d in _Journal.model_validate(snapshot).rounds:
+                n, stake = d.player_count, d.stake
+                seats = {int(s): k for s, k in d.seats.items()}
+                if any(str(s) not in d.seats or not 0 <= s < n for s in seats) or len(
                     set(seats.values())
                 ) != len(seats):
                     raise MatchEconomyError("invalid saved human seats")
                 for key in seats.values():
                     economy.account_view(key)
-                if d["mode"] == "versus":
-                    valid = set(seats) == set(range(n))
-                elif d["mode"] == "computer":
-                    valid = len(seats) == 1
-                else:
-                    valid = False
-                if not valid or rid in obj._rounds:
+                valid = set(seats) == set(range(n)) if d.mode == "versus" else len(seats) == 1
+                if not valid or d.id in obj._rounds:
                     raise MatchEconomyError("invalid saved mode or duplicate round")
-                enabled = d.get("money_enabled", True)
-                if type(enabled) is not bool or not enabled and stake:
+                if not d.money_enabled and stake:
                     raise MatchEconomyError("invalid saved money capability")
-                row = _Round(rid, seats, d["mode"], n, stake, enabled)
-                row.money = d["money"]
-                row.closed = d["closed"]
-                if row.money not in ("escrow", "paid", "refunded") or type(row.closed) is not bool:
-                    raise MatchEconomyError("invalid saved money phase")
-                row.result = None if d["result"] is None else _result(*d["result"], n)
-                row.payouts = {int(s): _uint(v, MAX_MONEY) for s, v in d["payouts"].items()}
+                row = _Round(d.id, seats, d.mode, n, stake, d.money_enabled)
+                row.money = d.money
+                row.closed = d.closed
+                row.result = None if d.result is None else _result(*d.result, n)
+                row.payouts = {int(s): v for s, v in d.payouts.items()}
                 row.cbc = {
-                    int(s): obj._cards(Card(*c) for c in cards) for s, cards in d["cbc"].items()
+                    int(s): obj._cards(Card(*c) for c in cards) for s, cards in d.cbc.items()
                 }
                 row.extras = {
-                    int(s): obj._cards(Card(*c) for c in cards) for s, cards in d["extras"].items()
+                    int(s): obj._cards(Card(*c) for c in cards) for s, cards in d.extras.items()
                 }
-                row.transfer_digest = d["transfer_digest"]
-                row.handed = set(d["handed"])
-                row.recovered = set(d["recovered"])
+                row.transfer_digest = d.transfer_digest
+                row.handed = set(d.handed)
+                row.recovered = set(d.recovered)
                 if (
-                    any(type(s) is not int or s not in seats for s in (*row.handed, *row.recovered))
+                    any(s not in seats for s in (*row.handed, *row.recovered))
                     or row.handed & row.recovered
                 ):
                     raise MatchEconomyError("invalid saved recovery seat")
@@ -511,9 +509,7 @@ class MatchEconomy:
                 if row.transfer_digest is None:
                     if row.extras or row.handed:
                         raise MatchEconomyError("unsettled cards contain handoff")
-                elif not re.fullmatch("[0-9a-f]{64}", row.transfer_digest) or set(
-                    row.extras
-                ) != set(seats):
+                elif set(row.extras) != set(seats):
                     raise MatchEconomyError("invalid saved transfer receipt")
                 elif any(row.extras[s][: len(row.cbc[s])] != row.cbc[s] for s in seats):
                     raise MatchEconomyError("saved settlement lost its CBC prefix")
@@ -528,7 +524,7 @@ class MatchEconomy:
                     for old in obj._rounds.values()
                 ):
                     raise MatchEconomyError("overlapping active saved rounds")
-                obj._rounds[rid] = row
+                obj._rounds[d.id] = row
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             if isinstance(exc, MatchEconomyError):
                 raise
