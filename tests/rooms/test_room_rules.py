@@ -111,10 +111,14 @@ class FixedRoomMatchTests(unittest.TestCase):
         service.register("alice")
         service.handle("alice", packet(0x14, body=settings(rules)))
         before = unchanged_state(service)
-        for key, value in dict(bm=1, du=1, st=0, cb=1, ca=1, gs=1, tl=2).items():
+        for key, value in dict(st=0, cb=1, ca=1, gs=1, tl=2).items():
             with self.subTest(key=key), self.assertRaisesRegex(MatchError, "room rules"):
                 service.handle("alice", packet(0x14, body=settings(replace(rules, **{key: value}))))
             self.assertEqual(unchanged_state(service), before)
+        # Without wagers a stake is dropped, so it cannot conflict with the room.
+        for key in ("bm", "du"):
+            service.handle("alice", packet(0x14, body=settings(replace(rules, **{key: 1}))))
+            self.assertEqual(service.game_rules, rules.as_dict())
         service.handle(
             "alice", packet(0x14, body=settings(rules, **{"in": 2, "pa": 1, "pw": "4142"}))
         )
