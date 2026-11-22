@@ -2,24 +2,24 @@
 
 `tmserver-admin` inspects saved accounts, queues explicit rewards, and records
 event progress or eligibility as audited actions. It uses the same validators and atomic
-transactions as the game server. JSON administration needs only the normal
-Python installation; PostgreSQL needs the optional `tmserver[postgres]` packages.
+transactions as the game server. It needs the `tmserver[postgres]` packages and
+the same database as the server.
 
-Stop the server or close the Local Play session first. The command holds the
-same writer lease as the normal launcher, so an active server blocks it. Keep
-the JSON `.writer.lock` and `.lock` sidecars in place; their existence does not
-mean the save is busy, and removing them can split the locks. Older launchers
-and custom scripts that do not acquire the lease must also be stopped.
+Stop the server first. The command takes the same PostgreSQL writer lock as the
+server, so an active server blocks it.
 
-Every invocation requires an explicit `--state PATH` or `--database-url URL`.
-There is no default save, automatic database selection, or account creation.
-An absent save/database state is rejected. Install the updated package to get
-the command, or use `python -m tmserver.cli.admin` from the configured source checkout.
+Every invocation needs the database URL, from `TM_DATABASE_URL` or
+`--database-url URL`; prefer the environment variable to keep credentials out of
+command history. There is no account creation, and an empty database is
+rejected. Install the updated package to get the command, or use
+`python -m tmserver.cli.admin` from the configured source checkout.
+
+The examples below assume `TM_DATABASE_URL` is set.
 
 ## Select the saved account
 
 ```powershell
-tmserver-admin --state .\var\local_state.json accounts
+tmserver-admin accounts
 ```
 
 The JSON output contains `account_key`, `player_id`, `name`, and `guild` for
@@ -31,7 +31,7 @@ For any save containing configured events, also supply the same complete
 configuration used by its server:
 
 ```powershell
-tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json accounts
+tmserver-admin --events .\examples\events.example.json accounts
 ```
 
 The configured event IDs must exactly match the saved IDs, and each saved event
@@ -41,7 +41,7 @@ Place storage and `--events` options before the command name.
 ## Inspect an account and its pending rewards
 
 ```powershell
-tmserver-admin --state .\var\local_state.json account --account-key KEY
+tmserver-admin account --account-key KEY
 ```
 
 The summary shows the saved identity, money balance, card count, Prize Center
@@ -71,8 +71,8 @@ never advances auction time. The shared `tmserver.admin.queries.account_summary`
 function produces the same detached read model without a CLI or web dependency.
 
 Supply the matching `--events` configuration when the save contains events.
-The same command accepts `--database-url`. Like other offline commands, it needs
-exclusive writer ownership, so stop the server first. Reading the summary does
+Like other offline commands, it needs exclusive writer ownership, so stop the
+server first. Reading the summary does
 not collect rewards, enroll members, recover interrupted matches, advance
 rankings, or write the save. Pending rewards stay separate from owned cards,
 money and Prize Center points. Normal server startup is responsible for
@@ -86,8 +86,8 @@ exact account key, a stable `--request-id`, `--operator` and `--reason`:
 
 ```powershell
 $audit = @('--account-key', 'KEY', '--request-id', 'operator-request-001', '--operator', 'local-admin', '--reason', 'Tournament award')
-tmserver-admin --state .\var\local_state.json prize-award @audit --id local-award-001 --top30 500
-tmserver-admin --state .\var\local_state.json operator-receipt --request-id operator-request-001
+tmserver-admin prize-award @audit --id local-award-001 --top30 500
+tmserver-admin operator-receipt --request-id operator-request-001
 ```
 
 The command prints the receipt. New actions require an idle account; the
@@ -110,7 +110,7 @@ failure before commit leaves both unchanged. PostgreSQL needs
 ## Queue a Prize Center award
 
 ```powershell
-tmserver-admin --state .\var\local_state.json prize-award @audit --id local-award-001 --top30 500
+tmserver-admin prize-award @audit --id local-award-001 --top30 500
 ```
 
 `--top30`, `--lucky`, and `--rookies` each accept 0 through 65,535 and default
@@ -129,7 +129,7 @@ IDs contain 1–128 letters, digits, periods, underscores, colons, or hyphens.
 ## Queue event cards or money
 
 ```powershell
-tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json event-grant @audit --event festival --id local-grant-001 --money 250 --card "0,12,0,10,10,5"
+tmserver-admin --events .\examples\events.example.json event-grant @audit --event festival --id local-grant-001 --money 250 --card "0,12,0,10,10,5"
 ```
 
 This queues explicit assets for the event's normal collection screen. It does
@@ -163,8 +163,8 @@ preserving existing Prize receipts unchanged.
 ## Correct event eligibility or progress
 
 ```powershell
-tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json event-eligibility @audit --event festival --value -1
-tmserver-admin --state .\var\local_state.json --events .\examples\events.example.json event-progress @audit --event festival --id local-progress-001 --steps 2 --completed-missions 1
+tmserver-admin --events .\examples\events.example.json event-eligibility @audit --event festival --value -1
+tmserver-admin --events .\examples\events.example.json event-progress @audit --event festival --id local-progress-001 --steps 2 --completed-missions 1
 ```
 
 `--value` is a signed 32-bit integer. Negative values exclude the member from
@@ -187,13 +187,7 @@ read v3 saves.
 The opt-in live panel exposes the same actions; see [panel setup](ADMIN_PANEL.md).
 Its web operator comes from the authenticated session.
 
-## PostgreSQL and commit behavior
-
-Use the same commands with explicit database selection, for example:
-
-```powershell
-tmserver-admin --database-url $env:TM_DATABASE_URL accounts
-```
+## Commit behavior
 
 The database must already contain state and use the current schema. Its existing
 session advisory lock excludes the running server and other cooperative writers.

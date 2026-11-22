@@ -22,6 +22,8 @@ Square Enix.
 - Windows and **32-bit** Python 3.13 or newer. Gameplay runs the client's own
   rules code through a small native bridge, which only works in a 32-bit process.
 - CMake 3.29+ and the MSVC x86 build tools, to build that bridge.
+- PostgreSQL 16 or newer, which holds the save, and a 32-bit `libpq.dll` for the
+  32-bit Python (see [PostgreSQL storage](docs/DATABASE.md)).
 
 ## Get started
 
@@ -31,22 +33,27 @@ Square Enix.
 
    ```powershell
    & 'C:/path/to/32-bit/python.exe' -m venv .venv
-   .venv/Scripts/python -m pip install -e ".[admin,auth]"
+   .venv/Scripts/python -m pip install -e ".[postgres,admin,auth]"
    ```
 
-3. Check out and build tmloader next to this folder, then follow
-   [local play](docs/LOCAL_PLAY.md). Run **`Check Setup.cmd`** to check the setup
-   without starting the game, and **`Play.cmd`** to play. One to three game windows
-   can connect to the same server.
+3. Create a database and bring its schema up to date, as described in
+   [PostgreSQL storage](docs/DATABASE.md):
 
-To run only the server, without starting the game:
+   ```powershell
+   $env:TM_DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@127.0.0.1:5432/tetramaster'
+   .venv/Scripts/tmserver-db upgrade
+   ```
 
-```powershell
-.venv/Scripts/tmserver --state var/local_state.json --log-dir var
-```
+4. Start the server, then point [tmloader](https://github.com/sruon/tmloader) at
+   its game and profile ports. One to three game windows can connect to the same
+   server.
 
-Saves and logs go to `var/` in the working directory. Run `tmserver --help` for
-rooms, events, human tables, prizes and ratings.
+   ```powershell
+   .venv/Scripts/tmserver --log-dir var
+   ```
+
+Logs go to `var/` in the working directory. Run `tmserver --help` for rooms,
+events, human tables, prizes and ratings.
 
 ## Features and options
 
@@ -54,13 +61,12 @@ rooms, events, human tables, prizes and ratings.
   The Computer menu offers one or two of the 30 computer opponents.
 - [Weekly rankings](docs/WEEKLY_RANKINGS.md), off by default.
 - [Offline administration](docs/ADMIN.md) with `tmserver-admin`: inspect saves,
-  preview recovery, queue prizes and correct event progress.
+  queue prizes and correct event progress.
 - The optional [admin panel](docs/ADMIN_PANEL.md), a browser view of the running
   server. It is read-only unless started with `--admin-actions`.
 - [Discord sign-in](docs/AUTHENTICATION.md) through Supabase, with automatic
   accounts and WebSocket game streams for tmloader. The
   [loader contract](docs/LOADER_AUTH_SPEC.md) describes the interface.
-- [PostgreSQL storage](docs/DATABASE.md) as an alternative to the JSON save.
 
 Listeners bind to loopback. Hosting the server for others needs a TLS reverse
 proxy, and public hosting has not been done yet.

@@ -1,45 +1,40 @@
 # PostgreSQL persistence
 
-The server now supports PostgreSQL through SQLAlchemy Core, with Alembic
-migrations. The existing JSON launcher remains available. Database mode is
-explicit: it neither reads nor overwrites `local_state.json`.
-
-The default JSON backend also checks each save against the file it previously
-read or committed. If that file disappears or changes externally, it stops the
-writer rather than merging stale memory or recreating a partial economy. Restart
-from the intended save after resolving the conflict. Unchanged saves retain their
-existing bytes without replacing the file.
-
-JSON commits use a short operating-system lock on an empty adjacent
-`<save-name>.lock` file. Leave this sidecar in place; the lock itself releases
-when the file handle closes or the process exits. Writes use a unique temporary
-file in the same directory, flush it, then atomically replace the save. Failed
-writes clean up their own temporary file and require a fresh server. This is
-protection for a local save, not a shared network-file or multi-server backend.
-
-The packaged JSON server and offline admin commands additionally share a
-`<save-name>.writer.lock` lifetime lease, acquired before loading/recovering the
-save and retained through shutdown. Leave this sidecar in place too. Direct
-low-level store users retain the commit checks above and must take
-`writer_lease(path)` themselves when they need exclusive lifetime ownership.
+The server saves to PostgreSQL through SQLAlchemy Core, with Alembic migrations.
+There is no other store: `tmserver` and `tmserver-admin` refuse to start without
+a database URL. A JSON save from an older version cannot be imported.
 
 ## Setup
 
 Use Python 3.13 and PostgreSQL 16 or newer. From the server directory, install
-the optional database dependencies in your environment:
+the database dependencies in your environment:
 
 ```powershell
 python -m pip install -e ".[postgres]"
 $env:TM_DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@HOST:5432/tetramaster'
 tmserver-db upgrade
+tmserver
 ```
+
+The game server runs in 32-bit Python, and psycopg needs a 32-bit `libpq.dll`
+on `PATH`. No 32-bit libpq is published for Windows; build it with vcpkg
+(`vcpkg install "libpq[core]:x86-windows"`) and add its `installed/x86-windows/bin`
+folder to `PATH`, as the native CI job does. For a local server, a PostgreSQL
+container is enough:
+
+```powershell
+docker run --detach --name tetramaster --env POSTGRES_PASSWORD=PASSWORD --publish 127.0.0.1:5432:5432 --volume tetramaster:/var/lib/postgresql/data postgres:16
+```
+
+`--database-url` overrides `TM_DATABASE_URL`; prefer the environment variable
+to keep credentials out of command history. Only `tmserver --list-accounts`
+works without a database.
 
 Current schema revision is `0003_identities`. Stop the owning server and run
 `tmserver-db upgrade` when upgrading an existing database. Revision 0002 adds the
 administration audit journal; 0003 adds durable authentication ownership. Neither
-rewrites accounts or prizes. The server refuses an older schema. Downgrade
-refuses retained identity links or audit receipts; only an absent or empty
-respective journal permits reverting its migration.
+rewrites accounts or prizes. The server refuses an older schema. Migrations only
+upgrade.
 
 Create the database and its credentials separately. Use a direct PostgreSQL
 connection or a session-pooling endpoint: transaction-pooling proxies cannot
@@ -47,38 +42,13 @@ preserve the session writer lock. Run migrations with a schema-owning role.
 Use TLS and the appropriate PostgreSQL URL parameters on a remote deployment.
 Do not put real credentials in committed files or command-line arguments.
 
-For a fresh economy, skip import. To move an existing save, stop the server that
-owns it and import the intended save:
-
-```powershell
-tmserver-db import-json 'var/local_state.json'
-tmserver
-```
-
-The importer validates every present service section with the existing domain
-readers, retains pending claims and recovery journals, records a SHA-256 digest,
-and verifies every generated native profile byte for byte after reading it back
-from PostgreSQL. Missing service sections in older saves remain missing until the
-server next saves. The importer refuses a database that already contains state,
-including a repeated import. It never updates the source file.
-
-For event saves, supply the same configuration to import and startup:
-
-```powershell
-tmserver-db import-json 'var/local_state.json' --events examples/events.example.json
-tmserver --events examples/events.example.json
-```
-
-`TM_DATABASE_URL` selects database mode. An explicit `--state some-save.json`
-selects JSON instead, even if that environment variable is set. Supplying both
-`--state` and `--database-url` is rejected. All existing game options remain
-available; protocol listeners still bind only to loopback.
+Protocol listeners bind only to loopback.
 
 ## Ownership and recovery
 
 One server process owns one database. A session advisory lock rejects a second
-writer immediately; migrations and import/export use the same lock and require
-the server to be stopped. Keep the database store context open until the server
+writer immediately; migrations use the same lock and require the server to be
+stopped. Keep the database store context open until the server
 has completed shutdown, including any final table cleanup:
 
 ```python
@@ -137,18 +107,9 @@ The context saves the account and award journal before publishing the award.
 The ID identifies the logical award and must be stable across retries. Direct
 domain-service methods remain in-memory APIs; their caller owns persistence.
 
-## Export
+## Backups
 
-With the server stopped:
-
-```powershell
-tmserver-db export-json 'var/export.json'
-```
-
-Exports exclusively create a new file and refuse to overwrite an existing save.
-The result can be opened by the JSON backend. After accepting database writes,
-use a fresh export for a deliberate switch back; the pre-import save is stale.
-Backup operations are outside this project setup.
+Backups are outside this project; use PostgreSQL's own tools, such as `pg_dump`.
 
 ## Tests and current limits
 
@@ -162,8 +123,8 @@ connections. Each test creates a random `tm_test_...` database and drops only
 that database on cleanup. The administrative database's tables are not changed.
 Without this environment variable, PostgreSQL tests are skipped.
 
-This is a complete alternative save backend for the existing single-process
-server. It is not a distributed architecture. Full administrative
+This is the save backend for a single-process server. It is not a distributed
+architecture. Full administrative
 saves still visit all accounts; database I/O blocks the event loop.
 Each service journal is currently one versioned JSONB document. Ordered card
 slots preserve duplicate copies, but do not yet provide permanent per-copy IDs.

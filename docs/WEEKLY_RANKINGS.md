@@ -6,12 +6,6 @@ Enable recorded local rankings when starting the server:
 .venv/Scripts/tmserver --ratings local-history --weekly-rankings
 ```
 
-The integrated launcher accepts the same options:
-
-```powershell
-.\Play.cmd --ratings local-history --weekly-rankings
-```
-
 This is a server choice; the original server's rule is unknown. Weeks start Monday at 00:00 UTC.
 Tracking starts when enabled; existing saves do not contain dates sufficient to
 reconstruct older weeks. The normal launch remains unchanged unless this option

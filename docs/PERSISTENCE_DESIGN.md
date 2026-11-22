@@ -1,7 +1,8 @@
 # Persistence design for the Python server
 
-Status: PostgreSQL backend implemented alongside the existing JSON backend.
-See [DATABASE.md](DATABASE.md) for setup, import/export and verification.
+Status: PostgreSQL is the only backend. The JSON file store and its import and
+export were removed; older JSON saves cannot be brought in.
+See [DATABASE.md](DATABASE.md) for setup and verification.
 
 ## The boundary
 
@@ -22,21 +23,19 @@ saving. Live request handlers no longer call Server.persist.
 SQLAlchemy Core expresses four concrete tables and short transactions. Alembic
 owns schema changes. An ORM object graph, repository hierarchy and another set of
 Pydantic game models would duplicate existing objects without clarifying this
-boundary. Import uses the existing domain restore validators.
+boundary. Validation uses the existing domain restore validators.
 
-Startup, import and administration reject unrecognized snapshot sections and
-account fields before recovery or writes. This prevents an older server from
-silently discarding newer saved data. Individual services then validate their
-journals and reject unknown receipt fields. The local launcher's read-only
-setup check validates the complete save, including journals, without refunding
-stakes or collecting pending rewards.
+Startup and administration reject unrecognized snapshot sections and account
+fields before recovery or writes. This prevents an older server from silently
+discarding newer saved data. Individual services then validate their journals
+and reject unknown receipt fields.
 
 `tests/fixtures/storage/` pins the saved document byte for byte. A scripted
 server run fills every journal and the accounts through the services' own
 requests and transactions (`tests/support/golden_save.py`). The tests check
 that this run produces `golden_snapshot.json`, that restoring and saving it
-again reproduces the same bytes, and that a PostgreSQL import of it exports
-`golden_postgres_export.json` with the same rows and journal values. Regenerate
+again reproduces the same bytes, and that saving it to PostgreSQL and reading it
+back gives `golden_postgres_export.json`, with the same rows and journal values. Regenerate
 both files with `python -m tests.support.golden_save` only for an intended
 format change, and review the diff.
 
@@ -47,7 +46,7 @@ format change, and review the diff.
 | accounts | Native identity, player ID, name, guild, balance, deck names, preserved profile bytes and session counter |
 | cards | Ordered eight-field card copies, keyed by account and inventory slot |
 | service_state | One versioned JSONB document per existing durable service |
-| state_meta | Schema-independent snapshot version, committed revision and optional import checksum |
+| state_meta | Schema-independent snapshot version, committed revision and a legacy import checksum column |
 
 Alembic also maintains its own schema revision table.
 
@@ -102,8 +101,7 @@ inventories unchanged.
 Trade negotiation, M4 reconciliation and the first Get are transient. Only final
 Get calls the trade transaction; delayed deck edits have their own one-account
 commit. Buy stages the offer, Get commits the purchase, and replay behavior stays
-native. Scoped JSON commits still replace the whole JSON file, preserving its
-other accounts and journals from the previous complete save.
+native.
 
 Ordinary match admission, results, prize transfer, Continue/late deck edits and
 disconnect recovery stage affected accounts and journals together. Round rows
@@ -162,27 +160,10 @@ phases and their existing disconnect/resynchronization behavior.
 
 ## Writer ownership
 
-JSON keeps a SHA-256 fingerprint of the last file it read or committed. A later
-read or save rejects a changed or missing file instead of silently rebasing live
-accounts. A save compares that fingerprint while holding a nonblocking OS lock
-on a stable sidecar, then writes a unique temporary file, flushes it and replaces
-the target. The containing directory is also flushed on POSIX. The file format
-does not change. Semantically unchanged snapshots skip replacement but still
-check for outside changes.
-
-The empty `.lock` sidecar stays in place; deleting it during service could let
-writers lock different files. The lock is held only during a commit, and the OS
-releases it on descriptor close or process exit. This is optimistic protection
-against competing local writers, not lifetime single-server ownership. External
-editors do not obey the lock; editing or replacing a live save remains unsupported.
-Network filesystems and hard-link aliases are outside this local JSON boundary.
-Errors permanently fail the store, including ambiguous replacement outcomes.
-A fresh process reloads the actual committed file and applies normal recovery.
-
 A session-scoped PostgreSQL advisory lock allows one application writer per
 database. Its dedicated physical connection uses no reusable pool. A second
 server fails fast. Offline migrations take the corresponding transaction-scoped
-lock, and import/export acquire the normal writer lock. The revision check
+lock, and offline administration acquires the normal writer lock. The revision check
 provides an additional stale-state guard.
 
 Locks are cooperative: direct SQL edits are unsupported while the server is
@@ -196,42 +177,28 @@ of players have not been load tested. Multi-writer concurrency still needs
 database-owned account ownership and operation receipts. Only then should independent tasks use separate
 AsyncSessions or multiple processes own accounts and tables.
 
-## Import and recovery
+## Recovery
 
-The offline importer reads a save without modifying it, validates present
-sections using existing domain readers, and requires an empty migrated database.
-It retains optional-section absence in old saves, writes one transaction, records
-the source hash, and compares generated native profile bytes after a database
-read. Event data requires matching event configuration.
-
-It does not run match recovery during import. Server startup performs that
-recovery and saves it before opening protocol listeners. Interrupted stakes
+Server startup performs match recovery and saves it before opening protocol listeners. Interrupted stakes
 refund once; paid results remain paid; unclaimed cards retain the returned-card
 collection path. An active board, socket, encryption stream, trade consent and
 unaccepted shop offer remain transient.
-
-An offline JSON export permits a deliberate switch back to the existing backend.
-It refuses file overwrite. The pre-import save ceases to be a valid rollback
-point once new database transactions have been accepted.
 
 ## Verification
 
 Real PostgreSQL tests cover schema/model agreement, repeatable migrations,
 duplicate-writer rejection, no-op and per-account writes, rollback after account
 and journal failures, lost connections, lost COMMIT acknowledgement, unsigned
-identities, duplicate cards, unknown profile bytes, import/export and repeated
-startup recovery.
+identities, duplicate cards, unknown profile bytes, the golden saved document
+and repeated startup recovery.
 
-JSON tests exercise real files and separate processes on Windows and Linux:
-missing/replaced saves, stale writers, simultaneous commit attempts, process
-death, flush/replace failures, no-op writes and lost replacement acknowledgements.
 Encrypted client tests verify storage conflicts close admission without a success
 reply. Auction recovery verifies an ambiguously committed payment is not repeated.
 
 Encrypted-socket tests exercise purchases and duplicate Buy/Get behavior,
 two-account trades, wagered games with prizes and ratings, auctions and
-collection, and partial event grants. The JSON backend retains its existing
-failure and protocol regression tests. These are headless tests; they do not
+collection, and partial event grants. The portable lane runs the same protocol
+and failure tests against an in-memory store. These are headless tests; they do not
 launch or control the native game.
 
 Production hosting still needs an operational backup and tested restore policy,

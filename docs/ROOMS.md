@@ -1,6 +1,7 @@
 # Rooms and Computer play
 
-`Play.cmd` loads the default Local Room plus
+`tmserver --rooms examples/auto_rooms.example.json` adds the rooms below to the
+default Local Room; see
 [`examples/auto_rooms.example.json`](../examples/auto_rooms.example.json).
 This is a local room lineup, not a claim about the historical service's lineup.
 
@@ -14,9 +15,9 @@ This is a local room lineup, not a claim about the historical service's lineup.
 
 For CPU play, enter **Local Room**, select an empty table and choose **Computer**.
 The native menu requires at least five cards; zero money does not disable it.
-Restart the launcher after updating to receive the corrected room permissions.
-The other supplied rooms use human opponents; run `Play.cmd --clients 2` or
-`--clients 3` to test them locally.
+Restart the server after updating to receive the corrected room permissions.
+The other supplied rooms use human opponents; connect two or three loader windows
+to test them locally.
 
 ## Configuring rules
 

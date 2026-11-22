@@ -26,11 +26,15 @@ supported server platform; only the client library must match Python's bitness.
 cmake -S native/original_rules -B build/original-rules -A Win32
 cmake --build build/original-rules --config Release
 $python32 = 'C:/path/to/32-bit/python.exe'
-& $python32 -m pip install -e .
+& $python32 -m pip install -e ".[postgres]"
 $env:TM_ORIGINAL_IMAGE = 'C:/path/to/TM_emulated_mapped.dll'
 $env:TM_NATIVE_BRIDGE = (Resolve-Path build/original-rules/Release/tm_original_rules.dll).Path
-& $python32 -m tmserver --state var/state.json
+$env:TM_DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@127.0.0.1:5432/tetramaster'
+& $python32 -m tmserver
 ```
+
+The save is in PostgreSQL; see [PostgreSQL storage](DATABASE.md) for the
+database, its schema upgrade and the 32-bit libpq it needs.
 
 The CLI also accepts `--rules-image` and `--rules-bridge` instead of environment
 variables. There is no backend selector or Python fallback. Missing paths,
