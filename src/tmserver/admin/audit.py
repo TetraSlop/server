@@ -1,6 +1,7 @@
 """Immutable operator requests and jointly committed prize/event receipts."""
 
 import json
+from types import SimpleNamespace
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -193,19 +194,75 @@ class EventMemberReceipt(_Receipt):
         return self
 
 
+# The lowest journal version that can hold each receipt type. A journal is
+# written at the highest version its receipts need, so older saves keep theirs.
+VERSIONS = {PrizeAwardReceipt: 1, EventGrantReceipt: 2, EventMemberReceipt: 3}
+
+
 class _Journal(_ImmutableModel):
-    version: Annotated[int, Field(ge=1, le=1)]
-    receipts: tuple[PrizeAwardReceipt, ...]
-
-
-class _JournalV2(_ImmutableModel):
-    version: Annotated[int, Field(ge=2, le=2)]
-    receipts: tuple[PrizeAwardReceipt | EventGrantReceipt, ...]
-
-
-class _JournalV3(_ImmutableModel):
-    version: Annotated[int, Field(ge=3, le=3)]
+    version: Annotated[int, Field(ge=1, le=max(VERSIONS.values()))]
     receipts: tuple[PrizeAwardReceipt | EventGrantReceipt | EventMemberReceipt, ...]
+
+
+def _check_award(receipt, saved, seen):
+    request = receipt.request
+    key = ("award", request.account_key, request.award_id)
+    if key in seen:
+        raise ValueError("duplicate administration request or award receipt")
+    row = saved.prizes.get(request.account_key, {})
+    if request.award_id not in row.get("known_awards", ()):
+        raise ValueError("audit receipt has no jointly recorded Prize Center award")
+    pending = row.get("pending")
+    if pending is not None and pending["id"] == request.award_id:
+        expected = dict(
+            id=request.award_id, top30=request.top30, lucky=request.lucky,
+            rookies=request.rookies, lucky_cards=list(request.lucky_cards),
+        )
+        if dict(pending, lucky_cards=list(pending["lucky_cards"])) != expected:
+            raise ValueError("audit receipt differs from its pending Prize Center award")
+    return key
+
+
+def _check_grant(receipt, saved, seen):
+    request = receipt.request
+    key = ("grant", request.account_key, request.event_id, request.grant_id)
+    row = saved.grants.get(key[1:])
+    if key in seen:
+        raise ValueError("duplicate administration event grant receipt")
+    if row is None:
+        raise ValueError("audit receipt has no jointly recorded event grant")
+    if row["money"] != request.money or row["cards"] != [list(card.full()) for card in receipt.cards]:
+        raise ValueError("audit receipt differs from its recorded event grant")
+    return key
+
+
+def _check_member(receipt, saved, seen):
+    # Later actions can change eligibility. Receipts retain the original
+    # before/after facts, not a copy of today's member.
+    request = receipt.request
+    events = saved.events
+    member = None if events is None else events.member(request.account_key, request.event_id)
+    if member is None or member.identity != receipt.member_identity:
+        raise ValueError("audit receipt has no matching event member")
+    if (receipt.after.steps > member.steps
+            or receipt.after.completed_missions & ~member.completed_missions):
+        raise ValueError("audit receipt exceeds its recorded event progress")
+    if not isinstance(request, EventProgressRequest):
+        return None
+    key = ("update", request.account_key, request.event_id, request.update_id)
+    facts = events.progress_update(*key[1:])
+    if key in seen or facts != (request.steps_delta, request.completed_missions):
+        raise ValueError("audit receipt differs from its recorded event progress")
+    return key
+
+
+# Each check confirms a receipt against the journal saved with it in the same
+# commit, and returns the reference it claims (or None) to reject duplicates.
+CHECKS = {
+    PrizeAwardReceipt: _check_award,
+    EventGrantReceipt: _check_grant,
+    EventMemberReceipt: _check_member,
+}
 
 
 class AdminAudit:
@@ -229,15 +286,9 @@ class AdminAudit:
         self._receipts = staged._receipts
 
     def snapshot(self):
-        if any(isinstance(receipt, EventMemberReceipt) for receipt in self._receipts.values()):
-            return _JournalV3(version=3, receipts=tuple(self._receipts.values())).model_dump(
-                mode="json"
-            )
-        if any(isinstance(receipt, EventGrantReceipt) for receipt in self._receipts.values()):
-            return _JournalV2(version=2, receipts=tuple(self._receipts.values())).model_dump(
-                mode="json"
-            )
-        return _Journal(version=1, receipts=tuple(self._receipts.values())).model_dump(mode="json")
+        receipts = tuple(self._receipts.values())
+        version = max((VERSIONS[type(receipt)] for receipt in receipts), default=1)
+        return _Journal(version=version, receipts=receipts).model_dump(mode="json")
 
     @classmethod
     def restore(cls, economy, prize, snapshot, *, event_cards=None):
@@ -246,21 +297,20 @@ class AdminAudit:
             return audit
         # JSON permits the arrays used for immutable tuples while preserving
         # strict number/string validation. No Python-side coercion is enabled.
-        models = {1: _Journal, 2: _JournalV2, 3: _JournalV3}
-        version = snapshot.get("version") if isinstance(snapshot, dict) else None
-        model = models.get(version, _Journal) if type(version) is int else _Journal
-        journal = model.model_validate_json(json.dumps(snapshot))
-        awards = set()
-        grants = set()
-        updates = set()
-        events = None if event_cards is None else event_cards.host
-        prize_rows = prize.snapshot()["accounts"]
-        grant_rows = {
-            (row["key"], row["event_id"], row["id"]): row
-            for row in (() if event_cards is None else event_cards.snapshot()["grants"])
-        }
+        journal = _Journal.model_validate_json(json.dumps(snapshot))
+        saved = SimpleNamespace(
+            prizes=prize.snapshot()["accounts"],
+            events=None if event_cards is None else event_cards.host,
+            grants={
+                (row["key"], row["event_id"], row["id"]): row
+                for row in (() if event_cards is None else event_cards.snapshot()["grants"])
+            },
+        )
+        seen = set()
         for receipt in journal.receipts:
             request = receipt.request
+            if VERSIONS[type(receipt)] > journal.version:
+                raise ValueError("audit receipt is newer than its journal version")
             # Input defaults help operators draft requests, but durable facts
             # must be complete. Redemption removes the original award bundle,
             # so defaulting a missing saved amount could invent its history.
@@ -271,54 +321,6 @@ class AdminAudit:
             economy.account_view(request.account_key)
             if request.request_id in audit._receipts:
                 raise ValueError("duplicate administration request receipt")
-            if isinstance(receipt, EventMemberReceipt):
-                member = None if events is None else events.member(request.account_key, request.event_id)
-                if member is None or member.identity != receipt.member_identity:
-                    raise ValueError("audit receipt has no matching event member")
-                if (receipt.after.steps > member.steps
-                        or receipt.after.completed_missions & ~member.completed_missions):
-                    raise ValueError("audit receipt exceeds its recorded event progress")
-                if isinstance(request, EventProgressRequest):
-                    update_key = (request.account_key, request.event_id, request.update_id)
-                    facts = events.progress_update(request.account_key, request.event_id, request.update_id)
-                    if update_key in updates or facts != (request.steps_delta, request.completed_missions):
-                        raise ValueError("audit receipt differs from its recorded event progress")
-                    updates.add(update_key)
-                # Later actions can change eligibility. Receipts retain the
-                # original before/after facts, not a copy of today's member.
-                audit._receipts[request.request_id] = receipt
-                continue
-            if isinstance(receipt, EventGrantReceipt):
-                grant_key = (request.account_key, request.event_id, request.grant_id)
-                row = grant_rows.get(grant_key)
-                if grant_key in grants:
-                    raise ValueError("duplicate administration event grant receipt")
-                if row is None:
-                    raise ValueError("audit receipt has no jointly recorded event grant")
-                if row["money"] != request.money or row["cards"] != [
-                    list(card.full()) for card in receipt.cards
-                ]:
-                    raise ValueError("audit receipt differs from its recorded event grant")
-                grants.add(grant_key)
-                audit._receipts[request.request_id] = receipt
-                continue
-            award_key = (request.account_key, request.award_id)
-            if award_key in awards:
-                raise ValueError("duplicate administration request or award receipt")
-            row = prize_rows.get(request.account_key, {})
-            if request.award_id not in row.get("known_awards", ()):
-                raise ValueError("audit receipt has no jointly recorded Prize Center award")
-            pending = row.get("pending")
-            if pending is not None and pending["id"] == request.award_id:
-                expected = dict(
-                    id=request.award_id,
-                    top30=request.top30,
-                    lucky=request.lucky,
-                    rookies=request.rookies,
-                    lucky_cards=list(request.lucky_cards),
-                )
-                if dict(pending, lucky_cards=list(pending["lucky_cards"])) != expected:
-                    raise ValueError("audit receipt differs from its pending Prize Center award")
+            seen.add(CHECKS[type(receipt)](receipt, saved, seen))
             audit._receipts[request.request_id] = receipt
-            awards.add(award_key)
         return audit
