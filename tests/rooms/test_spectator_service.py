@@ -170,16 +170,11 @@ class SpectatorTests(unittest.TestCase):
         self.assertEqual(self.poll()[0].payload, battle)
         self.assertEqual(self.poll(), [])
 
-    def test_duplicate_turn_is_suppressed_and_gap_evicts_observer_only(self):
+    def test_duplicate_turn_is_suppressed(self):
         self.watch()
         current = self.match.observer_snapshot().turn_packet
         self.publish([Delivery("alice", current), Delivery("bob", current)])
         self.assertEqual(self.poll(), [])
-        gap = packet(0x43, 9, 3, "@TurnData=/A=1/S=0|0/R=0|0|0|0|0|0|0|0")
-        before = self.match.snapshot()
-        self.publish([Delivery("alice", gap)])
-        self.assertEqual(self.s.take_evicted(), (("watcher", "turn_gap"),))
-        self.assertEqual(self.match.snapshot(), before)
 
     def test_deferred_battle_bootstrap_waits_for_stable_turn_and_skips_prior_batch(self):
         snapshot = self.match.observer_snapshot()

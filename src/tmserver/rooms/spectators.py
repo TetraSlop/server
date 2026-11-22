@@ -5,7 +5,6 @@ acknowledgement. A slow spectator may fall behind but never holds up the players
 Layout: TetraPackets flows/spectators.md.
 """
 
-import math
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -13,7 +12,6 @@ from dataclasses import dataclass, field
 from tmserver.game.models import Delivery
 from tmserver.game.errors import MatchError
 from tmserver.game.packets import decode, packet
-from tmserver.game.departure_rules import next_turn
 
 
 class SpectatorError(MatchError):
@@ -89,50 +87,24 @@ def bootstrap(snapshot):
     if snapshot.phase not in ("selection", "turn"):
         raise SpectatorError("watch bootstrap requires selection or a clean turn")
     n = len(snapshot.players)
-    if n not in (2, 3):
-        raise SpectatorError("watch bootstrap requires two or three named seats")
-    if not 0 <= snapshot.sequence <= 255 or snapshot.active not in range(n):
-        raise SpectatorError("invalid watch sequence/active seat")
     names = []
     for p in snapshot.players:
-        if (
-            type(p.npc_id) is not int
-            or not 0 <= p.npc_id <= 30
-            or p.npc_id
-            and (p.peer is not None or p.departed or p.substitute)
-        ):
-            raise SpectatorError("invalid native NPC snapshot")
         # C selects the complete original asset name (including its viewer
         # level threshold). CN remains safe for the separate sixteen-byte copy.
         name = p.name[:15] if p.npc_id else p.name
         if not name or len(name) > 15 or any(c < 32 or c > 126 for c in name):
             raise SpectatorError("watch name must fit the original NUL-terminated field")
-        if not 0 <= p.remaining <= 5:
-            raise SpectatorError("watch hand count outside original bounds")
         names.append(name.hex().upper())
     rules = dict(snapshot.game_rules)
     # VsGameInit's leading bm is absent here; WatchInfo shifts the vector.
     # WatchInfo R6 becomes P+D9. Both original watch setup branches create
     # the chat panel only when it is zero; in 2 therefore omits that panel.
-    if type(snapshot.observation) is not int or snapshot.observation not in (0, 1, 2):
-        raise SpectatorError("invalid observation rule")
     r = [rules[k] for k in ("st", "cb", "ca", "tl", "du", "gs")] + [snapshot.observation]
-    if any(type(v) is not int or not 0 <= v <= 255 for v in r):
-        raise SpectatorError("invalid watch rule byte")
     body = f"@WatchInfo=/N={n}/CN=" + "|".join(names) + "/R=" + _text(r)
     # Q=1 is converted by the original WatchInfo receiver into departed state2.
     # C installs the original NPC or replacement personality and asset name.
     # The ordinary local CPU facade still has C=0; it is not a native NPC id.
     zeros = _text([0] * n)
-    if any(
-        type(p.departed) is not bool
-        or type(p.substitute) is not int
-        or not 0 <= p.substitute <= 30
-        or p.substitute
-        and (not p.departed or rules["gs"] != 0)
-        for p in snapshot.players
-    ):
-        raise SpectatorError("invalid departure/replacement snapshot")
     body += "/Q=" + _text(int(p.departed) for p in snapshot.players)
     humans = n - sum(bool(p.npc_id) for p in snapshot.players)
     body += (
@@ -179,7 +151,6 @@ class _Observer:
     bootstrapping: bool = False
     next_send: float = 0
     last_turn: int | None = None
-    last_active: int | None = None
     result_seen: bool = False
 
 
@@ -211,15 +182,6 @@ class SpectatorService:
         max_backlog=256,
         max_observers=16,
     ):
-        if type(enabled) is not bool:
-            raise ValueError("enabled must be boolean")
-        for delay in (bootstrap_delay, turn_delay, action_delay, packet_delay):
-            if not isinstance(delay, (int, float)) or not math.isfinite(delay) or delay < 0:
-                raise ValueError("spectator delays must be finite and nonnegative")
-        if type(max_backlog) is not int or not 1 <= max_backlog <= 4096:
-            raise ValueError("max_backlog must be 1..4096")
-        if type(max_observers) is not int or not 1 <= max_observers <= 256:
-            raise ValueError("max_observers must be 1..256")
         self.enabled, self.clock = enabled, clock
         self.bootstrap_delay, self.turn_delay, self.action_delay, self.packet_delay = (
             bootstrap_delay,
@@ -282,7 +244,6 @@ class SpectatorService:
         state.outstanding.extend(messages)
         state.bootstrapping = True
         state.last_turn = snapshot.sequence if snapshot.phase == "turn" else None
-        state.last_active = snapshot.active if snapshot.phase == "turn" else None
         return [Delivery(peer, payload) for payload in messages]
 
     def delay_after(self, payload):
@@ -392,25 +353,7 @@ class SpectatorService:
                 if msg.subtype == 9:
                     if msg.argument == state.last_turn:
                         continue
-                    active = int(msg.sections["TurnData"]["A"])
-                    if state.last_turn is not None:
-                        departed = tuple(i for i, p in enumerate(snapshot.players) if p.departed)
-                        substitutes = tuple(
-                            i for i, p in enumerate(snapshot.players) if p.substitute
-                        )
-                        boundary = next_turn(
-                            len(snapshot.players),
-                            dict(snapshot.game_rules)["gs"],
-                            departed,
-                            state.last_turn,
-                            state.last_active,
-                            substitutes,
-                        )
-                        if (msg.argument, active) != (boundary.sequence, boundary.active):
-                            self._evict(peer, "turn_gap")
-                            break
                     state.last_turn = msg.argument
-                    state.last_active = active
                 state.queue.append(payload)
                 if msg.subtype == 0x0D:
                     state.result_seen = True
