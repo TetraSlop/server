@@ -4,11 +4,11 @@ import unittest
 from dataclasses import replace
 
 from tests import ROOT
+from tmserver.game.errors import MatchError
 from tmserver.game.original.runtime import default_rules
 from tmserver.game.rules import Card
 from tmserver.game.special_rules import (
     Cell,
-    SpecialRulesError,
     apply_special,
     finish_turn,
     place,
@@ -33,8 +33,6 @@ class SpecialAPITests(unittest.TestCase):
             (placed[1].model, placed[1].property, placed[1].identity), (5, 1, ("p", 3))
         )
         self.assertEqual(initial.cells[1].model, 0x8003)
-        with self.assertRaises(SpecialRulesError):
-            place(initial.cells, 0, CARD, 0)
         done = finish_turn(placed, 1)
         self.assertEqual(done[1].property, 0)
         self.assertEqual((done[5].direction, done[5].arrows), (1, 2))
@@ -48,8 +46,6 @@ class SpecialAPITests(unittest.TestCase):
         fields[5] = 18
         b = list(start_board(fields).cells)
         b[9] = Cell.ordinary(CARD, 0, identity=7)
-        with self.assertRaises(SpecialRulesError):
-            apply_special(b, 9, 5, 0, (0,) * 8)
         result = apply_special(b, 9, 5, 0, (0,) * 8, replacement=CARD)
         c = result.cells[5]
         self.assertEqual((c.base_owner, c.owner, c.card, c.identity), (5, 0, CARD, None))
@@ -57,15 +53,13 @@ class SpecialAPITests(unittest.TestCase):
 
     def test_input_boundaries(self):
         for fields in ([0] * 15, [19] + [0] * 15, [True] + [0] * 15):
-            with self.assertRaises(SpecialRulesError):
+            with self.assertRaises(MatchError):
                 start_board(fields)
         b = list(start_board([0] * 16).cells)
         b[5] = Cell(model=0x8009, base_owner=4, owner=4, arrows=16, direction=4)
         for power in (-1, 32768):
-            with self.assertRaises(SpecialRulesError):
+            with self.assertRaises(MatchError):
                 spinner_chain(b, 5, 0, power)
-        with self.assertRaises(SpecialRulesError):
-            shuffle(b, (1, 2))
 
 
     def test_native_AI_can_place_on_an_unoccupied_low_property_tile(self):

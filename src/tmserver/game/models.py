@@ -11,6 +11,7 @@ from tmserver.game.errors import MatchError
 from tmserver.game.packets import numbers
 from tmserver.game.prizes import PrizeSettlement
 from tmserver.rankings.stats import PracticeStats
+from tmserver.rooms.rules import RoomRules
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,6 @@ class ObserverSnapshot:
     observation: int = 0
 
 
-DEFAULT_GAME_RULES = dict(bm=0, du=0, st=0, cb=0, ca=0, gs=1, tl=2)
+DEFAULT_GAME_RULES = RoomRules().as_dict()
 
 DEFAULT_TABLE_RULES = {"in": 1, "lu": 99999, "ll": 0, "au": 300, "al": 100, "co": 4, "pa": 0}

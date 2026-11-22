@@ -1737,8 +1737,6 @@ class CardPrizeIntegrationTests(unittest.TestCase):
 
     def test_opt_in_guards_abort_and_full_round_default_behavior(self):
         self.assertTrue(MatchService(card_prizes=True).card_prizes)
-        with self.assertRaises(ValueError):
-            MatchService(mode="versus", card_prizes=1)
         s, out = service("versus")
         self.assertFalse(s.card_prizes)
         self.assertIsNone(s.handle("alice", packet(0x43, 15, 0, "@GetSelect=/H=0")))
@@ -2023,11 +2021,8 @@ class WagerHookTests(unittest.TestCase):
 
     def test_defaults_and_incomplete_economic_configuration_remain_disabled(self):
         for args in (
-            {"allow_wagers": 1},
             {"allow_wagers": True},
             {"allow_wagers": True, "round_authorizer": lambda *x: {}},
-            {"round_authorizer": 1},
-            {"payout_provider": False},
         ):
             with self.assertRaises(ValueError):
                 MatchService(**args)

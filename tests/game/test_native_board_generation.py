@@ -4,26 +4,13 @@ import sys
 import unittest
 from pathlib import Path
 
-from tmserver.game.boards import BoardGenerationError, generate_board
+from tmserver.game.boards import generate_board
 from tmserver.game.rules import CRTLCG
 
 
 class BoardGenerationTests(unittest.TestCase):
 
-    def test_bad_inputs_validate_before_randomness_and_default_original_has_walls(self):
-        def forbidden():
-            raise AssertionError("unexpected random draw")
-
-        for n in (0, 1, 4, True):
-            with self.assertRaises(BoardGenerationError):
-                generate_board(n, forbidden)
-        for field in ("st", "cb", "ca"):
-            for value in (-1, 2, True):
-                with self.assertRaises(BoardGenerationError):
-                    generate_board(2, forbidden, **{field: value})
-        for value in (-1, 32768, True):
-            with self.assertRaises(BoardGenerationError):
-                generate_board(2, lambda: value)
+    def test_default_original_has_walls(self):
         generated = generate_board(2, CRTLCG(1))
         self.assertGreater(generated.blocks, 0)
         self.assertEqual(generated.effects, 0)

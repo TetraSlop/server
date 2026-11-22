@@ -7,9 +7,7 @@ Client routines: 100C90EA..100C93E2, 100CAAE3..100CAC6E, 100CAEDD..100CAF59 and
 from dataclasses import dataclass, replace
 from typing import Any
 
-
-class PrizeError(ValueError):
-    pass
+from tmserver.game.errors import MatchError
 
 
 @dataclass(frozen=True)
@@ -78,43 +76,7 @@ class PrizeLedger:
     def __init__(self, scores, hands):
         self.scores = tuple(scores)
         self.player_count = len(self.scores)
-        if self.player_count not in (2, 3):
-            raise PrizeError("ordinary prizes require two or three players")
-        if (
-            any(type(x) is not int or not 0 <= x <= 255 for x in self.scores)
-            or sum(self.scores) == 0
-        ):
-            raise PrizeError("scores must be nonnegative bytes with a positive total")
-        if len(hands) != self.player_count:
-            raise PrizeError("one hand is required for each seat")
-        self._hands = []
-        for hand in hands:
-            hand = tuple(hand)
-            if len(hand) != 5 or any(not isinstance(c, PrizeCard) for c in hand):
-                raise PrizeError("each input hand must contain five PrizeCards")
-            if any(type(c.original_slot) is not int for c in hand) or sorted(
-                c.original_slot for c in hand
-            ) != list(range(5)):
-                raise PrizeError("each hand must identify every original slot0..4 once")
-            if any(
-                type(c.current_owner) is not int or not 0 <= c.current_owner < self.player_count
-                for c in hand
-            ):
-                raise PrizeError("capture owners must identify an ordinary seat")
-            # The service/economy card dataclasses are immutable and share deck.
-            # Validate the received-card conversion before any selection mutates.
-            try:
-                for c in hand:
-                    if not getattr(
-                        getattr(type(c.card), "__dataclass_params__", None), "frozen", False
-                    ):
-                        raise TypeError("card dataclass must be frozen")
-                    if type(c.card.deck) is not int or c.card.deck not in (*range(50), 255):
-                        raise ValueError("deck must be 0..49 or 255")
-                    replace(c.card, deck=255)
-            except (AttributeError, TypeError, ValueError) as exc:
-                raise PrizeError("cards must support an immutable deck255 copy") from exc
-            self._hands.append(list(hand))
+        self._hands = [list(hand) for hand in hands]
         self.order = tuple(
             sorted(range(self.player_count), key=lambda seat: (-self.scores[seat], seat))
         )
@@ -146,7 +108,7 @@ class PrizeLedger:
 
     def settlement(self):
         if self._settlement is None:
-            raise PrizeError("prize choices are incomplete")
+            raise MatchError("prize choices are incomplete")
         return self._settlement
 
     def select(self, winner, hand_index, *, choice_id):
@@ -158,15 +120,13 @@ class PrizeLedger:
         """
         pending = self._pending
         if pending is None:
-            raise PrizeError("there is no outstanding prize choice")
-        if type(choice_id) is not int or choice_id != pending.choice_id:
-            raise PrizeError("stale prize choice")
-        if type(winner) is not int or winner != pending.winner:
-            raise PrizeError("only the current winning seat can choose")
-        if type(hand_index) is not int or hand_index not in tuple(
-            o.hand_index for o in pending.options
-        ):
-            raise PrizeError("prize must be an eligible captured card")
+            raise MatchError("there is no outstanding prize choice")
+        if choice_id != pending.choice_id:
+            raise MatchError("stale prize choice")
+        if winner != pending.winner:
+            raise MatchError("only the current winning seat can choose")
+        if hand_index not in tuple(o.hand_index for o in pending.options):
+            raise MatchError("prize must be an eligible captured card")
         award = self._grant(pending.winner, pending.loser, hand_index)
         self._pending = None
         self._pair += 1  # A user-selected pair is necessarily nonperfect.

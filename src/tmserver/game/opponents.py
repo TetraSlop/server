@@ -7,10 +7,7 @@ client/computer-player.md.
 from dataclasses import dataclass
 
 from tmserver.game.ai import Personality
-
-
-class OpponentError(ValueError):
-    pass
+from tmserver.game.errors import MatchError
 
 
 @dataclass(frozen=True)
@@ -72,37 +69,21 @@ OPPONENTS = tuple(
 
 def opponent(npc_id):
     if type(npc_id) is not int or not 1 <= npc_id <= 30:
-        raise OpponentError("named NPC selector must be 1..30")
+        raise MatchError("named NPC selector must be 1..30")
     return OPPONENTS[npc_id - 1]
 
 
-def prepare_opponents(npc_ids, catalog, raw_rng, guild=0):
+def prepare_opponents(npc_ids, catalog, draw, guild=0):
     """Generate every NPC pool before choosing hands, as in the local menu.
 
     100EC14F..1C0 generates ten cards for each selected NPC, then the later
     100D9DE0 chooser takes pool0 and four random remaining cards per seat.
     These isolated stages run consecutively here. Intervening client scene,
     board-generation and optional frame-poll RNG draws are not reproduced;
-    historical hosted scheduling remains unknown.
+    historical hosted scheduling remains unknown. The match passes one or two
+    distinct selectors it has already checked with opponent().
     """
-    try:
-        npc_ids = tuple(npc_ids)
-    except TypeError as exc:
-        raise OpponentError("one or two named NPC selectors are required") from exc
-    if not 1 <= len(npc_ids) <= 2:
-        raise OpponentError("one or two named NPC selectors are required")
-    selected = tuple(opponent(npc_id) for npc_id in npc_ids)
-    if len(set(npc_ids)) != len(npc_ids):
-        raise OpponentError("named NPC selectors must be distinct")
-    if type(guild) is not int or guild not in range(4):
-        raise OpponentError("guild/filter must be 0..3")
-
-    def draw():
-        value = raw_rng()
-        if type(value) is not int or not 0 <= value <= 32767:
-            raise OpponentError("CRT draw must be 0..32767")
-        return value
-
+    selected = tuple(map(opponent, npc_ids))
     pools = [
         [catalog.generate(catalog.select(npc.pack, guild, draw), draw) for _ in range(10)]
         for npc in selected

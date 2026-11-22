@@ -2,13 +2,14 @@
 
 import unittest
 
-from tmserver.game.opponents import OpponentError, opponent
+from tmserver.game.errors import MatchError
+from tmserver.game.opponents import opponent
 
 
 class OpponentTests(unittest.TestCase):
     def test_API_rejects_reserved_ID_and_preserves_known_NPC_names(self):
         for selector in (0, 31, -1, True):
-            with self.subTest(selector=selector), self.assertRaises(OpponentError):
+            with self.subTest(selector=selector), self.assertRaises(MatchError):
                 opponent(selector)
         self.assertEqual(opponent(1).name, b"Flower Girl Natasha")
         self.assertEqual(opponent(3).name, b"Quina")

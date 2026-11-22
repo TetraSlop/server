@@ -8,10 +8,6 @@ TetraPackets client/board.md.
 from dataclasses import dataclass
 
 
-class BoardGenerationError(ValueError):
-    pass
-
-
 # Exact100-entry lookup tables, including the trailing15 zero bytes in3p E.
 # Original 100C0F33/100C0FA7 index these by raw_rand()%100 and mode*100.
 BLOCK_COUNTS = (
@@ -42,25 +38,15 @@ class GeneratedBoard:
     shared: tuple[int, ...]
 
 
-def generate_board(player_count, raw_rng, *, st=0, cb=0, ca=0):
+def generate_board(player_count, draw, *, st=0, cb=0, ca=0):
     """OriginalG.171 local simulation with ordinary role0 and native rule bits.
 
     F1/2 are walls; cb optionally substitutes6/7/8/17 among nonspinner blocks;
     ca turns floor(B/4) blocks into directional9..16; st adds low-property3..5.
     Selection is without replacement, rescanning ascending empty F indices.
-    The original emits no CBC18 in this ordinary generator.
+    The original emits no CBC18 in this ordinary generator. The match passes
+    a validated player count and 0/1 rule flags, and draws from its CRT.
     """
-    if type(player_count) is not int or player_count not in (2, 3):
-        raise BoardGenerationError("ordinary board needs two or three players")
-    if any(type(v) is not int or v not in (0, 1) for v in (st, cb, ca)):
-        raise BoardGenerationError("st/cb/ca must be native0/1 flags")
-
-    def draw():
-        value = raw_rng()
-        if type(value) is not int or not 0 <= value <= 32767:
-            raise BoardGenerationError("raw_rng must return CRT rand values0..32767")
-        return value
-
     mode = player_count - 2
     blocks = BLOCK_COUNTS[mode][draw() % 100]
     spinners = blocks // 4 if ca else 0
