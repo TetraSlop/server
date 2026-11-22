@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests import ROOT
+from tests.economy.entries import shop_entry
 from tests.network import test_services_integration as services
 from tests.network.test_server import Client
 from tmserver.cards.model import Card
@@ -23,11 +24,7 @@ OFFERS = ShopOffers(3, b"Alice", (76, 77), True)
 
 
 def enter(service, key="a"):
-    account = service.account_view(key)
-    return service.handle(
-        key,
-        named(0xB0, 0, 0, f"@ShReq=/NN={account.nn:016X}/HID=0/Dm=0/Vol=0/CN={account.name.hex()}"),
-    )
+    return service.handle(key, shop_entry(service, key))
 
 
 def number(replies):
@@ -142,13 +139,7 @@ class EncryptedShopOfferTests(unittest.IsolatedAsyncioTestCase):
         self.temp.cleanup()
 
     async def enter(self):
-        account = self.server.economy.account_view(self.key)
-        replies = await self.request(
-            SHOP_RAW,
-            named(
-                0xB0, 0, 0, f"@ShReq=/NN={account.nn:016X}/HID=0/Dm=0/Vol=0/CN={account.name.hex()}"
-            ),
-        )
+        replies = await self.request(SHOP_RAW, shop_entry(self.server.economy, self.key))
         self.assertEqual(len(replies), 2)
         self.assertEqual(parse_named(replies[0])[3], {"ShEnter": {"EN": "1"}})
         self.assertEqual(parse_named(replies[1])[2], 0)

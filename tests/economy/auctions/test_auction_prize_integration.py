@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests import ROOT
+from tests.economy.entries import prize_entry, shop_entry
 from tests.economy.auctions.test_auction_service import bid_request, collection_request, exhibit_request, request
 from tests.profiles.test_profile_accounts import delete_request, file_request, transact
 from tests.network.test_server import Client
@@ -101,8 +102,7 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         return item
 
     def prize_entry(self, side=0):
-        a = self.game.economy.account_view(self.keys[side])
-        return named(0x70, 0, 0, f"@CvReq=/NN={a.nn:016X}/HID=1/Dm=1/Vol=1/CN={a.name.hex()}")
+        return prize_entry(self.game.economy, self.keys[side])
 
     async def enter_prize(self, side=0):
         replies = await self.send(side, self.prize_entry(side), source=service_nick(SHOP_RAW))
@@ -232,11 +232,7 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         shop = service_nick(SHOP_RAW)
         quit_ = named(0xB2, 0x17, number, f"@Quit=/No={number}")
         await self.send(0, quit_, source=shop, target=shop)
-        view = self.game.economy.account_view(key)
-        entry = named(
-            0xB0, 0, 0, f"@ShReq=/NN={view.nn:016X}/HID=0/Dm=0/Vol=0/CN={view.name.hex()}"
-        )
-        replies = await self.send(0, entry, target=shop)
+        replies = await self.send(0, shop_entry(self.game.economy, key), target=shop)
         self.assertEqual(int(parse_named(replies[1])[3]["Init"]["N"]), number)
         self.assertTrue(self.game.economy.is_busy(key))
         self.assertFalse(self.game.prize.can_replay_quit(key, quit_))
