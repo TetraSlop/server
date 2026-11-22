@@ -5,6 +5,7 @@ delivering ResultData.
 """
 
 import time
+from copy import copy
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -107,7 +108,7 @@ class RatingPolicy(Staged):
         """Prepare rollover in isolation; the caller owns durable publication."""
         if not self.weekly:
             return False
-        staged = RankingPeriods.restore(self.periods.snapshot())
+        staged = copy(self.periods)
         changed = staged.advance(self.clock())
         if changed:
             self.periods = staged
@@ -154,7 +155,7 @@ class RatingPolicy(Staged):
             or len(set(seats.values())) != len(seats)
         ):
             raise EconomyError("rating seats require distinct authenticated accounts")
-        staged = LocalRatingHistory.restore(self.history.snapshot())
+        staged = copy(self.history)
         quotes = {}
         for seat, key in seats.items():
             previous = PracticeStats.from_profile(self.economy.profile_bytes(key))
@@ -194,11 +195,11 @@ class RatingPolicy(Staged):
             )
         if type(rating_changes_by_key) is not dict or not rating_changes_by_key:
             raise EconomyError("enabled rating policy requires quoted result proofs")
-        staged = LocalRatingHistory.restore(self.history.snapshot())
+        staged = copy(self.history)
         staged.commit_many(tuple(rating_changes_by_key.values()))
         if any(key != quote.key for key, quote in rating_changes_by_key.items()):
             raise EconomyError("rating quotes must be keyed by their own account")
-        if staged.snapshot() == self.history.snapshot():
+        if all(map(self.history.committed, rating_changes_by_key.values())):
             # Every quote was already committed: a replayed result must not
             # be counted again in the weekly period or the profiles.
             raise EconomyError("match result was already committed")
@@ -216,7 +217,7 @@ class RatingPolicy(Staged):
                     (result.reward_sum - previous.reward_sum) & 0xFFFFFFFF,
                     result.rating,
                 )
-            periods = RankingPeriods.restore(self.periods.snapshot())
+            periods = copy(self.periods)
             periods.record(self.clock(), results)
         refreshed = self.economy.commit_match_growth(
             rounds,

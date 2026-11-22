@@ -64,6 +64,12 @@ class RankingPeriods:
         self._current = {}  # Account -> (weekly prize total, last committed rating).
         self._previous = {}  # Account -> frozen last-week rating.
 
+    def __copy__(self):
+        clone = RankingPeriods()
+        clone._week_start = self._week_start
+        clone._current, clone._previous = dict(self._current), dict(self._previous)
+        return clone
+
     @property
     def account_keys(self):
         return frozenset(self._current) | frozenset(self._previous)

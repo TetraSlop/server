@@ -117,6 +117,16 @@ class LocalRatingHistory:
         self._states = {}
         self._receipts = {}
 
+    def __copy__(self):
+        """Independent account maps; a commit replaces a receipt map, never edits it."""
+        clone = LocalRatingHistory()
+        clone._initial, clone._states = dict(self._initial), dict(self._states)
+        clone._receipts = dict(self._receipts)
+        return clone
+
+    def committed(self, quote):
+        return quote.match_id in self._receipts.get(quote.key, {})
+
     def enrolled(self, key):
         _identifier(key, what="account key")
         return key in self._states
@@ -204,7 +214,7 @@ class LocalRatingHistory:
             result[quote.key] = quote.after
         for quote in updates:
             self._states[quote.key] = quote.after
-            self._receipts[quote.key][quote.match_id] = quote
+            self._receipts[quote.key] = {**self._receipts[quote.key], quote.match_id: quote}
         return result
 
     def snapshot(self):
