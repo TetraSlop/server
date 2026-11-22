@@ -135,12 +135,6 @@ class FlexibleSeatUnits(unittest.TestCase):
         args = arguments([*DATABASE, "--mode", "versus", "--players", "auto"])
         self.assertEqual((args.players, args.accounts, args.flexible_seats), (3, 3, True))
         self.assertFalse(arguments([*DATABASE, "--mode", "versus", "--players", "3"]).flexible_seats)
-        for opts in (
-            ["--players", "auto"],
-            ["--mode", "versus", "--players", "auto", "--board", ",".join(["0"] * 25)],
-        ):
-            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                arguments([*DATABASE, *opts])
         for kw in (
             {"mode": "computer"},
             {"player_count": 2},

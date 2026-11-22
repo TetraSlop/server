@@ -114,9 +114,10 @@ class BoardConfiguration(unittest.TestCase):
         valid = ["--mode", "versus", "--players", "3", "--board", ",".join(map(str, LAYOUTS[0]))]
         args = arguments([*DATABASE, *valid])
         self.assertEqual((args.players, args.accounts, args.board), (3, 3, LAYOUTS[0]))
+        for players, fields in ((2, 25), (3, 16)):
+            with self.assertRaisesRegex(ValueError, "board shape"):
+                MatchService(mode="versus", player_count=players, start_fields=(0,) * fields)
         invalid = (
-            ["--board", ",".join(["0"] * 25)],
-            ["--mode", "versus", "--players", "3", "--board", ",".join(["0"] * 16)],
             ["--no-allow-cbc", "--board", ",".join(["18"] + ["0"] * 15)],
             ["--no-allow-cbc", "--mode", "versus", "--players", "3", "--board", ",".join(["18"] + ["0"] * 24)],
         )
