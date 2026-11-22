@@ -9,8 +9,6 @@ only later play in that week.
 
 from collections.abc import Mapping
 
-from tmserver.rankings.models import RankingHistory
-
 POLICY = "local-utc-week-v1"
 WEEK = 7 * 24 * 60 * 60
 MONDAY_OFFSET = 3 * 24 * 60 * 60  # The Unix epoch was a Thursday.
@@ -44,11 +42,6 @@ class RankingPeriods:
         self._week_start = None
         self._current = {}  # Account -> (weekly prize total, last committed rating).
         self._previous = {}  # Account -> frozen last-week rating.
-
-    @property
-    def update_time(self):
-        # January 1-4, 1970 belong to a Monday before the unsigned native epoch.
-        return max(0, self._week_start or 0)
 
     @property
     def account_keys(self):
@@ -86,11 +79,9 @@ class RankingPeriods:
             self._current[key] = ((total + reward) & DWORD_MAX, rating)
 
     def historical_stats(self):
+        """Account -> (weekly prize or None, last week's rating or None)."""
         return {
-            key: RankingHistory(
-                weekly_prize=self._current[key][0] if key in self._current else None,
-                last_week_rating=self._previous.get(key),
-            )
+            key: (self._current[key][0] if key in self._current else None, self._previous.get(key))
             for key in sorted(self.account_keys)
         }
 

@@ -128,9 +128,7 @@ class RatingPolicy:
 
     def weekly_history(self):
         """Return a read-only projection; reads never advance or enable a period."""
-        if not self.weekly:
-            return {}, 0
-        return self.periods.historical_stats(), self.periods.update_time
+        return self.periods.historical_stats() if self.weekly else {}
 
     def is_ranked(self, key):
         """Local rankings require a committed result matching the saved profile.

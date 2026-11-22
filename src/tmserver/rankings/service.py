@@ -6,26 +6,28 @@ TetraPackets irc/R.md and file/ranking-files.md.
 
 Server choice: committed local accounts, ranked by score, or by rating (lower
 wins) when the local-history rating policy is on. Ties break by identity and key.
-Current rating and total prize money come from profile fields 30 and 50. Past
-categories need recorded weekly play or saved history. The original server's
-aggregation, eligibility, reset and award rules are unknown.
+Current rating and total prize money come from profile fields 30 and 50. Weekly
+categories need recorded weekly play; Rookies (4) is always empty. The original
+server's aggregation, eligibility, reset and award rules are unknown.
 """
 
 import re
 import struct
-from dataclasses import dataclass, replace
-from types import MappingProxyType
+from dataclasses import dataclass
 
 from tmserver.protocol.commands import Command, encode_service, parse
-from tmserver.rankings.models import RankingError, RankingHistory, _uint
-from tmserver.rankings.packets import (
-    METADATA_PATH,
-    RECORD_SIZE,
-    RESULT_PATH,
-    encode_record,
-)
+from tmserver.rankings.errors import RankingError
+from tmserver.rankings.packets import METADATA_PATH, RECORD_SIZE, RESULT_PATH, encode_record
+from tmserver.rankings.policy import RatingPolicy
 
 RANK_IDS = (0, 1, 2, 3, 4)
+MAX_SNAPSHOTS = 64  # Per account; a full cache answers RG(-8809).
+
+
+def _uint(value, bits, name):
+    if not 0 <= value < (1 << bits):
+        raise RankingError(f"{name} must be uint{bits}")
+    return value
 
 
 @dataclass(frozen=True)
@@ -36,15 +38,15 @@ class _Entry:
     name: bytes
     rating: int
     total_prize: int
-    history: RankingHistory
+    weekly_prize: int | None
+    last_week_rating: int | None
+    anonymous: bool
+    qualified: bool
 
     def score(self, rank_id):
+        # Rookies has no rookie rules, so it never has a score.
         return (
-            self.total_prize,
-            self.history.weekly_prize,
-            self.rating,
-            self.history.last_week_rating,
-            self.history.last_week_rating,
+            self.total_prize, self.weekly_prize, self.rating, self.last_week_rating, None
         )[rank_id]
 
 
@@ -61,48 +63,20 @@ class RankingService:
     returns RG(-8809), never silently evicts an unread result.
     """
 
-    def __init__(
-        self, economy, *, rating_policy=None, historical_stats=None, update_time=0,
-        max_snapshots=64,
-    ):
+    def __init__(self, economy, *, rating_policy=None):
         self.economy = economy
-        self.rating_policy = rating_policy
-        self.update_time = _uint(update_time, 32, "update_time")
-        if type(max_snapshots) is not int or not 1 <= max_snapshots <= 1024:
-            raise RankingError("max_snapshots must be 1..1024 per account")
-        self.max_snapshots = max_snapshots
-        history = dict(historical_stats or {})
-        if any(
-            not isinstance(key, str) or not isinstance(value, RankingHistory)
-            for key, value in history.items()
-        ):
-            raise RankingError("historical_stats must map account keys to RankingHistory")
-        self.history = MappingProxyType(history)
+        self.rating_policy = rating_policy or RatingPolicy(economy)
         self._snapshots = {}
         self._next_id = 1
 
     def _entries(self):
+        weekly = self.rating_policy.weekly_history()
         entries = []
-        periods = (
-            self.rating_policy.weekly_history()[0]
-            if self.rating_policy is not None and self.rating_policy.weekly
-            else None
-        )
         # snapshot is public and contains only committed accounts. profile_bytes
         # also excludes a staged shop purchase; this module never changes either.
         for key in sorted(self.economy.snapshot()["accounts"]):
             account = self.economy.account_view(key)
             profile = self.economy.profile_bytes(key)
-            history = self.history.get(key, RankingHistory())
-            if periods is not None:
-                recorded = periods.get(key, RankingHistory())
-                history = replace(
-                    history, weekly_prize=recorded.weekly_prize,
-                    last_week_rating=recorded.last_week_rating,
-                )
-            history = replace(history, anonymous=history.anonymous or bool(profile[0xB6]))
-            if self.rating_policy is not None and not self.rating_policy.is_ranked(key):
-                history = replace(history, qualified=False)
             entries.append(
                 _Entry(
                     key,
@@ -111,7 +85,9 @@ class RankingService:
                     account.name,
                     struct.unpack_from("<I", profile, 0x30)[0],
                     struct.unpack_from("<I", profile, 0x50)[0],
-                    history,
+                    *weekly.get(key, (None, None)),
+                    bool(profile[0xB6]),
+                    self.rating_policy.is_ranked(key),
                 )
             )
         return entries
@@ -122,16 +98,9 @@ class RankingService:
         candidates = [
             entry
             for entry in entries
-            if entry.score(rank_id) is not None
-            and (rank_id != 2 or entry.history.qualified)
-            and (rank_id != 4 or entry.history.rookie)
+            if entry.score(rank_id) is not None and (rank_id != 2 or entry.qualified)
         ]
-        local_rating = (
-            rank_id in (2, 3, 4)
-            and self.rating_policy is not None
-            and self.rating_policy.enabled
-        )
-        direction = 1 if local_rating else -1
+        direction = 1 if rank_id in (2, 3) and self.rating_policy.enabled else -1
         candidates.sort(
             key=lambda entry: (
                 direction * entry.score(rank_id), entry.identity, entry.character_id, entry.key,
@@ -147,24 +116,13 @@ class RankingService:
 
     def metadata(self):
         entries = self._entries()
-        # Native dates share one anchor for a closed tally and the next update.
-        # Live weekly totals cannot use it truthfully; zero hides those labels.
-        # The policy's saved period start and manually supplied dates stay intact.
-        update_time = (
-            0
-            if self.rating_policy is not None and self.rating_policy.weekly
-            else self.update_time
-        )
+        # Offset 12 is the native tally/update date. No server date is truthful
+        # for live weekly totals, so zero hides those labels.
         # Offsets4,8,14,18 are display denominators, not record counts. Offset4
         # is shared by Rating and Grand Total, so report all provisioned accounts.
-        counts = [
-            len(entries),
-            len(self._eligible(entries, 1)),
-            len(self._eligible(entries, 3)),
-            len(self._eligible(entries, 4)),
-        ]
         return struct.pack(
-            "<7I", 0, counts[0], counts[1], update_time, 0, counts[2], counts[3]
+            "<7I", 0, len(entries), len(self._eligible(entries, 1)), 0, 0,
+            len(self._eligible(entries, 3)), len(self._eligible(entries, 4)),
         )
 
     @staticmethod
@@ -200,7 +158,7 @@ class RankingService:
         if rank_id not in RANK_IDS:
             return self._failure(-8811)
         snapshots = self._snapshots.setdefault(account_key, {})
-        if len(snapshots) >= self.max_snapshots or self._next_id > 0xFFFFFFFF:
+        if len(snapshots) >= MAX_SNAPSHOTS or self._next_id > 0xFFFFFFFF:
             return self._failure(-8809)
         data = self.records(rank_id)
         path = f"{RESULT_PATH}_{self._next_id:08X}"

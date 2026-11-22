@@ -47,7 +47,6 @@ def check(package_root):
     from tmserver.economy.auctions.models import Actor, Listing
     from tmserver.economy.auctions.packets import actor_record, listing_record
     from tmserver.events.packets import event_list
-    from tmserver.rankings.models import RankingHistory
     from tmserver.rooms.packets import directory_files
     from tmserver.profiles.packets import answer, checked, checksum
 
@@ -61,7 +60,6 @@ def check(package_root):
     assert len(event_list()) == 0x2C08
     assert set(directory_files()) == {"b/g/ZL", "b/g/RL000"}
     assert len(answer()) == 24 and checksum(b"") == 0 and checked(b"") == bytes(4)
-    assert RankingHistory().previous_ranks == (0, 0, 0, 0, 0)
     check_loaded_modules(package_root)
     return {"model_codec_modules": len(modules), "import_isolation": True, "provenance": True}
 

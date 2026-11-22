@@ -6,7 +6,6 @@ from tests.rankings.test_rating_policy import economy, prepare
 from tests.rankings.test_ranking_service import request
 from tmserver.economy.service import EconomyService
 from tmserver.rankings.packets import RECORD_SIZE
-from tmserver.rankings.models import RankingHistory
 from tmserver.rankings.service import RankingService
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.protocol.commands import parse
@@ -50,30 +49,12 @@ class LocalRatingRankingTests(unittest.TestCase):
         ranking = RankingService(restored, rating_policy=policy)
         self.assertEqual(ranking.records(2), self.ranking.records(2))
 
-    def test_rating_history_ascends_while_money_descends(self):
-        self.complete()
-        self.ranking = RankingService(
-            self.economy, rating_policy=self.policy,
-            historical_stats={
-                "first": RankingHistory(last_week_rating=198, weekly_prize=10, rookie=True),
-                "second": RankingHistory(last_week_rating=201, weekly_prize=20, rookie=True),
-            },
-        )
-        for category in (2, 3, 4):
-            self.assertEqual(names(self.ranking.records(category)), [b"first", b"second"])
-        self.assertEqual(names(self.ranking.records(1)), [b"second", b"first"])
-
-    def test_ties_snapshot_immutability_and_explicit_disqualification(self):
+    def test_ties_and_snapshot_immutability(self):
         reply = self.ranking.handle("first", request(2, 1))[0]
         empty_path = parse(reply[5:])[0].payload.decode()
         self.complete((5, 5))
         self.assertEqual(names(self.ranking.records(2)), [b"first", b"second"])
         self.assertEqual(self.ranking.file("first", empty_path), b"")
-        disqualified = RankingService(
-            self.economy, rating_policy=self.policy,
-            historical_stats={"first": RankingHistory(qualified=False)},
-        )
-        self.assertEqual(names(disqualified.records(2)), [b"second"])
 
     def test_preserved_policy_retains_existing_order_and_stale_ring_is_unranked(self):
         tokens = self.complete()

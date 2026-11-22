@@ -65,7 +65,7 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         self.assertEqual(baseline["version"], 1)
         self.assertEqual(self.policy.snapshot(), baseline)
         with patch.object(self.policy, "clock", side_effect=AssertionError("read clock")):
-            self.assertEqual(self.policy.weekly_history(), ({}, 0))
+            self.assertEqual(self.policy.weekly_history(), {})
             self.assertEqual(self.policy.snapshot(), baseline)
         imported = RatingPolicy(self.economy, mode="local-history", snapshot=baseline, weekly=True)
         self.assertEqual(imported.snapshot(), baseline)
@@ -79,7 +79,8 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         initialized = self.policy.snapshot()
         self.assertEqual(set(initialized), {"version", "history", "periods"})
         self.assertEqual(initialized["version"], 2)
-        self.assertEqual(self.policy.weekly_history(), ({}, MONDAY))
+        self.assertEqual(self.policy.weekly_history(), {})
+        self.assertEqual(initialized["periods"]["week_start"], MONDAY)
 
     def test_strict_v1_v2_restore_authenticates_current_and_previous_accounts(self):
         self.policy.advance_week()
@@ -116,7 +117,7 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
                 self.assertFalse(policy.weekly)
                 self.assertEqual(policy.snapshot(), snapshot)
                 self.assertFalse(policy.advance_week())
-                self.assertEqual(policy.weekly_history(), ({}, 0))
+                self.assertEqual(policy.weekly_history(), {})
                 rounds, stats, changes = prepare(service, policy, (7, 3), match_id="disabled")
                 policy.commit_growth(rounds, stats, rating_changes_by_key=changes)
                 self.assertEqual(policy.snapshot()["periods"], snapshot["periods"])
@@ -125,12 +126,9 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
     def test_human_and_cpu_results_count_only_authorized_rewards(self):
         first = result(self.economy, self.policy, rewards={"first": 137, "second": 42})
         tokens = commit(self.policy, first)
-        history, updated = self.policy.weekly_history()
-        self.assertEqual(updated, MONDAY)
         self.assertEqual(
-            {k: h.weekly_prize for k, h in history.items()}, {"first": 137, "second": 42}
+            self.policy.weekly_history(), {"first": (137, None), "second": (42, None)}
         )
-        self.assertTrue(all(h.last_week_rating is None for h in history.values()))
         for key in KEYS[:2]:
             self.assertEqual(
                 PracticeStats.from_profile(self.economy.profile_bytes(key)).vs_player_games, 10
@@ -144,16 +142,17 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
             tokens={"first": tokens["first"]},
         )
         commit(self.policy, cpu)
-        self.assertEqual(self.policy.weekly_history()[0]["first"].weekly_prize, 337)
+        self.assertEqual(self.policy.weekly_history()["first"][0], 337)
         self.assertEqual(
             PracticeStats.from_profile(self.economy.profile_bytes("first")).vs_player_games, 10
         )
         self.now = MONDAY + WEEK
         self.assertTrue(self.policy.advance_week())
-        history, updated = self.policy.weekly_history()
-        self.assertEqual(updated, self.now)
-        self.assertEqual(history["first"].last_week_rating, cpu[1]["first"].rating)
-        self.assertEqual(history["second"].last_week_rating, first[1]["second"].rating)
+        self.assertEqual(self.policy.periods.snapshot()["week_start"], self.now)
+        self.assertEqual(
+            self.policy.weekly_history(),
+            {"first": (None, cpu[1]["first"].rating), "second": (None, first[1]["second"].rating)},
+        )
 
     def test_refund_is_zero_and_native_cumulative_wrap_is_only_actual_delta(self):
         saved = self.economy.snapshot()
@@ -165,7 +164,7 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         paid = result(service, policy, rewards={"first": 20, "second": 0})
         tokens = commit(policy, paid)
         self.assertEqual(paid[1]["first"].reward_sum, 14)
-        self.assertEqual(policy.weekly_history()[0]["first"].weekly_prize, 20)
+        self.assertEqual(policy.weekly_history()["first"][0], 20)
         refund = result(
             service,
             policy,
@@ -177,7 +176,7 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         commit(policy, refund)
         self.assertEqual(refund[1]["first"].current_reward, 99)
         self.assertEqual(
-            {k: h.weekly_prize for k, h in policy.weekly_history()[0].items()},
+            {k: prize for k, (prize, _) in policy.weekly_history().items()},
             {"first": 20, "second": 0},
         )
 
@@ -204,8 +203,8 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         self.assertFalse(self.policy.advance_week())
         self.assertIs(self.policy.periods, periods)
         self.now += WEEK
-        projected, updated = self.policy.weekly_history()
-        self.assertEqual(updated, MONDAY)
+        projected = self.policy.weekly_history()
+        self.assertEqual(self.policy.periods.snapshot()["week_start"], MONDAY)
         projected.clear()
         self.assertEqual(self.policy.snapshot(), baseline)
         staged = self.policy.stage_state(self.economy)
@@ -215,7 +214,7 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         self.assertEqual(self.policy.snapshot(), baseline)
         self.policy.publish_state(staged)
         self.assertIs(self.policy.periods, staged.periods)
-        self.assertEqual(self.policy.weekly_history()[1], MONDAY + WEEK)
+        self.assertEqual(self.policy.periods.snapshot()["week_start"], MONDAY + WEEK)
 
     def test_duplicate_result_after_rollover_and_restart_never_counts_twice(self):
         batch = result(self.economy, self.policy, rewards={"first": 45, "second": 0})

@@ -8,7 +8,6 @@ from tests.rankings.test_weekly_rating_policy import MONDAY, WEEK, commit, resul
 from tmserver.economy.service import EconomyService
 from tmserver.network.local_accounts import MAX_ACCOUNTS
 from tmserver.rankings.packets import RECORD_SIZE, SCORE_OFFSETS
-from tmserver.rankings.models import RankingHistory
 from tmserver.rankings.service import RankingService
 from tmserver.rankings.policy import RatingPolicy
 
@@ -38,47 +37,28 @@ class WeeklyRankingProjectionTests(unittest.TestCase):
             restored = RatingPolicy(
                 service, mode="local-history", weekly=enabled, snapshot=before[1],
             )
-            ranking = RankingService(service, rating_policy=restored, update_time=MONDAY + WEEK)
+            ranking = RankingService(service, rating_policy=restored)
             with self.subTest(weekly=enabled):
-                self.assertEqual(
-                    struct.unpack_from("<I", ranking.metadata(), 12)[0],
-                    0 if enabled else MONDAY + WEEK,
-                )
-                self.assertEqual(restored.periods.update_time, MONDAY)
+                self.assertEqual(struct.unpack_from("<I", ranking.metadata(), 12)[0], 0)
+                self.assertEqual(restored.periods.snapshot()["week_start"], MONDAY)
                 self.assertEqual((service.snapshot(), restored.snapshot()), before)
                 if enabled:
                     self.assertEqual(scores(ranking, 1), [(1, 25), (2, 0)])
 
-    def test_provider_overlays_only_recorded_scores_and_retains_privacy_and_qualification(self):
+    def test_weekly_scores_retain_privacy_and_qualification(self):
         service = economy()
         policy = RatingPolicy(service, mode="local-history", weekly=True, clock=lambda: MONDAY)
         commit(policy, result(service, policy, rewards={"first": 25, "second": 0}))
-        service.save_ranking_privacy("second", 1)
-        ranking = RankingService(
-            service,
-            rating_policy=policy,
-            historical_stats={
-                "first": RankingHistory(
-                    weekly_prize=999,
-                    last_week_rating=99,
-                    anonymous=True,
-                    qualified=False,
-                    rookie=True,
-                    previous_ranks=(1, 2, 3, 4, 5),
-                ),
-                "third": RankingHistory(weekly_prize=777, last_week_rating=77, rookie=True),
-            },
-        )
+        service.save_ranking_privacy("first", 0)
+        ranking = RankingService(service, rating_policy=policy)
         before = service.snapshot(), policy.snapshot()
         weekly = rows(ranking, 1)
         self.assertEqual(scores(ranking, 1), [(1, 25), (2, 0)])
-        self.assertEqual((weekly[0][0xC0], weekly[0][0xC2]), (1, 0))
-        self.assertEqual(list(weekly[0][0xC3:0xC8]), [5, 4, 3, 1, 2])
-        self.assertEqual((weekly[1][0xC0], weekly[1][0xC2]), (1, 1))
+        self.assertEqual((weekly[0][0xC0], weekly[0][0xC2]), (0, 1))
+        self.assertEqual((weekly[1][0xC0], weekly[1][0xC2]), (1, 1))  # Fixture byte B6.
         self.assertEqual([row[:16].split(b"\0")[0] for row in weekly], [b"first", b"second"])
-        # Qualification applies to current rating; the provider must not reset
-        # an explicit disqualification or admit the unplayed third account.
-        self.assertEqual([identity for identity, _ in scores(ranking, 2)], [2])
+        # The unplayed third account has no weekly score and no local rating.
+        self.assertEqual([identity for identity, _ in scores(ranking, 2)], [1, 2])
         self.assertEqual(ranking.records(3), b"")
         self.assertEqual(ranking.records(4), b"")
         self.assertEqual(struct.unpack("<7I", ranking.metadata()), (0, 3, 2, 0, 0, 0, 0))
