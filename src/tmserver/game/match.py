@@ -678,6 +678,13 @@ class MatchService:
         if game != expected:
             raise MatchError("game settings conflict with configured room rules")
 
+    def _strip_disabled_wager(self, game):
+        """Zero bm/du in place when wagers are off; True if anything changed."""
+        if self.allow_wagers or not (game["bm"] or game["du"]):
+            return False
+        game["bm"] = game["du"] = 0
+        return True
+
     def _settings(self, peer, msg):
         if self.phase != "lobby" or msg.subtype != 0 or msg.argument != 0:
             raise MatchError("table settings are only accepted before a match")
@@ -699,6 +706,9 @@ class MatchService:
         owner = self.owner_peer if self.owner_peer is not None else self.players[0].peer
         if peer != owner:
             raise MatchError("only the admitted table owner may change current rules")
+        # Apply has no reply, so a wager the operator disabled cannot be refused
+        # on the wire. Drop it; the TD delta then advertises bm=0/du=0.
+        self._strip_disabled_wager(game)
         self._check_room_rules(game)
         if self.start_pending:
             # GameReady may already be queued for a guest, and Req returns the
@@ -708,8 +718,6 @@ class MatchService:
             raise MatchError("current rules cannot change during the start handshake")
         # Saving default preferences does not activate them in this practice
         # table. Current settings require features the match engine implements.
-        if not self.allow_wagers and any(game[key] for key in ("bm", "du")):
-            raise MatchError("wagers/double-up require economic hooks")
         if self.explicit_start_fields and any(
             game[key] != value for key, value in self.special_flags.items()
         ):
@@ -1107,8 +1115,10 @@ class MatchService:
         _game_rules(game, "computer menu rules are invalid")
         if rules[6] not in (0, 1, 2):
             raise MatchError("computer menu rules are invalid")
-        if not self.allow_wagers and (game["bm"] or game["du"]):
-            raise MatchError("computer wager/double-up is disabled")
+        # ComGame has no reply. A disabled wager plays as a no-stake round; the
+        # client's local debit stays until its balance is next refreshed.
+        if self._strip_disabled_wager(game):
+            rules[0] = rules[5] = 0
         if self.explicit_start_fields and tuple(rules[1:4]) != tuple(
             self.special_flags[k] for k in ("st", "cb", "ca")
         ):

@@ -122,7 +122,6 @@ class MatchTests(unittest.TestCase):
             ("alice", NATIVE_SETTINGS.replace("/tl=0", "/tl=6")),
             ("alice", NATIVE_SETTINGS.replace("/ll=0", "/ll=101")),
             ("alice", NATIVE_SETTINGS.replace("/st=0", "/st=2")),
-            ("alice", NATIVE_SETTINGS.replace("/bm=0", "/bm=1")),
             ("alice", NATIVE_SETTINGS.replace("/au=300", "/au=301")),
             ("alice", NATIVE_SETTINGS.replace("/al=100", "/al=99")),
         ]:
@@ -130,7 +129,10 @@ class MatchTests(unittest.TestCase):
             with self.assertRaises(MatchError):
                 s.handle(who, packet(0x14, body=text))
             self.assertEqual(s.snapshot(), before)
-        s.handle("alice", packet(0x14, body=NATIVE_SETTINGS))
+        # A wager the operator disabled is dropped rather than refused.
+        wagered = NATIVE_SETTINGS.replace("/bm=0/du=0", "/bm=1/du=1")
+        self.assertEqual(s.handle("alice", packet(0x14, body=wagered)), [])
+        self.assertEqual((s.game_rules["bm"], s.game_rules["du"]), (0, 0))
         s.begin()
         with self.assertRaises(MatchError):
             s.handle("alice", packet(0x14, body=NATIVE_SETTINGS))
@@ -1582,10 +1584,8 @@ class OriginalComputerTests(unittest.TestCase):
             self.choose(0),
             self.choose(31),
             self.choose(argument=3),
-            self.choose(rule="1|0|0|0|2|0|0|1"),
             self.choose(rule="0|2|0|0|2|0|0|1"),
             self.choose(rule="0|0|0|0|6|0|0|1"),
-            self.choose(rule="0|0|0|0|2|1|0|1"),
             self.choose(rule="0|0|0|0|2|0|3|1"),
             self.choose(rule="0|0|0|0|2|0|0|3"),
         ]
@@ -1593,6 +1593,11 @@ class OriginalComputerTests(unittest.TestCase):
             with self.assertRaises(MatchError):
                 s.handle("alice", request)
             self.assertEqual((s.snapshot(), s.computer_view, s.rng.state), before)
+        # A disabled stake or double-up is dropped and the round starts without it.
+        for rule in ("1|0|0|0|2|0|0|1", "0|0|0|0|2|1|0|1"):
+            s, _ = self.menu()
+            self.assertEqual(s.handle("alice", self.choose(rule=rule)), [])
+            self.assertEqual((s.phase, s.game_rules["bm"], s.game_rules["du"]), ("selection", 0, 0))
 
     def test_complete_original_NPC_round_rematch_and_menu_reconfiguration(self):
         from tmserver.game.opponents import prepare_opponents
@@ -2028,8 +2033,8 @@ class WagerHookTests(unittest.TestCase):
                 MatchService(**args)
         s = MatchService()
         s.register("p0")
-        with self.assertRaises(MatchError):
-            self.settings(s)
+        self.assertEqual(self.settings(s), [])
+        self.assertEqual((s.game_rules["bm"], s.game_rules["du"]), (0, 0))
         for balance in (-1, True, 100000000):
             with self.assertRaises(MatchError):
                 MatchService().register("p0", balance=balance)
