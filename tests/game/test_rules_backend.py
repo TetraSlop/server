@@ -18,7 +18,6 @@ def recording_backend():
     native = default_rules()
     return SimpleNamespace(
         calculate_battle=Mock(wraps=native.calculate_battle),
-        choose_move=Mock(wraps=native.choose_move),
         choose_special_move=Mock(wraps=native.choose_special_move),
         grow_card=Mock(wraps=native.grow_card),
         choose_target=Mock(wraps=native.choose_target),
@@ -39,7 +38,7 @@ class RulesBackendTests(unittest.TestCase):
         self.assertIsInstance(match.rules_backend, NativeRuntime)
         native = default_rules()
         with (
-            patch.object(native, "choose_move", wraps=native.choose_move) as move,
+            patch.object(native, "choose_special_move", wraps=native.choose_special_move) as move,
             patch.object(native, "calculate_battle", wraps=native.calculate_battle) as battle,
         ):
             finish_arrowless_round(match)
@@ -65,9 +64,9 @@ class RulesBackendTests(unittest.TestCase):
         actual = match.battle_values(CARDS[0], CARDS[1], **effects)
         self.assertEqual(actual, expected.battle_values(CARDS[0], CARDS[1], **effects))
         backend.calculate_battle.assert_called_once_with(CARDS[0], CARDS[1], match.draw, **effects)
-        self.assertEqual(backend.choose_move.call_count, 5)
+        self.assertEqual(backend.choose_special_move.call_count, 5)
         self.assertTrue(
-            all(call.args[3] is match.draw for call in backend.choose_move.call_args_list)
+            all(call.args[3] is match.draw for call in backend.choose_special_move.call_args_list)
         )
 
     def test_native_growth_handles_combat_and_result_without_python_fallback(self):
@@ -172,7 +171,6 @@ class RulesBackendTests(unittest.TestCase):
         match = self.computer(backend, start_fields=fields)
         finish(match)
         self.assertEqual(backend.choose_special_move.call_count, 5)
-        backend.choose_move.assert_not_called()
 
     def test_computer_menu_reconfiguration_uses_live_player_count(self):
         backend = recording_backend()
@@ -180,11 +178,9 @@ class RulesBackendTests(unittest.TestCase):
         for npcs in ((1, 30), (3,)):
             match.handle("alice", choose(npcs))
             match.handle("alice", select())
-            backend.choose_move.reset_mock()
             backend.choose_special_move.reset_mock()
             finish(match)
-            self.assertEqual(backend.choose_move.call_count, 0 if len(npcs) == 2 else 5)
-            self.assertEqual(backend.choose_special_move.call_count, 10 if len(npcs) == 2 else 0)
+            self.assertEqual(backend.choose_special_move.call_count, 10 if len(npcs) == 2 else 5)
             match.handle("alice", packet(0x43, 17, 0, "@Continue=/Ans=1/Conf=1"))
 
     def test_failed_injected_battle_consumes_draw_once_and_cannot_retry(self):
@@ -214,12 +210,12 @@ class RulesBackendTests(unittest.TestCase):
         self.assertEqual(match.advance(), [])
 
     def test_failed_injected_move_aborts_without_retry_on_ordinary_and_special_boards(self):
-        for fields, operation in (((0,) * 16, "choose_move"), ((1,) + (0,) * 15, "choose_special_move")):
-            with self.subTest(operation=operation):
+        for fields in ((0,) * 16, (1,) + (0,) * 15):
+            with self.subTest(fields=fields):
                 backend = recording_backend()
                 match = self.computer(backend, start_fields=fields)
                 failure = RuntimeError("move bridge failure")
-                calculate = getattr(backend, operation)
+                calculate = backend.choose_special_move
                 calculate.side_effect = failure
                 match.active = 1
                 with self.assertRaises(RulesExecutionError) as caught:

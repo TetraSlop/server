@@ -1293,24 +1293,14 @@ class MatchService:
                 if player.substitute
                 else player.ai_personality or self.ai_personality
             )
-            if any(self.start_board.fields) or self.player_count == 3:
-                move = self._backend_call(
-                    "choose_special_move",
-                    self.players[self.active].hand,
-                    self._effect_cells(),
-                    self.active,
-                    self.draw,
-                    personality,
-                )
-            else:
-                move = self._backend_call(
-                    "choose_move",
-                    self.players[self.active].hand,
-                    self.board,
-                    self.active,
-                    self.draw,
-                    personality,
-                )
+            move = self._backend_call(
+                "choose_special_move",
+                player.hand,
+                self._effect_cells(),
+                self.active,
+                self.draw,
+                personality,
+            )
             if move is None:
                 raise MatchError("active computer has no legal move")
             return self._place(move.hand_index, move.field)
