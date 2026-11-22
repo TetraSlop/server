@@ -84,6 +84,13 @@ class AdminListenerTests(unittest.IsolatedAsyncioTestCase):
                 await client.close()
         await self.assert_closed(ports)
 
+    async def test_admin_bind_listens_on_the_requested_address(self):
+        self.args.admin_bind = "0.0.0.0"
+        async with running_services(self.args) as services:
+            origin = f"http://127.0.0.1:{services.admin.port}"
+            async with self.httpx.AsyncClient(base_url=origin, trust_env=False) as browser:
+                self.assertEqual((await browser.get("/admin/login")).status_code, 200)
+
     async def test_occupied_admin_port_releases_both_protocol_listeners_and_store(self):
         occupied = await asyncio.start_server(lambda reader, writer: writer.close(), "127.0.0.1", 0)
         self.addAsyncCleanup(occupied.wait_closed)
