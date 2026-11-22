@@ -35,7 +35,7 @@ timestamp for both an older closed-week tally and the next update, which cannot
 truthfully describe our live current-week prizes and previous-week ratings.
 Only that display field is zeroed; the saved period dates and rollover still
 use Monday UTC. Explicit historical timestamps outside automatic weekly mode
-remain supported. See [TetraPackets file/ranking-files.md](https://github.com/sruon/TetraPackets/blob/main/file/ranking-files.md).
+remain supported. See [TetraPackets file/ranking-files.md](https://github.com/TetraSlop/packets/blob/main/file/ranking-files.md).
 
 Period state shares the existing rating/result transaction. A failed save cannot
 publish a new week or a credited result. Turning tracking off preserves its

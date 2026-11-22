@@ -1,15 +1,15 @@
 # Checks and releases
 
-The [Checks workflow](https://github.com/sruon/tmserver/actions/workflows/checks.yml)
+The [Checks workflow](https://github.com/TetraSlop/server/actions/workflows/checks.yml)
 runs on main, pull requests and manual dispatch. It checks lint and complete test
-discovery, image-free tests on Windows and Linux, isolated admin/auth tests, and
+discovery, image-free tests on Windows and Linux, isolated admin tests, and
 transactions/migrations against a disposable PostgreSQL 16 container. Unexpected
 skips fail the run. The aggregate **All checks** job fails if any required job
 fails or is cancelled, and can be selected as a branch-protection requirement.
 
 Packaging checks exact wheel contents before installing in a new environment,
-then starts the installed services and smokes the entry points, admin templates
-and the auth gateway. Successful builds retain the `tmserver-wheel` artifact for
+then starts the installed services and smokes the entry points and admin
+templates. Successful builds retain the `tmserver-wheel` artifact for
 14 days.
 
 The portable lane includes `tests/game/test_rules_vectors.py`, which checks the
@@ -55,14 +55,13 @@ and Python dependency updates; web and PostgreSQL dependencies are grouped.
 Every lane runs on Windows and Linux.
 
 ```powershell
-.venv/Scripts/python -m pip install -e ".[dev,admin,auth]"
+.venv/Scripts/python -m pip install -e ".[dev,admin]"
 .venv/Scripts/ruff check src tests tools
 .venv/Scripts/python -m tools.check_collection
 .venv/Scripts/python -m tools.check_tests portable
 .venv/Scripts/python -m tools.check_tests admin
-.venv/Scripts/python -m tools.check_tests auth
 .venv/Scripts/python -m build --wheel
-.venv/Scripts/python -m tools.check_wheel dist/tmserver-0.1.0-py3-none-any.whl --admin --auth
+.venv/Scripts/python -m tools.check_wheel dist/tmserver-0.1.0-py3-none-any.whl --admin
 ```
 
 The portable lane needs no database. It checks source import boundaries, rejects

@@ -17,6 +17,21 @@ MODULUS = N.to_bytes(32, "little")
 
 class Client:
     async def open(self, port, account=b"UGITW5T4U", password=b"tm-local-test", fragmented=False):
+        challenge = await self.exchange(port, account, fragmented)
+        digest = hashlib.md5(challenge + password).hexdigest().encode()
+        await self.send(b"NICK " + account + b":" + digest + b":test")
+
+    async def login(self, port, pol_id, password):
+        """The loader's own LOGIN connection: one reply, then the server closes."""
+        await self.exchange(port, None)
+        await self.send(b"LOGIN " + pol_id + b" :" + password)
+        reply = await self.read()
+        closed = await self.read()
+        self.writer.close()
+        return reply, closed
+
+    async def exchange(self, port, account, fragmented=False):
+        """Plain challenge and the RSA/Blowfish key exchange; returns the challenge."""
         self.reader, self.writer = await asyncio.open_connection("127.0.0.1", port)
         self.cipher, self.iv, self.nick = None, 0, account
         challenge = (await self.read()).split()[-1]
@@ -36,8 +51,7 @@ class Client:
         assert len(key) == 8
         self.cipher = await asyncio.to_thread(wire.SqBlowfish, key)
         self.iv = int.from_bytes(MODULUS[:8], "little")
-        digest = hashlib.md5(challenge + password).hexdigest().encode()
-        await self.send(b"NICK " + account + b":" + digest + b":test")
+        return challenge
 
     async def read(self, *, timeout=10):
         # A hang guard, not a protocol deadline: legacy key setup can exceed

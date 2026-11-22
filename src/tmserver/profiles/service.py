@@ -1,4 +1,4 @@
-"""PlayOnline profile file service, on loopback.
+"""PlayOnline profile file service, on loopback unless bound elsewhere.
 
 Layout: TetraPackets file/service.md. Unknown operations fail and are logged.
 
@@ -11,8 +11,8 @@ no expiry beyond replacement/restart; a restarted service needs a fresh IRC
 context before encrypted profile use. Plain mode uses the same full digest.
 Encrypted authentication failure closes without guessing an error-response key.
 
-Gateway streams additionally bind the account and cached cipher history to one
-revocable play session; they never consult the local listener's shared cache.
+Self-registered accounts authenticate with the game password their LOGIN
+minted. The built-in test accounts are accepted from loopback peers only.
 """
 
 import asyncio
@@ -26,7 +26,7 @@ from pathlib import Path
 from tmserver.protocol import wire
 from tmserver.network.diagnostics import report_failure, write_record
 from tmserver.protocol.identities import player_id as game_player_id
-from tmserver.network.local_accounts import account_specs, display_name
+from tmserver.network.local_accounts import account_specs, display_name, loopback
 from tmserver.profiles.location import FileOwner
 from tmserver.profiles.packets import answer, checked, checksum
 from tmserver.rooms.packets import directory_files
@@ -87,8 +87,8 @@ class ProfileServer:
             self.log_error = error
             report_failure("Profile", error)
 
-    async def start(self, port=51220):
-        self.listener = await asyncio.start_server(self.handle, "127.0.0.1", port)
+    async def start(self, port=51220, host="127.0.0.1"):
+        self.listener = await asyncio.start_server(self.handle, host, port)
         return self.listener.sockets[0].getsockname()[1]
 
     async def stop(self):
@@ -102,10 +102,10 @@ class ProfileServer:
         if self.listener:
             await self.listener.wait_closed()
 
-    def _local_accounts(self):
-        identities = getattr(self.game_server, "identities", None)
+    def _eligible_accounts(self, local):
+        credentials = getattr(self.game_server, "credentials", None)
         return {key: spec for key, spec in self.accounts.items()
-                if identities is None or not identities.owns(key)}
+                if local or credentials is not None and credentials.get(key) is not None}
 
     def _identity(self, account_key):
         account_id, _, player_id = self._account(account_key)
@@ -118,44 +118,29 @@ class ProfileServer:
         # separate game-domain identity comes directly from the economy save.
         return wire.polid_from_string(account_id.decode("ascii")), player_id, name[:16]
 
-    def _cipher_candidates(self, access=None):
+    def _cipher_candidates(self, accounts):
         """At most three candidates per configured authenticated IRC account."""
-        for key in self._local_accounts() if access is None else (access.account_key,):
+        for key in accounts:
             candidates = []
-            if access is not None or self.game_server is not None:
-                session = (
-                    access.game
-                    if access is not None
-                    else self.game_server.nicks.get(key.encode("ascii"))
-                )
-                if access is not None and (
-                    session is None or session.closed or session.nick != key.encode("ascii")
-                ):
-                    session = None
+            if self.game_server is not None:
+                session = self.game_server.nicks.get(key.encode("ascii"))
                 if session is not None and getattr(session, "cipher", None) is not None:
                     candidates.append((session.cipher, session.iv))
-            cached = self.profile_ciphers.get(key, ()) if access is None else access.profile_ciphers
+            cached = self.profile_ciphers.get(key, ())
             for cipher, iv in cached:
                 if not any(cipher is old and iv == old_iv for old, old_iv in candidates):
                     candidates.append((cipher, iv))
             for cipher, iv in candidates:
                 yield key, cipher, iv
 
-    def _remember_cipher(self, key, cipher, iv, access=None):
+    def _remember_cipher(self, key, cipher, iv):
         # Only nonce-authenticated profile contexts survive IRC reconnects.
-        previous = self.profile_ciphers[key] if access is None else access.profile_ciphers
+        previous = self.profile_ciphers.get(key, ())  # Accounts can register after startup.
         cached = [(old, old_iv) for old, old_iv in previous if old is not cipher or old_iv != iv]
-        contexts = [(cipher, iv)] + cached[: MAX_CACHED_CIPHERS - 1]
-        if access is None:
-            self.profile_ciphers[key] = contexts
-        else:
-            access.profile_ciphers = contexts
+        self.profile_ciphers[key] = [(cipher, iv)] + cached[: MAX_CACHED_CIPHERS - 1]
 
-    def _authenticate(self, request, nonce, encrypted, access=None):
-        accounts = self._local_accounts()
-        if access is not None:
-            access.check()
-            accounts = {access.account_key: self._account(access.account_key)}
+    def _authenticate(self, request, nonce, encrypted, local=True):
+        accounts = self._eligible_accounts(local)
         expected = {
             key: hashlib.md5(account_id + password + struct.pack("<I", nonce)).digest()
             for key, (account_id, password, _) in accounts.items()
@@ -165,7 +150,7 @@ class ProfileServer:
                 if hmac.compare_digest(request[24:40], digest):
                     return key, request, None
         else:
-            for key, cipher, iv in self._cipher_candidates(access):
+            for key, cipher, iv in self._cipher_candidates(accounts):
                 plain = wire.crypt64(cipher, iv, request)
                 # No structural byte guesses: all 16 authentication bytes must
                 # match the account that owns this particular cipher context.
@@ -270,7 +255,7 @@ class ProfileServer:
         self.log("unsupported_operation", cmd=cmd, sub=sub, body=body.hex())
         return b"", 1
 
-    async def handle(self, reader, writer, *, access=None):
+    async def handle(self, reader, writer):
         task = asyncio.current_task()
         if len(self.tasks) >= max(8, len(self.accounts)):
             writer.close()
@@ -281,8 +266,6 @@ class ProfileServer:
         try:
             async with asyncio.timeout(20):
                 opening = await reader.readexactly(40)
-                if access is not None:
-                    access.check()
                 self.log("open", wire=opening.hex())
                 if opening[0] != 0 or opening[4:6] != b"\x01\0":
                     raise ValueError("invalid open")
@@ -291,7 +274,7 @@ class ProfileServer:
                 writer.write(answer(nonce=nonce))
                 await writer.drain()
                 request = await reader.readexactly(40)
-                authenticated = self._authenticate(request, nonce, encrypted, access)
+                authenticated = self._authenticate(request, nonce, encrypted, loopback(writer))
                 if authenticated is None:
                     # Without an authenticated encrypted context, selecting a
                     # response key would reintroduce the same identity guess.
@@ -306,18 +289,15 @@ class ProfileServer:
                     crypt = lambda data, offset=0: wire.crypt64(cipher, iv, bytes(offset) + data)[
                         offset:
                     ]
-                logged = request if access is None else request[:24] + bytes(16)
-                self.log("request", account=account_key, wire=logged.hex())
+                self.log("request", account=account_key, wire=request.hex())
                 if request[0] != 2:
                     raise ValueError("unrecognized request (possibly encrypted)")
                 size = struct.unpack_from("<I", request, 4)[0]
                 if size > 1024 * 1024:
                     raise ValueError("request too large")
                 if context is not None:
-                    self._remember_cipher(account_key, *context, access=access)
+                    self._remember_cipher(account_key, *context)
                 body = await reader.readexactly(size)
-                if access is not None:
-                    access.check()
                 if crypt:
                     body = crypt(body, 40)
                 payload, error = self.dispatch(

@@ -1,6 +1,7 @@
 """Game (IRC) listener: owns connections, shared services and table runtimes.
 
-Listens on loopback only. The wire encryption is in protocol/wire.py.
+Listens on loopback unless the operator binds another address. The wire
+encryption is in protocol/wire.py.
 """
 
 from tmserver.protocol.messages import service_notice
@@ -12,7 +13,12 @@ from collections import deque
 from contextlib import contextmanager
 from pathlib import Path
 
-from tmserver.accounts.provisioning import provision_account
+from tmserver.accounts.credentials import (
+    Limiter, hash_password, valid_password, valid_pol_id, verify_password,
+)
+from tmserver.accounts.provisioning import (
+    provision_account, register_account, registered_key,
+)
 from tmserver.economy.auctions.models import AuctionError
 from tmserver.economy.auctions.service import AuctionService
 from tmserver.network.chat import ChatService
@@ -22,9 +28,8 @@ from tmserver.network.diagnostics import report_failure, write_record
 from tmserver.events.adapter import EventAdapter
 from tmserver.events.rooms import EventRooms
 from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, TRADE_RAW, player_id, service_nick
-from tmserver.network.session import MAX_LINE, Session
+from tmserver.network.session import LOGIN_REPLY, MAX_LINE, Session, login_error
 from tmserver.network.local_accounts import MAX_LEGACY_PASSWORD, account_specs
-from tmserver.protocol.wire import polid_to_string, polid_unscramble
 from tmserver.rooms.config import configure_rooms
 from tmserver.rooms.config import directory_files as ordinary_directory_files
 from tmserver.rooms.table import OrdinaryTable
@@ -96,6 +101,10 @@ class Server:
         self.listener = None
         self.auction_task = None
         self.storage_failed = None
+        # Failed logins per IP and per POL ID, and new accounts per IP.
+        self.address_failures = Limiter(20, 900)
+        self.pol_id_failures = Limiter(5, 900)
+        self.registrations = Limiter(5, 3600)
         self.room = RoomService(
             player_count=match_player_count, computer_enabled=match_mode == "computer"
         )
@@ -125,7 +134,7 @@ class Server:
             event_clock=event_clock,
         )
         self.economy = state.economy
-        self.identities = state.identities
+        self.credentials = state.credentials
         self.auction_ledger = state.auction_ledger
         self.prize = state.prize
         self.result_rewards = state.result_rewards
@@ -138,8 +147,6 @@ class Server:
         self.event_results = state.event_results
         self.ratings.validate_profiles()
         self.account_keys = set(self.economy.snapshot()["accounts"])
-        for link in self.identities.snapshot()["links"]:
-            self.register_hosted_account(link["account_key"])
         self.commerce = Commerce(self.economy, self.persist_changes)
         self.auction_clock = auction_clock
         self.auction = AuctionService(self.auction_ledger, clock=auction_clock)
@@ -258,16 +265,48 @@ class Server:
             self.log("auction_expiry", count=len(changes))
         return changes
 
-    def register_hosted_account(self, key):
-        """Expose saved hosted identities to bound transports, never raw logins."""
-        if key not in self.account_specs:
-            nick = key.encode("ascii")
-            login = polid_to_string(polid_unscramble(nick)).encode("ascii")
-            # Regenerated at every start and never saved, so no save holds an old length.
-            password = secrets.token_hex(MAX_LEGACY_PASSWORD // 2).encode("ascii")
-            self.account_specs[key] = (login, password, self.economy.account_view(key).player_id)
-            self.accounts[nick] = password
-            self.connection_limit = max(8, len(self.accounts))
+    async def login(self, address, pol_id, password):
+        """Register an unknown POL ID or check its password; mint a game password."""
+        if not valid_pol_id(pol_id) or not valid_password(password):
+            return login_error(b"invalid_request")
+        if self.address_failures.blocked(address) or self.pol_id_failures.blocked(pol_id):
+            return login_error(b"rate_limited")
+        key = registered_key(self, pol_id.decode("ascii"))
+        if key is None:
+            return login_error(b"pol_id_unavailable")
+        created = False
+        credential = self.credentials.get(key)
+        if credential is None:
+            if key in self.account_keys:
+                return login_error(b"account_locked")  # Saved without a password.
+            if self.registrations.blocked(address):
+                return login_error(b"rate_limited")
+            credential = await asyncio.to_thread(hash_password, password)
+            if self.credentials.get(key) is None and key not in self.account_keys:
+                try:
+                    register_account(self, key, credential)
+                except OSError:
+                    return login_error(b"unavailable")
+                self.registrations.hit(address)
+                created = True
+            credential = self.credentials.get(key)  # Another LOGIN may have won the race.
+        if credential is None or credential.disabled:
+            return login_error(b"account_locked")
+        if not created and not await asyncio.to_thread(verify_password, credential, password):
+            self.address_failures.hit(address)
+            self.pol_id_failures.hit(pol_id)
+            return login_error(b"invalid_credentials")
+        nick = key.encode("ascii")
+        if nick in self.nicks:
+            return login_error(b"account_connected")
+        # Held in memory only, like the original Viewer's per-launch secret.
+        game_password = secrets.token_hex(MAX_LEGACY_PASSWORD // 2).encode("ascii")
+        self.account_specs[key] = (pol_id, game_password, self.economy.account_view(key).player_id)
+        self.accounts[nick] = game_password
+        self.connection_limit = max(8, len(self.accounts))
+        self.log("login", account=key, created=created)
+        return b"%s %s %s :%s" % (LOGIN_REPLY, pol_id, game_password,
+                                  b"created" if created else b"signed_in")
 
     def ensure_account(self, nick, *, name=None):
         key = nick.decode("ascii")
@@ -414,17 +453,17 @@ class Server:
             self.log_error = error
             report_failure("Game", error)
 
-    async def start(self, port=51241):
+    async def start(self, port=51241, host="127.0.0.1"):
         if self.storage_failed is not None:
             raise OSError("restart the server after correcting state storage")
         self.advance_rankings()
-        self.listener = await asyncio.start_server(self.accept, "127.0.0.1", port, limit=MAX_LINE)
+        self.listener = await asyncio.start_server(self.accept, host, port, limit=MAX_LINE)
         for table in self.ordinary_tables:
             table.start_table_tasks()
         self.auction_task = asyncio.create_task(self.run_auctions())
         self.event_matches.start()
         port = self.listener.sockets[0].getsockname()[1]
-        self.log("listening", address="127.0.0.1", port=port)
+        self.log("listening", address=host, port=port)
         return port
 
     async def run_auctions(self):
@@ -435,25 +474,14 @@ class Server:
             except OSError as exc:
                 self.log("auction_storage_error", reason=str(exc))
 
-    async def accept(self, reader, writer, *, access=None):
+    async def accept(self, reader, writer):
         if self.storage_failed is not None or len(self.sessions) >= self.connection_limit:
             writer.close()
             return
-        if access is not None:
-            try:
-                access.check()
-                if access.account_key not in self.account_specs or access.game is not None:
-                    raise ValueError("play session cannot open another game connection")
-            except ValueError as error:
-                self.log("connection_rejected", reason=str(error))
-                writer.close()
-                return
         self.counter += 1
         task = asyncio.current_task()
         self.tasks.add(task)
-        session = Session(self, reader, writer, self.counter, access=access)
-        if access is not None:
-            access.game = session
+        session = Session(self, reader, writer, self.counter)
         self.sessions.add(session)
         try:
             await session.run()

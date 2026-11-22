@@ -92,8 +92,8 @@ class AdminListenerTests(unittest.IsolatedAsyncioTestCase):
         ports = []
 
         def capture(original):
-            async def start(host, port):
-                bound = await original(host, port)
+            async def start(owner, port, **options):
+                bound = await original(owner, port, **options)
                 ports.append(bound)
                 return bound
             return start

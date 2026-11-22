@@ -15,8 +15,15 @@ import time
 from tmserver.protocol import wire
 from tmserver.network import dispatch as services
 from tmserver.network.chat import relay_text
+from tmserver.network.local_accounts import loopback
 from tmserver.protocol.identities import service_nick
 from tmserver.protocol.messages import FRAME_OVERHEAD, MAX_LINE, MAX_SERVICE_PAYLOAD
+
+LOGIN_REPLY = b":srv 900"
+
+
+def login_error(code):
+    return b":srv 901 " + code + b" :login refused"
 
 
 def split_message(message):
@@ -47,9 +54,8 @@ def names_replies(nick, channel, members):
 
 
 class Session:
-    def __init__(self, server, reader, writer, session_id, *, access=None):
+    def __init__(self, server, reader, writer, session_id):
         self.server, self.reader, self.writer, self.id = server, reader, writer, session_id
-        self.access = access
         self.cipher, self.iv, self.nick = None, 0, None
         self.channels = set()
         self.closed = False
@@ -72,15 +78,12 @@ class Session:
         async with self.send_lock:
             if self.closed or self.server.storage_failed is not None:
                 return
-            if self.access is not None:
-                try:
-                    self.access.check()
-                except ValueError as error:
-                    raise ConnectionError("play session is no longer authorized") from error
             packet = wire.frame_line(message, self.cipher, self.iv)
             self.writer.write(packet)
             await asyncio.wait_for(self.writer.drain(), 5)
-            if self.access is None or self.nick is not None:
+            if message.startswith(LOGIN_REPLY):
+                self.server.log("send", session=self.id, encrypted=True, text="LOGIN reply")
+            else:
                 self.server.log(
                     "send",
                     session=self.id,
@@ -107,8 +110,6 @@ class Session:
             # Another writer can close this peer while its buffered read is ready.
             if self.closed or not raw:
                 break
-            if self.access is not None:
-                self.access.check()
             if len(raw) > MAX_LINE or not raw.endswith(b"\r\n"):
                 raise ValueError("oversized or unterminated frame")
             plain = wire.crypt64(self.cipher, self.iv, raw) if self.cipher else raw
@@ -120,14 +121,16 @@ class Session:
                 self.server.log(
                     "bad_checksum",
                     session=self.id,
-                    **({"wire_hex": raw.hex()} if self.access is None else {}),
+                    wire_hex=raw.hex(),
                 )
                 if self.bad_checksums >= 3:
                     raise ValueError("repeated bad checksums")
                 continue
             if b"\0" in message or b"\r" in message or b"\n" in message:
                 raise ValueError("control byte in message")
-            if self.access is None or self.nick is not None:
+            if message[:6].upper() == b"LOGIN ":
+                self.server.log("receive", session=self.id, encrypted=True, text="LOGIN")
+            else:
                 self.server.log(
                     "receive",
                     session=self.id,
@@ -151,6 +154,15 @@ class Session:
                 await self.send(b":srv 300 * " + wire.rsa_wrap_session_key(modulus, key))
                 self.cipher, self.iv = cipher, int.from_bytes(modulus[:8], "little")
                 self.server.log("key_exchange", session=self.id)
+            elif self.nick is None and verb == b"LOGIN":
+                # A loader's own short connection: answer once, then close.
+                address = self.writer.get_extra_info("peername")[0]
+                if len(args) == 2:
+                    reply = await self.server.login(address, *args)
+                else:
+                    reply = login_error(b"invalid_request")
+                await self.send(reply)
+                return
             elif self.nick is None:
                 if verb != b"NICK" or len(args) != 1:
                     raise ValueError("expected encrypted NICK")
@@ -158,10 +170,10 @@ class Session:
                 if len(parts) != 3 or parts[0] not in self.server.accounts:
                     raise ValueError("unknown synthetic account")
                 nick, digest, _ = parts
-                if self.access is None and self.server.identities.owns(nick.decode("ascii")):
-                    raise ValueError("hosted account requires an authorized play session")
-                if self.access is not None and nick != self.access.account_key.encode("ascii"):
-                    raise ValueError("game account differs from authorized play session")
+                if self.server.credentials.get(nick.decode("ascii")) is None and not loopback(
+                    self.writer
+                ):
+                    raise ValueError("built-in test accounts sign in from loopback only")
                 expected = (
                     hashlib.md5(self.challenge + self.server.accounts[nick]).hexdigest().encode()
                 )
@@ -362,8 +374,6 @@ class Session:
         if self.closed:
             return
         self.closed = True
-        if self.access is not None and self.access.game is self:
-            self.access.game = None
         # Detach synchronously, before any notification can block. A reconnect
         # may bind the account while the old socket finishes closing.
         for channel in list(self.channels):

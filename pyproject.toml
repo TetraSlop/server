@@ -13,12 +13,11 @@ license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 
 [project.urls]
-Repository = "https://github.com/sruon/tmserver"
-Issues = "https://github.com/sruon/tmserver/issues"
+Repository = "https://github.com/TetraSlop/server"
+Issues = "https://github.com/TetraSlop/server/issues"
 
 [project.optional-dependencies]
 admin = ["starlette-admin==1.0.3", "starlette==1.10.0", "uvicorn==0.54.0"]
-auth = ["starlette==1.10.0", "uvicorn==0.54.0", "httpx==0.28.1", "websockets==17.3"]
 postgres = [
     "SQLAlchemy==2.1.6", "alembic==1.20.1",
     "psycopg[binary]==3.3.6",

@@ -20,8 +20,6 @@ def test_modules(lane, root=ROOT):
     paths = list((root / "tests").rglob("test_*.py"))
 
     def selected_lane(path):
-        if path.is_relative_to(root / "tests" / "auth"):
-            return "auth"
         if path.is_relative_to(root / "tests" / "admin" / "web"):
             return "admin"
         return "postgres" if "postgres" in path.stem.split("_") else "portable"
@@ -100,21 +98,16 @@ def run_worker(lane, url=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("lane", choices=("portable", "postgres", "admin", "auth"))
+    parser.add_argument("lane", choices=("portable", "postgres", "admin"))
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
-    if args.lane == "auth" and any(
-        importlib.util.find_spec(name) is None
-        for name in ("starlette", "uvicorn", "httpx", "websockets")
-    ):
-        parser.error('install ".[dev,auth]" before selecting the auth lane')
     if args.lane == "admin" and any(
         importlib.util.find_spec(name) is None
         for name in ("starlette_admin", "starlette", "uvicorn", "httpx")
     ):
         parser.error('install ".[dev,admin]" before selecting the admin lane')
     if not args.worker:
-        if args.lane in ("portable", "admin", "auth"):
+        if args.lane in ("portable", "admin"):
             return run_worker(args.lane)
         if any(importlib.util.find_spec(name) is None for name in ("sqlalchemy", "alembic", "psycopg")):
             parser.error('install ".[postgres]" before selecting the PostgreSQL lane')

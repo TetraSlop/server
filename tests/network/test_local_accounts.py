@@ -7,7 +7,6 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
-from uuid import uuid4
 
 from tests import ROOT
 from tests.profiles.test_profile_accounts import file_request, transact
@@ -197,23 +196,23 @@ class AccountPoolTests(unittest.TestCase):
         )
 
     def test_every_legacy_password_fits_polcores_15_character_game_irc_limit(self):
-        from tmserver.accounts.provisioning import provision_identity
+        from tests.accounts.test_provisioning import nth
 
         self.assertEqual(MAX_LEGACY_PASSWORD, 15)
-        store = MemoryStore()
-        game = Server(store=store)
-        issuer = "https://fixture.supabase.co/auth/v1"
-        hosted = [provision_identity(game, issuer, str(uuid4())) for _ in range(8)]
-        # Passwords are never saved: a restart gives every hosted account a fresh one.
-        restarted = Server(store=store)
-        for server in (game, restarted):
-            for key, (_, password, _) in server.account_specs.items():
-                with self.subTest(key=key, restarted=server is restarted):
-                    self.assertLessEqual(len(password), MAX_LEGACY_PASSWORD)
-                    if key in hosted:
-                        self.assertEqual(len(password), 14)
-        self.assertTrue(set(hosted) <= set(restarted.account_specs))
-        self.assertNotIn(b"tm-local-test", {restarted.account_specs[key][1] for key in hosted})
+        game = Server(store=MemoryStore())
+
+        async def logins():
+            for index in range(8):
+                await game.login(f"192.0.2.{index}", nth(index), b"password")
+            await game.stop()
+
+        asyncio.run(logins())
+        self.assertEqual(len(game.account_specs), 10)
+        for key, (_, password, _) in game.account_specs.items():
+            with self.subTest(key=key):
+                self.assertLessEqual(len(password), MAX_LEGACY_PASSWORD)
+                if game.credentials.get(key) is not None:
+                    self.assertEqual(len(password), 14)
 
 
 if __name__ == "__main__":

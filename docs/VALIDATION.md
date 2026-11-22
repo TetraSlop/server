@@ -7,9 +7,8 @@ What the test lanes cover, and what they do not. How to run them is in
 
 | Lane | Needs | Covers |
 | --- | --- | --- |
-| `portable` | Python 3.13, `.[dev]` | Protocol codecs, services, gameplay rules, computer and human matches, encrypted loopback sessions on an in-memory store, tooling. Runs on Windows and Linux. |
+| `portable` | Python 3.13, `.[dev]` | Protocol codecs, services, gameplay rules, computer and human matches, LOGIN registration and limits, encrypted loopback sessions on an in-memory store, tooling. Runs on Windows and Linux. |
 | `admin` | `.[dev,admin]` | The admin panel, its sign-in, audited actions and receipts. |
-| `auth` | `.[dev,auth]` | Supabase verification (provider mocked at the HTTP boundary), tickets, WebSocket game and profile streams, automatic registration. |
 | `postgres` | `.[dev,postgres]`, Docker | Joint account and journal commits, rollback, lost commit acknowledgements, writer exclusion and migrations, on a disposable PostgreSQL 16. |
 
 No lane may skip a test, and the collection check fails if a module has no lane.
@@ -23,7 +22,7 @@ the server grows cards at the client's 24 bits, checked against a digest of all
 
 The wheel check rebuilds from fresh sources, compares every packaged file with
 the source tree, then installs it into a new environment and starts the base,
-admin and auth services.
+and admin services.
 
 ## Last full run
 
@@ -41,8 +40,9 @@ database is not tested.
 
 - What the game client shows on screen. Use the
   [native test checklist](NATIVE_TEST_CHECKLIST.md).
-- Live Discord sign-in. Only the provider's HTTP responses are mocked.
-- Public hosting behind TLS.
+- LOGIN from a real tmloader build, and a public deployment.
+- An active man-in-the-middle on LOGIN: the key exchange does not authenticate
+  the server, so none is claimed.
 - Original server rules that the client does not contain, such as reward and
   rating formulas. See [rules provenance](RULES_PROVENANCE.md).
 - Player capacity. Throughput and storage stalls are not measured.

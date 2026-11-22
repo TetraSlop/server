@@ -82,7 +82,7 @@ table-options editor. Open Tables opens the game-rule editor with saved personal
 defaults first. Both can use personal table options. Four
 captured Apply messages from the client pass encrypted replay against the
 corresponding supplied rooms. The messages are described in
-[TetraPackets irc/G/14.md](https://github.com/sruon/TetraPackets/blob/main/irc/G/14.md).
+[TetraPackets irc/G/14.md](https://github.com/TetraSlop/packets/blob/main/irc/G/14.md).
 Changing between rooms and restarting preserves saved personal game defaults.
 
 Computer uses a separate rule editor that remains editable even in a fixed
@@ -92,7 +92,7 @@ double-up value, so the server does not prohibit that preset. Prefer custom
 rules for CPU rooms when players should freely change these options. The
 supplied lineup keeps Local Room custom and all fixed rooms human-only.
 The client's Computer menu is described in
-[TetraPackets client/computer-player.md](https://github.com/sruon/TetraPackets/blob/main/client/computer-player.md). How the
+[TetraPackets client/computer-player.md](https://github.com/TetraSlop/packets/blob/main/client/computer-player.md). How the
 client shows custom fixed CPU rooms has not been checked.
 
 ## Computer availability
@@ -108,7 +108,7 @@ supports rooms containing separate human and CPU tables. A direct Computer
 admission to a human table receives a refusal without claiming the account or
 disconnecting it.
 
-[TetraPackets irc/L.md](https://github.com/sruon/TetraPackets/blob/main/irc/L.md) documents the room
+[TetraPackets irc/L.md](https://github.com/TetraSlop/packets/blob/main/irc/L.md) documents the room
 flag at RL record `+0x29`, table prefix, card threshold and table-state guards.
 The frozen fixture includes all five actual launcher rooms passing through
 original directory parsing, room selection and action branches. Encrypted tests
@@ -126,7 +126,7 @@ this is local compatibility behavior, not a recovered historical IRC case policy
 Room presence uses the authenticated character name, separately from a handle
 alias. Entry and updates with another name are rejected before publication.
 Full 16-byte names have an existing native sender/receiver limitation despite
-server-wire support; see [TetraPackets irc/L.md](https://github.com/sruon/TetraPackets/blob/main/irc/L.md).
+server-wire support; see [TetraPackets irc/L.md](https://github.com/TetraSlop/packets/blob/main/irc/L.md).
 
 ## Table entry limits
 
@@ -146,5 +146,5 @@ spectators need no owned cards.
 An ineligible request receives the existing nonfatal unavailable/start-failure
 reply without reserving the account or changing the table. The same connection
 can retry when eligible. This response is a server choice: the client's menu checks are known
-([TetraPackets flows/tables.md](https://github.com/sruon/TetraPackets/blob/main/flows/tables.md)), but not the original
+([TetraPackets flows/tables.md](https://github.com/TetraSlop/packets/blob/main/flows/tables.md)), but not the original
 server's error codes for these conditions.

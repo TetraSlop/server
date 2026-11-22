@@ -29,7 +29,8 @@ works without a database.
 
 Current schema revision is `0003_identities`. Stop the owning server and run
 `tmserver-db upgrade` when upgrading an existing database. Revision 0002 adds the
-administration audit journal; 0003 adds durable authentication ownership. Neither
+administration audit journal; 0003 adds the `identities` journal, which now holds
+login password hashes (it first held Supabase links, which restore as empty). Neither
 rewrites accounts or prizes. The server refuses an older schema. Migrations only
 upgrade.
 
@@ -39,7 +40,8 @@ preserve the session writer lock. Run migrations with a schema-owning role.
 Use TLS and the appropriate PostgreSQL URL parameters on a remote deployment.
 Do not put real credentials in committed files or command-line arguments.
 
-Protocol listeners bind only to loopback.
+Protocol listeners bind to loopback unless `tmserver --bind` names another
+address; the admin panel always stays on loopback.
 
 ## Ownership and recovery
 
