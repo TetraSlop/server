@@ -47,8 +47,14 @@ jobs:
       - name: Start PostgreSQL and the server container
         env:
           TM_IMAGE: tmserver:ci
+          # Host port 0: Docker picks free ports, so nothing else on the runner can collide.
+          TM_GAME_PORT: 0
+          TM_PROFILE_PORT: 0
         run: docker compose up --detach --wait --wait-timeout 120
-      - run: python -m tools.check_container
+      - name: Register and sign in through the published game port
+        run: |
+          port=$(docker compose port server 51241)
+          python -m tools.check_container --port "${port##*:}"
       - if: failure()
         run: docker compose logs
       - if: always()
