@@ -15,7 +15,7 @@ EVENT_SETUP = """
 import json
 from pathlib import Path
 from tmserver.economy.service import EconomyService
-from tmserver.events.config import parse_event_configs
+from tmserver.events.config import parse_event_setup
 from tmserver.events.service import EventHost
 from tmserver.storage.json import JsonStateStore
 
@@ -32,7 +32,7 @@ Path("events.json").write_text(json.dumps(document), encoding="utf8")
 store = JsonStateStore("admin.json")
 snapshot = store.load()
 economy = EconomyService.restore(snapshot)
-events = EventHost(economy, parse_event_configs(document), clock=lambda: 200)
+events = EventHost(economy, parse_event_setup(document)[0], clock=lambda: 200)
 events.admit_room("audited", "wheel-event")
 store.save(dict(snapshot, events=events.snapshot()))
 """
@@ -52,7 +52,7 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener
 import uvicorn
 
 from tmserver.admin.web import create_app
-from tmserver.events.config import load_event_configs
+from tmserver.events.config import load_event_setup
 from tmserver.network.server import Server
 
 
@@ -175,7 +175,7 @@ def check_receipts(request):
 
 async def main():
     host = Server(
-        state_path="admin-web.json", event_configs=load_event_configs("events.json"),
+        state_path="admin-web.json", event_configs=load_event_setup("events.json")[0],
         event_clock=lambda: 200,
     )
     account = host.ensure_account(next(iter(host.accounts)))

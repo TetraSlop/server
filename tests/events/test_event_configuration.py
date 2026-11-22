@@ -5,7 +5,7 @@ import unittest
 from dataclasses import FrozenInstanceError, is_dataclass, replace
 
 from tmserver.economy.service import EconomyService
-from tmserver.events.config import parse_event_configs, parse_event_setup
+from tmserver.events.config import parse_event_setup
 from tmserver.events.matches import EventMatchRound, EventParticipant
 from tmserver.events.models import EventListing, EventTableConfig
 from tmserver.events.rooms import EventRooms
@@ -67,7 +67,7 @@ class EventConfigurationTests(unittest.TestCase):
                 target = target[key]
             target[path[-1]] = value
             with self.subTest(path=path, value=value), self.assertRaises(ValueError):
-                parse_event_configs(document)
+                parse_event_setup(document)[0]
 
     def test_table_types_and_nested_unknown_fields_are_rejected(self):
         document = copy.deepcopy(DOCUMENT)
@@ -95,14 +95,14 @@ class EventConfigurationTests(unittest.TestCase):
                 target = target[key]
             target["unknown"] = 1
             with self.subTest(path=path), self.assertRaises(ValueError):
-                parse_event_configs(invalid)
+                parse_event_setup(invalid)[0]
 
     def test_latin1_text_and_input_document_are_preserved(self):
         document = copy.deepcopy(DOCUMENT)
         document["events"][0]["listing"]["description"] = "Café ÿ"
         document["events"][0]["data"]["classes"] = ["Étage", "Après"]
         original = copy.deepcopy(document)
-        config = parse_event_configs(document)[0]
+        config = parse_event_setup(document)[0][0]
         self.assertEqual(config.listing.description, b"Caf\xe9 \xff")
         self.assertEqual(config.data[0x60:0x65], b"\xc9tage")
         self.assertEqual(document, original)
@@ -118,7 +118,7 @@ class EventConfigurationTests(unittest.TestCase):
                 replace(listing, scalar=scalar)
         with self.assertRaises(ValueError):
             EventListing("Region", b"Event", b"Description")
-        config = parse_event_configs(DOCUMENT)[0]
+        config = parse_event_setup(DOCUMENT)[0][0]
         self.assertTrue(is_dataclass(config))
         self.assertEqual(replace(config, id="renamed").data, config.data)
         cards = list(CARDS)
@@ -247,7 +247,7 @@ class EventConfigurationTests(unittest.TestCase):
             parse_event_setup(item)
 
     def test_json_values_project_without_assigning_opaque_fields(self):
-        configs = parse_event_configs(DOCUMENT)
+        configs = parse_event_setup(DOCUMENT)[0]
         c = configs[0]
         self.assertEqual(c.room_id, game_id(4096))
         self.assertEqual(
@@ -263,7 +263,7 @@ class EventConfigurationTests(unittest.TestCase):
         self.assertEqual(len(rooms.rooms), 1)
         self.assertEqual(len(c.service_records()), 1)
         self.assertEqual(c.service_records()[0][0x28], ord("F"))
-        self.assertEqual(parse_event_configs({"events": []}), ())
+        self.assertEqual(parse_event_setup({"events": []})[0], ())
 
     def test_malformed_unknown_and_unrepresentable_settings_fail(self):
         invalid = []
@@ -285,7 +285,7 @@ class EventConfigurationTests(unittest.TestCase):
         invalid.extend(({"events": "text"}, {"events": [], "unknown": 1}, []))
         for document in invalid:
             with self.subTest(document=document), self.assertRaises((ValueError, TypeError)):
-                parse_event_configs(document)
+                parse_event_setup(document)[0]
 
 
 if __name__ == "__main__":

@@ -148,7 +148,7 @@ class EventCardTests(unittest.TestCase):
                 self.s.grant("a", "event", "cash", money=amount)
             replies = self.entry()
             self.assertEqual(parse_named(replies[1])[3]["EcmInit"]["C"], "0")
-            self.assertTrue(self.s.status("a")["accepted"])
+            self.assertTrue(self.s._active["a"].accepted)
             self.quit()
         self.assertEqual(self.e.balance("a"), 1025)
         self.assertEqual(len(self.e.inventory("a")), 10)
@@ -216,7 +216,8 @@ class EventCardTests(unittest.TestCase):
         self.s.grant("a", "event", "award", cards=[self.card])
         self.entry()
         before = self.snapshot()
-        status = self.s.status("a")
+        state = self.s._active["a"]
+        status = (state.number, len(state.incoming), len(state.cards), state.accepted)
         for body in (
             self.edits("Erase", [replace(self.card, arrows=self.card.arrows ^ 255)]),
             self.edits("Erase", [self.card] * 15),
@@ -227,7 +228,10 @@ class EventCardTests(unittest.TestCase):
         with self.assertRaises(EconomyError):
             self.send(0x22, self.edits("Decks", [replace(self.card, deck=50)]))
         self.assertEqual(self.snapshot(), before)
-        self.assertEqual(self.s.status("a"), status)
+        state = self.s._active["a"]
+        self.assertEqual(
+            (state.number, len(state.incoming), len(state.cards), state.accepted), status
+        )
 
     def test_more_than_nine_pending_cards_are_claimed_across_bounded_visits(self):
         self.s.grant("a", "event", "bulk", cards=[self.card] * 23)

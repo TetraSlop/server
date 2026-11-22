@@ -144,20 +144,6 @@ class EventCardService:
     def is_active(self, key):
         return key in self._active
 
-    def status(self, key):
-        state = self._active.get(key)
-        return (
-            None
-            if state is None
-            else {
-                "event_id": state.event_id,
-                "session": state.number,
-                "incoming": len(state.incoming),
-                "working_cards": len(state.cards),
-                "accepted": state.accepted,
-            }
-        )
-
     def _init(self, key, view, number, money, cards):
         rt = struct.unpack_from("<I", self.economy.profile_bytes(key), 0x128)[0]
         body = f"@EcmInit=/N={number}/RA={view.rating}/M={view.balance}/CP={collection_points(view.cards)}/S={len(view.cards)}/RT={rt}/PM={money}/C={len(cards)}"

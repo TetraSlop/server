@@ -58,8 +58,6 @@ class _EventData(BaseModel):
 class _Document(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     events: list[dict[str, Any]]
-    # parse_event_configs historically reads events alone. Setup validates the
-    # optional table and policy sections when that broader entry point is used.
     tables: Any = Field(default_factory=list)
     progress_policy: Any = "none"
 
@@ -98,14 +96,6 @@ def _events(rows):
             _route(values, name)
         configs.append(EventConfig(**values))
     return tuple(configs)
-
-
-def parse_event_configs(document):
-    return _events(_Document.model_validate(document).events)
-
-
-def load_event_configs(path):
-    return parse_event_configs(json.loads(Path(path).read_text(encoding="utf8")))
 
 
 def parse_event_setup(document):
