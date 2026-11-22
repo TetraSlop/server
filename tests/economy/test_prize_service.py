@@ -203,7 +203,7 @@ class PrizeTests(unittest.TestCase):
             reply = self.send(0x14, f"@Buy=/No={pack_id}")[0]
             card = self.card(reply)
             pack = self.catalog.packs[pack_id]
-            self.assertEqual(card.model, pack["explicit_models"][0]["model_id"])
+            self.assertEqual(card.model, pack["explicit_models"][0]["model"])
             self.catalog.validate(card)
             self.get()
             points -= pack["price"]

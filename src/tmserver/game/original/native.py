@@ -5,6 +5,7 @@ Close contexts explicitly, preferably with a ``with NativeRules(...)`` block.
 """
 
 import ctypes
+import struct
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -17,6 +18,21 @@ from tmserver.game.original.image import OriginalCodeError, read_image
 _U32 = ctypes.c_uint32
 _I32 = ctypes.c_int32
 _Random = ctypes.CFUNCTYPE(_U32, ctypes.c_void_p, ctypes.POINTER(_U32))
+_CARD_FIELDS = (
+    "attack",
+    "type",
+    "physical_defense",
+    "magical_defense",
+    "base_card_points",
+    "price_tier",
+    "category_6",
+    "category_7",
+)
+
+
+def _card_record(card):
+    """Rebuild the 12-byte CardPrm record; bytes 8-9 are FFFF in every record."""
+    return struct.pack("<8BHH", *(card[k] for k in _CARD_FIELDS), 0xFFFF, card["name_reference"])
 
 
 class _BattleRequest(ctypes.Structure):
@@ -158,9 +174,7 @@ class NativeRules:
         self._last_draws = ()
         self._bridge = _load_bridge(bridge)
         data = read_image(image)
-        catalog = b"".join(
-            bytes.fromhex(card["raw_hex"]) for card in read_json("economy_catalog.json")["cards"]
-        )
+        catalog = b"".join(map(_card_record, read_json("economy_catalog.json")["cards"]))
         _check_status(
             self._bridge.tm_rules_open(data, len(data), catalog, len(catalog)), "open native rules"
         )

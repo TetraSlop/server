@@ -44,7 +44,7 @@ class ShopOffers:
     def flags(self, catalog, guild):
         if type(guild) is not int or guild not in range(4):
             raise ValueError("invalid original guild")
-        flags = [p["availability_or_category"] for p in catalog.packs]
+        flags = [p["category"] for p in catalog.packs]
         flags[5] = self.special_flag
         for i in self.highlighted:
             flags[i] = 1 if self.highlighted_available else 4
