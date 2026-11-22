@@ -1,8 +1,6 @@
 """Decoded card catalogue, generation and collection arithmetic."""
 
-import json
 from fractions import Fraction
-from pathlib import Path
 
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
@@ -14,12 +12,8 @@ _ARROW_COUNTS = tuple(
 
 
 class Catalog:
-    def __init__(self, path=None):
-        data = (
-            read_json("economy_catalog.json")
-            if path is None
-            else json.loads(Path(path).read_text(encoding="utf8"))
-        )
+    def __init__(self):
+        data = read_json("economy_catalog.json")
         self.cards = tuple(data["cards"])
         self.packs = tuple(data["packs"])
         self.prices = tuple(data["price_tiers"])
@@ -66,45 +60,21 @@ class Catalog:
         excluded = ((), (2, 4, 6), (2, 3), (3, 4, 6))[guild]
         for _ in range(256):
             roll = draw() & 255
-            group = next(
-                (
-                    g
-                    for g in p["generation_bins"]
-                    if g["threshold"] and roll <= g["threshold"]
-                ),
-                None,
-            )
-            if group is None:
-                entry = next(
-                    (
-                        e
-                        for e in p["explicit_models"]
-                        if e["threshold"]
-                        and roll <= e["threshold"]
-                        and e["model"] < len(self.cards)
-                    ),
-                    None,
-                )
-                if entry is not None:
-                    return entry["model"]
+            bins = [g for g in p["generation_bins"] if g["threshold"] and roll <= g["threshold"]]
+            if not bins:
+                for e in p["explicit_models"]:
+                    if e["threshold"] and roll <= e["threshold"] and e["model"] < len(self.cards):
+                        return e["model"]
                 continue
-            lo, hi = p["range_first"], p["range_end"]
+            group = bins[0]
+            # 255 price tier and zero categories match any card.
             choices = [
                 i
-                for i in range(lo, hi)
+                for i in range(p["range_first"], p["range_end"])
                 if self.cards[i]["category_7"] not in excluded
-                and (
-                    group["price_tier"] == 255
-                    or self.cards[i]["price_tier"] == group["price_tier"]
-                )
-                and (
-                    not group["category_6"]
-                    or self.cards[i]["category_6"] == group["category_6"]
-                )
-                and (
-                    not group["category_7"]
-                    or self.cards[i]["category_7"] == group["category_7"]
-                )
+                and group["price_tier"] in (255, self.cards[i]["price_tier"])
+                and group["category_6"] in (0, self.cards[i]["category_6"])
+                and group["category_7"] in (0, self.cards[i]["category_7"])
             ]
             if choices:
                 return choices[draw() % len(choices)]
