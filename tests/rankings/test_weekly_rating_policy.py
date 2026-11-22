@@ -26,23 +26,9 @@ def result(
     service, policy, *, scores=(7, 3), keys=KEYS[:2], match_id="week:1", rewards=None, tokens=None
 ):
     rewards = dict.fromkeys(keys, 0) if rewards is None else rewards
-    tokens = {key: service.reserve_match(key) for key in keys} if tokens is None else tokens
-    quoted = policy.quote(match_id, dict(enumerate(keys)), scores)
-    changes = {key: quoted[seat] for seat, key in enumerate(keys)}
-    rounds, stats = [], {}
-    for key in keys:
-        change = changes[key]
-        previous = PracticeStats.from_profile(service.profile_bytes(key))
-        stats[key] = previous.next_result(
-            (change.result_class < 2) - (change.result_class > 2),
-            rewards[key],
-            fully_tied=len(set(scores)) == 1,
-            rating_change=change,
-            vs_player_game=len(keys) > 1,
-        )
-        cards = service.inventory(key)[:5]
-        rounds.append((tokens[key], cards, cards))
-    return rounds, stats, changes, rewards
+    batch = prepare(service, policy, scores, keys=keys, match_id=match_id, tokens=tokens,
+                    payouts=rewards, vs_player_game=len(keys) > 1)
+    return *batch, rewards
 
 
 def commit(policy, batch):
