@@ -13,6 +13,7 @@ commits before sending D2; a crash between separate saves is not atomic.
 import re
 from dataclasses import dataclass
 
+from tmserver.game.departure_rules import result_classes
 from tmserver.rankings.errors import RankingError
 
 RatingHistoryError = RankingError  # Name still imported by economy/service.py.
@@ -43,9 +44,8 @@ def _scores(scores, seat):
 
 
 def classify_result(scores, seat):
-    """Native class0..4; lower is better, ties compare equal in either order."""
-    scores = _scores(scores, seat)
-    return 2 + sum(x > scores[seat] for x in scores) - sum(x < scores[seat] for x in scores)
+    """Native class0..4 from the match result ranking; rated rounds have no departures."""
+    return result_classes(_scores(scores, seat))[seat]
 
 
 @dataclass(frozen=True)
