@@ -21,7 +21,7 @@ is supplied.
 |---|---|
 | Weekly Total prize money | Sum of completed ordinary human/CPU result rewards recorded this week. Played accounts with zero rewards are included. |
 | Top 30 | The previous week's last recorded local-history rating for each participant; lower values rank first. |
-| Best Rookies | Empty by default. No account creation dates or rookie rules are inferred. |
+| Best Rookies | Always empty. No account creation dates or rookie rules are inferred. |
 | Grand Total / current VS. Rating | Existing committed profile totals and current-rating policy. |
 
 Weekly money uses the change in the game's cumulative result-reward counter,
