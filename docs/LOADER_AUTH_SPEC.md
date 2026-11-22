@@ -61,10 +61,11 @@ login is refused or the connection closes during NICK, run LOGIN again.
   allowed because it is the trailing argument. polcore takes at most 15
   characters: its Game IRC open (Viewer entry 132) copies the password and its
   NUL into a 16-byte buffer.
-- **Assigned POL ID:** random and unused, with a raw value from 2^16 to 2^32 - 1
-  (`EEEEFWIQ` to `EF5FOF5A`). polcore sends that value as the profile GID and
-  derives NN from it, and the save holds the player ID in 32 bits, so the account
-  stores the raw value as its player ID. It never collides with the built-in
+- **Assigned POL ID:** random and unused, with a raw value from 2^16 to 2^31 - 1
+  (`EEEEFWIQ` to `EE5PIE5C`). polcore sends that value as the profile GID and
+  derives NN from it, so the account stores the raw value as its player ID. The
+  save holds the player ID in 32 bits, and polcore writes it as a signed 32-bit
+  decimal in the GTM0P `<CR>` locator, so it stays below 2^31. It never collides with the built-in
   test accounts or service identities.
 - **Rate limits** (per server process, reset on restart): 5 failed logins per
   username and 20 per IP address in 15 minutes, and 5 new accounts per IP address

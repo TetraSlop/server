@@ -9,6 +9,7 @@ from tests.accounts.test_provisioning import granted
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.support.irc import Client
 from tests.support.memory_store import MemoryStore
+from tmserver.accounts.provisioning import MAX_REGISTERED_RAW
 from tmserver.economy.packets import named
 from tmserver.network.server import Server
 from tmserver.protocol.identities import ROOM_RAW, player_id, service_nick
@@ -28,8 +29,11 @@ class LoginTransportTests(unittest.IsolatedAsyncioTestCase):
         self.profile_port = await self.profile.start(0)
 
     async def test_login_then_game_and_encrypted_profile_with_the_game_password(self):
-        reply, closed = await Client().login(self.port, b"Alice", b"my password")
+        # The top of the range: polcore writes the player ID as a signed 32-bit decimal.
+        with patch("tmserver.accounts.provisioning.secrets.randbelow", lambda bound: bound - 1):
+            reply, closed = await Client().login(self.port, b"Alice", b"my password")
         pol_id, key, game_password, outcome = granted(reply)
+        self.assertEqual(polid_from_string(pol_id), MAX_REGISTERED_RAW)
         self.assertEqual((outcome, closed), (b"created", b""))
         client = Client()
         await client.open(self.port, key.encode(), game_password)
@@ -46,6 +50,14 @@ class LoginTransportTests(unittest.IsolatedAsyncioTestCase):
                 f"/GID={polid_from_string(pol_id):016X}/L=1/GLD=0"))
             await client.send(b"NOTICE " + service_nick(ROOM_RAW) + b" :" + init)
             self.assertTrue((await client.read()).endswith(b"@InitAns=/Ans=1"))
+            # The character profile record carries the GID in hex and the player ID signed.
+            gid = polid_from_string(pol_id)
+            signed = gid - (1 << 32) if gid >= 1 << 31 else gid
+            record = (b"GTM0P<CR>\x07" + f"0x{gid:016X}\x06{signed}".encode()
+                      + b"\x07<AN>\x07Alice\x07<CI>\x071\x06Card Level 0\x07")
+            await client.send(b"NOTICE " + service_nick(ROOM_RAW) + b" :" + record)
+            self.assertTrue((await client.read()).endswith(b":GTM0P<CS>\x07\x07"))
+            self.assertEqual(self.host.character_profiles.records[key][2], "Alice")
         finally:
             await client.close()
         log = self.log.read_text()
