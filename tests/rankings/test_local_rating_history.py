@@ -225,7 +225,7 @@ class LocalRatingHistoryTests(unittest.TestCase):
         x["policy"] = "elo"
         variants.append(x)
         for variant in variants:
-            with self.assertRaises(EconomyError):
+            with self.assertRaises(ValueError):
                 LocalRatingHistory.restore(variant)
         self.assertEqual(LocalRatingHistory.restore(None).snapshot()["accounts"], {})
         self.assertEqual(service.snapshot(), saved)

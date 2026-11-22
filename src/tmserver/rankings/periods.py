@@ -9,6 +9,9 @@ only later play in that week.
 
 from collections.abc import Mapping
 from functools import partial
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from tmserver.checks import uint
 from tmserver.economy.errors import EconomyError
@@ -20,6 +23,27 @@ DWORD_MAX = 0xFFFFFFFF
 
 
 _uint = partial(uint, maximum=DWORD_MAX, error=EconomyError, what="weekly value")
+
+
+_Dword = Annotated[int, Field(ge=0, le=DWORD_MAX)]
+_Key = Annotated[str, Field(min_length=1, max_length=128)]
+
+
+class _Current(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    prize: _Dword
+    rating: _Dword
+
+
+class _Periods(BaseModel):
+    """Saved period shape; the week's UTC Monday alignment is checked on restore."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+    version: Annotated[int, Field(ge=1, le=1)]
+    policy: Literal[POLICY]
+    week_start: int
+    current: dict[_Key, _Current]
+    previous: dict[_Key, _Dword]
 
 
 def _key(value):
@@ -101,30 +125,11 @@ class RankingPeriods:
         result = cls()
         if snapshot is None:
             return result
-        if (
-            type(snapshot) is not dict
-            or set(snapshot) != {"version", "policy", "week_start", "current", "previous"}
-            or type(snapshot["version"]) is not int
-            or snapshot["version"] != 1
-            or snapshot["policy"] != POLICY
-        ):
-            raise EconomyError("invalid weekly snapshot")
-        week = snapshot["week_start"]
-        if (
-            type(week) is not int
-            or not -MONDAY_OFFSET <= week <= _week(DWORD_MAX)
-            or (week + MONDAY_OFFSET) % WEEK
-        ):
+        saved = _Periods.model_validate(snapshot)
+        week = saved.week_start
+        if not -MONDAY_OFFSET <= week <= _week(DWORD_MAX) or (week + MONDAY_OFFSET) % WEEK:
             raise EconomyError("invalid saved UTC week")
-        if type(snapshot["current"]) is not dict or type(snapshot["previous"]) is not dict:
-            raise EconomyError("weekly account records must be objects")
-        for key, row in snapshot["current"].items():
-            _key(key)
-            if type(row) is not dict or set(row) != {"prize", "rating"}:
-                raise EconomyError("invalid current weekly record")
-            result._current[key] = (_uint(row["prize"]), _uint(row["rating"]))
-        result._previous = {
-            _key(key): _uint(rating) for key, rating in snapshot["previous"].items()
-        }
+        result._current = {key: (row.prize, row.rating) for key, row in saved.current.items()}
+        result._previous = dict(saved.previous)
         result._week_start = week
         return result

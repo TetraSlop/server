@@ -6,11 +6,31 @@ delivering ResultData.
 
 import time
 from copy import copy
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tmserver.economy.errors import EconomyError
 from tmserver.rankings.history import LocalRatingHistory
 from tmserver.rankings.periods import RankingPeriods
 from tmserver.rankings.stats import PracticeStats
+
+
+class _Envelope(BaseModel):
+    """Version 1 holds history only; version 2 adds initialized weekly periods."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+    version: Annotated[int, Field(ge=1, le=2)]
+    history: dict | None
+    periods: dict | None = None
+
+    @model_validator(mode="after")
+    def _periods_match_version(self):
+        if ("periods" in self.model_fields_set) != (self.version == 2) or (
+            self.version == 2 and self.periods is None
+        ):
+            raise ValueError("rating policy periods do not match its version")
+        return self
 
 
 def _matches_profile(state, profile):
@@ -31,27 +51,11 @@ class RatingPolicy:
         self.mode = mode
         self._weekly = weekly
         self.clock = clock
-        periods = None
+        saved = _Envelope(version=1, history=None)
         if snapshot is not None:
-            if (
-                type(snapshot) is not dict
-                or type(snapshot.get("version")) is not int
-                or snapshot["version"] not in (1, 2)
-                or set(snapshot)
-                != (
-                    {"version", "history"}
-                    if snapshot["version"] == 1
-                    else {"version", "history", "periods"}
-                )
-            ):
-                raise EconomyError("invalid rating policy snapshot")
-            if snapshot["version"] == 2:
-                periods = snapshot["periods"]
-                if periods is None:
-                    raise EconomyError("version2 rating policy requires initialized periods")
-            snapshot = snapshot["history"]
-        self.history = LocalRatingHistory.restore(snapshot)
-        self.periods = RankingPeriods.restore(periods)
+            saved = _Envelope.model_validate(snapshot)
+        self.history = LocalRatingHistory.restore(saved.history)
+        self.periods = RankingPeriods.restore(saved.periods)
         for key in set(self.history.snapshot()["accounts"]) | self.periods.account_keys:
             self.economy.account_view(key)  # A journal cannot create accounts.
 

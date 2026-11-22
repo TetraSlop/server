@@ -82,7 +82,7 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
             {"version": 1},
         )
         for malformed in attempts:
-            with self.subTest(snapshot=malformed), self.assertRaises(EconomyError):
+            with self.subTest(snapshot=malformed), self.assertRaises(ValueError):
                 RatingPolicy(self.economy, snapshot=malformed)
         for previous in (False, True):
             periods = RankingPeriods.restore()

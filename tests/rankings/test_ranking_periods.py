@@ -173,7 +173,7 @@ class RankingPeriodsTests(unittest.TestCase):
             bad_snapshots.append(dict(snapshot, **{field: value}))
         for bad in bad_snapshots:
             original = copy.deepcopy(bad)
-            with self.subTest(snapshot=bad), self.assertRaises(EconomyError):
+            with self.subTest(snapshot=bad), self.assertRaises(ValueError):
                 RankingPeriods.restore(bad)
             self.assertEqual(bad, original)
         self.assertEqual(periods.snapshot(), snapshot)

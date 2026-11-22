@@ -12,6 +12,9 @@ commits before sending D2; a crash between separate saves is not atomic.
 
 from dataclasses import dataclass
 from functools import partial
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from tmserver.checks import stable_id, uint
 from tmserver.game.departure_rules import result_classes
@@ -20,6 +23,34 @@ from tmserver.economy.errors import EconomyError
 
 _uint = partial(uint, error=EconomyError)
 _identifier = partial(stable_id, error=EconomyError)
+
+
+class _Saved(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+
+class _Receipt(_Saved):
+    match_id: str
+    scores: list[int]
+    seat: int
+
+
+class _Initial(_Saved):
+    entries: list[int]
+    sequence: int
+
+
+class _Account(_Saved):
+    initial: _Initial
+    results: list[_Receipt]
+
+
+class _Ledger(_Saved):
+    """Saved ledger shape; ranges, the ring and receipts are checked by replay."""
+
+    version: Annotated[int, Field(ge=1, le=1)]
+    policy: Literal["original-offline-ring-v1"]
+    accounts: dict[str, _Account]
 
 
 def _scores(scores, seat):
@@ -205,35 +236,11 @@ class LocalRatingHistory:
         service = cls()
         if snapshot is None:
             return service
-        if (
-            type(snapshot) is not dict
-            or set(snapshot) != {"version", "policy", "accounts"}
-            or type(snapshot["version"]) is not int
-            or snapshot["version"] != 1
-            or snapshot["policy"] != "original-offline-ring-v1"
-            or type(snapshot["accounts"]) is not dict
-        ):
-            raise EconomyError("invalid rating snapshot")
-        for key, record in snapshot["accounts"].items():
-            if (
-                type(record) is not dict
-                or set(record) != {"initial", "results"}
-                or type(record["initial"]) is not dict
-                or set(record["initial"]) != {"entries", "sequence"}
-                or type(record["initial"]["entries"]) is not list
-                or type(record["results"]) is not list
-            ):
-                raise EconomyError("invalid account rating ledger")
-            service.enroll(
-                key, history=record["initial"]["entries"], sequence=record["initial"]["sequence"]
-            )
-            for event in record["results"]:
-                if type(event) is not dict or set(event) != {"match_id", "scores", "seat"}:
-                    raise EconomyError("invalid rating receipt")
-                _identifier(event["match_id"], what="stable match ID")
-                if event["match_id"] in service._receipts[key]:
+        for key, record in _Ledger.model_validate(snapshot).accounts.items():
+            service.enroll(key, history=record.initial.entries, sequence=record.initial.sequence)
+            for event in record.results:
+                _identifier(event.match_id, what="stable match ID")
+                if event.match_id in service._receipts[key]:
                     raise EconomyError("duplicate durable rating receipt")
-                service.commit(
-                    service.quote(key, event["match_id"], event["scores"], event["seat"])
-                )
+                service.commit(service.quote(key, event.match_id, event.scores, event.seat))
         return service
