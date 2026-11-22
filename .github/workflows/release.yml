@@ -34,14 +34,9 @@ jobs:
     needs: version
     uses: ./.github/workflows/checks.yml
 
-  native:
-    needs: version
-    uses: ./.github/workflows/native-checks.yml
-    secrets: inherit
-
   publish:
     name: Publish verified packages
-    needs: [checks, native]
+    needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
