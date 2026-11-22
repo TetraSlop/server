@@ -37,6 +37,25 @@ class AuthConfigurationTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(updates=updates), self.assertRaises(ValueError):
                 self.model.model_validate(dict(self.data, **updates))
 
+    def test_browser_origins_default_empty_and_accept_only_page_origins(self):
+        self.assertEqual(self.model.model_validate(self.data).browser_origins, [])
+        config = self.model.model_validate(dict(self.data, browser_origins=[
+            "HTTPS://App.Example:443/", "https://app.example", "http://127.0.0.1:5173",
+            "http://localhost:8080"]))
+        self.assertEqual(config.browser_origins,
+                         ["https://app.example", "http://127.0.0.1:5173", "http://localhost:8080"])
+        for origin in ("null", "*", "http://app.example", "https://app.example/path",
+                       "https://user@app.example", "http://localhost:5173/", "http://LOCALHOST",
+                       "http://127.0.0.1:99999", "http://127.0.0.2", "ws://127.0.0.1", ""):
+            with self.subTest(origin=origin), self.assertRaises(ValueError):
+                self.model.model_validate(dict(self.data, browser_origins=[origin]))
+        with self.assertRaises(ValueError):
+            self.model.model_validate(dict(self.data, browser_origins=[
+                f"https://{index}.example" for index in range(17)]))
+        loaded = self.model.model_validate_json(json.dumps(dict(
+            self.data, browser_origins=["https://app.example"])))
+        self.assertEqual(loaded.browser_origins, ["https://app.example"])
+
     async def test_closed_registration_starts_discovery_but_denies_new_players(self):
         import httpx
         from tmserver.auth.provider import Subject
