@@ -44,6 +44,13 @@ class Catalog:
             raise EconomyError("card points disagree with stats")
         return card
 
+    def validate_batch(self, cards, *, limit=30, error=EconomyError):
+        """Validate a delivery batch: at most `limit` cards, none of them in a deck."""
+        cards = tuple(self.validate(card) for card in cards)
+        if len(cards) > limit or any(card.deck != 255 for card in cards):
+            raise error(f"card batch needs at most {limit} undecked cards")
+        return cards
+
     def sale_value(self, card):
         """The value the client's shop and auction screens compute.
 
