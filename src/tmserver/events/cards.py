@@ -18,8 +18,8 @@ from tmserver.cards.model import Card
 from tmserver.checks import uint
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
-from tmserver.cards.edits import apply_card_edits, parse_edit_records
-from tmserver.events.packets import _id, _keys, _number
+from tmserver.cards.edits import apply_card_edits, parse_edit_section
+from tmserver.events.packets import _id, _keys
 
 _integer = partial(uint, error=EconomyError, what="event delivery integer")
 
@@ -260,14 +260,10 @@ class EventCardService:
 
     @staticmethod
     def _edit(state, subtype, sections):
-        token = "Erase" if subtype == 0x10 else "Decks"
-        if subtype == 0x10 and sections == {"Erase": {"Mode": "2"}}:
+        parsed = parse_edit_section(sections, subtype, error=EconomyError)
+        if parsed is None:
             return list(state.cards), dict(state.names)
-        fields = sections.get(token, {})
-        _keys(fields, ("Mode", "C") if subtype == 0x10 else ("C",))
-        if subtype == 0x10 and fields["Mode"] != "1":
-            raise EconomyError("invalid event Erase mode")
-        values, renamed = parse_edit_records(sections, token, number=_number, error=EconomyError)
+        values, renamed = parsed
         cards, _ = apply_card_edits(
             state.cards, values, discard=subtype == 0x10, error=EconomyError
         )

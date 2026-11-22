@@ -13,20 +13,18 @@ from copy import copy
 from dataclasses import dataclass, replace
 from functools import partial
 
-from tmserver.checks import decimal, exact_keys, stable_id
+from tmserver.checks import stable_id
 from tmserver.economy.models import AccountView, MatchReservation
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import parse_named
-from tmserver.cards.edits import apply_card_edits, parse_edit_records
+from tmserver.cards.edits import apply_card_edits, parse_edit_section
 
 
 class ResultRewardError(EconomyError):
     pass
 
 
-_int = partial(decimal, error=ResultRewardError, what="result edit integer")
-_fields = partial(exact_keys, error=ResultRewardError, what="result edit fields")
 _id = partial(stable_id, error=ResultRewardError, what="reward ID")
 
 
@@ -267,26 +265,10 @@ class ResultRewardService:
             else:
                 view = self.economy.match_account(accepted.token)
             cards, names = list(view.cards), dict(view.deck_names)
-        token = "Erase" if subtype == 0x10 else "Decks"
-        if token not in sections:
-            raise ResultRewardError("missing result edit section")
-        f = sections[token]
-        if _int(f.get("P"), 2) != seat:
-            raise ResultRewardError("result edit body side mismatch")
-        if subtype == 0x10:
-            mode = _int(f.get("Mode"), 2)
-            if mode == 2:
-                _fields(sections, ("Erase",))
-                _fields(f, ("P", "Mode"))
-                return []
-            if mode != 1:
-                raise ResultRewardError("unsupported result Erase mode")
-            _fields(f, ("P", "Mode", "C"))
-        else:
-            _fields(f, ("P", "C"))
-        values, renamed = parse_edit_records(
-            sections, token, number=_int, error=ResultRewardError
-        )
+        parsed = parse_edit_section(sections, subtype, side=seat, error=ResultRewardError)
+        if parsed is None:
+            return []
+        values, renamed = parsed
         cards, indices = apply_card_edits(
             cards, values, discard=subtype == 0x10, error=ResultRewardError
         )

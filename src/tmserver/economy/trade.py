@@ -13,7 +13,7 @@ from tmserver.checks import decimal, exact_keys
 from tmserver.cards.catalog import collection_points
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
-from tmserver.cards.edits import apply_card_edits, parse_edit_records
+from tmserver.cards.edits import apply_card_edits, parse_edit_section
 from tmserver.cards.edits import match_owned as owned_indices
 
 
@@ -378,22 +378,10 @@ class TradeService:
         return result
 
     def _edit_values(self, subtype, side, sections):
-        token = "Erase" if subtype == 0x10 else "Decks"
-        head = sections[token]
-        if integer(head.get("P"), 1) != side:
-            raise TradeError("edit side mismatch")
-        if subtype == 0x10:
-            mode = integer(head.get("Mode"), 2)
-            if mode == 2:
-                fields(head, ("P", "Mode"))
-                fields(sections, ("Erase",))
-                return [], {}
-            if mode != 1:
-                raise TradeError("unknown Erase mode")
-            fields(head, ("P", "Mode", "C"))
-        else:
-            fields(head, ("P", "C"))
-        values, renamed = parse_edit_records(sections, token, number=integer, error=TradeError)
+        parsed = parse_edit_section(sections, subtype, side=side, error=TradeError)
+        if parsed is None:
+            return [], {}
+        values, renamed = parsed
         if any(value[0] >= 250 or value[2] > 3 for value in values):
             raise TradeError("invalid edit card")
         return values, renamed

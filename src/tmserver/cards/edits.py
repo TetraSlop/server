@@ -1,11 +1,14 @@
 """Pure inventory edits shared by shops, trades and reward collection.
 
-Services validate their own header, seat and completion marker, then choose
-their existing number/name decoders. They retain ownership of commit timing.
+Every service reads Erase, Decks and Sell sections with parse_edit_section, so
+one rule applies everywhere. Services keep ownership of commit timing.
 """
 
 import re
 from dataclasses import replace
+from functools import partial
+
+from tmserver.checks import decimal
 
 
 def deck_name(value):
@@ -17,10 +20,43 @@ def deck_name(value):
     return name
 
 
-def parse_edit_records(sections, token, *, number, name=deck_name, error=ValueError):
-    """Read the common numbered card records and optional single deck rename."""
+# Unsigned decimal text, the only number form the client writes.
+edit_number = partial(decimal, what="edit field")
+
+
+def parse_edit_section(sections, subtype, *, side=None, token=None, error=ValueError):
+    """Validate an Erase (0x10) or Decks (0x22) message and read its records.
+
+    Returns (values, renames), or None for the Erase Mode=2 completion marker.
+    Mode is exactly "1" or "2", numbers are unsigned decimal, and the seat field
+    P is required, and must equal side, exactly when side is given. The shop
+    passes token="Sell" for its sale list, which has the Decks header shape.
+    """
+    token = token or ("Erase" if subtype == 0x10 else "Decks")
     try:
-        count = number(sections[token]["C"])
+        head = sections[token]
+        keys = {"C"} if side is None else {"P", "C"}
+        if side is not None and edit_number(head.get("P")) != side:
+            raise ValueError("edit side mismatch")
+        if token == "Erase":
+            if head.get("Mode") == "2":
+                if set(head) != keys - {"C"} | {"Mode"} or set(sections) != {"Erase"}:
+                    raise ValueError("Mode 2 carries no card list")
+                return None
+            if head.get("Mode") != "1":
+                raise ValueError("unsupported Erase mode")
+            keys |= {"Mode"}
+        if set(head) != keys:
+            raise ValueError("unexpected or missing edit header fields")
+    except (ValueError, KeyError, TypeError) as exc:
+        raise error(str(exc)) from exc
+    return _records(sections, token, error)
+
+
+def _records(sections, token, error):
+    """Read the numbered card records and the optional single deck rename."""
+    try:
+        count = edit_number(sections[token]["C"])
         if not 0 <= count <= (13 if token == "Decks" else 15):
             raise ValueError("inventory edit exceeds original batch")
         expected = {token} | {str(i) for i in range(count)}
@@ -35,7 +71,7 @@ def parse_edit_records(sections, token, *, number, name=deck_name, error=ValueEr
             parts = record["D"].split("|")
             if len(parts) != (7 if token == "Decks" else 6):
                 raise ValueError("incorrect inventory card tuple length")
-            value = tuple(number(part) for part in parts)
+            value = tuple(edit_number(part) for part in parts)
             if any(not 0 <= part <= (65535 if j == 0 else 255) for j, part in enumerate(value)):
                 raise ValueError("inventory card field exceeds its width")
             if token == "Decks" and value[6] not in range(50) and value[6] != 255:
@@ -45,7 +81,7 @@ def parse_edit_records(sections, token, *, number, name=deck_name, error=ValueEr
         for section in renames:
             if set(sections[section]) != {"S"}:
                 raise ValueError("invalid deck name fields")
-            names[int(section[2:])] = name(sections[section]["S"])
+            names[int(section[2:])] = deck_name(sections[section]["S"])
         return values, names
     except (ValueError, KeyError, TypeError) as exc:
         raise error(str(exc)) from exc

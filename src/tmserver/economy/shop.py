@@ -24,7 +24,7 @@ import re
 import struct
 
 from tmserver.cards.catalog import collection_points
-from tmserver.cards.edits import apply_card_edits, parse_edit_records
+from tmserver.cards.edits import apply_card_edits, parse_edit_section
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.models import MAX_MONEY, _Pending, _State, check_inventory
 from tmserver.economy.packets import _hex, _int, _keys, named
@@ -134,21 +134,10 @@ def handle(account, family, subtype, session, sections, *, catalog, offers, draw
 
 def _edit(account, subtype, sections, catalog):
     token = {0x10: "Erase", 0x16: "Sell", 0x22: "Decks"}[subtype]
-    if token not in sections:
-        raise EconomyError("expected " + token)
-    head = sections[token]
-    if subtype == 0x10:
-        mode = _int(head.get("Mode"), maximum=2)
-        if mode == 2:
-            if sections != {"Erase": {"Mode": "2"}}:
-                raise EconomyError("Mode2 carries no card list")
-            return  # Recorded completion marker, not evidence of any deletion.
-        if mode != 1:
-            raise EconomyError("unsupported Erase mode")
-        _keys(head, ("Mode", "C"))
-    else:
-        _keys(head, ("C",))
-    values, renamed = parse_edit_records(sections, token, number=_int, error=EconomyError)
+    parsed = parse_edit_section(sections, subtype, token=token, error=EconomyError)
+    if parsed is None:
+        return  # Recorded completion marker, not evidence of any deletion.
+    values, renamed = parsed
     current = account.pending.state if account.pending else account.committed
     cards, indices = apply_card_edits(
         current.cards, values, discard=subtype != 0x22, error=EconomyError
