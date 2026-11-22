@@ -16,11 +16,8 @@ tmserver-db upgrade
 tmserver
 ```
 
-The game server runs in 32-bit Python, and psycopg needs a 32-bit `libpq.dll`
-on `PATH`. No 32-bit libpq is published for Windows; build it with vcpkg
-(`vcpkg install "libpq[core]:x86-windows"`) and add its `installed/x86-windows/bin`
-folder to `PATH`, as the native CI job does. For a local server, a PostgreSQL
-container is enough:
+The `postgres` extra installs psycopg's binary package, which bundles libpq on
+Windows and Linux. For a local server, a PostgreSQL container is enough:
 
 ```powershell
 docker run --detach --name tetramaster --env POSTGRES_PASSWORD=PASSWORD --publish 127.0.0.1:5432:5432 --volume tetramaster:/var/lib/postgresql/data postgres:16

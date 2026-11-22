@@ -64,7 +64,7 @@ class CheckTests(unittest.TestCase):
             ])
 
     def test_repository_collection_assigns_every_module_to_exactly_one_lane(self):
-        lanes = [check_tests.test_modules(lane) for lane in ("portable", "postgres", "admin", "auth", "native", "native-postgres")]
+        lanes = [check_tests.test_modules(lane) for lane in ("portable", "postgres", "admin", "auth")]
         modules = [module for lane in lanes for module in lane]
         self.assertEqual(len(modules), len(set(modules)))
         self.assertTrue(all(lanes))

@@ -1,4 +1,4 @@
-"""Original computer-menu messages with two NPC seats; no native process or sockets."""
+"""Original computer-menu messages with two NPC seats; no sockets."""
 
 import copy
 import json

@@ -1,4 +1,4 @@
-"""Native calculations preserve live board dispatch, RNG ownership and failure isolation."""
+"""The rules backend: live board dispatch, RNG ownership and failure isolation."""
 
 import unittest
 from types import SimpleNamespace
@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from tests.game.test_match_service import CARDS, ack, finish_arrowless_round, select
 from tests.game.test_three_player_computer import choose, finish, menu
 from tmserver.game import rules
-from tmserver.game.original.runtime import NativeRuntime, default_rules
+from tmserver.game.match import RULES
 from tmserver.game.errors import RulesExecutionError
 from tmserver.game.match import MatchService
 from tmserver.game.models import BoardCard
@@ -15,12 +15,12 @@ from tmserver.game.packets import packet
 
 
 def recording_backend():
-    native = default_rules()
+    default = RULES
     return SimpleNamespace(
-        calculate_battle=Mock(wraps=native.calculate_battle),
-        choose_special_move=Mock(wraps=native.choose_special_move),
-        grow_card=Mock(wraps=native.grow_card),
-        choose_target=Mock(wraps=native.choose_target),
+        calculate_battle=Mock(wraps=default.calculate_battle),
+        choose_special_move=Mock(wraps=default.choose_special_move),
+        grow_card=Mock(wraps=default.grow_card),
+        choose_target=Mock(wraps=default.choose_target),
         close=Mock(),
     )
 
@@ -33,13 +33,13 @@ class RulesBackendTests(unittest.TestCase):
         match.handle("alice", select())
         return match
 
-    def test_default_dispatches_to_native_engine(self):
+    def test_default_dispatches_to_the_rules_modules(self):
         match = self.computer()
-        self.assertIsInstance(match.rules_backend, NativeRuntime)
-        native = default_rules()
+        self.assertIs(match.rules_backend, RULES)
+        default = RULES
         with (
-            patch.object(native, "choose_special_move", wraps=native.choose_special_move) as move,
-            patch.object(native, "calculate_battle", wraps=native.calculate_battle) as battle,
+            patch.object(default, "choose_special_move", wraps=default.choose_special_move) as move,
+            patch.object(default, "calculate_battle", wraps=default.calculate_battle) as battle,
         ):
             finish_arrowless_round(match)
             match.battle_values(CARDS[0], CARDS[1])
@@ -69,7 +69,7 @@ class RulesBackendTests(unittest.TestCase):
             all(call.args[3] is match.draw for call in backend.choose_special_move.call_args_list)
         )
 
-    def test_native_growth_handles_combat_and_result_without_python_fallback(self):
+    def test_growth_handles_combat_and_result(self):
         backend = recording_backend()
         match, expected = self.computer(backend), self.computer()
         board_card = BoardCard(CARDS[0], 0, 0, 0)
@@ -83,7 +83,7 @@ class RulesBackendTests(unittest.TestCase):
         self.assertEqual(match.final_cards("alice"), expected.final_cards("alice"))
         self.assertEqual(match.rng.state, expected.rng.state)
 
-    def test_native_target_uses_live_board_size_after_computer_menu_changes(self):
+    def test_target_uses_live_board_size_after_computer_menu_changes(self):
         backend = recording_backend()
         match = menu(rules_backend=backend)
         match.handle("alice", choose((1, 30)))
@@ -92,7 +92,7 @@ class RulesBackendTests(unittest.TestCase):
         self.assertIn(match._choose_target(), match.targets)
         backend.choose_target.assert_called_once_with(match.targets, match.draw, board_size=25)
 
-    def test_native_target_failure_consumes_draw_once_and_aborts(self):
+    def test_target_failure_consumes_draw_once_and_aborts(self):
         backend = recording_backend()
         match = self.computer(backend)
         match.targets = [3, 7]
@@ -114,7 +114,7 @@ class RulesBackendTests(unittest.TestCase):
         self.assertEqual(match.phase, "finished")
         self.assertFalse(match.pending_work)
 
-    def test_native_growth_failure_aborts_before_board_mutation_and_cannot_retry(self):
+    def test_growth_failure_aborts_before_board_mutation_and_cannot_retry(self):
         backend = recording_backend()
         match = self.computer(backend)
         board_card = BoardCard(CARDS[0], 0, 0, 0)
@@ -132,7 +132,7 @@ class RulesBackendTests(unittest.TestCase):
         self.assertEqual(match.phase, "finished")
         self.assertFalse(match.pending_work)
 
-    def test_native_result_growth_failure_prevents_completed_card_snapshot(self):
+    def test_result_growth_failure_prevents_completed_card_snapshot(self):
         backend = recording_backend()
         match = self.computer(backend)
         backend.grow_card.side_effect = RuntimeError("result growth failed")
@@ -154,7 +154,7 @@ class RulesBackendTests(unittest.TestCase):
                     calls += 1
                     if calls == failed_call:
                         raise RuntimeError("result growth failed after the first player")
-                    return default_rules().grow_card(*args, **kwargs)
+                    return RULES.grow_card(*args, **kwargs)
 
                 backend.grow_card.side_effect = interrupted_growth
                 with self.assertRaises(RulesExecutionError):
@@ -165,7 +165,7 @@ class RulesBackendTests(unittest.TestCase):
                 self.assertFalse(match._final_snapshots)
                 self.assertFalse(match._final_order)
 
-    def test_special_board_dispatches_to_native_special_ai(self):
+    def test_special_board_dispatches_to_special_ai(self):
         backend = recording_backend()
         fields = (1,) + (0,) * 15
         match = self.computer(backend, start_fields=fields)

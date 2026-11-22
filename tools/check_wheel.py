@@ -226,8 +226,6 @@ def main():
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--admin", action="store_true", help="also install and smoke the admin extra")
     parser.add_argument("--auth", action="store_true", help="also install and smoke the auth extra")
-    parser.add_argument("--native", action="store_true",
-                        help="also launch services; requires Windows x86 and native image/bridge env")
     args = parser.parse_args()
     wheel = args.wheel.resolve(strict=True)
     manifest = verify_wheel(wheel)
@@ -276,19 +274,9 @@ def main():
             assert refused.returncode != 0 and "TM_DATABASE_URL" in refused.stderr, refused.stderr
         accounts = run(script("tmserver"), "--list-accounts")
         assert len(accounts.strip().splitlines()) == 2, accounts
-        if args.native:
-            ready = run(str(python), "-B", "-c", SERVICES_SMOKE)
-            assert "rules: native x86" in ready, ready
-            assert (root / "var").is_dir(), "runtime output did not use the working directory"
-        else:
-            no_native = {key: value for key, value in env.items()
-                         if key not in {"TM_ORIGINAL_IMAGE", "TM_NATIVE_BRIDGE"}}
-            refused = subprocess.run(
-                [str(python), "-m", "tmserver", "--database-url", "postgresql+psycopg://wheel"],
-                cwd=root, env=no_native, capture_output=True, text=True, timeout=15,
-            )
-            assert refused.returncode != 0 and "Native rules require" in refused.stderr
-            assert not (root / "var").exists(), "missing native configuration created state"
+        ready = run(str(python), "-B", "-c", SERVICES_SMOKE)
+        assert "Tetra Master services ready" in ready, ready
+        assert (root / "var").is_dir(), "runtime output did not use the working directory"
         admin_report = {}
         if args.admin:
             run(str(python), "-m", "pip", "install", f"{wheel}[admin]")
@@ -298,18 +286,14 @@ def main():
         if args.auth:
             run(str(python), "-m", "pip", "install", f"{wheel}[auth]")
             run(str(python), "-m", "pip", "check")
-            if args.native:
-                auth_report = json.loads(run(str(python), "-I", "-c", AUTH_SMOKE))
-            else:
-                run(str(python), "-I", "-c", "import tmserver.auth.server")
-                auth_report = {"auth_imports": True, "auth_native_service_smoke": False}
+            auth_report = json.loads(run(str(python), "-I", "-c", AUTH_SMOKE))
         print(json.dumps({
             "wheel": wheel.name,
             **manifest,
             "clean_install": True,
             "runtime_dependencies": dependencies,
             "console_entrypoints": True,
-            "services_started_on_ephemeral_ports": args.native,
+            "services_started_on_ephemeral_ports": True,
             **admin_report,
             **auth_report,
         }))

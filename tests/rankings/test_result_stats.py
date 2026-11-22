@@ -14,7 +14,7 @@ from tests import ROOT
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
-from tmserver.game.original.runtime import default_rules
+from tmserver.game.match import RULES
 from tmserver.game.rules import GrowthBaseline
 from tmserver.profiles.service import SYNTHETIC_ACCOUNTS, ProfileServer
 from tmserver.rankings.errors import RankingError
@@ -135,7 +135,7 @@ class ResultStatsPersistenceTests(unittest.TestCase):
         baseline = GrowthBaseline.from_catalog(
             self.service.catalog.cards[original[0].model], self.service.catalog.prices
         )
-        grown = Card(*default_rules().grow_card(original[0], baseline, 1, 0).card.full())
+        grown = Card(*RULES.grow_card(original[0], baseline, 1, 0).card.full())
         updated = (grown,) + original[1:]
         final = SEEDED.next_result(1)
         refreshed = self.service.commit_match_growth([(token, original, updated)], {key: final})[

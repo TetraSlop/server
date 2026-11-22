@@ -12,7 +12,7 @@ from tmserver.game.errors import MatchError
 from tmserver.game.match import MatchService
 from tmserver.game import special_rules as special
 from tmserver.game.packets import decode, packet
-from tmserver.game.original.runtime import default_rules
+from tmserver.game.match import RULES
 from tmserver.game.rules import CRTLCG
 from tmserver.rankings.stats import PracticeStats
 
@@ -578,7 +578,7 @@ class MatchTests(unittest.TestCase):
             aa, dd = s.battle_values(a, d)
             self.assertEqual(aa[0], 30 if kind == 3 else 10)
             self.assertEqual(dd[0], 15 if kind == 0 else 5)
-            reference = default_rules().calculate_battle(a, d, CRTLCG(1))
+            reference = RULES.calculate_battle(a, d, CRTLCG(1))
             self.assertEqual(
                 (aa, dd), (astuple(reference.attacker), astuple(reference.defender))
             )
@@ -785,7 +785,7 @@ class MatchTests(unittest.TestCase):
             self.assertEqual(s._final_order[seat], (0, 2, 3, 4, 1))
             for hand_slot, original_slot in enumerate(s._final_order[seat]):
                 c = final.original[original_slot]
-                expected = default_rules().grow_card(
+                expected = RULES.grow_card(
                     c, s.baselines[c.model], 1, shared[(hand_slot - 3 * seat + 2) & 7]
                 ).card
                 self.assertEqual(final.updated[original_slot], Card(*expected.full()))
@@ -1056,7 +1056,7 @@ class SpecialMatchTests(unittest.TestCase):
         defender = Card(1, 50, 0, 40, 30, 1, 64)
         s.board[6] = BoardCard(defender, 1, 1, 1, property=2, modifier=10)
         draws = [3, 2, 20, 21, 8, 9] + [255] * 8 + [0] * 8
-        expected = default_rules().calculate_battle(
+        expected = RULES.calculate_battle(
             cards[0],
             defender,
             iter(draws).__next__,
@@ -1198,7 +1198,7 @@ class SpecialMatchTests(unittest.TestCase):
                 )
 
     def test_CPU_special_adapter_matches_original_choice_and_random_stream(self):
-        from tests.game.test_native_ai import Draws
+        from tests.game.test_ai import Draws
 
         fields = [0] * 16
         fields[5] = 5
@@ -1301,7 +1301,7 @@ class SpecialMatchTests(unittest.TestCase):
         cards = (Card(0, 50, 0, 40, 30, 1, 4),) + CARDS[1:]
         s, _ = self.start(fields, cards, allow_cbc=True)
         expected_rng = CRTLCG(s.rng.state)
-        default_rules().calculate_battle(cards[0], Card(0, 0, 0, 0, 0, 0, 0), expected_rng, defender_property=0x50)
+        RULES.calculate_battle(cards[0], Card(0, 0, 0, 0, 0, 0, 0), expected_rng, defender_property=0x50)
         expected_R = tuple(expected_rng() & 255 for _ in range(8))
         model = s.catalog.select(75, 0, expected_rng)
         expected = Card(*s.catalog.generate(model, expected_rng).full())

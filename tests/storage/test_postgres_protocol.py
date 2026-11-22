@@ -12,6 +12,7 @@ from tests.economy.auctions import test_auction_prize_integration as auctions
 from tests.events import test_event_integration as events
 from tests.network import test_services_integration as services
 from tests.economy import test_trade_integration as trades
+from tests.economy.test_journal_pruning import after_restart
 from tests.profiles.test_options_service import request as options_request
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture, sa
 from tests.profiles.test_profile_accounts import file_request, transact
@@ -53,7 +54,8 @@ class ProtocolFixture(DatabaseFixture, unittest.IsolatedAsyncioTestCase):
         await self.disconnect()
         expected = self.server.snapshot()
         self.server = Server(store=self.reopen(), **self.options)
-        self.assertEqual(self.server.snapshot(), expected)
+        # Startup recovery prunes closed rounds and settled reward IDs.
+        self.assertEqual(self.server.snapshot(), after_restart(expected))
         return expected
 
 

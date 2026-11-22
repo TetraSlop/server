@@ -1,11 +1,11 @@
-"""Original x86 board-effect comparisons; no game process or desktop control."""
+"""Board effects and the special-board computer move."""
 
 import unittest
 from dataclasses import replace
 
 from tests import ROOT
 from tmserver.game.errors import MatchError
-from tmserver.game.original.runtime import default_rules
+from tmserver.game.match import RULES
 from tmserver.game.rules import Card
 from tmserver.game.special_rules import (
     Cell,
@@ -62,31 +62,31 @@ class SpecialAPITests(unittest.TestCase):
                 spinner_chain(b, 5, 0, power)
 
 
-    def test_native_AI_can_place_on_an_unoccupied_low_property_tile(self):
-        from tests.game.test_native_ai import Draws
+    def test_AI_can_place_on_an_unoccupied_low_property_tile(self):
+        from tests.game.test_ai import Draws
         from tmserver.game.ai import Move
 
         fields = [1] * 16
         fields[5] = 5
         board = start_board(fields).cells
         before = tuple(board)
-        self.assertEqual(default_rules().choose_special_move((CARD,), board, 0, Draws([0] * 6)), Move(0, 5))
+        self.assertEqual(RULES.choose_special_move((CARD,), board, 0, Draws([0] * 6)), Move(0, 5))
         self.assertEqual(board, before)
 
     def test_special_AI_adapter_no_move_and_validation_boundaries(self):
-        from tests.game.test_native_ai import Draws
+        from tests.game.test_ai import Draws
         from tmserver.game.ai import Personality
-        from tmserver.game.original.image import OriginalCodeError
+        from tmserver.game.rules import RulesError
 
         empty = start_board([0] * 16).cells
-        self.assertIsNone(default_rules().choose_special_move((), empty, 0, Draws([])))
-        self.assertIsNone(default_rules().choose_special_move((CARD,), start_board([1] * 16).cells, 0, Draws([])))
-        with self.assertRaisesRegex(OriginalCodeError, "invalid bridge input"):
-            default_rules().choose_special_move((CARD,) * 6, empty, 0, Draws([]))
+        self.assertIsNone(RULES.choose_special_move((), empty, 0, Draws([])))
+        self.assertIsNone(RULES.choose_special_move((CARD,), start_board([1] * 16).cells, 0, Draws([])))
+        with self.assertRaisesRegex(RulesError, "outside the client.s domain"):
+            RULES.choose_special_move((CARD,) * 6, empty, 0, Draws([]))
         for raw in (-1, True, 32768):
-            with self.assertRaisesRegex(OriginalCodeError, "Random draw"):
-                default_rules().choose_special_move((CARD,), empty, 0, Draws([raw]))
-        move = default_rules().choose_special_move((CARD,), empty, 0, Draws([0, 0, 0, 0, 0, 5]), Personality())
+            with self.assertRaisesRegex(RulesError, "Random draw"):
+                RULES.choose_special_move((CARD,), empty, 0, Draws([raw]))
+        move = RULES.choose_special_move((CARD,), empty, 0, Draws([0, 0, 0, 0, 0, 5]), Personality())
         self.assertEqual((move.hand_index, move.field), (0, 5))
 
 
