@@ -13,7 +13,6 @@ from tests.rankings.test_rating_policy import KEYS, economy, prepare
 from tests.support.memory_store import MemoryStore
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
-from tmserver.rankings.errors import RankingError
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.rankings.periods import RankingPeriods
 from tmserver.rankings.stats import PracticeStats
@@ -58,9 +57,9 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         self.assertEqual(imported.snapshot(), baseline)
         self.assertTrue(imported.weekly)
         for mode, weekly in (("preserve", True), ("local-history", 1), ("local-history", None)):
-            with self.subTest(mode=mode, weekly=weekly), self.assertRaises(RankingError):
+            with self.subTest(mode=mode, weekly=weekly), self.assertRaises(EconomyError):
                 RatingPolicy(self.economy, mode=mode, weekly=weekly)
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             RatingPolicy(self.economy, clock=123)
         self.assertTrue(self.policy.advance_week())
         initialized = self.policy.snapshot()
@@ -83,7 +82,7 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
             {"version": 1},
         )
         for malformed in attempts:
-            with self.subTest(snapshot=malformed), self.assertRaises(RankingError):
+            with self.subTest(snapshot=malformed), self.assertRaises(EconomyError):
                 RatingPolicy(self.economy, snapshot=malformed)
         for previous in (False, True):
             periods = RankingPeriods.restore()
@@ -177,9 +176,9 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
         self.assertEqual((self.economy.snapshot(), self.policy.snapshot()), baseline)
         self.assertIs(self.policy.periods, periods)
         self.now = float("nan")
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             commit(self.policy, batch)
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             self.policy.advance_week()
         self.assertEqual((self.economy.snapshot(), self.policy.snapshot()), baseline)
         self.assertIs(self.policy.periods, periods)

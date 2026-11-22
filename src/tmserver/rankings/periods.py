@@ -9,7 +9,7 @@ only later play in that week.
 
 from collections.abc import Mapping
 
-from tmserver.rankings.errors import RankingError
+from tmserver.economy.errors import EconomyError
 
 POLICY = "local-utc-week-v1"
 WEEK = 7 * 24 * 60 * 60
@@ -19,19 +19,19 @@ DWORD_MAX = 0xFFFFFFFF
 
 def _uint(value):
     if type(value) is not int or not 0 <= value <= DWORD_MAX:
-        raise RankingError("weekly values must be unsigned DWORDs")
+        raise EconomyError("weekly values must be unsigned DWORDs")
     return value
 
 
 def _key(value):
     if not isinstance(value, str) or not 1 <= len(value) <= 128:
-        raise RankingError("invalid weekly account key")
+        raise EconomyError("invalid weekly account key")
     return value
 
 
 def _week(now):
     if type(now) not in (int, float) or not 0 <= now <= DWORD_MAX:
-        raise RankingError("clock must be a finite nonnegative native timestamp")
+        raise EconomyError("clock must be a finite nonnegative native timestamp")
     return (int(now) + MONDAY_OFFSET) // WEEK * WEEK - MONDAY_OFFSET
 
 
@@ -49,7 +49,7 @@ class RankingPeriods:
         week = _week(now)
         if self._week_start is not None:
             if week < self._week_start:
-                raise RankingError("weekly clock moved to an earlier week")
+                raise EconomyError("weekly clock moved to an earlier week")
             if week == self._week_start:
                 return False
         self._previous = (
@@ -64,12 +64,12 @@ class RankingPeriods:
     def record(self, now, contributions):
         """Apply a trusted fresh result; validate every row before rolling over."""
         if not isinstance(contributions, Mapping):
-            raise RankingError("weekly contributions must map accounts to results")
+            raise EconomyError("weekly contributions must map accounts to results")
         rows = {}
         for key, values in contributions.items():
             _key(key)
             if not isinstance(values, (tuple, list)) or len(values) != 2:
-                raise RankingError("weekly contribution requires reward and rating")
+                raise EconomyError("weekly contribution requires reward and rating")
             rows[key] = (_uint(values[0]), _uint(values[1]))
         self.advance(now)
         for key, (reward, rating) in rows.items():
@@ -109,20 +109,20 @@ class RankingPeriods:
             or snapshot["version"] != 1
             or snapshot["policy"] != POLICY
         ):
-            raise RankingError("invalid weekly snapshot")
+            raise EconomyError("invalid weekly snapshot")
         week = snapshot["week_start"]
         if (
             type(week) is not int
             or not -MONDAY_OFFSET <= week <= _week(DWORD_MAX)
             or (week + MONDAY_OFFSET) % WEEK
         ):
-            raise RankingError("invalid saved UTC week")
+            raise EconomyError("invalid saved UTC week")
         if type(snapshot["current"]) is not dict or type(snapshot["previous"]) is not dict:
-            raise RankingError("weekly account records must be objects")
+            raise EconomyError("weekly account records must be objects")
         for key, row in snapshot["current"].items():
             _key(key)
             if type(row) is not dict or set(row) != {"prize", "rating"}:
-                raise RankingError("invalid current weekly record")
+                raise EconomyError("invalid current weekly record")
             result._current[key] = (_uint(row["prize"]), _uint(row["rating"]))
         result._previous = {
             _key(key): _uint(rating) for key, rating in snapshot["previous"].items()

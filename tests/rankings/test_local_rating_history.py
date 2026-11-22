@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from tests import FIXTURES
-from tmserver.rankings.errors import RankingError
+from tmserver.economy.errors import EconomyError
 from tmserver.rankings.history import (
     HistoryState,
     LocalRatingHistory,
@@ -62,11 +62,11 @@ class LocalRatingHistoryTests(unittest.TestCase):
     def test_enrollment_is_explicit_and_cannot_overwrite_existing_history(self):
         service = LocalRatingHistory()
         self.assertFalse(service.enrolled("existing300"))
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             service.quote("existing300", "one", [7, 3], 0)
         self.assertEqual(service.snapshot()["accounts"], {})
         self.assertEqual(service.enroll("fresh").rating, 200)
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             service.enroll("fresh", history=[4] * 32)
         self.assertEqual(service.state("fresh").rating, 200)
 
@@ -87,9 +87,9 @@ class LocalRatingHistoryTests(unittest.TestCase):
         self.assertEqual(restored.quote("one", quote.match_id, [10, 0], 0), quote)
         self.assertEqual(restored.commit(quote), quote.after)
         self.assertEqual(restored.state("one"), next_quote.after)
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             restored.quote("one", quote.match_id, [0, 10], 0)
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             restored.quote("one", quote.match_id, [10, 0], 1)
 
     def test_competing_quotes_and_forged_state_rejected_without_changes(self):
@@ -97,12 +97,12 @@ class LocalRatingHistoryTests(unittest.TestCase):
         service.enroll("one")
         a = service.quote("one", "a", [5, 5], 0)
         stale = service.quote("one", "b", [5, 5], 0)
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             service.commit(replace(a, after=replace(a.after, entries=(4,) * 32)))
         self.assertEqual(service.state("one").revision, 0)
         service.commit(a)
         before = service.snapshot()
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             service.commit(stale)
         self.assertEqual(service.snapshot(), before)
 
@@ -115,7 +115,7 @@ class LocalRatingHistoryTests(unittest.TestCase):
         ]
         service.commit(service.quote("c", "intervening", [0, 15], 0))
         before = service.snapshot()
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             service.commit_many(quotes)
         self.assertEqual(service.snapshot(), before)
         quotes[2] = service.quote("c", "round", [6, 6, 3], 2)
@@ -137,7 +137,7 @@ class LocalRatingHistoryTests(unittest.TestCase):
             a,
         ):
             before = service.snapshot()
-            with self.assertRaises(RankingError):
+            with self.assertRaises(EconomyError):
                 service.commit_many([a, b])
             self.assertEqual(service.snapshot(), before)
 
@@ -183,7 +183,7 @@ class LocalRatingHistoryTests(unittest.TestCase):
             ([5, 5], True),
             ("55", 0),
         ):
-            with self.subTest(scores=scores, seat=seat), self.assertRaises(RankingError):
+            with self.subTest(scores=scores, seat=seat), self.assertRaises(EconomyError):
                 classify_result(scores, seat)
         for history, sequence in (
             ([2] * 31, 0),
@@ -194,7 +194,7 @@ class LocalRatingHistoryTests(unittest.TestCase):
             ([2] * 32, 65536),
             ([2] * 32, True),
         ):
-            with self.assertRaises(RankingError):
+            with self.assertRaises(EconomyError):
                 LocalRatingHistory().enroll("one", history=history, sequence=sequence)
 
     def test_snapshot_validation_rejects_duplicate_corrupt_or_ambiguous_records(self):
@@ -225,7 +225,7 @@ class LocalRatingHistoryTests(unittest.TestCase):
         x["policy"] = "elo"
         variants.append(x)
         for variant in variants:
-            with self.assertRaises(RankingError):
+            with self.assertRaises(EconomyError):
                 LocalRatingHistory.restore(variant)
         self.assertEqual(LocalRatingHistory.restore(None).snapshot()["accounts"], {})
         self.assertEqual(service.snapshot(), saved)

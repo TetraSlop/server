@@ -9,7 +9,6 @@ from tmserver.economy.service import EconomyService
 from tmserver.game.departure_rules import result_classes
 from tmserver.rankings.history import HistoryState, LocalRatingHistory
 from tmserver.economy.match_ledger import MatchEconomy
-from tmserver.rankings.errors import RankingError
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.rankings.stats import PracticeStats, result_outcome
 
@@ -213,7 +212,7 @@ class RatingPolicyTests(unittest.TestCase):
     def test_departures_and_profile_history_mismatch_require_explicit_action(self):
         service = economy(2)
         policy = RatingPolicy(service, mode="local-history")
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             policy.quote("departed", {0: "first", 1: "second"}, (8, 2), departed_seats=(1,))
         self.assertEqual(policy.snapshot()["history"]["accounts"], {})
         rounds, stats, changes = prepare(service, policy, (7, 3))
@@ -224,7 +223,7 @@ class RatingPolicyTests(unittest.TestCase):
         )
         preserved.commit_growth(rounds, stats)
         enabled = RatingPolicy(service, mode="local-history", snapshot=preserved.snapshot())
-        with self.assertRaises(RankingError):
+        with self.assertRaises(EconomyError):
             enabled.quote("reenabled", {0: "first", 1: "second"}, (7, 3))
 
     def test_quote_all_accounts_validate_before_any_enrollment(self):
