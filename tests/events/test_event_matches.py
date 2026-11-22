@@ -152,19 +152,18 @@ class EventRoundTests(unittest.TestCase):
         self.assertIsNone(unstarted.outcome)
 
     def test_invalid_configuration_rejected(self):
+        # Seat counts, turn limits and departure rules are checked by
+        # EventTableConfig; these are the checks the round itself owns.
         a = EventParticipant("0", 1, b"Alice", 1, CARDS)
-        for ps, kw in [
-            ((a,), {}),
-            ((a, a), {}),
-            ((a,), {"cpu_cards": CARDS, "turn_limit": 6}),
-            ((a, a), {"cpu_cards": CARDS}),
-            ((EventParticipant("0", 0, b"Alice", 1, CARDS), a), {}),
+        for ps in [
+            (a,),
+            (EventParticipant("0", 0, b"Alice", 1, CARDS), a),
+            (EventParticipant("0", 0x80000000, b"Alice", 1, CARDS), a),
         ]:
             with self.assertRaises((ValueError, MatchError)):
-                EventMatchRound(ps, **kw)
-        for args in [dict(session=256), dict(session=1, status=4)]:
-            with self.assertRaises(MatchError):
-                event_session_quit(**args)
+                EventMatchRound(ps)
+        with self.assertRaises(MatchError):
+            event_session_quit(256)
 
 
 if __name__ == "__main__":

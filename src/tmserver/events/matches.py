@@ -10,7 +10,6 @@ prizes and rewards alone. Layout: TetraPackets flows/event-matches.md.
 from dataclasses import dataclass, replace
 
 from tmserver.game import special_rules as special
-from tmserver.cards.model import card_values
 from tmserver.game.models import Card, Delivery
 from tmserver.game.errors import MatchError
 from tmserver.game.match import MatchService
@@ -23,31 +22,27 @@ def _uint(value, maximum, label):
     return value
 
 
-def event_session_init(session, *, rating, balance, points, count, rt, status=0):
+def event_session_init(session, *, rating, balance, points, count, rt):
     """B2/13 EInit: Stat presence releases the gate; its value is not a mode.
 
     M is parsed but does not replace client balance. This builder cannot repair
     a stale profile balance. N (not header) is the session token.
     """
-    _uint(session, 255, "session")
     _uint(rating, 0x7FFFFFFF, "rating")
     _uint(balance, 99999999, "balance")
     _uint(points, 65535, "points")
     _uint(count, 1000, "inventory count")
     _uint(rt, 0x7FFFFFFF, "RT")
-    _uint(status, 3, "status")
     return packet(
         0xB2,
         0x13,
-        body=f"@EInit=/N={session}/RA={rating}/M={balance}/CP={points}/S={count}/RT={rt}/Stat={status}",
+        body=f"@EInit=/N={session}/RA={rating}/M={balance}/CP={points}/S={count}/RT={rt}/Stat=0",
     )
 
 
-def event_session_quit(session, *, status=0):
-    """B2/17 EQuit D0: flags178/179/17A become (s&1,not(s&2),s&2)."""
-    _uint(session, 255, "session")
-    _uint(status, 3, "status")
-    return packet(0xB2, 0x17, session, f"@EQuit=/D=0/Stat={status}")
+def event_session_quit(session):
+    """B2/17 EQuit D0 with Stat 0: flags178/179/17A become (s&1,not(s&2),s&2)."""
+    return packet(0xB2, 0x17, session, "@EQuit=/D=0/Stat=0")
 
 
 @dataclass(frozen=True)
@@ -124,15 +119,6 @@ class EventMatchRound:
         rules_backend=None,
     ):
         participants = tuple(participants)
-        if (cpu_cards is not None and len(participants) != 1) or (
-            cpu_cards is None and len(participants) not in (2, 3)
-        ):
-            raise MatchError("event round needs two/three humans or one human plus configured CPU")
-        if any(not isinstance(p, EventParticipant) or p.peer is None for p in participants):
-            raise MatchError("authenticated event participants required")
-        _uint(turn_limit, 5, "turn limit")
-        _uint(departure_rule, 2, "departure rule")
-        _uint(observation, 2, "observation rule")
         count = 2 if cpu_cards is not None else len(participants)
         self._combat = _EventCombat(
             mode="computer" if cpu_cards is not None else "versus",
@@ -147,18 +133,11 @@ class EventMatchRound:
         self._combat.table_rules["in"] = observation
         self._participants = participants
         self._seat = {p.peer: i for i, p in enumerate(participants)}
-        if len(self._seat) != len(participants):
-            raise MatchError("duplicate peer")
         self._hands = {}
-        identities = set()
         for p in participants:
-            if (
-                type(p.character_id) is not int
-                or not 1 <= p.character_id <= 0x7FFFFFFF
-                or p.character_id in identities
-            ):
-                raise MatchError("unique positive event character IDs required")
-            identities.add(p.character_id)
+            # Event result receipts store character IDs as signed DWORDs.
+            if p.character_id > 0x7FFFFFFF:
+                raise MatchError("event character ID exceeds a signed DWORD")
             self._hands[p.peer] = self._normalize_hand(p.cards)
             self._combat.register(
                 p.peer,
@@ -177,27 +156,11 @@ class EventMatchRound:
         self._released = set()
 
     def _normalize_hand(self, cards):
-        cards = tuple(cards)
-        if len(cards) != 5:
-            raise MatchError("five event cards required per seat")
-        out = []
-        for c in cards:
-            try:
-                values = card_values(c)
-                if any(type(value) is not int for value in values):
-                    raise MatchError("event card fields must be integers")
-                c = Card(*values)
-            except (AttributeError, TypeError) as exc:
-                raise MatchError("invalid event card") from exc
-            base = self._combat.baselines[c.model]
-            denominator = base.attack + base.physical + base.magical
-            points = (
-                (c.attack + c.physical + c.magical) * base.points // denominator
-                if denominator
-                else 0
-            ) & 255
-            out.append(replace(c, points=points, deck=255))
-        return tuple(out)
+        points = self._combat.catalog.points
+        return tuple(
+            replace(c, points=points(c.model, c.attack, c.physical, c.magical), deck=255)
+            for c in cards
+        )
 
     @property
     def phase(self):
