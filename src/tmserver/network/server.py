@@ -23,7 +23,7 @@ from tmserver.events.adapter import EventAdapter
 from tmserver.events.rooms import EventRooms
 from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, TRADE_RAW, player_id, service_nick
 from tmserver.network.session import MAX_LINE, Session
-from tmserver.network.local_accounts import account_specs
+from tmserver.network.local_accounts import MAX_LEGACY_PASSWORD, account_specs
 from tmserver.protocol.wire import polid_to_string, polid_unscramble
 from tmserver.rooms.config import configure_rooms
 from tmserver.rooms.config import directory_files as ordinary_directory_files
@@ -263,7 +263,8 @@ class Server:
         if key not in self.account_specs:
             nick = key.encode("ascii")
             login = polid_to_string(polid_unscramble(nick)).encode("ascii")
-            password = secrets.token_hex(8).encode("ascii")
+            # Regenerated at every start and never saved, so no save holds an old length.
+            password = secrets.token_hex(MAX_LEGACY_PASSWORD // 2).encode("ascii")
             self.account_specs[key] = (login, password, self.economy.account_view(key).player_id)
             self.accounts[nick] = password
             self.connection_limit = max(8, len(self.accounts))

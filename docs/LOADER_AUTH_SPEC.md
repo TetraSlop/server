@@ -130,6 +130,13 @@ The session response is:
 }
 ```
 
+`legacy.password` is at most **15** printable ASCII characters (hosted accounts get
+14 hex characters). polcore's Game IRC open (Viewer entry 132) copies the password
+and its NUL terminator into a 16-byte buffer, so 16 or more characters corrupt
+polcore's stack and crash the client. Pass the value to the Viewer unchanged; do
+not pad, truncate or cache it. The server generates hosted passwords again at every
+start and never saves them, so always use the one from the latest session response.
+
 Tickets are single use. Requesting a new ticket replaces an unused previous one.
 Only one play session per account is allowed; a second redemption returns 409.
 Do not automatically disconnect another session on that response. Offer an
