@@ -16,18 +16,7 @@ from tmserver.rooms.spectators import SpectatorService
 from tmserver.protocol.commands import parse
 
 
-class EventRoomPartTests(unittest.IsolatedAsyncioTestCase):
-    drain = event_tests.EventMatchIntegrationTests.drain
-    send = event_tests.EventMatchIntegrationTests.send
-    identity = event_tests.EventMatchIntegrationTests.identity
-    enter_selection = event_tests.EventMatchIntegrationTests.enter_selection
-    admit = event_tests.EventMatchIntegrationTests.admit
-    engine = event_tests.EventMatchIntegrationTests.engine
-    watch = observer_tests.EventSpectatorsIntegration.watch
-    admit_watch = observer_tests.EventSpectatorsIntegration.admit_watch
-    observer_send = observer_tests.EventSpectatorsIntegration.observer_send
-    read_watch = observer_tests.EventSpectatorsIntegration.read_watch
-
+class EventRoomPartTests(observer_tests.EventSpectatorHelpers, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.cfg = config(match_enabled=True)
@@ -157,13 +146,7 @@ class EventRoomPartTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.server.snapshot(), before[1])
 
     async def observer_barrier(self):
-        await self.observer.send(b"PING :observer-part")
-        for _ in range(200):
-            line = await self.observer.read()
-            self.assertTrue(line, "observer was disconnected")
-            if line == b"PONG observer-part":
-                return
-        self.fail("observer barrier missing")
+        await event_tests.barrier(self, self.observer, b"observer-part")
 
     async def test_old_part_preserves_current_observer_and_current_part_only_releases_observer(
         self,

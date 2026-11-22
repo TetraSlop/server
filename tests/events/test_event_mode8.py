@@ -15,13 +15,7 @@ from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
 
 
-class EventMode8Integration(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = events.EventMatchIntegrationTests.asyncSetUp
-    asyncTearDown = events.EventMatchIntegrationTests.asyncTearDown
-    drain = events.EventMatchIntegrationTests.drain
-    send = events.EventMatchIntegrationTests.send
-    identity = events.EventMatchIntegrationTests.identity
-
+class EventMode8Integration(events.EventMatchHelpers, unittest.IsolatedAsyncioTestCase):
     async def test_entry_with_zero_owned_cards_is_nonplaying_and_durable(self):
         self.cfg = replace(self.cfg, entry_answer=2)
         self.server = Server(

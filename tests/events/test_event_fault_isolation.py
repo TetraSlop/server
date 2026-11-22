@@ -12,14 +12,7 @@ from tmserver.game.packets import packet
 from tmserver.network.server import Server
 
 
-class EventFaultIsolation(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = events.EventMatchIntegrationTests.asyncSetUp
-    drain = events.EventMatchIntegrationTests.drain
-    send = events.EventMatchIntegrationTests.send
-    identity = events.EventMatchIntegrationTests.identity
-    enter_selection = events.EventMatchIntegrationTests.enter_selection
-    admit = events.EventMatchIntegrationTests.admit
-    engine = events.EventMatchIntegrationTests.engine
+class EventFaultIsolation(events.EventMatchHelpers, unittest.IsolatedAsyncioTestCase):
     request = computer.ComputerMenuIntegrationTests.request
     choose = computer.ComputerMenuIntegrationTests.choose
     play_cpu = computer.ComputerMenuIntegrationTests.play

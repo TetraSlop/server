@@ -17,16 +17,13 @@ from tmserver.network.server import Server
 from tmserver.rooms.spectators import SpectatorService
 
 
-class EventMultiTable(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = base.EventMatchIntegrationTests.asyncSetUp
-    send = base.EventMatchIntegrationTests.send
-    identity = base.EventMatchIntegrationTests.identity
-    enter_selection = base.EventMatchIntegrationTests.enter_selection
+class EventMultiTableHelpers(base.EventMatchHelpers):
+    """Four players on two tables of one event, with optional observers."""
 
     async def asyncTearDown(self):
         for client in getattr(self, "observers", ()):
             await client.close()
-        await base.EventMatchIntegrationTests.asyncTearDown(self)
+        await base.EventMatchHelpers.asyncTearDown(self)
 
     async def start(self, observer=False):
         self.tables = (
@@ -62,18 +59,8 @@ class EventMultiTable(unittest.IsolatedAsyncioTestCase):
             if not self.server.event_matches.coordinator.pending():
                 break
         for side, client in enumerate(self.clients):
-            if side in self.closed:
-                continue
-            await client.send(b"PING :multi-event")
-            for _ in range(200):
-                line = await client.read()
-                self.assertTrue(line, "healthy event table disconnected")
-                if line == b"PONG multi-event":
-                    break
-                if b" NOTICE " in line:
-                    self.inbox[side].append((line.split(b"!", 1)[0][1:], line.split(b" :", 1)[1]))
-            else:
-                self.fail("event output limit")
+            if side not in self.closed:
+                self.inbox[side] += base.notices(await base.barrier(self, client, b"multi-event"))
 
     def round(self, index):
         return self.server.event_matches.coordinator._rounds[self.tables[index].table_id]
@@ -166,6 +153,8 @@ class EventMultiTable(unittest.IsolatedAsyncioTestCase):
         for seat in (0, 1):
             await self.send(index * 2 + seat, target, packet(0x43, 14, 10, f"@Ready=/Ans={seat}"))
 
+
+class EventMultiTable(EventMultiTableHelpers, unittest.IsolatedAsyncioTestCase):
     async def test_two_matches_settle_once_and_persist_independent_progress(self):
         await self.start()
         await self.admit_all()

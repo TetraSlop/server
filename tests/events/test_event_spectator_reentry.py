@@ -5,34 +5,17 @@ import unittest
 from unittest.mock import patch
 
 from tests.events import test_event_spectators as base
+from tests.events.test_event_matches_integration import barrier
 from tests.protocol.test_admission_identity import native_identity
 from tmserver.game.packets import decode, packet
 
 
-class EventSpectatorReentryTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = base.EventSpectatorsIntegration.asyncSetUp
-    asyncTearDown = base.EventSpectatorsIntegration.asyncTearDown
-    start = base.EventSpectatorsIntegration.start
-    drain = base.EventSpectatorsIntegration.drain
-    send = base.EventSpectatorsIntegration.send
-    identity = base.EventSpectatorsIntegration.identity
-    enter_selection = base.EventSpectatorsIntegration.enter_selection
-    admit = base.EventSpectatorsIntegration.admit
-    engine = base.EventSpectatorsIntegration.engine
-    observer_send = base.EventSpectatorsIntegration.observer_send
-    read_watch = base.EventSpectatorsIntegration.read_watch
-    admit_watch = base.EventSpectatorsIntegration.admit_watch
-    watch = base.EventSpectatorsIntegration.watch
-
+class EventSpectatorReentryTests(base.EventSpectatorHelpers, unittest.IsolatedAsyncioTestCase):
     async def observer_barrier(self):
-        await self.observer.send(b"PING :observer-reentry")
-        for _ in range(20):
-            line = await self.observer.read()
-            self.assertTrue(line, "observer was closed during channel transition")
-            if line == b"PONG observer-reentry":
-                return
-            self.assertNotIn(b"GTM0G43", line, "retired gameplay leaked after channel exit")
-        self.fail("missing observer transition barrier")
+        lines = await barrier(self, self.observer, b"observer-reentry", limit=20)
+        self.assertFalse(
+            [x for x in lines if b"GTM0G43" in x], "retired gameplay leaked after channel exit"
+        )
 
     async def reentry(self, *, part=False, completion="cancel"):
         await self.start()

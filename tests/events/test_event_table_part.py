@@ -4,6 +4,7 @@ import asyncio
 import unittest
 
 from tests.events import test_event_multitable as event_tests
+from tests.events.test_event_matches_integration import barrier
 from tests.protocol.test_admission_identity import native_identity
 from tests.events.test_event_rooms import presence
 from tests.support.irc import Client
@@ -11,16 +12,7 @@ from tmserver.protocol.identities import GAME_KEY, service_nick
 from tmserver.game.packets import decode, packet
 
 
-class EventTablePartTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = event_tests.EventMultiTable.asyncSetUp
-    start = event_tests.EventMultiTable.start
-    drain = event_tests.EventMultiTable.drain
-    send = event_tests.EventMultiTable.send
-    identity = event_tests.EventMultiTable.identity
-    enter_selection = event_tests.EventMultiTable.enter_selection
-    round = event_tests.EventMultiTable.round
-    admit_all = event_tests.EventMultiTable.admit_all
-
+class EventTablePartTests(event_tests.EventMultiTableHelpers, unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         clients = [*self.clients, *getattr(self, "observers", ())]
         await asyncio.gather(*(client.close() for client in clients), return_exceptions=True)
@@ -57,13 +49,7 @@ class EventTablePartTests(unittest.IsolatedAsyncioTestCase):
         self.fail("missing observer table response")
 
     async def observer_barrier(self):
-        await self.observer.send(b"PING :table-part")
-        for _ in range(200):
-            line = await self.observer.read()
-            self.assertTrue(line, "observer unexpectedly disconnected")
-            if line == b"PONG table-part":
-                return
-        self.fail("missing observer barrier")
+        await barrier(self, self.observer, b"table-part")
 
     async def watch(self, index):
         table = self.tables[index]
