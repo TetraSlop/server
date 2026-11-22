@@ -83,7 +83,7 @@ class EventConfig:
         if self.start < 0 or self.end <= self.start:
             raise EventError("event needs a bounded positive time window")
         ids = (self.room_id, self.init_id, self.card_id)
-        if any(type(i) is not int or not 0 < i < 1 << 64 for i in ids) or len(set(ids)) != 3:
+        if any(not 0 < i < 1 << 64 for i in ids) or len(set(ids)) != 3:
             raise EventError("event services need distinct nonzero game identities")
         for channel in (self.init_channel, self.card_channel):
             text(channel, 15, empty=False)
@@ -91,10 +91,8 @@ class EventConfig:
                 raise EventError("invalid event service channel")
         if self.init_channel == self.card_channel:
             raise EventError("event channels must differ")
-        if type(self.entry_answer) is not int or self.entry_answer not in (1, 2):
+        if self.entry_answer not in (1, 2):
             raise EventError("unmapped event entry answer")
-        if type(self.match_enabled) is not bool or type(self.card_service_enabled) is not bool:
-            raise EventError("service enable flags must be boolean")
 
     @property
     def mission_mask(self):
@@ -166,7 +164,7 @@ class EventTableConfig:
     start_fields: tuple | list | None = None
 
     def __post_init__(self):
-        if self.player_count not in (2, 3) or type(self.player_count) is not int:
+        if self.player_count not in (2, 3):
             raise EventError("event table needs two/three seats")
         if self.cpu_cards is not None and (self.player_count != 2 or len(self.cpu_cards) != 5):
             raise EventError("synthetic event CPU needs one human and five CPU cards")
@@ -181,11 +179,11 @@ class EventTableConfig:
                     raise EventError("event CPU card fields must be integers")
                 checked.append(Card(*values))
             object.__setattr__(self, "cpu_cards", tuple(checked))
-        if type(self.turn_limit) is not int or not 0 <= self.turn_limit <= 5:
+        if not 0 <= self.turn_limit <= 5:
             raise EventError("unsupported event turn limit")
-        if type(self.departure_rule) is not int or not 0 <= self.departure_rule <= 2:
+        if not 0 <= self.departure_rule <= 2:
             raise EventError("unsupported event departure rule")
-        if type(self.seed) is not int or not 0 <= self.seed <= 0xFFFFFFFF:
+        if not 0 <= self.seed <= 0xFFFFFFFF:
             raise EventError("event seed must be an unsigned32-bit integer")
         if self.start_fields is not None:
             board = special.start_board(self.start_fields)
