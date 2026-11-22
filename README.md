@@ -56,10 +56,10 @@ events, human tables, prizes and ratings.
 
 ## Accounts
 
-Players create their own accounts. tmloader sends a POL ID (in practice one
-starting with `EE`) and password to the game port once before the game starts. An unknown POL ID becomes a new account
-with that password, and later logins must match it. The server stores only a
-salted scrypt hash. The [loader login contract](docs/LOADER_AUTH_SPEC.md)
+Players create their own accounts. tmloader sends a username and password to
+the game port once before the game starts. An unknown username becomes a new
+account with that password and a POL ID the server assigns; later logins must
+match the password. The server stores only a salted scrypt hash. The [loader login contract](docs/LOADER_AUTH_SPEC.md)
 describes the exchange, the limits and the error codes. Operators can set a
 password, or disable and re-enable an account, with
 [`tmserver-admin`](docs/ADMIN.md#accounts-and-passwords).

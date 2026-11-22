@@ -4,7 +4,7 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-from tests.accounts.test_provisioning import KEY, POL_ID, granted
+from tests.accounts.test_provisioning import granted
 from tests.storage import test_postgres_store as database_tests
 from tmserver.network.server import Server
 
@@ -16,21 +16,22 @@ class RegistrationPostgresTests(database_tests.DatabaseFixture, unittest.TestCas
         self.host = Server(store=self.store)
 
     def login(self):
-        return asyncio.run(self.host.login("192.0.2.1", POL_ID, b"password"))
+        return asyncio.run(self.host.login("192.0.2.1", b"Alice", b"password"))
 
     def restart(self):
         self.host = Server(store=self.reopen())
 
     def test_restart_signs_in_without_reissuing_starter_cards(self):
-        self.assertEqual(granted(self.login())[1], b"created")
+        _, key, _, outcome = granted(self.login())
+        self.assertEqual(outcome, b"created")
         saved, revision = self.store.load(), self.store.revision
         self.restart()
         with patch.object(self.store, "save_changes", side_effect=AssertionError("sign-in wrote")):
-            self.assertEqual(granted(self.login())[1], b"signed_in")
+            self.assertEqual(granted(self.login())[1:4:2], (key, b"signed_in"))
         self.assertEqual(self.store.load(), saved)
         self.assertEqual(self.store.revision, revision)
-        self.assertEqual(len(saved["accounts"][KEY]["cards"]), 10)
-        self.assertEqual(saved["accounts"][KEY]["balance"], 10000)
+        self.assertEqual(len(saved["accounts"][key]["cards"]), 10)
+        self.assertEqual(saved["accounts"][key]["balance"], 10000)
 
     def test_credential_journal_failure_rolls_back_account_and_starter_cards(self):
         from tmserver.storage.schema import accounts, cards
@@ -51,8 +52,8 @@ class RegistrationPostgresTests(database_tests.DatabaseFixture, unittest.TestCas
         self.assertEqual(self.host.snapshot(), live)
         self.restart()
         self.assertEqual(self.store.load(), saved)
-        self.assertIsNone(self.host.credentials.get(KEY))
-        self.assertEqual(granted(self.login())[1], b"created")
+        self.assertIsNone(self.host.credentials.account("alice"))
+        self.assertEqual(granted(self.login())[3], b"created")
 
     def test_lost_commit_ack_keeps_the_account_for_the_next_sign_in(self):
         import psycopg
@@ -70,6 +71,6 @@ class RegistrationPostgresTests(database_tests.DatabaseFixture, unittest.TestCas
         self.restart()
         saved = self.store.load()
         with patch.object(self.store, "save_changes", side_effect=AssertionError("retry wrote")):
-            self.assertEqual(granted(self.login())[1], b"signed_in")
+            self.assertEqual(granted(self.login())[3], b"signed_in")
         self.assertEqual(self.store.load(), saved)
         self.assertEqual(self.store.revision, revision + 1)

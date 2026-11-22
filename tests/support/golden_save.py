@@ -56,7 +56,7 @@ from tmserver.storage.validation import validate_snapshot
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "storage"
 SNAPSHOT = FIXTURES / "golden_snapshot.json"
 EXPORT = FIXTURES / "golden_postgres_export.json"
-# A self-registered account; its POL ID is EEGOLDEN.
+# A self-registered account; the server assigned it POL ID EEGOLDEN.
 REGISTERED = polid_scramble(polid_from_string("EEGOLDEN")).decode("ascii")
 EPOCH = 200  # Inside the fixture event's 100..500 window.
 WEEK = 7 * 86400
@@ -108,8 +108,8 @@ class GoldenRun(ClaimFixture, TableFixture):
         for clock in clocks:
             clock.start()
         try:
-            register_account(self.server, REGISTERED, hash_password(b"golden", salt=bytes(16)))
-            self.server.ensure_account(REGISTERED.encode("ascii"), name=b"Hosted")
+            register_account(self.server, REGISTERED,
+                             hash_password("Hosted", b"golden", salt=bytes(16)))
             self.events()
             self.prizes()
             self.auctions()

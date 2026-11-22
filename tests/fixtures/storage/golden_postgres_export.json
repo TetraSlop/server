@@ -1091,7 +1091,8 @@
       "UGIRSKKH3": {
         "hash": "59012fe5d1abdf0430b34b02517d2fb127ffa7bfd06cac08a6c438f0e4913b22",
         "salt": "00000000000000000000000000000000",
-        "disabled": false
+        "disabled": false,
+        "username": "Hosted"
       }
     }
   },

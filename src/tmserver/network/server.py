@@ -14,10 +14,10 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from tmserver.accounts.credentials import (
-    Limiter, hash_password, valid_password, valid_pol_id, verify_password,
+    Limiter, hash_password, valid_password, valid_username, verify_password,
 )
 from tmserver.accounts.provisioning import (
-    provision_account, register_account, registered_key,
+    free_key, provision_account, register_account,
 )
 from tmserver.economy.auctions.models import AuctionError
 from tmserver.economy.auctions.service import AuctionService
@@ -30,6 +30,7 @@ from tmserver.events.rooms import EventRooms
 from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, TRADE_RAW, player_id, service_nick
 from tmserver.network.session import LOGIN_REPLY, MAX_LINE, Session, login_error
 from tmserver.network.local_accounts import MAX_LEGACY_PASSWORD, account_specs
+from tmserver.protocol.wire import polid_to_string, polid_unscramble
 from tmserver.rooms.config import configure_rooms
 from tmserver.rooms.config import directory_files as ordinary_directory_files
 from tmserver.rooms.table import OrdinaryTable
@@ -101,9 +102,9 @@ class Server:
         self.listener = None
         self.auction_task = None
         self.storage_failed = None
-        # Failed logins per IP and per POL ID, and new accounts per IP.
+        # Failed logins per IP and per username, and new accounts per IP.
         self.address_failures = Limiter(20, 900)
-        self.pol_id_failures = Limiter(5, 900)
+        self.username_failures = Limiter(5, 900)
         self.registrations = Limiter(5, 3600)
         self.room = RoomService(
             player_count=match_player_count, computer_enabled=match_mode == "computer"
@@ -265,41 +266,40 @@ class Server:
             self.log("auction_expiry", count=len(changes))
         return changes
 
-    async def login(self, address, pol_id, password):
-        """Register an unknown POL ID or check its password; mint a game password."""
-        if not valid_pol_id(pol_id) or not valid_password(password):
+    async def login(self, address, username, password):
+        """Register an unknown username or check its password; mint a game password."""
+        if not valid_username(username) or not valid_password(password):
             return login_error(b"invalid_request")
-        if self.address_failures.blocked(address) or self.pol_id_failures.blocked(pol_id):
+        name = username.decode("ascii").lower()
+        if self.address_failures.blocked(address) or self.username_failures.blocked(name):
             return login_error(b"rate_limited")
-        key = registered_key(self, pol_id.decode("ascii"))
-        if key is None:
-            return login_error(b"pol_id_unavailable")
         created = False
-        credential = self.credentials.get(key)
-        if credential is None:
-            if key in self.account_keys:
-                return login_error(b"account_locked")  # Saved without a password.
+        key = self.credentials.account(name)
+        if key is None:
             if self.registrations.blocked(address):
                 return login_error(b"rate_limited")
-            credential = await asyncio.to_thread(hash_password, password)
-            if self.credentials.get(key) is None and key not in self.account_keys:
+            credential = await asyncio.to_thread(hash_password, username.decode("ascii"), password)
+            key = self.credentials.account(name)  # Another LOGIN may have won the race.
+            if key is None:
+                key = free_key(self)
                 try:
                     register_account(self, key, credential)
                 except OSError:
                     return login_error(b"unavailable")
                 self.registrations.hit(address)
                 created = True
-            credential = self.credentials.get(key)  # Another LOGIN may have won the race.
-        if credential is None or credential.disabled:
+        credential = self.credentials.get(key)
+        if credential.disabled:
             return login_error(b"account_locked")
         if not created and not await asyncio.to_thread(verify_password, credential, password):
             self.address_failures.hit(address)
-            self.pol_id_failures.hit(pol_id)
+            self.username_failures.hit(name)
             return login_error(b"invalid_credentials")
         nick = key.encode("ascii")
         if nick in self.nicks:
             return login_error(b"account_connected")
         # Held in memory only, like the original Viewer's per-launch secret.
+        pol_id = polid_to_string(polid_unscramble(nick)).encode("ascii")
         game_password = secrets.token_hex(MAX_LEGACY_PASSWORD // 2).encode("ascii")
         self.account_specs[key] = (pol_id, game_password, self.economy.account_view(key).player_id)
         self.accounts[nick] = game_password

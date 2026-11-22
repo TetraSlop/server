@@ -6,7 +6,7 @@
   three-player boards are ported from the client to Python and checked against
   8,067 results frozen from its own code. Board effects and generation, match
   order, departures, policy, storage and transport are Python too.
-- Players register a POL ID and password with tmloader's LOGIN on the game port;
+- Players register a username and password with tmloader's LOGIN on the game port;
   see the [loader login contract](LOADER_AUTH_SPEC.md). The browser client that
   used the removed WebSocket gateway needs a plain WebSocket-to-TCP bridge.
 - The optional [admin panel](ADMIN_PANEL.md) is read-only by default. With
