@@ -555,18 +555,10 @@ class MatchService:
         if self.flexible_seats:
             self._seats_frozen = False
             self._resize_lobby(self.seat_capacity)
-        self.sequence = self.active = 0
-        self.board = [None] * self.board_size
-        self.acks.clear()
-        self.pending_move = self.source = None
-        self.markers.clear()
-        self.targets.clear()
-        self.ready.clear()
-        self.continues.clear()
+        self._clear_round()
         self.owner_peer = None
         self.settings_applied = False
         self.npc_id = None
-        self.cancel_pending()
         self._final_snapshots.clear()
         self._final_order = ()
         self._start_offered = False
@@ -584,6 +576,17 @@ class MatchService:
         for p in self.players:
             p.departed = False
             p.substitute = 0
+
+    def _clear_round(self):
+        self.sequence = self.active = 0
+        self.board = [None] * self.board_size
+        self.acks.clear()
+        self.pending_move = self.source = None
+        self.markers.clear()
+        self.targets.clear()
+        self.ready.clear()
+        self.continues.clear()
+        self.cancel_pending()
 
     @property
     def owner_id(self):
@@ -630,12 +633,14 @@ class MatchService:
             self._start_offered or any(p.requested for p in self.players)
         )
 
-    def rules_body(self):
+    def rules_body(self, game=None, table=None):
+        game = self.game_rules if game is None else game
+        table = self.table_rules if table is None else table
         return (
             "@Tet="
-            + "".join(f"/{k}={v}" for k, v in self.game_rules.items())
+            + "".join(f"/{k}={v}" for k, v in game.items())
             + "@Tab="
-            + "".join(f"/{k}={v}" for k, v in self.table_rules.items())
+            + "".join(f"/{k}={v}" for k, v in table.items())
         )
 
     @staticmethod
@@ -747,11 +752,14 @@ class MatchService:
         if not self.settings_applied or self.phase != "lobby":
             return []
         self._add_ai()
-        owner = self.players[self._seat(self.owner_peer)]
-        owner_body = f"@GameOwner=/NN={owner.nickname_id:016X}/CN={owner.name.hex().upper()}"
+        owner_body = self._owner_body(self.players[self._seat(self.owner_peer)])
         return self._emit(packet(0x41, 4, body=self.member_list(peer)), peer) + self._emit(
             packet(0x1A, body=owner_body), peer
         )
+
+    @staticmethod
+    def _owner_body(owner):
+        return f"@GameOwner=/NN={owner.nickname_id:016X}/CN={owner.name.hex().upper()}"
 
     def _humans(self):
         return [p.peer for p in self.players if p.peer is not None and not p.departed]
@@ -762,7 +770,7 @@ class MatchService:
         """
         if peer != self.owner_peer:
             raise MatchError("only the table owner can remove a member")
-        if self.phase != "lobby" or self._start_offered or any(p.requested for p in self.players):
+        if self.phase != "lobby" or self.start_pending:
             raise MatchError("member removal must precede the start handshake")
         ack = packet(0x41, 6, body="@GameQA=/QT=2")
         removed = next((p for p in self.players if p.nickname_id == target), None)
@@ -791,8 +799,7 @@ class MatchService:
             self.mode == "versus"
             and self.phase == "lobby"
             and self.settings_applied
-            and not self._start_offered
-            and not any(p.requested for p in self.players)
+            and not self.start_pending
             and len(self.players) > 1
         )
 
@@ -816,8 +823,7 @@ class MatchService:
         )
         roster = packet(0x41, 4, body=self._member_body(remaining))
         owner_notice = packet(
-            0x1A,
-            body=f"@GameOwner=/NN={next_owner.nickname_id:016X}/CN={next_owner.name.hex().upper()}/QN={player.name.hex().upper()}",
+            0x1A, body=self._owner_body(next_owner) + f"/QN={player.name.hex().upper()}"
         )
         out = (self._emit(ack, peer) if ack is not None else []) + [
             Delivery(p.peer, roster) for p in remaining
@@ -965,14 +971,7 @@ class MatchService:
     def _check_playack(self, players, game=None, table=None):
         # Original format has no proven fragmentation or safe field truncation.
         # Reject unrepresentable combinations before admission/settings mutate.
-        game = self.game_rules if game is None else game
-        table = self.table_rules if table is None else table
-        rules = (
-            "@Tet="
-            + "".join(f"/{k}={v}" for k, v in game.items())
-            + "@Tab="
-            + "".join(f"/{k}={v}" for k, v in table.items())
-        )
+        rules = self.rules_body(game, table)
         return packet(2, body="@PLAYACK=/EN=1" + rules + self._member_body(players))
 
     def playack(self, peer):
@@ -1517,27 +1516,21 @@ class MatchService:
         result_peers = self._humans() + [
             p.peer for p in self.players if p.peer in self._departure_result_peers
         ]
-        if self.player_count == 3:
-            out = []
-            for peer in result_peers:
-                # 10104141..101044F9 reads full profile fields only for the
-                # receiving ordinary player; remote sections read D2 rating.
-                # Keep one complete logical packet within 447 even with long RN.
-                body = prefix + "".join(
-                    (
-                        p.result_stats.result_section(i)
-                        if p.peer == peer
-                        else f"@No{i}=/D=0|0|{p.rating}|0|0|1|0"
-                    )
-                    for i, p in enumerate(self.players)
+        out = []
+        for peer in result_peers:
+            # Three-player 10104141..101044F9 reads full profile fields only for
+            # the receiving ordinary player; remote sections read D2 rating.
+            # Keep one complete logical packet within 447 even with long RN.
+            body = prefix + "".join(
+                (
+                    p.result_stats.result_section(i)
+                    if self.player_count == 2 or p.peer == peer
+                    else f"@No{i}=/D=0|0|{p.rating}|0|0|1|0"
                 )
-                out += self._emit(packet(0x43, 0x0D, self._result_sequence, body), peer)
-            return self._prize_gate(out)
-        body = prefix + "".join(
-            p.result_stats.result_section(i) for i, p in enumerate(self.players)
-        )
-        data = packet(0x43, 0x0D, self._result_sequence, body)
-        return self._prize_gate([Delivery(peer, data) for peer in result_peers])
+                for i, p in enumerate(self.players)
+            )
+            out.append(Delivery(peer, packet(0x43, 0x0D, self._result_sequence, body)))
+        return self._prize_gate(out)
 
     def _complete_cards(self, shared):
         # 100C87E2..88D9 rebuilds each original owner's hand in board-index order.
@@ -1630,35 +1623,13 @@ class MatchService:
         privacy = msg.sections["Continue"].get("PR")
         if privacy is not None and numbers(privacy, 1)[0] not in (0, 1):
             raise MatchError("Continue ranking privacy must be zero or one")
-        if self.departure_seats:
+        if self.departure_seats or ans == 2:
             # The original Continue constructor preselects leave for departures.
             # No silent rematch can restore the removed network participant.
+            if not self.departure_seats:
+                self.continues[peer] = ans
             self.phase = "finished"
-            return self._emit(
-                packet(
-                    0x43,
-                    0x11,
-                    2,
-                    "@Continue=/Ans="
-                    + self._r_text([3] * self.player_count)
-                    + "/B="
-                    + self._r_text([0] * self.player_count),
-                )
-            )
-        if ans == 2:
-            self.continues[peer] = ans
-            self.phase = "finished"
-            return self._emit(
-                packet(
-                    0x43,
-                    0x11,
-                    2,
-                    "@Continue=/Ans="
-                    + self._r_text([3] * self.player_count)
-                    + "/B="
-                    + self._r_text([0] * self.player_count),
-                )
-            )
+            return self._continue_reply(2, 3)
         votes = {**self.continues, peer: ans}
         if set(votes) != set(self._humans()):
             self.continues = votes
@@ -1674,28 +1645,10 @@ class MatchService:
         out = (
             self._emit(packet(0x43, 4, body=self._com_list()))
             if conf
-            else self._emit(
-                packet(
-                    0x43,
-                    0x11,
-                    1,
-                    "@Continue=/Ans="
-                    + self._r_text([1] * self.player_count)
-                    + "/B="
-                    + self._r_text([0] * self.player_count),
-                )
-            )
+            else self._continue_reply(1, 1)
         )
         self.phase = "computer_menu" if conf else "selection"
-        self.sequence = self.active = 0
-        self.board = [None] * self.board_size
-        self.acks.clear()
-        self.pending_move = self.source = None
-        self.markers.clear()
-        self.targets.clear()
-        self.ready.clear()
-        self.continues.clear()
-        self.cancel_pending()
+        self._clear_round()
         for p in self.players:
             self._choose_cards(
                 p, self.ai_cards if p.peer is None and not self.computer_menu else ()
@@ -1705,6 +1658,11 @@ class MatchService:
         # Req/GameOK acceptance describes continued table membership. Only the
         # round's card choices are reset; the original returns to selection.
         return out
+
+    def _continue_reply(self, argument, answer):
+        n = self.player_count
+        body = f"@Continue=/Ans={self._r_text([answer] * n)}/B={self._r_text([0] * n)}"
+        return self._emit(packet(0x43, 0x11, argument, body))
 
     def handle(self, peer, payload):
         """Return deliveries, [] for handled/no reply, or None for another service."""
@@ -1735,43 +1693,18 @@ class MatchService:
             return None
         if section not in msg.sections:
             raise MatchError("message section does not match subtype")
-        if section == "ComGame":
-            return self._com_game(peer, msg)
-        if section == "GetSelect":
-            return self._get_select(peer, msg)
-        if section == "CardSelect":
-            return self._select(peer, msg)
-        if section == "TurnData":
-            return self._ack(peer, msg)
-        if section == "PutData":
-            return self._move(peer, msg)
-        if section == "BattleSelect":
-            if (
-                self.phase != "battle"
-                or self.active != seat
-                or self.sequence != msg.argument
-                or not self._unlocked()
-            ):
-                raise MatchError("battle choice is not for the active turn")
-            target = numbers(msg.sections[section].get("B"), 1)[0]
-            if self.pending_work:
-                if target == self._pending_battle:
-                    return []
-                raise MatchError("battle continuation already pending")
-            return self._battle(target)
-        if section == "Ready":
-            # Result and prize presentation each send Ready. No mapped retry
-            # bit distinguishes them; emitting TCList twice risks a stale list.
-            if self.phase == "result" and peer not in self.ready:
-                if msg.argument != self.sequence or numbers(
-                    msg.sections["Ready"].get("Ans"), 1
-                ) != [seat]:
-                    raise MatchError("Ready is not for this participant and final turn")
-                self.ready.add(peer)
-                return self._final_cards(peer)
-            return []
-        if section == "Continue":
-            return self._continue(peer, msg)
+        handler = {
+            "ComGame": self._com_game,
+            "GetSelect": self._get_select,
+            "CardSelect": self._select,
+            "TurnData": self._ack,
+            "PutData": self._move,
+            "BattleSelect": self._battle_select,
+            "Ready": self._ready,
+            "Continue": self._continue,
+        }.get(section)
+        if handler is not None:
+            return handler(peer, msg)
         if self.phase not in ("computer_menu", "selection", "turn", "battle", "result"):
             return []
         if section == "Quit":
@@ -1791,21 +1724,44 @@ class MatchService:
                 return []
         elif msg.argument != 3 or numbers(msg.sections["Break"].get("ID"), 1) != [p.character_id]:
             raise MatchError("Break must identify this authenticated character with header3")
-        if self.departure_supported(peer) and len(self._humans()) > 1:
-            out = self.depart(peer, await_result=section == "Quit")
-            return (
-                self._emit(packet(0x43, 5, msg.argument, f"@Quit=/No={seat}/B=0"), peer)
-                if section == "Quit"
-                else []
-            ) + out
-        self.phase = "finished"
-        self.cancel_pending()
-        self._held_prize_deliveries = []  # Adapter owns interruption recovery.
-        return (
+        reply = (
             self._emit(packet(0x43, 5, msg.argument, f"@Quit=/No={seat}/B=0"), peer)
             if section == "Quit"
             else []
         )
+        if self.departure_supported(peer) and len(self._humans()) > 1:
+            return reply + self.depart(peer, await_result=section == "Quit")
+        self.phase = "finished"
+        self.cancel_pending()
+        self._held_prize_deliveries = []  # Adapter owns interruption recovery.
+        return reply
+
+    def _battle_select(self, peer, msg):
+        if (
+            self.phase != "battle"
+            or self.active != self._seat(peer)
+            or self.sequence != msg.argument
+            or not self._unlocked()
+        ):
+            raise MatchError("battle choice is not for the active turn")
+        target = numbers(msg.sections["BattleSelect"].get("B"), 1)[0]
+        if self.pending_work:
+            if target == self._pending_battle:
+                return []
+            raise MatchError("battle continuation already pending")
+        return self._battle(target)
+
+    def _ready(self, peer, msg):
+        # Result and prize presentation each send Ready. No mapped retry
+        # bit distinguishes them; emitting TCList twice risks a stale list.
+        if self.phase != "result" or peer in self.ready:
+            return []
+        if msg.argument != self.sequence or numbers(msg.sections["Ready"].get("Ans"), 1) != [
+            self._seat(peer)
+        ]:
+            raise MatchError("Ready is not for this participant and final turn")
+        self.ready.add(peer)
+        return self._final_cards(peer)
 
     def _table_message(self, peer, msg, p):
         """Handle table notices, admission, preferences and discovery."""
@@ -1920,11 +1876,7 @@ class MatchService:
                 return []
             return self._emit(packet(0x41, 4, body=self.member_list(peer, True)), peer)
         if sub == 0x0A:
-            if (
-                self.phase != "lobby"
-                or self._start_offered
-                or any(x.requested for x in self.players)
-            ):
+            if self.phase != "lobby" or self.start_pending:
                 return []
             if peer != (self.owner_peer if self.owner_peer is not None else self.players[0].peer):
                 raise MatchError("only the table owner can offer a start")
