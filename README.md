@@ -75,7 +75,6 @@ lists which is which. What is still open is in the [roadmap](docs/ROADMAP.md).
 - [Architecture](docs/ARCHITECTURE.md): where the code for each feature lives.
 - [Checks and releases](docs/CI.md): test lanes, CI and the release workflow.
 - [Validation](docs/VALIDATION.md): what the tests cover and what they do not.
-- [Load testing](docs/LOAD_TESTING.md).
 
 ## Licence
 
