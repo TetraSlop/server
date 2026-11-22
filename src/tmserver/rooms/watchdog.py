@@ -6,7 +6,6 @@ periods, on a monotonic clock. The watchdog only observes; it never advances a
 match, sends a packet or changes ownership.
 """
 
-import math
 import time
 from dataclasses import dataclass, replace
 from typing import Hashable
@@ -53,22 +52,11 @@ class MatchWatchdog:
         configuration_timeout=900,
     ):
         self.clock = clock
-        for name, value in [
-            ("ack_timeout", ack_timeout),
-            ("decision_grace", decision_grace),
-            ("result_timeout", result_timeout),
-            ("processing_timeout", processing_timeout),
-            ("configuration_timeout", configuration_timeout),
-        ]:
-            if (
-                isinstance(value, bool)
-                or not isinstance(value, (int, float))
-                or not math.isfinite(value)
-            ):
-                raise ValueError(f"{name} must be a finite number")
-            if value < 0 or (name != "decision_grace" and value == 0):
-                raise ValueError(f"{name} must be positive (grace may be zero)")
-            setattr(self, name, float(value))
+        self.ack_timeout = ack_timeout
+        self.decision_grace = decision_grace
+        self.result_timeout = result_timeout
+        self.processing_timeout = processing_timeout
+        self.configuration_timeout = configuration_timeout
         self._match = None
         self._epoch = None
         self._last_time = None
@@ -84,18 +72,12 @@ class MatchWatchdog:
         self._decision_started = self._decision_deadline = None
 
     def _now(self):
-        value = float(self.clock())
-        if not math.isfinite(value) or (self._last_time is not None and value < self._last_time):
-            raise ValueError("watchdog clock must be finite and monotonic")
-        self._last_time = value
-        return value
+        self._last_time = self.clock()
+        return self._last_time
 
     @staticmethod
     def _limit(match):
-        tl = match.game_rules["tl"]
-        if type(tl) is not int or not 0 <= tl < len(TURN_SECONDS):
-            raise ValueError("tl must be one of the six original timer indices")
-        return TURN_SECONDS[tl]
+        return TURN_SECONDS[match.game_rules["tl"]]
 
     def _arm(self, key, reason, match, peers, now, duration, *, started=None, deadline=None):
         current = dict(
