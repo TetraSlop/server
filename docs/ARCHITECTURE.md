@@ -1,8 +1,30 @@
 # Architecture and code ownership
 
 The runtime is organized by feature under `src/tmserver/`. Start with the
-owning package rather than a generic service layer. A package move does not
-change the wire protocol, saved-state format or service lifetime.
+owning package rather than a generic service layer.
+
+| Package | Responsibility |
+| --- | --- |
+| `cli` | Server, local-play and offline-admin entry points. |
+| `admin` | Shared read projections and the optional authenticated operator panel. |
+| `auth` | Optional Supabase verification, play capabilities and account-bound WebSocket transport. |
+| `accounts` | Login identities and automatic account creation. |
+| `network` | Server ownership, connections, dispatch, chat and diagnostics. |
+| `protocol` | Encryption, command envelopes, identities and table controls. |
+| `cards` | Card values, catalogue and inventory edits. |
+| `game` | Match phases, computer opponents and the native rules bridge. |
+| `rooms` | Ordinary room configuration, tables, admission and spectators. |
+| `events` | Configured event rooms, matchmaking, results and card grants. |
+| `economy` | Accounts, shop, trade, auctions, prizes and transaction boundaries. |
+| `profiles` | Profile transport, character records, options and saved preferences. |
+| `rankings` | Result statistics, ratings and optional weekly projections. |
+| `storage` | JSON and PostgreSQL stores, validation, recovery and migrations. |
+| `data` | Packaged protocol tables and the card catalogue, read through `data/resources.py`. |
+
+Tests mirror these packages under `tests/`, with shared fixtures in
+`tests/fixtures/`. `examples/` holds optional room, shop and event configurations;
+`research/` holds the native rules checks; `tools/` holds the check, packaging and
+load-test commands. `results/` and `var/` are ignored output and local state.
 
 ## Find the code
 
@@ -32,8 +54,8 @@ change the wire protocol, saved-state format or service lifetime.
 `cli.serve` constructs the two loopback listeners. `network.server.Server` owns
 shared services; `network.session.Session` owns each connection. The profile
 listener is separate in `profiles.service`. Recovered combat, AI, board and
-opponent algorithms live in `game`; explicit local reward and rating policies
-remain in their economy/ranking owners.
+opponent algorithms live in `game`; this server's reward and rating choices live
+in their economy and ranking owners.
 
 The optional Starlette Admin listener runs on the same event loop and borrows
 that host. Request-local detached projections are captured before rendering;
@@ -46,7 +68,7 @@ The optional auth gateway verifies a provider identity before asking
 Pydantic ownership journal commit together through the existing store. The
 registry restores without web dependencies; both raw listeners reject its owned
 accounts unless a trusted play-session access object authorizes the stream.
-Legacy pilot links import at startup. No loader-supplied name or identifier
+Legacy manual bindings import at startup. No loader-supplied name or identifier
 controls ownership, and tickets remain process-local capabilities.
 
 When explicitly enabled, `admin.actions` shares synchronous preview/commit logic
@@ -80,10 +102,10 @@ The room and zone directory layouts are Construct schemas in `rooms.records`,
 shared by default, ordinary and event room builders. Field widths, constants
 and padding are defined there once; callers supply the room's policy values.
 
-The old flat Python module names have moved, with no compatibility namespace.
-For example, import `Server` from `tmserver.network.server` and `MatchService`
-from `tmserver.game.match`. CLI names and `python -m tmserver` are unchanged;
-use the [README](../README.md) for installation and invocation.
+Import from the feature package, for example `Server` from
+`tmserver.network.server` and `MatchService` from `tmserver.game.match`. The
+supported entry points are the `tmserver`, `tmserver-db`, `tmserver-play` and
+`tmserver-admin` commands, `python -m tmserver` and `Play.cmd`.
 
 ## Inside a feature
 
@@ -298,7 +320,6 @@ All writes are synchronous. JSON rewrites the complete save; PostgreSQL limits
 account writes but stores each service journal as a complete JSONB document.
 Large journals and slow storage can therefore pause all clients on the event loop.
 
-The configured synthetic login pool is capped at 128 accounts. This is a local
-protocol implementation, not public account authentication or a distributed
-server. The load tool can create additional dormant accounts to measure storage
+The local test account pool is capped at 128 accounts; hosted accounts come from
+Discord sign-in. The server is one process, not a distributed service. The load tool can create additional dormant accounts to measure storage
 growth; those accounts are not additional connected players.
