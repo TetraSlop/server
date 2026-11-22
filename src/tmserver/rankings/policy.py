@@ -199,6 +199,8 @@ class RatingPolicy:
             raise RankingError("enabled rating policy requires quoted result proofs")
         staged = LocalRatingHistory.restore(self.history.snapshot())
         staged.commit_many(tuple(rating_changes_by_key.values()))
+        if any(key != quote.key for key, quote in rating_changes_by_key.items()):
+            raise RankingError("rating quotes must be keyed by their own account")
         periods = self.periods
         if self.weekly:
             if not isinstance(stats_by_key, dict):
