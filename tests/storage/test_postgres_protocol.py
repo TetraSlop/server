@@ -15,7 +15,7 @@ from tests.economy import test_trade_integration as trades
 from tests.profiles.test_options_service import request as options_request
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture, sa
 from tests.profiles.test_profile_accounts import file_request, transact
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, player_id, service_nick
 from tmserver.profiles.service import ProfileServer

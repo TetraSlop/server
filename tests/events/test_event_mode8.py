@@ -9,7 +9,7 @@ from pathlib import Path
 from tests.events import test_event_matches_integration as events
 from tests.events.test_event_configuration import DOCUMENT
 from tests.events.test_event_rooms import presence
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.events.config import parse_event_setup
 from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server

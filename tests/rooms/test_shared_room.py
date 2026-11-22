@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from tests.rooms import test_ordinary_rooms as base
 from tests.events.test_event_rooms import presence as room_presence
 from tests.rooms.test_room_service import presence
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import GAME_KEY, game_id, player_id, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.rooms.config import OrdinaryRoomConfig, OrdinaryTableConfig, directory_files

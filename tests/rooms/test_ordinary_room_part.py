@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from tests import ROOT
 from tests.events.test_event_rooms import presence
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.protocol.test_admission_identity import native_identity
 from tests.rooms.test_room_rules import settings
 from tests.rooms import test_room_transitions as transitions

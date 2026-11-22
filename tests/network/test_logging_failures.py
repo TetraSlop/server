@@ -13,7 +13,8 @@ from tests.network.test_session_recovery import Writer
 from tmserver.game.packets import packet
 from tmserver.profiles.service import ProfileServer
 from tmserver.profiles.packets import checked
-from tmserver.network.server import Server, Session
+from tmserver.network.server import Server
+from tmserver.network.session import Session
 
 
 LOGGER = "tmserver.network.diagnostics"

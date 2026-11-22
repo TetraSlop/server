@@ -41,7 +41,7 @@ class AdminListenerTests(unittest.IsolatedAsyncioTestCase):
             pass
 
     async def test_http_inspects_the_same_host_as_encrypted_game_and_profile_connections(self):
-        from tests.network.test_server import Client
+        from tests.support.irc import Client
         from tests.profiles.test_options_service import request
         from tests.profiles.test_profile_accounts import file_request, transact
         from tmserver.network.local_accounts import account_specs, display_name

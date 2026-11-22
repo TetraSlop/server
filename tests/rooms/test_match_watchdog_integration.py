@@ -7,7 +7,9 @@ from tests.network.test_session_recovery import Writer
 from tmserver.game.models import Card
 from tmserver.game.packets import packet
 from tmserver.rooms.watchdog import MatchWatchdog
-from tmserver.network.server import ACCOUNTS, Server, Session
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
+from tmserver.network.session import Session
 
 SETTINGS = "@Tet=/bm=0/du=0/st=0/cb=0/ca=0/gs=0/tl=0@Tab=/in=0/lu=100/ll=0/au=300/al=100/co=0/pa=0"
 

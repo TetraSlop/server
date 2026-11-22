@@ -7,7 +7,7 @@ from pathlib import Path
 
 from tests import ROOT
 from tests.network import test_services_integration as service_tests
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.cards.catalog import collection_points
 from tmserver.protocol.identities import TABLE_RAW, player_id
 from tmserver.game.packets import decode, packet

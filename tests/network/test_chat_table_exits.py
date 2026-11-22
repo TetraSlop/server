@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from tests.network import test_chat_service as chats
 from tests.game.test_match_service import NATIVE_SETTINGS
 from tests.rooms.test_ordinary_rooms import EXTRA
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, player_id, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server

@@ -9,7 +9,7 @@ from tests.rooms import test_spectator_integration as ordinary_tests
 from tests.protocol.test_admission_identity import native_identity
 from tests.events.test_event_rooms import presence
 from tests.game.test_match_service import NATIVE_SETTINGS
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import GAME_KEY, TABLE_RAW, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server

@@ -11,7 +11,7 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.economy.entries import shop_entry
 from tests.network import test_services_integration as services
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.cards.model import Card
 from tmserver.cards.catalog import Catalog
 from tmserver.economy.service import EconomyService

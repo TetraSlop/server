@@ -13,7 +13,8 @@ from tmserver.economy.packets import named
 from tmserver.events.models import EventTableConfig
 from tmserver.protocol.identities import SHOP_RAW, TABLE_RAW, game_id, service_nick
 from tmserver.game.packets import packet
-from tmserver.network.server import Server, Session
+from tmserver.network.server import Server
+from tmserver.network.session import Session
 
 
 class ClosingWriter(Writer):

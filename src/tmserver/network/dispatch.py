@@ -7,7 +7,6 @@ service's. Reply keys and pipe-separated elements come from TM 0x100812e0 and
 
 from tmserver.protocol.messages import service_notice
 
-from dataclasses import dataclass
 from contextlib import AsyncExitStack
 
 from tmserver.economy.claim_transactions import auction_transaction, prize_transaction
@@ -19,31 +18,10 @@ from tmserver.profiles.transactions import character_profile_request
 from tmserver.rooms.routing import leave_other_rooms, validate_room_entry
 from tmserver.protocol.commands import parse
 
-
-@dataclass(frozen=True)
-class DirectoryVersion:
-    directory: int = 1
-    version: int = 1
-
-    def pair(self):
-        if not 0 <= self.directory <= 255 or not 0 <= self.version <= 65535:
-            raise ValueError("directory/version outside native field width")
-        return f"{self.directory}|{self.version}".encode()
-
-
-def teach_dv_answer():
-    local = DirectoryVersion()
-    pair = local.pair()
-    return (
-        b"GTM0GE2000000@TeachDVAns=/D=1/V=1/AC="
-        + pair
-        + b"/RK="
-        + pair
-        + b"/Shm="
-        + f"{game_id(SHOP_RAW):016X}".encode()
-        + b"|"
-        + pair
-    )
+# Directory 1, version 1 for every list; Shm names the shop service.
+TEACH_DV_ANSWER = b"GTM0GE2000000@TeachDVAns=/D=1/V=1/AC=1|1/RK=1|1/Shm=%016X|1|1" % game_id(
+    SHOP_RAW
+)
 
 
 async def dispatch(session, target, payload):
@@ -126,15 +104,6 @@ async def dispatch(session, target, payload):
         key = session.server.ensure_account(session.nick)
         replies = character_profile_request(session.server, key, payload)
         if replies is not None:
-            commands = parse(payload[5:])
-            if commands[0].token == b"CR" and parse(replies[0][5:])[0].token == b"CS":
-                record = session.server.character_profiles.records[key]
-                session.tm_player = {
-                    "id": session.server.economy.account_view(key).player_id,
-                    "name": record[2].encode("latin1"),
-                    "info": next((c.payload for c in commands if c.token == b"CI"), b""),
-                    "server": target,
-                }
             for answer in replies:
                 await session.send(service_notice(target, session.nick, answer))
             return True
@@ -256,8 +225,7 @@ async def dispatch(session, target, payload):
                 )
                 return True
     if payload == b"GTM0GE1000000@TeachDV=":
-        answer = teach_dv_answer()
-        await session.send(service_notice(target, session.nick, answer))
+        await session.send(service_notice(target, session.nick, TEACH_DV_ANSWER))
         session.server.log(
             "teach_dv_answer",
             session=session.id,

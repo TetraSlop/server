@@ -10,7 +10,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.rooms import test_observer_rules as rules
 from tests.rooms import test_spectator_integration as base
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.game.match import MatchService
 from tmserver.game.packets import decode, packet

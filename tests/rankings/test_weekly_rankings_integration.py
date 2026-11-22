@@ -14,7 +14,7 @@ from tests.game import test_computer_menu_integration as computer
 from tests.economy import test_match_wagers_integration as wagers
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.rankings.test_ranking_service import request as rank_request
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, player_id
 from tmserver.game.packets import packet
 from tmserver.profiles.service import ProfileServer

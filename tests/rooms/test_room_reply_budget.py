@@ -3,9 +3,10 @@
 import asyncio
 import unittest
 
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.rooms.test_room_service import presence
-from tmserver.network.server import ACCOUNTS, Server
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
 from tmserver.protocol.commands import Command, encode, parse
 from tmserver.rooms.service import RoomService
 

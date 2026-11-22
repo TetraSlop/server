@@ -34,11 +34,6 @@ class PreferenceError(ValueError):
     pass
 
 
-def _profile(profile):
-    if not isinstance(profile, (bytes, bytearray)) or len(profile) != PROFILE_SIZE:
-        raise PreferenceError("saved preferences require canonical TM0DataFile")
-
-
 def _values(values, fields, *, password=False, max_password=9):
     if not isinstance(values, Mapping):
         raise PreferenceError("preference group must be a mapping")
@@ -73,7 +68,8 @@ def apply_preferences(profile, *, game=None, table=None):
     policy. Callers authorize the account and persist the returned bytes before
     completing the no-ack24 request. No live table, inventory or money changes.
     """
-    _profile(profile)
+    if not isinstance(profile, (bytes, bytearray)) or len(profile) != PROFILE_SIZE:
+        raise PreferenceError("saved preferences require canonical TM0DataFile")
     if game is None and table is None:
         raise PreferenceError("at least one saved preference group is required")
     game = _values(game, GAME_FIELDS) if game is not None else None
@@ -90,23 +86,6 @@ def apply_preferences(profile, *, game=None, table=None):
         password = bytes.fromhex(table["pw"]) if table["pa"] else b"********"
         output[0xF4:0xFE] = password.ljust(10, b"\0")
     return bytes(output)
-
-
-def read_preferences(profile):
-    """Project the file bytes read by the native importer, without normalizing.
-
-    For an old password lacking a NUL in the first ten bytes, this returns the
-    imported prefix only. Native live-memory tail contents cannot be inferred.
-    """
-    _profile(profile)
-    result = {}
-    for label, fields in (("Tet", GAME_FIELDS), ("Tab", TABLE_FIELDS)):
-        result[label] = {
-            key: int.from_bytes(profile[o : o + n], "little") for key, (o, n, _) in fields.items()
-        }
-    if result["Tab"]["pa"]:
-        result["Tab"]["pw"] = bytes(profile[0xF4:0xFE]).split(b"\0", 1)[0].hex().upper()
-    return result
 
 
 def parse_save(payload):
@@ -152,17 +131,3 @@ def parse_save(payload):
         "game": game if flags["Game"] == "1" else None,
         "table": table if flags["Tbl"] == "1" else None,
     }
-
-
-class TablePreferences:
-    """Small account adapter; its owner supplies authorization and durable save."""
-
-    def __init__(self, economy):
-        self.economy = economy
-
-    def handle(self, key, payload):
-        update = parse_save(payload)
-        if update is None:
-            return None
-        self.economy.save_table_preferences(key, **update)
-        return []  # No distinct original acknowledgement is mapped.

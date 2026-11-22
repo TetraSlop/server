@@ -13,7 +13,7 @@ from tests.network import test_services_integration as service_tests
 from tests.events.test_event_rooms import presence
 from tests.profiles.test_profile_accounts import transact
 from tests.profiles.test_profile_location import request as file_request
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.economy.packets import named, parse_named
 from tmserver.events.models import EventConfig, EventListing
 from tmserver.events.packets import event_data

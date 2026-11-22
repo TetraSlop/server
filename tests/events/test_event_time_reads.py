@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from tests.events.test_event_configuration import DOCUMENT
 from tests.events.test_event_rooms import presence
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.profiles.test_options_service import OFFSETS, VALUES, request as options_request
 from tmserver.economy.packets import named
 from tmserver.events.config import parse_event_configs

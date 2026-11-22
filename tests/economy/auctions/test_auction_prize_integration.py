@@ -12,12 +12,13 @@ from tests import ROOT
 from tests.economy.entries import prize_entry, shop_entry
 from tests.economy.auctions.test_auction_service import bid_request, collection_request, exhibit_request, request
 from tests.profiles.test_profile_accounts import delete_request, file_request, transact
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.economy.auctions.packets import EXHIBIT_PATH, PENDING_PATHS, listing_record
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import ROOM_RAW, SHOP_RAW, service_nick
 from tmserver.profiles.service import ProfileServer
-from tmserver.network.server import ACCOUNTS, Server
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
 from tmserver.protocol.commands import parse
 
 

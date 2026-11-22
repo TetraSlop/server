@@ -14,7 +14,9 @@ from tmserver.economy.packets import named
 from tmserver.events.models import EventDelivery
 from tmserver.protocol.identities import ROOM_RAW, SHOP_RAW, TABLE_RAW, game_id, service_nick
 from tmserver.game.packets import packet
-from tmserver.network.server import ACCOUNTS, Server, Session
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
+from tmserver.network.session import Session
 
 
 class Writer:

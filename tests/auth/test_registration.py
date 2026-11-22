@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from tests.accounts.test_provisioning import ISSUER, USER, SECOND
 from tests.auth.test_transport import local_bridge
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.profiles.test_profile_accounts import file_request, transact
 from tmserver.network.server import Server
 from tmserver.profiles.service import ProfileServer

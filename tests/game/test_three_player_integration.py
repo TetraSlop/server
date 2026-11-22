@@ -7,7 +7,7 @@ from pathlib import Path
 
 from tests import ROOT
 from tests.game import test_versus_integration as versus_tests
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.rankings.stats import PracticeStats

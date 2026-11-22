@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.profiles.test_profile_accounts import file_request, transact
 from tmserver.network.server import Server
 from tmserver.profiles.service import ProfileServer

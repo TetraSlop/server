@@ -10,7 +10,7 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.game import test_computer_menu_integration as computer
 from tests.economy.test_match_prizes_integration import full
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, player_id, service_nick
 from tmserver.economy.match_ledger import offline_payout
 from tmserver.game.packets import decode, packet

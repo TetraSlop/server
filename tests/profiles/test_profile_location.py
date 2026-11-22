@@ -9,7 +9,7 @@ from pathlib import Path
 
 from tests import ROOT
 from tests.profiles.test_profile_accounts import file_request, transact
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.events.models import EventConfig, EventListing
 from tmserver.events.packets import event_data
 from tmserver.protocol.identities import game_id

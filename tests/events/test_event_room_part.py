@@ -7,7 +7,7 @@ from tests.protocol.test_admission_identity import native_identity
 from tests.events import test_event_matches_integration as event_tests
 from tests.events import test_event_spectators as observer_tests
 from tests.events.test_event_rooms import config, presence
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.events.models import EventTableConfig
 from tmserver.protocol.identities import GAME_KEY, TABLE_RAW, game_id, service_nick
 from tmserver.game.packets import packet

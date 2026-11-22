@@ -11,7 +11,7 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.profiles.test_options_service import OFFSETS, VALUES
 from tests.profiles.test_options_service import request as options_request
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tests.profiles.test_table_preferences import (
     GAME as SAVED_GAME,
 )
@@ -28,7 +28,7 @@ from tmserver.profiles.service import ProfileServer
 from tmserver.profiles.packets import checked
 from tmserver.rooms.packets import ROOM_CHANNEL, ROOM_ID, TABLE_CHANNEL, TABLE_ID
 from tmserver.network.server import Server
-from tmserver.profiles.preferences import read_preferences
+from tests.support.profiles import read_preferences
 from tmserver.protocol.commands import Command, encode, parse
 
 

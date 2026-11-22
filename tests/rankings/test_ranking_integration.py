@@ -9,12 +9,13 @@ from pathlib import Path
 from tests import ROOT
 from tests.profiles.test_profile_accounts import delete_request, file_request, transact
 from tests.rankings.test_ranking_service import request
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol.identities import ROOM_RAW, player_id, service_nick
 from tmserver.profiles.service import ProfileServer
 from tmserver.profiles.packets import checksum
 from tmserver.rankings.packets import RECORD_SIZE, RESULT_PATH
-from tmserver.network.server import ACCOUNTS, Server
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
 from tmserver.protocol.commands import parse
 
 

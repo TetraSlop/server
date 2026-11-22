@@ -13,7 +13,7 @@ from tmserver.protocol import wire
 from tmserver.protocol.identities import SHOP_RAW, game_id
 from tmserver.profiles.service import ProfileServer
 from tmserver.profiles.packets import answer, checked, checksum
-from tmserver.network.dispatch import teach_dv_answer
+from tmserver.network.dispatch import TEACH_DV_ANSWER
 
 
 class ProfileTests(unittest.IsolatedAsyncioTestCase):
@@ -115,8 +115,8 @@ class ProfileFormatTests(unittest.TestCase):
         self.assertEqual(checksum(b"\x01\x02\x03\x04\x05"), 0x09030201)
 
     def test_teach_directory_keeps_command_separator(self):
-        self.assertIn(b"@TeachDVAns=/D=1/V=1", teach_dv_answer())
-        self.assertIn(b"/Shm=" + f"{game_id(SHOP_RAW):016X}".encode() + b"|1|1", teach_dv_answer())
+        self.assertIn(b"@TeachDVAns=/D=1/V=1", TEACH_DV_ANSWER)
+        self.assertIn(b"/Shm=" + f"{game_id(SHOP_RAW):016X}".encode() + b"|1|1", TEACH_DV_ANSWER)
 
 
 if __name__ == "__main__":

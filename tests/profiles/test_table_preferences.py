@@ -5,16 +5,15 @@ import sys
 import unittest
 from pathlib import Path
 
+from tests.support.profiles import read_preferences
 from tmserver.economy.service import EconomyService
 from tmserver.economy.packets import named
 from tmserver.profiles.preferences import (
     GAME_FIELDS,
     TABLE_FIELDS,
     PreferenceError,
-    TablePreferences,
     apply_preferences,
     parse_save,
-    read_preferences,
 )
 
 GAME = dict(bm=1234, du=1, st=0, cb=1, ca=0, gs=2, tl=5)
@@ -128,10 +127,9 @@ class PreferenceTests(unittest.TestCase):
         e = EconomyService(seed=4)
         e.provision("a", nn=1, name=b"A")
         e.provision("b", nn=2, name=b"B")
-        adapter = TablePreferences(e)
         before = e.account_view("a")
         other = e.profile_bytes("b")
-        self.assertEqual(adapter.handle("a", save()), [])
+        e.save_table_preferences("a", **parse_save(save()))
         restored = EconomyService.restore(e.snapshot())
         self.assertEqual(
             read_preferences(restored.profile_bytes("a")),
@@ -139,7 +137,7 @@ class PreferenceTests(unittest.TestCase):
         )
         self.assertEqual(restored.account_view("a"), before)
         self.assertEqual(restored.profile_bytes("b"), other)
-        self.assertIsNone(adapter.handle("a", named(0x14, 0, 0, "@Tet=")))
+        self.assertIsNone(parse_save(named(0x14, 0, 0, "@Tet=")))
 
     def test_atomic_rejection_does_not_change_template(self):
         e = EconomyService(seed=4)

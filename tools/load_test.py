@@ -20,7 +20,7 @@ from pathlib import Path
 
 from tests.profiles.test_options_service import VALUES
 from tests.profiles.test_options_service import request as options_request
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.protocol import wire
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, service_nick

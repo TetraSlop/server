@@ -8,7 +8,7 @@ from pathlib import Path
 
 from tests.events import test_event_matches_integration as base
 from tests.events.test_event_rooms import presence
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.events.models import EventError
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
 from tmserver.game.errors import MatchError

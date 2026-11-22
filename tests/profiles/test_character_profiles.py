@@ -9,11 +9,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests import ROOT
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.profiles.characters import CharacterProfiles
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import player_id
-from tmserver.network.server import ACCOUNTS, Server
+from tests.support.irc import ACCOUNTS
+from tmserver.network.server import Server
 from tmserver.storage.json import JsonStateStore
 from tmserver.protocol.commands import Command, encode, parse
 

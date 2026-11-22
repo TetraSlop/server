@@ -10,7 +10,7 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.auth.test_transport import local_bridge
 from tests.game import test_three_player_computer_integration as computer
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.cli.serve import arguments, running_services
 from tmserver.game.packets import packet
 from tmserver.protocol.identities import TABLE_RAW, service_nick

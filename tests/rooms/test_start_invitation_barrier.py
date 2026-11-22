@@ -10,7 +10,7 @@ from tests import ROOT
 from tests.rooms import test_table_roster as roster_tests
 from tests.game.test_flexible_seats import seated
 from tests.game.test_match_service import NATIVE_SETTINGS
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.game.match import MatchService
 from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server

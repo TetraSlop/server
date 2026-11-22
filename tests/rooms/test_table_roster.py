@@ -11,7 +11,7 @@ from tests import ROOT
 from tests.events.test_event_rooms import presence
 from tests.game.test_match_service import NATIVE_SETTINGS
 from tests.rooms.test_ordinary_rooms import EXTRA
-from tests.network.test_server import Client
+from tests.support.irc import Client
 from tmserver.network import dispatch as services
 from tmserver.protocol.identities import GAME_KEY, service_nick
 from tmserver.game.match import MatchService
