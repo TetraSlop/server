@@ -117,7 +117,7 @@ Use the same boundaries when adding or changing substantial feature code:
 | Packets | Parse requests, validate wire fields and encode replies or native files. | [game/packets.py](../src/tmserver/game/packets.py), [economy/packets.py](../src/tmserver/economy/packets.py), [events/packets.py](../src/tmserver/events/packets.py) |
 | Services | Feature behavior, permissions, state transitions and operation-specific staging. | `game/match.py`, `economy/service.py`, `events/service.py` |
 | Transactions | Coordinate the affected accounts/journals; save before publishing or replying. | `economy/commerce.py`, `economy/claim_transactions.py`, `economy/match_transactions.py`, `profiles/transactions.py` |
-| Storage | Implement the shared save contract using JSON or SQLAlchemy Core. | [storage/base.py](../src/tmserver/storage/base.py), `storage/json.py`, `storage/postgres.py`, `storage/schema.py` |
+| Storage | Implement the shared save contract using JSON or SQLAlchemy Core. | [storage/validation.py](../src/tmserver/storage/validation.py), `storage/json.py`, `storage/postgres.py`, `storage/schema.py` |
 
 Import a shared value or codec from its owner, not through a service that happens
 to use it. Models and codecs must be usable without constructing a service,
@@ -273,10 +273,10 @@ references remain stable, including table capabilities and cross-service reads.
 Single-account commits share token-type, identity and account-view checks; Prize
 Center also checks its independent points. Release checks only token type and
 identity so cleanup can discard a reservation whose account view is outdated.
-`StateStore` in `storage.base` defines the shared persistence boundary with four operations: load, full save,
-save selected accounts, and save selected accounts with named journals.
-Supported service-journal names also live in `storage.base`; PostgreSQL, schema
-declarations and snapshot validation do not import the JSON implementation.
+Both stores share three operations: load, full save, and save selected accounts
+with named journals. Supported service-journal names live in `storage.validation`;
+PostgreSQL, schema declarations and snapshot validation do not import the JSON
+implementation.
 
 ## Tests and packaged resources
 

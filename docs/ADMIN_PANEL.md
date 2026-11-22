@@ -171,8 +171,7 @@ The admin lane covers sign-in and session expiry, unauthorized and CSRF requests
 duplicate submissions, conflicting previews, busy accounts and storage failure:
 a failed commit publishes neither game state nor a receipt, and a lost commit
 acknowledgement needs a reload and exact retry. The PostgreSQL lane covers reads,
-atomic awards, rollback, lost acknowledgements, restart and retry, upgrades and
-downgrade protection. The wheel check installs the package without the checkout
+atomic awards, rollback, lost acknowledgements, restart and retry, and upgrades. The wheel check installs the package without the checkout
 and loads every template. See [validation](VALIDATION.md). Checks in the game
 client are separate; see the [native test checklist](NATIVE_TEST_CHECKLIST.md).
 
