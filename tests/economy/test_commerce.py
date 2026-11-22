@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from tests.economy import test_trade_service as trade_tests
+from tests.economy.entries import shop_entry
 from tests.economy.test_trade_service import edits
 from tmserver.economy.commerce import Commerce
 from tmserver.cards.catalog import Catalog
@@ -30,11 +31,7 @@ class CommerceTests(unittest.TestCase):
         self.commerce = Commerce(self.economy, self.save)
 
     def enter(self):
-        view = self.economy.account_view("alice")
-        replies = self.commerce.shop(
-            "alice",
-            named(0xB0, 0, 0, f"@ShReq=/NN={view.nn:016X}/HID=0/Dm=0/Vol=0/CN={view.name.hex()}"),
-        )
+        replies = self.commerce.shop("alice", shop_entry(self.economy, "alice"))
         self.session = int(parse_named(replies[1])[3]["Init"]["N"])
         return replies
 

@@ -7,6 +7,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
+from tests.economy.entries import prize_entry
 from tmserver.economy.models import PROFILE_SIZE
 from tmserver.economy.service import EconomyService
 from tmserver.cards.model import Card
@@ -38,11 +39,7 @@ class PrizeTests(unittest.TestCase):
         self.session = {}
 
     def entry(self, key="one"):
-        view = self.e.account_view(key)
-        payload = named(
-            0x70, 0, 0, f"@CvReq=/NN={view.nn:016X}/HID=0/Dm=1/Vol=1/CN={view.name.hex()}"
-        )
-        replies = self.p.handle(key, payload)
+        replies = self.p.handle(key, prize_entry(self.e, key))
         self.session[key] = int(parse_named(replies[1])[3]["ExcInit"]["N"])
         return replies
 

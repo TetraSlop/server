@@ -7,6 +7,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
+from tests.economy.entries import collection_request
 from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.auctions.packets import (
     BID_PATH,
@@ -97,11 +98,6 @@ def bid_request(e, key, auction_id, amount, revision):
         Command(b"BM", str(amount).encode()),
         Command(b"BC", str(revision).encode()),
     )
-
-
-def collection_request(e, key):
-    a = e.account_view(key)
-    return named(0xB0, 1, 0, f"@ShReq=/NN={a.nn:016X}/HID=1/Dm=1/Vol=1/CN={a.name.hex()}")
 
 
 class AuctionServiceTests(unittest.TestCase):

@@ -4,7 +4,8 @@ import unittest
 from dataclasses import replace
 from unittest.mock import patch
 
-from tests.economy.auctions.test_auction_service import bid_request, collection_request, exhibit_request
+from tests.economy.auctions.test_auction_service import bid_request, exhibit_request
+from tests.economy.entries import collection_request, prize_entry
 from tests.events.test_event_rooms import config
 from tmserver.economy.claim_transactions import (
     auction_transaction,
@@ -55,12 +56,9 @@ class ClaimFixture:
         with prize_transaction(self.server, self.key) as staged:
             staged.grant_award(self.key, "award", top30=5000)
 
-    def prize_entry(self):
-        v = self.server.economy.account_view(self.key)
-        return named(0x70, 0, 0, f"@CvReq=/NN={v.nn:016X}/HID=0/Dm=1/Vol=1/CN={v.name.hex()}")
-
     def enter_prize(self):
-        return int(parse_named(self.prize(self.prize_entry())[1])[3]["ExcInit"]["N"])
+        replies = self.prize(prize_entry(self.server.economy, self.key))
+        return int(parse_named(replies[1])[3]["ExcInit"]["N"])
 
     def event_grant(self):
         card = replace(self.server.economy.inventory(self.key)[0], deck=255)
