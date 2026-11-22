@@ -33,14 +33,6 @@ class EventFileTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from("<I", service.file("b/g/TM0EventMemberList"), 4)[0], 0)
         self.assertIsNone(service.file("b/g/unknown"))
 
-    def test_opaque_template_bytes_are_preserved(self):
-        template = bytes([0xA5]) * 0x1308
-        result = event_data(template=template)
-        for at in (0, 0x34, 0x4C, 0x58, 0x1000, 0x1101, 0x110C, 0x12F8):
-            self.assertEqual(result[at], 0xA5)
-        member = event_members([EventMember(1, b"Alice")], template=bytes([0xA5]) * 0x2808)
-        self.assertEqual(member[8 + 0x18 : 8 + 0x1C], bytes([0xA5]) * 4)
-
     def test_client_array_and_string_bounds_are_enforced(self):
         bad = [
             lambda: event_list([EventListing(b"R" * 32, b"E", b"")]),

@@ -1,7 +1,6 @@
 """Event file fields, wire validation and packet constructors.
 
-The codecs keep unknown metadata as-is. Layout: TetraPackets
-file/event-files.md.
+Layout: TetraPackets file/event-files.md.
 """
 
 import re
@@ -37,23 +36,15 @@ def text(value, maximum, *, empty=True):
     return value
 
 
-def buffer(size, template):
-    if template is None:
-        return bytearray(size)
-    if not isinstance(template, bytes) or len(template) != size:
-        raise ValueError("incorrect event template extent")
-    return bytearray(template)
-
-
 def cstring(out, offset, size, value):
     out[offset : offset + size] = text(value, size - 1).ljust(size, b"\0")
 
 
-def event_list(records=(), *, template=None):
+def event_list(records=()):
     records = tuple(records)
     if len(records) > 32:
         raise ValueError("event directory capacity is 32")
-    out = buffer(0x2C08, template)
+    out = bytearray(0x2C08)
     struct.pack_into("<I", out, 4, len(records))
     keys = set()
     for index, record in enumerate(records):
@@ -89,9 +80,8 @@ def event_data(
     steps_per_class=1,
     prizes=(),
     missions=None,
-    template=None,
 ):
-    out = buffer(0x1308, template)
+    out = bytearray(0x1308)
     if len(start) != 5 or len(end) != 5:
         raise ValueError("schedule requires five raw components")
     classes = tuple(classes)
@@ -137,11 +127,11 @@ def event_data(
     return bytes(out)
 
 
-def event_members(records=(), *, template=None):
+def event_members(records=()):
     records = tuple(records)
     if len(records) > 256:
         raise ValueError("event member capacity is 256")
-    out = buffer(0x2808, template)
+    out = bytearray(0x2808)
     struct.pack_into("<I", out, 4, len(records))
     seen = set()
     for index, member in enumerate(records):
@@ -222,35 +212,3 @@ def _identity(value):
     if not isinstance(value, str) or not re.fullmatch(r"[0-9A-Fa-f]{16}", value):
         raise EventError("event identity must be sixteen hex digits")
     return int(value, 16)
-
-
-def _data_checked(data):
-    """Validate consumed array extents without assigning opaque bytes meanings."""
-    if not isinstance(data, bytes) or len(data) != SIZES["b/g/TM0EventDataList"]:
-        raise EventError("incorrect event data extent")
-    count = struct.unpack_from("<I", data, 0x54)[0]
-    steps = struct.unpack_from("<I", data, 0x80)[0]
-    bounds = {0: (1, 1), 2: (4, 8), 3: (1, 5), 4: (1, 4)}
-    if count not in bounds or not bounds[count][0] <= steps <= bounds[count][1]:
-        raise EventError("unsupported event class layout")
-    for index in range(count):
-        if b"\0" not in data[0x60 + index * 0x28 : 0x80 + index * 0x28]:
-            raise EventError("unterminated event class")
-    mask = struct.unpack_from("<I", data, 0x12FC)[0]
-    if (
-        mask > 255
-        or mask.bit_count() > 3
-        or any(not data[0x1300 + i] for i in range(8) if mask & (1 << i))
-    ):
-        raise EventError("invalid event mission display mask/target")
-    for index in range(9):
-        at = 0x1100 + index * 0x38
-        flags = data[at]
-        if flags & 1 and any(
-            card not in range(250) and card != 65535
-            for card in struct.unpack_from("<3H", data, at + 2)
-        ):
-            raise EventError("unknown event prize display model")
-        if flags & 4 and b"\0" not in data[at + 0x10 : at + 0x38]:
-            raise EventError("unterminated event prize text")
-    return data

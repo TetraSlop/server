@@ -74,11 +74,10 @@ class EventConfig:
     card_service_enabled: bool = False
 
     def __post_init__(self):
-        from .packets import _data_checked, _id, event_list, integer, text
+        from .packets import _id, event_list, integer, text
 
         _id(self.id)
         event_list((self.listing,))
-        _data_checked(self.data)
         integer(self.start, signed=True)
         integer(self.end, signed=True)
         if self.start < 0 or self.end <= self.start:
