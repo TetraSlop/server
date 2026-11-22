@@ -107,7 +107,8 @@ Under `src/tmserver/admin/`, `server.py` attaches the panel to the shared
 `network/http.py` listener owner, `web.py` owns the application
 and origin boundary, `auth.py` operator access, `views.py` framework projections,
 and `templates/` the page extensions. Static assets come from the framework.
-`awards.py`, `event_grants.py` and `event_members.py` adapt forms; `actions.py`
+`awards.py`, `event_grants.py` and `event_members.py` adapt forms on the shared
+`forms.py` view; `actions.py`
 performs the shared audited operations. `audit.py` validates immutable requests
 and durable receipts with Pydantic.
 HTTP routes translate inputs and errors; feature services own game rules and
