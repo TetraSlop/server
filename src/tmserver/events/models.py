@@ -4,8 +4,9 @@ import hashlib
 import re
 import struct
 from dataclasses import dataclass
+from typing import Annotated
 
-from pydantic import ConfigDict
+from pydantic import BeforeValidator, ConfigDict
 from pydantic.dataclasses import dataclass as validated_dataclass
 
 from tmserver.economy.errors import EconomyError
@@ -17,11 +18,26 @@ from tmserver.rooms.records import build_table_record
 _CONFIG = ConfigDict(strict=True, extra="forbid")
 
 
+def _json_text(value, info):
+    """Configuration JSON carries latin1 text as strings; Python callers pass bytes."""
+    if info.mode != "json":
+        return value
+    if not isinstance(value, str):
+        raise ValueError("event text must be a string")
+    try:
+        return value.encode("latin1")
+    except UnicodeEncodeError as exc:
+        raise ValueError("event text must fit the configured PC client encoding") from exc
+
+
+Text = Annotated[bytes, BeforeValidator(_json_text)]
+
+
 @validated_dataclass(frozen=True, config=_CONFIG)
 class EventListing:
-    key_region: bytes
-    key_event: bytes
-    description: bytes
+    key_region: Text
+    key_event: Text
+    description: Text
     scalar: int = 0
     flags: tuple[int, ...] = (0, 0, 0, 0)
     start: int = 0
@@ -32,7 +48,7 @@ class EventListing:
 class PrizeDisplay:
     cards: tuple[int, ...] = ()
     money: int = 0
-    description: bytes = b""
+    description: Text = b""
 
 
 @dataclass(frozen=True)

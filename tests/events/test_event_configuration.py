@@ -80,7 +80,7 @@ class EventConfigurationTests(unittest.TestCase):
             ("seed", False),
             ("cpu_cards", [[1, 50, False, 30, 30, 1, 255, 0]] * 5),
             ("cpu_cards", None),
-            ("start_fields", tuple([0] * 16)),
+            ("start_fields", [0] * 15 + [True]),
             ("table_id", game_id(4099)),
             ("unknown", 1),
         ):
