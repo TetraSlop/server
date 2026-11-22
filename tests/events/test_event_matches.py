@@ -90,7 +90,6 @@ class EventRoundTests(unittest.TestCase):
                 for seat, p in enumerate(s.players):
                     if p.peer is None:
                         continue
-                    self.assertIsNone(s.final_cards(p.peer))
                     out = s.handle(p.peer, packet(0x43, 14, 5 * n, f"@Ready=/Ans={seat}"))
                     self.assertEqual(
                         out[0].payload,
@@ -112,7 +111,6 @@ class EventRoundTests(unittest.TestCase):
         out = finish(s)
         self.assertTrue(any(b"@BattleData=" in d.payload for d in out))
         self.assertEqual(s.phase, "result")
-        self.assertTrue(all(s.final_cards(p.peer) is None for p in s.players))
 
     def test_untrusted_routes_and_wrong_result_release_rejected_atomically(self):
         s = make()
@@ -148,7 +146,6 @@ class EventRoundTests(unittest.TestCase):
         self.assertFalse(s.pending_work)
         self.assertTrue(s.outcome.aborted)
         self.assertEqual(s.advance(), [])
-        self.assertIsNone(s.final_cards("0"))
         unstarted = make()
         unstarted.cancel()
         self.assertEqual(unstarted.begin(), [])

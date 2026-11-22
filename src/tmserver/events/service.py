@@ -26,18 +26,12 @@ from .packets import (
 )
 
 
-class EventDirectory:
-    """Empty, compatible browse files until a tournament is explicitly hosted."""
-
-    def __init__(self):
-        self.files = {
-            "b/g/TM0EventList": event_list(),
-            "b/g/TM0EventDataList": event_data(),
-            "b/g/TM0EventMemberList": event_members(),
-        }
-
-    def file(self, path):
-        return self.files.get(path)
+# Empty, compatible browse files until a tournament is explicitly hosted.
+EMPTY_FILES = {
+    "b/g/TM0EventList": event_list(),
+    "b/g/TM0EventDataList": event_data(),
+    "b/g/TM0EventMemberList": event_members(),
+}
 
 
 class EventHost:
@@ -103,11 +97,9 @@ class EventHost:
         if path not in SIZES:
             return None
         if event_id is None:
-            if not self.configs:
-                return EventDirectory().file(path)
-            if len(self.configs) != 1:
+            if self.configs:
                 raise EventError("event file owner is ambiguous")
-            event_id = next(iter(self.configs))
+            return EMPTY_FILES[path]
         config = self.config(event_id)
         if path == "b/g/TM0EventDataList":
             return config.data

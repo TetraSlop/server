@@ -9,7 +9,6 @@ import math
 import re
 import struct
 import time
-import uuid
 from dataclasses import dataclass, field, replace
 
 from tmserver.protocol.admission import validate_admission
@@ -79,7 +78,6 @@ class EventMatchmaking:
         clock=time.monotonic,
         admission_timeout=120,
         proposal_backoff=2,
-        watchdog_factory=None,
         allow_observers=False,
         transactions=None,
         rules_backend=None,
@@ -121,10 +119,6 @@ class EventMatchmaking:
         self.timeout = float(admission_timeout)
         self.backoff = float(proposal_backoff)
         self.hand_provider = hand_provider
-        self.generation = uuid.uuid4().hex
-        self.watchdog_factory = watchdog_factory or (lambda: MatchWatchdog(clock=clock))
-        if not callable(self.watchdog_factory):
-            raise EventError("watchdog factory must be callable")
         self._results = {}
         self._finished = {}
         self._errors = []
@@ -179,10 +173,6 @@ class EventMatchmaking:
 
     def _emit(self, r, deliveries):
         return [EventDelivery(d.peer, r.config.table_id, d.payload) for d in deliveries]
-
-    def initial_updates(self):
-        out, self._initial = self._initial, []
-        return out
 
     def routes(self):
         return tuple((c.event_id, c.table_id, c.channel) for c in self.configs.values())
@@ -331,9 +321,7 @@ class EventMatchmaking:
                     observation=0 if self.allow_observers else 1,
                     rules_backend=self.rules_backend,
                 )
-                watchdog = self.watchdog_factory()
-                if not all(callable(getattr(watchdog, m, None)) for m in ("observe", "expired")):
-                    raise EventError("invalid event watchdog")
+                watchdog = MatchWatchdog(clock=self.clock)
             except Exception as exc:
                 # A trusted policy/configuration failure is scoped to these
                 # entries; do not strand reservations or stop unrelated events.
@@ -715,7 +703,7 @@ class EventMatchmaking:
     def results(self):
         """Frozen completed-board facts before EventResult delivery/all Ready.
 
-        Adapter journals generation:event_id:epoch before emitting a batch.
+        The adapter journals each one before emitting a batch.
         Facts survive cancellation/disconnection until acknowledge_result().
         """
         return tuple(self._results.values())
