@@ -25,36 +25,20 @@
     {% if receipt %}
       <div class="alert alert-success" role="status">Event grant queued and audit receipt saved.</div>
       {{ grant_facts(receipt) }}
-      <p>Queued by {{ receipt.request.operator }} at {{ receipt.committed_at }}.</p>
+      <p>Queued by {{ receipt.request.operator }} at {{ receipt.committed_at }}. Event eligibility was {{ 'Eligible' if receipt.eligibility >= 0 else 'Excluded' }} and collection was {{ 'enabled' if receipt.collection_enabled else 'disabled' }}.</p>
+      {% if receipt.eligibility < 0 %}<div class="alert alert-warning">The player is excluded from this event and cannot collect while excluded.</div>{% endif %}
+      {% if not receipt.collection_enabled %}<div class="alert alert-warning">Collection is disabled. The grant stays queued until collection is enabled.</div>{% endif %}
       <p>This receipt records the original grant, including after collection. Refreshing or retrying the same request does not queue another grant.</p>
       <a class="btn btn-outline-primary" href="{{ url_for('admin:event-grants') }}">Prepare another grant</a>
-    {% elif failed_request_id %}
+    {% elif values %}
+      {% if failed_request_id %}
       <p>Request ID: <strong>{{ failed_request_id }}</strong></p>
-      <p>Keep this page open. After the server restarts, sign in again in a separate tab, then return here to check the receipt or retry this exact request.</p>
+      <p>Keep this page open. After the server restarts, sign in again in a separate tab, then return here to check the receipt or submit this exact request again.</p>
       <a class="btn btn-outline-primary mb-3" href="{{ url_for('admin:login') }}" target="_blank" rel="noopener">Sign in again after restart</a>
       <a class="btn btn-outline-primary mb-3" href="{{ receipt_url }}" target="_blank" rel="noopener">Check this request's receipt after recovery</a>
-      <form id="event-grant-retry" method="post" action="{{ url_for('admin:event-grant-apply') }}">
-        {{ csrf_input(request) }}
-        <input type="hidden" name="command" value="{{ command_json }}">
-        <input type="hidden" name="digest" value="{{ digest }}">
-        <button class="btn btn-outline-primary" type="submit">Retry this same request after recovery</button>
-      </form>
-    {% elif preview %}
-      <h3>Review before queuing</h3>
-      {{ grant_facts(preview) }}
-      <p>Current event eligibility: {{ 'Eligible' if preview.eligibility >= 0 else 'Excluded' }}. Collection is {{ 'enabled' if preview.collection_enabled else 'disabled' }} for this event.</p>
-      {% if preview.eligibility < 0 %}<div class="alert alert-warning">The player is currently excluded from this event and cannot collect while excluded.</div>{% endif %}
-      {% if not preview.collection_enabled %}<div class="alert alert-warning">Collection is currently disabled. The grant stays queued until collection is enabled.</div>{% endif %}
-      <form method="post" action="{{ url_for('admin:event-grant-apply') }}">
-        {{ csrf_input(request) }}
-        <input type="hidden" name="command" value="{{ command_json }}">
-        <input type="hidden" name="digest" value="{{ preview.digest }}">
-        <button class="btn btn-primary" type="submit">Confirm and queue grant</button>
-        <a class="btn btn-outline-secondary" href="{{ url_for('admin:event-grants') }}">Cancel</a>
-      </form>
-    {% elif values %}
-      <p>New grants require an idle account registered for the selected event. Nothing is saved until you confirm the preview.</p>
-      <form method="post" action="{{ url_for('admin:event-grant-preview') }}">
+      {% endif %}
+      <p>New grants require an idle account registered for the selected event. The grant and its audit receipt are saved together when you submit.</p>
+      <form id="event-grant-form" method="post" action="{{ url_for('admin:event-grant-apply') }}">
         {{ csrf_input(request) }}
         <input type="hidden" name="request_id" value="{{ values.request_id }}">
         <input type="hidden" name="row_count" value="{{ values.row_count }}">
@@ -94,7 +78,7 @@
         {% endfor %}
         {% if values.row_count < 30 %}<button class="btn btn-outline-secondary mb-3" type="submit" name="intent" value="add-card" formnovalidate>Add card row</button>{% endif %}
         <div class="mb-3"><label class="form-label" for="reason">Reason</label><textarea class="form-control" id="reason" name="reason" maxlength="1000" required>{{ values.reason }}</textarea></div>
-        <button class="btn btn-primary" type="submit" name="intent" value="preview">Preview grant</button>
+        <button class="btn btn-primary" type="submit" name="intent" value="apply">Queue grant</button>
       </form>
     {% else %}
       <a class="btn btn-outline-primary" href="{{ url_for('admin:event-grants') }}">Prepare a grant</a>
@@ -106,7 +90,7 @@
 {{ super() }}
 {% if failed_request_id %}
 <script>
-  document.getElementById("event-grant-retry").addEventListener("submit", function () {
+  document.getElementById("event-grant-form").addEventListener("submit", function () {
     this.elements.csrftoken.value = Cookies.get("starlette_admin_csrftoken") || "";
   });
 </script>

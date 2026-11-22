@@ -84,14 +84,6 @@ class PrizeAwardReceipt(_Receipt):
         return self
 
 
-class PrizeAwardPreview(_ImmutableModel):
-    request: PrizeAwardRequest
-    digest: Digest
-    current_points: PrizePoints
-    points_on_redemption: PrizePoints
-    already_committed: PrizeAwardReceipt | None = None
-
-
 class EventGrantCard(_ImmutableModel):
     model: Annotated[int, Field(ge=0, le=249)]
     attack: CardByte
@@ -139,15 +131,6 @@ class EventGrantReceipt(_Receipt):
         if actual != inputs:
             raise ValueError("receipt cards differ from the confirmed event grant")
         return self
-
-
-class EventGrantPreview(_ImmutableModel):
-    request: EventGrantRequest
-    digest: Digest
-    cards: Annotated[tuple[GrantedEventCard, ...], Field(max_length=30)]
-    eligibility: Eligibility
-    collection_enabled: bool
-    already_committed: EventGrantReceipt | None = None
 
 
 EventSteps = Annotated[int, Field(ge=0, le=0x7FFFFFFF)]
@@ -206,15 +189,6 @@ class EventMemberReceipt(_Receipt):
         if isinstance(self.request, EventProgressRequest) and self.before.eligibility < 0:
             raise ValueError("excluded event member cannot progress")
         return self
-
-
-class EventMemberPreview(_ImmutableModel):
-    request: EventMemberRequest
-    digest: Digest
-    member_identity: Annotated[int, Field(ge=0, le=0xFFFFFFFFFFFFFFFF)]
-    before: EventMemberState
-    after: EventMemberState
-    already_committed: EventMemberReceipt | None = None
 
 
 class _Journal(_ImmutableModel):

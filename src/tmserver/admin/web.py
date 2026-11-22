@@ -27,9 +27,7 @@ class LocalAdminBoundary:
         self.post_paths = {"/admin/login", "/admin/logout"}
         if actions_enabled:
             self.post_paths.update((
-                "/admin/awards/preview", "/admin/awards/apply",
-                "/admin/event-grants/preview", "/admin/event-grants/apply",
-                "/admin/event-members/preview", "/admin/event-members/apply",
+                "/admin/awards/apply", "/admin/event-grants/apply", "/admin/event-members/apply",
             ))
 
     async def __call__(self, scope, receive, send):

@@ -33,9 +33,8 @@ load-test commands. `results/` and `var/` are ignored output and local state.
 | Start the server or local client session | [cli/serve.py](../src/tmserver/cli/serve.py), [cli/play.py](../src/tmserver/cli/play.py) |
 | Inspect or modify an offline save | [cli/admin.py](../src/tmserver/cli/admin.py), [storage/database.py](../src/tmserver/storage/database.py) |
 | Inspect the running server | [admin/queries.py](../src/tmserver/admin/queries.py), [admin/views.py](../src/tmserver/admin/views.py), [admin/server.py](../src/tmserver/admin/server.py) |
-| Preview and commit an audited operator award | [admin/actions.py](../src/tmserver/admin/actions.py), [admin/audit.py](../src/tmserver/admin/audit.py), [admin/awards.py](../src/tmserver/admin/awards.py) |
-| Queue an audited event card or money grant | [admin/event_actions.py](../src/tmserver/admin/event_actions.py), [admin/audit.py](../src/tmserver/admin/audit.py) |
-| Correct event eligibility or progress | [admin/member_actions.py](../src/tmserver/admin/member_actions.py), [admin/event_members.py](../src/tmserver/admin/event_members.py) |
+| Apply an audited award, event grant or event correction | [admin/actions.py](../src/tmserver/admin/actions.py), [admin/audit.py](../src/tmserver/admin/audit.py) |
+| Operator forms for those actions | [admin/awards.py](../src/tmserver/admin/awards.py), [admin/event_grants.py](../src/tmserver/admin/event_grants.py), [admin/event_members.py](../src/tmserver/admin/event_members.py) |
 | Shared services and connection lifetime | [network/server.py](../src/tmserver/network/server.py), [network/session.py](../src/tmserver/network/session.py) |
 | Route a service request or chat message | [network/dispatch.py](../src/tmserver/network/dispatch.py), [network/chat.py](../src/tmserver/network/chat.py) |
 | Decode wire frames, commands or identities | [protocol/](../src/tmserver/protocol/) |
@@ -48,7 +47,7 @@ load-test commands. `results/` and `var/` are ignored output and local state.
 | Auction records, protocol and escrow | [economy/auctions/](../src/tmserver/economy/auctions/), [economy/claim_transactions.py](../src/tmserver/economy/claim_transactions.py) |
 | Profile files and saved player settings | [profiles/service.py](../src/tmserver/profiles/service.py), [profiles/characters.py](../src/tmserver/profiles/characters.py), [profiles/preferences.py](../src/tmserver/profiles/preferences.py) |
 | Ratings, statistics and ranking files | [rankings/policy.py](../src/tmserver/rankings/policy.py), [rankings/stats.py](../src/tmserver/rankings/stats.py), [rankings/service.py](../src/tmserver/rankings/service.py) |
-| Save, validate or recover durable state | [storage/json.py](../src/tmserver/storage/json.py), [storage/postgres.py](../src/tmserver/storage/postgres.py), [storage/validation.py](../src/tmserver/storage/validation.py), [storage/recovery.py](../src/tmserver/storage/recovery.py) |
+| Save, validate or recover durable state | [storage/json.py](../src/tmserver/storage/json.py), [storage/postgres.py](../src/tmserver/storage/postgres.py), [storage/validation.py](../src/tmserver/storage/validation.py) |
 | Packaged immutable tables | [data/](../src/tmserver/data/), read through [data/resources.py](../src/tmserver/data/resources.py) |
 
 `cli.serve` constructs the two loopback listeners. `network.server.Server` owns
@@ -71,12 +70,12 @@ accounts unless a trusted play-session access object authorizes the stream.
 Legacy manual bindings import at startup. No loader-supplied name or identifier
 controls ownership, and tickets remain process-local capabilities.
 
-When explicitly enabled, `admin.actions` shares synchronous preview/commit logic
-between web forms and the offline CLI. Strict Pydantic requests and receipts live
-in `admin.audit`; award and audit publish only after one joint storage commit.
-`admin.event_actions` applies the same contract to event grants. It stages only
-the event-card and audit journals; account inventory, balance and event progress
-remain unchanged until normal collection. Restoration loads event grants before
+When explicitly enabled, `admin.actions` shares one synchronous, idempotent
+apply per action between web forms and the offline CLI, keyed by request ID.
+Strict Pydantic requests and receipts live in `admin.audit`; the change and its
+audit receipt publish only after one joint storage commit. Event grants stage
+only the event-card and audit journals; account inventory, balance and event
+progress remain unchanged until normal collection. Restoration loads event grants before
 audit receipts so it can check their original facts even after collection.
 
 `MatchService` borrows a `rules_backend` with the native battle, growth, target

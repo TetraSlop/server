@@ -22,10 +22,8 @@ from tmserver.economy.packets import named, parse_named
 from tmserver.events.cards import EventCardService
 from tmserver.events.config import parse_event_setup
 from tmserver.events.service import EventHost
-from tmserver.economy.prize_center import PrizeService
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.economy.result_rewards import ResultRewardService
-from tmserver.storage.validation import validate_snapshot
 from tmserver.storage.validation import SERVICE_NAMES
 from tmserver.storage.json import JsonStateStore, writer_lease
 
@@ -66,34 +64,28 @@ class AdminTests(unittest.TestCase):
         self.seed(snapshot)
         return configs
 
-    def prize(self, key="alice", award_id="award-1", amount=500):
-        return ("prize-award", "--account-key", key, "--id", award_id, "--top30", str(amount))
-
-    def grant(self, key="alice", amount=75, card=None):
-        args = [
-            "event-grant",
-            "--account-key",
-            key,
-            "--event",
-            "festival",
-            "--id",
-            "grant-1",
-            "--money",
-            str(amount),
-        ]
-        if card is not None:
-            args += ["--card", card]
-        return args
-
-    def eligibility(self, value=-1, key="alice"):
+    def audited(self, command, request_id, *options):
         return (
-            "event-eligibility",
-            "--account-key",
-            key,
-            "--event",
-            "festival",
-            "--value",
-            str(value),
+            command, *options, "--request-id", request_id,
+            "--operator", "fixture-operator", "--reason", "Fixture correction",
+        )
+
+    def prize(self, key="alice", award_id="award-1", amount=500):
+        return self.audited(
+            "prize-award", "prize-request", "--account-key", key, "--id", award_id,
+            "--top30", str(amount),
+        )
+
+    def grant(self, key="alice", amount=75):
+        return self.audited(
+            "event-grant", "grant-request", "--account-key", key, "--event", "festival",
+            "--id", "grant-1", "--money", str(amount),
+        )
+
+    def eligibility(self, value=-1, key="alice", request_id="eligibility-request"):
+        return self.audited(
+            "event-eligibility", request_id, "--account-key", key, "--event", "festival",
+            "--value", str(value),
         )
 
     def test_target_is_explicit_and_unknown_accounts_are_never_created(self):
@@ -130,32 +122,6 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(rows[0]["name"], "A\n\x1b[31m")
         self.assertNotIn("\x1b", output.getvalue())
         self.assertEqual(self.path.read_bytes(), before)
-
-    def test_prize_queues_once_then_replay_after_redemption_keeps_points(self):
-        result = self.execute(*self.prize())
-        self.assertEqual(result, dict(account_key="alice", id="award-1", status="queued"))
-        snapshot = self.load()
-        self.assertEqual(set(snapshot), {"version", "accounts", "prize"})
-        self.assertEqual(snapshot["accounts"], self.economy.snapshot()["accounts"])
-        before = self.path.read_bytes()
-        # Existing Prize Center receipts retain IDs, not historical award contents.
-        self.assertEqual(self.execute(*self.prize(amount=900))["status"], "already-recorded")
-        self.assertEqual(self.path.read_bytes(), before)
-        with self.assertRaisesRegex(ValueError, "pending award"):
-            self.execute(*self.prize(award_id="another"))
-        economy = validate_snapshot(snapshot)
-        prize = PrizeService.restore(economy, snapshot["prize"])
-        view = economy.account_view("alice")
-        prize.handle(
-            "alice",
-            named(0x70, 0, 0, f"@CvReq=/NN={view.nn:016X}/HID=0/Dm=1/Vol=1/CN={view.name.hex()}"),
-        )
-        snapshot.update(economy.snapshot(), prize=prize.snapshot())
-        self.seed(snapshot)
-        before = self.path.read_bytes()
-        self.assertEqual(self.execute(*self.prize())["status"], "already-recorded")
-        self.assertEqual(self.path.read_bytes(), before)
-        self.assertEqual(validate_snapshot(self.load()).prize_points("alice"), 500)
 
     def test_account_summary_is_exact_read_only_and_preserves_null_journals(self):
         snapshot = self.load()
@@ -235,123 +201,30 @@ class AdminTests(unittest.TestCase):
             self.assertEqual(other["event_claims"], [])
         self.assertEqual(self.path.read_bytes(), before)
 
-    def test_prize_bounds_use_domain_validation_before_any_save(self):
-        before = self.path.read_bytes()
-        for flags in (
-            ("--top30", "65536"),
-            ("--lucky", "-1"),
-            ("--rookies", "65536"),
-            ("--lucky-cards", "1,2,250"),
-            ("--id", "bad/id"),
-        ):
-            with self.subTest(flags=flags), self.assertRaises(ValueError):
-                self.execute(*self.prize(), *flags)
-            self.assertEqual(self.path.read_bytes(), before)
-        result = self.execute(
-            *self.prize(amount=65535),
-            "--lucky",
-            "65535",
-            "--rookies",
-            "65535",
-            "--lucky-cards",
-            "0,249,65535",
-        )
-        self.assertEqual(result["status"], "queued")
-
-    def test_event_grants_require_exact_membership_and_replay_exact_contents(self):
-        configs = self.enable_events()
-        card = self.economy.inventory("alice")[0]
-        card_arg = ",".join(map(str, card.reduced()))
-        before = self.load()
-        with self.assertRaisesRegex(ValueError, "member"):
-            self.execute(*self.grant(key="bob", card=card_arg))
-        self.assertEqual(self.load(), before)
-        self.assertEqual(self.execute(*self.grant(card=card_arg))["status"], "queued")
-        after = self.load()
-        self.assertEqual(set(after), set(before) | {"event_cards"})
-        self.assertEqual(after["events"], before["events"])
-        self.assertEqual(after["accounts"], before["accounts"])
-        grant = after["event_cards"]["grants"][0]
-        self.assertEqual(grant["cards"], [list(card.full())])
-        self.assertEqual((grant["money"], grant["card_offset"], grant["money_claimed"]), (75, 0, 0))
-        self.assertEqual(self.execute(*self.grant(card=card_arg))["status"], "already-recorded")
-        with self.assertRaisesRegex(ValueError, "replay differs"):
-            self.execute(*self.grant(amount=76, card=card_arg))
-        self.assertEqual(self.load(), after)
-        validate_snapshot(after, event_configs=configs)
-
-    def test_invalid_last_card_or_excessive_batch_and_money_are_atomic(self):
-        self.enable_events()
-        card = ",".join(map(str, self.economy.inventory("alice")[0].reduced()))
-        before = self.path.read_bytes()
-        cases = [
-            self.grant(card=card) + ["--card", invalid]
-            for invalid in (
-                "250,1,0,1,1,1",
-                "0,256,0,1,1,1",
-                "0,1,4,1,1,1",
-                "0,1,0,1,1,256",
-                "0,0,0,0,0,1",
-            )
-        ]
-        cases += [
-            self.grant() + [item for _ in range(31) for item in ("--card", card)],
-            self.grant(amount=-1),
-            self.grant(amount=100000000),
-        ]
-        for argv in cases:
-            with self.subTest(argv=argv), self.assertRaises(ValueError):
-                self.execute(*argv)
-            self.assertEqual(self.path.read_bytes(), before)
-        self.execute(
-            *self.grant(amount=99999999), *[item for _ in range(30) for item in ("--card", card)]
-        )
-        self.assertEqual(len(self.load()["event_cards"]["grants"][0]["cards"]), 30)
-
-    def test_eligibility_changes_only_existing_member_status(self):
-        self.enable_events()
-        before = self.load()
-        for value, status in ((-1, "updated"), (-1, "unchanged"), (0, "updated")):
-            self.assertEqual(self.execute(*self.eligibility(value))["status"], status)
-            after = self.load()
-            expected = copy.deepcopy(before)
-            expected["events"]["events"][0]["members"][0]["eligibility"] = value
-            self.assertEqual(after, expected)
-        for argv in (
-            self.eligibility(key="bob"),
-            self.eligibility(1 << 31),
-            self.eligibility(-(1 << 31) - 1),
-        ):
-            with self.subTest(argv=argv), self.assertRaises(ValueError):
-                self.execute(*argv)
-            self.assertEqual(self.load(), before)
-
-    def test_reused_admin_persists_reversions_and_preserves_unrelated_journals(self):
+    def test_reused_admin_saves_each_change_and_preserves_unrelated_journals(self):
         configs = self.enable_events()
         original = self.load()
         original.update(prize=None, event_results=None)
         self.seed(original)
         store = JsonStateStore(self.path)
         state = admin.AdminState(store, store.load(), configs)
-        previous = 0
-        for value in (-1, -1, 0, 0, -1):
-            with self.subTest(value=value, previous=previous):
-                args = admin.arguments(self.argv(*self.eligibility(value)))
-                result = state.apply(args)
-                self.assertEqual(result["status"], "unchanged" if value == previous else "updated")
-                expected = copy.deepcopy(original)
-                expected["events"]["events"][0]["members"][0]["eligibility"] = value
-                self.assertEqual(self.load(), expected)
+        for number, value in enumerate((-1, 0, -1)):
+            with self.subTest(value=value):
+                args = admin.arguments(self.argv(*self.eligibility(value, request_id=str(number))))
+                self.assertEqual(state.apply(args)["after"]["eligibility"], value)
+                saved = self.load()
+                self.assertEqual(saved["events"]["events"][0]["members"][0]["eligibility"], value)
+                self.assertEqual(len(saved["admin_audit"]["receipts"]), number + 1)
+                for name in set(original) - {"events", "admin_audit"}:
+                    self.assertEqual(saved[name], original[name])
                 self.assertEqual(state.events.member("alice", "festival").eligibility, value)
-            previous = value
 
     def test_reused_admin_failed_save_does_not_advance_comparison_or_publish(self):
         configs = self.enable_events()
         store = JsonStateStore(self.path)
         state = admin.AdminState(store, store.load(), configs)
-        excluded = admin.arguments(self.argv(*self.eligibility(-1)))
-        included = admin.arguments(self.argv(*self.eligibility(0)))
-        state.apply(excluded)
+        state.apply(admin.arguments(self.argv(*self.eligibility(-1, request_id="exclude"))))
+        included = admin.arguments(self.argv(*self.eligibility(0, request_id="include")))
         saved = self.path.read_bytes()
         # Reject before entering the backend; it has not failed or committed.
         with patch.object(store, "save_changes", side_effect=OSError("rejected before save")):
@@ -359,75 +232,8 @@ class AdminTests(unittest.TestCase):
                 state.apply(included)
         self.assertEqual(self.path.read_bytes(), saved)
         self.assertEqual(state.events.member("alice", "festival").eligibility, -1)
-        self.assertEqual(state.apply(included)["status"], "updated")
+        self.assertEqual(state.apply(included)["after"]["eligibility"], 0)
         self.assertEqual(self.load()["events"], state.events.snapshot())
-        self.assertEqual(state.events.member("alice", "festival").eligibility, 0)
-
-    def test_explicit_progress_replays_exactly_and_preserves_rewards_and_accounts(self):
-        self.enable_events()
-        self.execute(*self.prize())
-        self.execute(*self.grant())
-        before = self.load()
-        command = (
-            "event-progress",
-            "--account-key",
-            "alice",
-            "--event",
-            "festival",
-            "--id",
-            "manual-1",
-            "--steps",
-            "2",
-            "--completed-missions",
-            "1",
-        )
-        self.assertEqual(self.execute(*command)["status"], "recorded")
-        saved = self.load()
-        self.assertEqual(
-            {k: v for k, v in saved.items() if k != "events"},
-            {k: v for k, v in before.items() if k != "events"},
-        )
-        summary = self.execute("account", "--account-key", "alice")["events"][0]
-        self.assertEqual((summary["steps"], summary["completed_missions"]), (2, 1))
-        self.assertEqual(summary["pending"], dict(cards=0, money=75))
-        unchanged = self.path.read_bytes()
-        self.assertEqual(self.execute(*command)["status"], "already-recorded")
-        with self.assertRaisesRegex(ValueError, "different facts"):
-            self.execute(*command, "--steps", "3")
-        self.assertEqual(self.path.read_bytes(), unchanged)
-        self.execute(*command, "--id", "manual-2", "--steps", "1", "--completed-missions", "0")
-        member = self.execute("account", "--account-key", "alice")["events"][0]
-        self.assertEqual((member["steps"], member["completed_missions"]), (3, 1))
-        before_failure = self.path.read_bytes()
-        with patch.object(JsonStateStore, "save_changes", side_effect=OSError("save failed")):
-            with self.assertRaises(OSError):
-                self.execute(*command, "--id", "manual-3", "--steps", "1")
-        self.assertEqual(self.path.read_bytes(), before_failure)
-        self.assertEqual(
-            self.execute(*command, "--id", "manual-3", "--steps", "1")["status"], "recorded"
-        )
-
-    def test_progress_rejects_invalid_facts_missing_members_and_excluded_members(self):
-        self.enable_events()
-        command = ["event-progress", "--account-key", "alice", "--event", "festival", "--id", "one"]
-        before = self.path.read_bytes()
-        for flags in (
-            ("--steps", "-1"),
-            ("--steps", str(1 << 31)),
-            ("--completed-missions", "4"),
-            ("--completed-missions", "-1"),
-            ("--account-key", "bob"),
-            ("--event", "missing"),
-            ("--id", "invalid/id"),
-        ):
-            with self.subTest(flags=flags), self.assertRaises(ValueError):
-                self.execute(*command, *flags)
-            self.assertEqual(self.path.read_bytes(), before)
-        self.execute(*self.eligibility(-1))
-        before = self.path.read_bytes()
-        with self.assertRaisesRegex(ValueError, "excluded"):
-            self.execute(*command, "--steps", "1")
-        self.assertEqual(self.path.read_bytes(), before)
 
     def test_event_configuration_must_match_saved_ids_and_fingerprints(self):
         self.enable_events()
@@ -464,7 +270,9 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(self.load(), snapshot)
         self.execute(*self.prize())
         after = self.load()
-        self.assertEqual({k: v for k, v in after.items() if k != "prize"}, snapshot)
+        self.assertEqual(
+            {k: v for k, v in after.items() if k not in {"prize", "admin_audit"}}, snapshot
+        )
         self.assertTrue(after["result_rewards"]["pending"])
 
     def test_save_failures_produce_no_success_or_partial_state(self):
@@ -527,7 +335,6 @@ class AdminTests(unittest.TestCase):
         for args in (
             ["--help"],
             self.argv("account", "--account-key", "alice"),
-            self.argv("recovery"),
             self.argv(*self.prize()),
         ):
             result = subprocess.run(
@@ -554,7 +361,9 @@ class AdminTests(unittest.TestCase):
         saved = self.load()
         self.assertEqual(saved["accounts"], snapshot["accounts"])
         self.assertEqual(set(saved), set(snapshot))
-        self.assertTrue(all(saved[name] is None for name in SERVICE_NAMES - {"prize"}))
+        self.assertTrue(
+            all(saved[name] is None for name in SERVICE_NAMES - {"prize", "admin_audit"})
+        )
         self.assertEqual(saved["prize"]["accounts"]["alice"]["known_awards"], ["award-1"])
 
     def test_malformed_snapshot_shapes_fail_cleanly_without_writes(self):

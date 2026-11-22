@@ -26,7 +26,7 @@ from tests.events.test_event_rooms import config
 from tests.profiles.test_character_profiles import request as profile_request
 from tmserver.accounts.identities import IdentityRegistry
 from tmserver.accounts.provisioning import provision_identity
-from tmserver.admin.actions import apply_prize_award, preview_prize_award
+from tmserver.admin.actions import apply_event_grant, apply_event_member, apply_prize_award
 from tmserver.admin.audit import (
     AdminAudit,
     EventGrantCard,
@@ -34,8 +34,6 @@ from tmserver.admin.audit import (
     EventProgressRequest,
     PrizeAwardRequest,
 )
-from tmserver.admin.event_actions import apply_event_grant, preview_event_grant
-from tmserver.admin.member_actions import apply_event_member, preview_event_member
 from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.claim_transactions import prize_transaction
 from tmserver.economy.match_ledger import MatchEconomy
@@ -62,7 +60,7 @@ EPOCH = 200  # Inside the fixture event's 100..500 window.
 WEEK = 7 * 86400
 COMMITTED_AT = datetime(2023, 11, 14, 22, 13, 20, tzinfo=UTC)
 EVENT = config(card_service_enabled=True)
-ADMIN_CLOCKS = ("actions", "event_actions", "member_actions")
+ADMIN_CLOCKS = ("actions",)
 
 
 def document(snapshot):
@@ -151,13 +149,13 @@ class GoldenRun(ClaimFixture, TableFixture):
             grant_id="grant.audited", money=75,
             cards=(EventGrantCard(**{name: getattr(card, name) for name in EventGrantCard.model_fields}),),
         )
-        apply_event_grant(self.server, grant, preview_event_grant(self.server, grant).digest)
+        apply_event_grant(self.server, grant)
         progress = EventProgressRequest(
             request_id="golden.progress", account_key=self.buyer, operator="golden",
             source="cli", reason="golden save fixture", event_id="festival",
             update_id="progress.audited", steps_delta=3,
         )
-        apply_event_member(self.server, progress, preview_event_member(self.server, progress).digest)
+        apply_event_member(self.server, progress)
         self.record_result()
 
     def prizes(self):
@@ -167,7 +165,7 @@ class GoldenRun(ClaimFixture, TableFixture):
             source="cli", reason="golden save fixture", award_id="award.audited",
             top30=120, lucky=30, rookies=5, lucky_cards=(1, 2, 65535),
         )
-        apply_prize_award(self.server, award, preview_prize_award(self.server, award).digest)
+        apply_prize_award(self.server, award)
         self.prize(quit_request(self.enter_prize()))
         with prize_transaction(self.server, self.buyer) as staged:
             staged.grant_award(self.buyer, "award.pending", lucky=40)
