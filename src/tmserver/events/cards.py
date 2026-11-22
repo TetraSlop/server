@@ -147,37 +147,31 @@ class EventCardService:
         view = token.account
         try:
             number = self._last.get(key, 0) % 255 + 1
+            rows = [
+                (ident, g)
+                for ident, g in self._grants.items()
+                if g.key == key and g.event_id == event_id
+            ]
             money = 0
             credits = []
-            for ident, g in self._grants.items():
-                if g.key != key or g.event_id != event_id:
-                    continue
+            for ident, g in rows:
                 amount = min(g.money - g.money_claimed, MAX_MONEY - view.balance - money)
                 if amount:
                     credits.append((ident, amount))
                     money += amount
-            incoming = []
-            selected = []
-            init = self._init(key, view, number, money, ())
-            full = False
-            for ident, g in self._grants.items():
-                if full:
+            # At most nine unclaimed cards, in grant order, that fit the
+            # original 447-byte named body.
+            selected = [(ident, i) for ident, g in rows for i in range(g.card_offset, len(g.cards))]
+            selected = selected[:9]
+            while True:
+                incoming = [self._grants[ident].cards[i] for ident, i in selected]
+                try:
+                    init = self._init(key, view, number, money, incoming)
                     break
-                if g.key != key or g.event_id != event_id:
-                    continue
-                for index in range(g.card_offset, len(g.cards)):
-                    if len(incoming) == 9:
-                        full = True
-                        break
-                    candidate = incoming + [g.cards[index]]
-                    try:
-                        message = self._init(key, view, number, money, candidate)
-                    except EconomyError:
-                        full = True
-                        break  # Original named body is 447 bytes.
-                    incoming = candidate
-                    selected.append((ident, index))
-                    init = message
+                except EconomyError:
+                    if not selected:
+                        raise
+                    selected.pop()
             token = self.economy.commit_auction(token, credit=money, keep_reserved=True)
         except Exception:
             self.economy.release_auction(token)
