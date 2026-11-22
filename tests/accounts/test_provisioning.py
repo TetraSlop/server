@@ -37,7 +37,7 @@ class IdentityProvisioningTests(unittest.TestCase):
         login, password, character = self.host.account_specs[key]
         self.assertEqual(polid_from_string(login.decode()), HOSTED_RAW_BASE + character)
         self.assertEqual(polid_unscramble(key.encode()), HOSTED_RAW_BASE + 129)
-        self.assertEqual(len(password), 16)
+        self.assertEqual(len(password), 14)  # polcore takes at most 15.
         after, disk = self.host.snapshot(), self.store.load()
         for name in set(before) - {"accounts", "identities"}:
             self.assertEqual(after[name], before[name])
