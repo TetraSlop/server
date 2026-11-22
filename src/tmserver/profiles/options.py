@@ -14,25 +14,7 @@ def save_options(economy, key, payload):
         raise EconomyError("invalid options envelope")
     f = sections["Opt"]
     account = economy.account_view(key)
-    keys = {
-        "NN",
-        "HID",
-        "Dm",
-        "Vol",
-        "CN",
-        "Ar",
-        "Cu",
-        "Vi",
-        "Se",
-        "Bgm",
-        "Per",
-        "Ran",
-        "CMD",
-        "CAD",
-        "CL",
-        "CT",
-        "HNSS",
-    }
+    keys = set("NN HID Dm Vol CN Ar Cu Vi Se Bgm Per Ran CMD CAD CL CT HNSS".split())
     if set(f) != keys:
         raise EconomyError("incomplete options fields")
     if not re.fullmatch("[0-9A-Fa-f]{16}", f["NN"]) or int(f["NN"], 16) != account.nn:

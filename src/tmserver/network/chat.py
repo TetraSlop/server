@@ -69,8 +69,6 @@ def roster_pages(members, counter):
 
 
 def relay_text(payload, name, *, private):
-    if not payload.startswith(b"GTM0G42"):
-        return None
     name = display_name(name)
     match = re.fullmatch(rb"GTM0G420008([0-9A-Fa-f]{2})([^\x00\r\n]*)", payload)
     if match is None:
@@ -103,8 +101,6 @@ class ChatService:
         self.counters = {}
 
     def enter(self, peer, group, payload, *, identity, name):
-        if not payload.startswith(b"GTM0G420001"):
-            return None
         message = decode(payload)
         if message is None or message.argument != 0 or set(message.sections) != {"Chat"}:
             raise ValueError("invalid chat entry")

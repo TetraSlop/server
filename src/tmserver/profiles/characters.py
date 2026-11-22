@@ -87,13 +87,15 @@ class CharacterProfiles:
     def _response(token, payload=b""):
         return encode_service(b"P", [Command(token, payload)])
 
+    @classmethod
+    def _profile_reply(cls, fields):
+        return cls._response(b"PO", b"\x06".join(value.encode("latin1") for value in fields))
+
     def _validate_projections(self, key, fields):
         # Both character aliases are legal reads. A short locator must not let
         # an edit or restored record break a later full-width locator read.
-        self._response(b"PO", b"\x06".join(value.encode("latin1") for value in fields))
-        projected = list(fields)
-        projected[1] = str(self.economy.account_view(key).player_id)
-        self._response(b"PO", b"\x06".join(value.encode("latin1") for value in projected))
+        self._profile_reply(fields)
+        self._profile_reply([fields[0], str(self.economy.account_view(key).player_id), *fields[2:]])
 
     def handle(self, key, payload):
         if not payload.startswith(b"GTM0P"):
@@ -112,7 +114,7 @@ class CharacterProfiles:
             fields = self._fields(owner)
             fields[0] = f"0x{address[0]:016X}"
             fields[1] = str(address[1])
-            return [self._response(b"PO", b"\x06".join(value.encode("latin1") for value in fields))]
+            return [self._profile_reply(fields)]
         if not self._owned(key, address):
             return (
                 [encode_service(b"P", [Command(b"GG", b""), Command(b"PE", b"-8706")])]
