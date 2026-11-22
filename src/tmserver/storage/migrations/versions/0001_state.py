@@ -60,7 +60,3 @@ def upgrade():
     """)
     op.execute("INSERT INTO state_meta (id, revision) VALUES (1, 0)")
 
-
-def downgrade():
-    for table in ("service_state", "cards", "accounts", "state_meta"):
-        op.drop_table(table)
