@@ -1,9 +1,10 @@
-"""Database records. The game domain deliberately does not import this module."""
+"""Database records. The game domain deliberately does not import this module.
+
+Constraints live only in the frozen migrations; these tables describe columns.
+"""
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
-
-from tmserver.storage.base import SERVICE_NAMES
 
 SCHEMA_REVISION = "0003_identities"
 WRITER_LOCK = 0x54455452414D4153
@@ -26,9 +27,6 @@ state_meta = sa.Table(
     sa.Column("revision", sa.BigInteger, nullable=False),
     sa.Column("snapshot_version", sa.Integer),
     sa.Column("import_sha256", sa.String(64)),
-    sa.CheckConstraint("id = 1"),
-    sa.CheckConstraint("revision >= 0"),
-    sa.CheckConstraint("snapshot_version = 1"),
 )
 accounts = sa.Table(
     "accounts",
@@ -42,14 +40,6 @@ accounts = sa.Table(
     sa.Column("deck_names", JSONB, nullable=False),
     sa.Column("template", sa.LargeBinary, nullable=False),
     sa.Column("last_session", sa.SmallInteger, nullable=False),
-    sa.CheckConstraint("nn BETWEEN 0 AND 18446744073709551615"),
-    sa.CheckConstraint("player_id BETWEEN 0 AND 4294967295"),
-    sa.CheckConstraint("guild BETWEEN 0 AND 3"),
-    sa.CheckConstraint("length(key) BETWEEN 1 AND 128"),
-    sa.CheckConstraint("octet_length(name) <= 16"),
-    sa.CheckConstraint("balance BETWEEN 0 AND 99999999"),
-    sa.CheckConstraint("last_session BETWEEN 0 AND 255"),
-    sa.CheckConstraint("octet_length(template) = 12328"),
 )
 cards = sa.Table(
     "cards",
@@ -62,19 +52,10 @@ cards = sa.Table(
     ),
     sa.Column("slot", sa.SmallInteger, primary_key=True),
     *(sa.Column(field, sa.SmallInteger, nullable=False) for field in CARD_FIELDS),
-    sa.CheckConstraint("slot BETWEEN 0 AND 999"),
-    sa.CheckConstraint("model BETWEEN 0 AND 249"),
-    sa.CheckConstraint("kind BETWEEN 0 AND 3"),
-    *(
-        sa.CheckConstraint(f"{field} BETWEEN 0 AND 255")
-        for field in ("attack", "physical", "magical", "points", "arrows")
-    ),
-    sa.CheckConstraint("deck BETWEEN 0 AND 49 OR deck = 255"),
 )
 service_state = sa.Table(
     "service_state",
     metadata,
     sa.Column("name", sa.Text, primary_key=True),
     sa.Column("payload", JSONB, nullable=False),
-    sa.CheckConstraint("name IN (" + ", ".join(repr(n) for n in sorted(SERVICE_NAMES)) + ")"),
 )
