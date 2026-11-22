@@ -68,7 +68,7 @@ def discord_name(identities):
     return None
 
 
-def _header_value(value, limit):
+def header_value(value, limit=MAX_TOKEN_LENGTH):
     return (
         isinstance(value, str)
         and 0 < len(value) <= limit
@@ -78,7 +78,7 @@ def _header_value(value, limit):
 
 def validate_public_key(value: str) -> str:
     """Classify publishable/legacy anon keys; decoded claims never authorize a user."""
-    if _header_value(value, MAX_TOKEN_LENGTH):
+    if header_value(value):
         if value.startswith("sb_publishable_") and value != "sb_publishable_":
             return value
         if re.fullmatch(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", value):
@@ -101,12 +101,12 @@ def validate_public_key(value: str) -> str:
     raise ValueError("Supabase requires a publishable key or a legacy anon key")
 
 
-def validate_project_url(value: str) -> str:
-    """Return the canonical issuer for an explicitly trusted HTTPS project origin."""
+def https_origin(value, error):
+    """Return a canonical HTTPS origin without credentials, path, query or fragment."""
     try:
         url = TypeAdapter(HttpUrl).validate_python(value, strict=True)
     except ValidationError:
-        raise ValueError("Supabase requires a trusted HTTPS project origin") from None
+        raise ValueError(error) from None
     if (
         not isinstance(value, str)
         or "@" in value
@@ -117,20 +117,23 @@ def validate_project_url(value: str) -> str:
         or url.fragment is not None
         or url.path not in ("", "/")
     ):
-        raise ValueError("Supabase requires a trusted HTTPS project origin")
-    return str(url).rstrip("/") + "/auth/v1"
+        raise ValueError(error)
+    return str(url).rstrip("/")
 
 
 class SupabaseVerifier:
-    """Borrow one async HTTP client; verify against a fixed trusted HTTPS origin."""
+    """Borrow one async HTTP client; verify against a fixed trusted HTTPS origin.
+
+    The project origin and key come from AuthConfig, which validates both.
+    """
 
     def __init__(self, project_url: str, public_key: str, *, client: httpx.AsyncClient):
-        self.issuer = validate_project_url(project_url)
-        self._public_key = validate_public_key(public_key)
+        self.issuer = project_url + "/auth/v1"
+        self._public_key = public_key
         self._client = client
 
     async def verify(self, access_token: str) -> Subject:
-        if not _header_value(access_token, MAX_TOKEN_LENGTH):
+        if not header_value(access_token):
             raise InvalidToken("An access token is required")
         try:
             async with asyncio.timeout(VERIFY_TIMEOUT):

@@ -70,10 +70,6 @@ class IdentityRegistry:
     def owns(self, key):
         return key in self._owners
 
-    def bindings(self, issuer):
-        return {subject: link.account_key for (source, subject), link in self._links.items()
-                if source == issuer}
-
     def stage_links(self, links):
         added = dict(self._links)
         for link in links:

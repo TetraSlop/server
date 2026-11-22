@@ -122,19 +122,19 @@ class SupabaseVerifierTests(unittest.IsolatedAsyncioTestCase):
             None,
         ):
             with self.subTest(url=value), self.assertRaises(ValueError):
-                await self.verifier(project_url=value)
-        verifier = await self.verifier(project_url="https://FIXTURE.supabase.co/")
-        self.assertEqual(verifier.issuer, self.project + "/auth/v1")
+                self.provider.https_origin(value, "invalid origin")
         self.assertEqual(
-            self.provider.validate_project_url("https://FIXTURE.supabase.co/"), verifier.issuer
+            self.provider.https_origin("https://FIXTURE.supabase.co/", "invalid origin"),
+            self.project,
         )
-        self.assertEqual(self.requests, [])
+        verifier = await self.verifier()
+        self.assertEqual(verifier.issuer, self.project + "/auth/v1")
 
     async def test_invalid_header_values_are_rejected_without_sending_credentials(self):
         bad_values = (None, b"bytes", True, "", " ", "line\r\nheader", "snowman-\u2603", "x" * 8193)
         for value in bad_values:
             with self.subTest(key=value), self.assertRaises(ValueError):
-                await self.verifier(public_key=value)
+                self.provider.validate_public_key(value)
         verifier = await self.verifier()
         for value in bad_values:
             with self.subTest(token=value), self.assertRaises(self.provider.InvalidToken):
@@ -195,7 +195,7 @@ class SupabaseVerifierTests(unittest.IsolatedAsyncioTestCase):
             "a.b.c",
         ):
             with self.subTest(key=invalid), self.assertRaises(ValueError) as raised:
-                await self.verifier(public_key=invalid)
+                self.provider.validate_public_key(invalid)
             self.assertNotIn(invalid, str(raised.exception))
 
     async def test_redirects_never_forward_the_bearer_to_another_endpoint(self):
