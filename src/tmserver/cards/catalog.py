@@ -1,6 +1,6 @@
 """Decoded card catalogue, generation and collection arithmetic."""
 
-from fractions import Fraction
+import struct
 
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
@@ -45,15 +45,26 @@ class Catalog:
         return card
 
     def sale_value(self, card):
+        """The value the client's shop and auction screens compute.
+
+        The client runs its x87 at 24-bit precision once Direct3D is up, so
+        every step rounds like IEEE single precision. Physical and magical are
+        summed before attack; that order changes some results.
+        """
         b = self.cards[card.model]
-        # Rational form matches all positive-baseline original sale fixtures.
-        scale = (
-            Fraction(card.attack, b["attack"])
-            + Fraction(card.physical, b["physical_defense"])
-            + Fraction(card.magical, b["magical_defense"])
-            + Fraction(max(card.kind, 1), 2)
+
+        def term(stat, base):
+            return _single(_single((2 * stat - base) / base) + 1) * 0.5
+
+        total = _single(
+            _single(
+                term(card.physical, b["physical_defense"])
+                + term(card.magical, b["magical_defense"])
+            )
+            + term(card.attack, b["attack"])
         )
-        return int(scale * self.prices[b["price_tier"]] / 4)
+        total = _single(total + max(card.kind, 1) * 0.5)
+        return int(_single(total * self.prices[b["price_tier"]]) * 0.25)
 
     def select(self, pack_id, guild, draw):
         p = self.packs[pack_id]
@@ -104,6 +115,12 @@ class Catalog:
                 arrows,
             )
         )
+
+
+def _single(value):
+    # Double has more than 2 * 24 + 2 bits, so a double +, -, * or / of single
+    # operands rounded to single equals the correctly rounded single result.
+    return struct.unpack("<f", struct.pack("<f", value))[0]
 
 
 def collection_points(cards):

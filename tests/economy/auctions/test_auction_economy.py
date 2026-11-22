@@ -161,6 +161,21 @@ class AuctionTests(unittest.TestCase):
         item = self.exhibit(item_metadata=ii)
         self.assertEqual(item.item_metadata, ii)
 
+    def test_descriptor_accepts_the_client_sale_value(self):
+        # The client computes 5299 for this card; the exact rational value is 5300.
+        card = Card(23, 55, 1, 25, 31, self.catalog.points(23, 55, 25, 31), 1)
+        self.e.provision("client", nn=4, player_id=4, name=b"Client", cards=[card] * 6)
+
+        def descriptor(sale):
+            return (23, sale, 0, 0, 0, 0, 0, 0, 55, 25, 1, 31, card.points, 1, 0, 0)
+
+        with self.assertRaises(AuctionError):
+            self.a.exhibit("client", card, 100, 20, 1, 0, now=100, item_metadata=descriptor(5300))
+        item = self.a.exhibit(
+            "client", card, 100, 20, 1, 0, now=100, item_metadata=descriptor(5299)
+        )
+        self.assertEqual(item.item_metadata[1], 5299)
+
     def test_limit_thirty_active_exhibits_and_five_retained_cards(self):
         card = self.e.inventory("seller")[0]
         self.e.provision("many", nn=4, player_id=4, name=b"Many", cards=[card] * 40)
