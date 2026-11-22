@@ -31,6 +31,15 @@ journals and reject unknown receipt fields. The local launcher's read-only
 setup check validates the complete save, including journals, without refunding
 stakes or collecting pending rewards.
 
+`tests/fixtures/storage/` pins the saved document byte for byte. A scripted
+server run fills every journal and the accounts through the services' own
+requests and transactions (`tests/support/golden_save.py`). The tests check
+that this run produces `golden_snapshot.json`, that restoring and saving it
+again reproduces the same bytes, and that a PostgreSQL import of it exports
+`golden_postgres_export.json` with the same rows and journal values. Regenerate
+both files with `python -m tests.support.golden_save` only for an intended
+format change, and review the diff.
+
 ## What is stored
 
 | Table | Content |
