@@ -74,7 +74,7 @@ class InventoryEditCompatibilityTests(unittest.TestCase):
         elif kind == "event":
             f.entry()
             f.get()
-            send, error = f.send, events.EventCardError
+            send, error = f.send, EconomyError
         elif kind == "auction":
             session, _ = f.enter(key)
             f.get(key, session)

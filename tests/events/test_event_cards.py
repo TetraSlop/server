@@ -14,7 +14,7 @@ from tmserver.cards.model import Card
 from tmserver.cards.catalog import Catalog
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
-from tmserver.events.cards import EventCardError, EventCardService
+from tmserver.events.cards import EventCardService
 from tmserver.events.models import EventConfig, EventListing
 from tmserver.events.service import EventHost
 from tmserver.events.packets import event_data
@@ -129,7 +129,7 @@ class EventCardTests(unittest.TestCase):
         self.assertEqual(self.e.balance("a"), 1025)
         self.assertEqual(self.e.inventory("a"), before)
         self.assertEqual(self.entry(), replies)
-        with self.assertRaises(EventCardError):
+        with self.assertRaises(EconomyError):
             self.quit()
         self.assertEqual(self.get(), [])
         self.assertEqual(len(self.e.inventory("a")), 11)
@@ -181,11 +181,11 @@ class EventCardTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
         self.entry()
         before = self.snapshot()
-        with self.assertRaises(EventCardError):
+        with self.assertRaises(EconomyError):
             self.send(0x15, "@Get=/No=2", number=2)
-        with self.assertRaises(EventCardError):
+        with self.assertRaises(EconomyError):
             self.send(0x15, "@Get=/No=2")
-        with self.assertRaises(EventCardError):
+        with self.assertRaises(EconomyError):
             self.send(0x14, "@Buy=/No=6")
         with self.assertRaises(EconomyError):
             self.entry(NN="0000000000000002")
@@ -266,7 +266,7 @@ class EventCardTests(unittest.TestCase):
         reply = self.quit()
         request = named(0xB2, 0x17, self.number["a"], f"@Quit=/No={self.number['a']}")
         self.assertEqual(self.s.handle("a", request, event_id="event"), reply)
-        with self.assertRaises(EventCardError):
+        with self.assertRaises(EconomyError):
             self.s.handle("a", request, event_id="other")
 
     def test_grant_queued_during_collection_does_not_invalidate_frozen_batch(self):
@@ -327,11 +327,11 @@ class EventCardTests(unittest.TestCase):
         ):
             bad = copy.deepcopy(snapshot)
             bad["grants"][0].update(change)
-            with self.assertRaises(EventCardError):
+            with self.assertRaises(EconomyError):
                 EventCardService.restore(self.e, self.h, bad)
         bad = copy.deepcopy(snapshot)
         bad["grants"].append(bad["grants"][0])
-        with self.assertRaises(EventCardError):
+        with self.assertRaises(EconomyError):
             EventCardService.restore(self.e, self.h, bad)
 
 

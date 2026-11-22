@@ -18,7 +18,6 @@ from tmserver.events import matchmaking
 from tmserver.events.matchmaking import EventMatchmaking
 from tmserver.events.models import EventTableConfig
 from tmserver.events.rooms import EventRooms
-from tmserver.events.models import EventError
 from tmserver.events.service import EventHost
 from tmserver.protocol.identities import game_id
 from tmserver.game.errors import MatchError
@@ -171,7 +170,7 @@ class CoordinatorTests(unittest.TestCase):
         raise AssertionError("round did not finish")
 
     def test_nonpresence_nonparticipant_wrong_identity_cannot_reserve(self):
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.send("1", self.entry_packet("1"), self.cfg.init_id)
         self.assertFalse(self.economy.is_busy("1"))
         for msg in (
@@ -179,7 +178,7 @@ class CoordinatorTests(unittest.TestCase):
             packet(0x41, 8, body="@GameOK="),
             packet(0x43, 9, body="@TurnData=/Ans=0"),
         ):
-            with self.assertRaises(EventError):
+            with self.assertRaises(EconomyError):
                 self.send("1", msg)
         self.assertFalse(self.economy.is_busy("1"))
         self.assertIsNone(self.c.snapshot("festival"))
@@ -202,17 +201,17 @@ class CoordinatorTests(unittest.TestCase):
         self.admit("1")
         self.admit("2")
         self.c.poll()
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.send("1", packet(1, body=self.identity("1", "Req")))
         self.assertEqual(self.consent("1"), [])
         start = self.consent("2")
         self.assertEqual(len(start), 2)
         self.assertTrue(all(d.payload == packet(0xD2, 1, body="@MuchMake=/Start=1") for d in start))
         self.assertEqual(self.consent("1"), [])
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.send("1", packet(0x41, 8, body="@GameOK="))
         self.send("1", packet(0x41, 1, body=self.identity("1", "GameEN")))
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.send("1", packet(1, body=self.identity("1", "Req")), channels=())
         ack = self.send("1", packet(1, body=self.identity("1", "Req")))
         self.assertEqual(ack, self.send("1", packet(1, body=self.identity("1", "Req"))))
@@ -223,7 +222,7 @@ class CoordinatorTests(unittest.TestCase):
         self.admit("2")
         self.c.poll()
         before = self.c.snapshot("festival")
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.send(
                 "1",
                 packet(0xD3, body=f"@MuchMakeAns=/Ans=1/TblNo=2/TblId={self.table.table_id:016X}"),
@@ -233,7 +232,7 @@ class CoordinatorTests(unittest.TestCase):
         self.consent("1")
         self.consent("2")
         before = self.c.snapshot("festival")
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.send("1", packet(0x41, 1, body=self.identity("2", "GameEN")))
         self.assertEqual(before, self.c.snapshot("festival"))
 
@@ -351,7 +350,7 @@ class CoordinatorTests(unittest.TestCase):
     def test_configuration_collision_rejected_atomically(self):
         rooms = EventRooms(self.host)
         before = rooms.profile_file(0x1000, "b/g/PTL")
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             EventMatchmaking(
                 self.host,
                 rooms,
@@ -454,12 +453,12 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(self.send("1", ready), [])
         self.assertFalse(self.economy.is_busy("1"))
         self.assertEqual(self.c.results(), ())
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.send("1", packet(0x43, 14, 9, "@Ready=/Ans=0"))
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.send("2", ready)
         self.admit("1")
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.send("1", ready)
 
     def test_one_bad_event_policy_does_not_stop_a_second_event(self):
@@ -540,10 +539,10 @@ class CoordinatorTests(unittest.TestCase):
         self.admit("1", False)
         session = self.c.session("1")
         before = self.economy.profile_bytes("1")
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.select("1", CARDS)
         wrong = packet(0xB2, 0x17, session + 1, f"@Quit=/No={session}")
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             self.send("1", wrong, self.cfg.init_id)
         self.assertEqual(before, self.economy.profile_bytes("1"))
         self.assertTrue(self.economy.is_busy("1"))
@@ -609,7 +608,7 @@ class CoordinatorTests(unittest.TestCase):
         self.start()
         before = self.c.snapshot("festival")
         for bad in (packet(0x43, 5, 10, "@Quit=/No=1"), packet(0x43, 0x27, 3, "@Break=/ID=2")):
-            with self.assertRaises(EventError):
+            with self.assertRaises(EconomyError):
                 self.send("1", bad)
             self.assertEqual(before, self.c.snapshot("festival"))
         quit = packet(0x43, 5, 10, "@Quit=/No=0")

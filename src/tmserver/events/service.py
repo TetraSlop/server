@@ -4,11 +4,11 @@ import re
 import time
 from copy import copy
 
+from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
 
 from .models import (
     EventAdmission,
-    EventError,
     EventMember,
 )
 from .packets import (
@@ -48,7 +48,7 @@ class EventHost:
         configs = tuple(configs)
         self.configs = {config.id: config for config in configs}
         if len(self.configs) != len(configs):
-            raise EventError("duplicate event ID")
+            raise EconomyError("duplicate event ID")
         event_list(tuple(config.listing for config in configs))
         self._members = {c.id: {} for c in configs}
         self._updates = {c.id: {} for c in configs}
@@ -75,7 +75,7 @@ class EventHost:
         try:
             return self.configs[event_id]
         except KeyError as exc:
-            raise EventError("unknown hosted event") from exc
+            raise EconomyError("unknown hosted event") from exc
 
     def _now(self):
         return integer(int(self.clock()), signed=True)
@@ -94,7 +94,7 @@ class EventHost:
             return None
         if event_id is None:
             if self.configs:
-                raise EventError("event file owner is ambiguous")
+                raise EconomyError("event file owner is ambiguous")
             return EMPTY_FILES[path]
         config = self.config(event_id)
         if path == "b/g/TM0EventDataList":
@@ -130,7 +130,7 @@ class EventHost:
         if any(
             k != key and m.identity == member.identity for k, m in self._members[event_id].items()
         ):
-            raise EventError("event member identity already belongs to another account")
+            raise EconomyError("event member identity already belongs to another account")
         self._members[event_id][key] = member
         self._present[key] = event_id
         self._admissions.pop(key, None)
@@ -154,7 +154,7 @@ class EventHost:
     def _auth(self, key, f, with_name=False, with_gid=False):
         view = self.economy.account_view(key)
         if _identity(f["NN"]) != view.nn:
-            raise EventError("event NN differs from authenticated account")
+            raise EconomyError("event NN differs from authenticated account")
         if with_name:
             value = f["CN"]
             if (
@@ -162,23 +162,23 @@ class EventHost:
                 or len(value) % 2
                 or bytes.fromhex(value) != view.name
             ):
-                raise EventError("event CN differs from authenticated account")
+                raise EconomyError("event CN differs from authenticated account")
             _number(f["HID"], 0xFFFFFFFF)
             _number(f["Dm"], 255)
             _number(f["Vol"], 65535)
         if with_gid and _identity(f["GID"]) not in (view.player_id, view.nn):
-            raise EventError("event GID is not an owned local character alias")
+            raise EconomyError("event GID is not an owned local character alias")
         return view
 
     def authenticate_entry(self, key, payload, *, route):
         """Identity-only validation for a delivery service's entry replay."""
         family, subtype, sequence, sections = parse_named(payload)
         if family not in (0x90, 0x98):
-            raise EventError("not an event entry request")
+            raise EconomyError("not an event entry request")
         kind = "card" if family == 0x90 else "init"
         token = "CardReq" if family == 0x90 else "EInitReq"
         if route != kind or subtype != 0:
-            raise EventError("event entry on wrong service/subtype")
+            raise EconomyError("event entry on wrong service/subtype")
         _keys(sections, (token,))
         fields = sections[token]
         _keys(fields, ("NN", "HID", "Dm", "Vol", "CN") + (("GID",) if family == 0x98 else ()))
@@ -191,7 +191,7 @@ class EventHost:
         family, subtype, sequence, sections = parse_named(payload)
         if family == 0xD1:
             if subtype != 4 or route != "room":
-                raise EventError("EventTimeReq belongs to the event room route")
+                raise EconomyError("EventTimeReq belongs to the event room route")
             _keys(sections, ("EventTimeReq",))
             _keys(sections["EventTimeReq"], ("NN",))
             self._auth(key, sections["EventTimeReq"])
@@ -241,22 +241,22 @@ class EventHost:
         integer(steps_delta)
         integer(completed_missions)
         if steps_delta > 0x7FFFFFFF or completed_missions & ~config.mission_mask:
-            raise EventError("progress exceeds configured display domain")
+            raise EconomyError("progress exceeds configured display domain")
         member = self.member(key, event_id)
         if member is None:
-            raise EventError("progress requires a durable member")
+            raise EconomyError("progress requires a durable member")
         identity = (key, update_id)
         facts = (steps_delta, completed_missions)
         old = self._updates[event_id].get(identity)
         if old is not None:
             if old != facts:
-                raise EventError("progress ID replay has different facts")
+                raise EconomyError("progress ID replay has different facts")
             return False
         if member.eligibility < 0:
-            raise EventError("excluded event member cannot progress")
+            raise EconomyError("excluded event member cannot progress")
         value = member.steps + steps_delta
         if value > 0x7FFFFFFF:
-            raise EventError("event steps overflow native signed sorter")
+            raise EconomyError("event steps overflow native signed sorter")
         self._members[event_id][key] = EventMember(
             member.identity,
             member.name,
@@ -272,7 +272,7 @@ class EventHost:
         integer(value, signed=True)
         member = self.member(key, event_id)
         if member is None:
-            raise EventError("eligibility requires a durable member")
+            raise EconomyError("eligibility requires a durable member")
         self._members[event_id][key] = EventMember(
             member.identity, member.name, member.steps, member.completed_missions, value
         )
@@ -296,7 +296,7 @@ class EventHost:
                 integer(ecm, signed=True)
                 body += f"/ECM={ecm}"
         else:
-            raise EventError("unsupported event time notice")
+            raise EconomyError("unsupported event time notice")
         return named(0xD1, subtype, 0, "@EventTime=" + body)
 
     def snapshot(self):
@@ -339,14 +339,14 @@ class EventHost:
         try:
             _keys(snapshot, ("version", "events"))
             if snapshot["version"] != 1:
-                raise EventError("unsupported event snapshot version")
+                raise EconomyError("unsupported event snapshot version")
             seen = set()
             for row in snapshot["events"]:
                 _keys(row, ("id", "configuration", "members", "updates"))
                 eid = row["id"]
                 config = result.config(eid)
                 if eid in seen or row["configuration"] != config.fingerprint():
-                    raise EventError("saved event configuration differs")
+                    raise EconomyError("saved event configuration differs")
                 seen.add(eid)
                 for record in row["members"]:
                     _keys(
@@ -356,11 +356,11 @@ class EventHost:
                     key = record["key"]
                     view = economy.account_view(key)
                     if key in result._members[eid] or record["identity"] != view.nn:
-                        raise EventError("saved event member owner differs")
+                        raise EconomyError("saved event member owner differs")
                     if not isinstance(record["name"], str) or not re.fullmatch(
                         r"[0-9a-fA-F]{2,30}", record["name"]
                     ):
-                        raise EventError("invalid saved member name")
+                        raise EconomyError("invalid saved member name")
                     member = EventMember(
                         record["identity"],
                         bytes.fromhex(record["name"]),
@@ -369,7 +369,7 @@ class EventHost:
                         record["eligibility"],
                     )
                     if member.completed_missions & ~config.mission_mask:
-                        raise EventError("saved member has disabled mission")
+                        raise EconomyError("saved member has disabled mission")
                     result._members[eid][key] = member
                 event_members(tuple(result._members[eid].values()))
                 totals = {key: [0, 0] for key in result._members[eid]}
@@ -378,18 +378,18 @@ class EventHost:
                     key = update["key"]
                     identity = (key, _id(update["id"]))
                     if key not in totals or identity in result._updates[eid]:
-                        raise EventError("invalid progress update owner/ID")
+                        raise EconomyError("invalid progress update owner/ID")
                     facts = (integer(update["steps_delta"]), integer(update["completed_missions"]))
                     if facts[0] > 0x7FFFFFFF or facts[1] & ~config.mission_mask:
-                        raise EventError("invalid saved progress facts")
+                        raise EconomyError("invalid saved progress facts")
                     totals[key][0] += facts[0]
                     totals[key][1] |= facts[1]
                     result._updates[eid][identity] = facts
                 for key, m in result._members[eid].items():
                     if totals[key] != [m.steps, m.completed_missions]:
-                        raise EventError("saved progress differs from update history")
+                        raise EconomyError("saved progress differs from update history")
         except (KeyError, ValueError, TypeError, AttributeError) as exc:
-            if isinstance(exc, EventError):
+            if isinstance(exc, EconomyError):
                 raise
-            raise EventError("invalid event snapshot") from exc
+            raise EconomyError("invalid event snapshot") from exc
         return result

@@ -6,11 +6,12 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
+from tmserver.economy.errors import EconomyError
 from tmserver.cards.catalog import Catalog
 from tmserver.economy.service import EconomyService
 from tmserver.economy.packets import parse_named
 from tmserver.events.rooms import EventRooms
-from tmserver.events.models import EventConfig, EventError, EventListing
+from tmserver.events.models import EventConfig, EventListing
 from tmserver.events.service import EventHost
 from tmserver.events.packets import event_data
 from tmserver.protocol.identities import game_id
@@ -177,10 +178,10 @@ class EventRoomTests(unittest.TestCase):
             replace(source, card_channel=b"#localroom01"),
         ]
         for c in bad:
-            with self.subTest(config=c), self.assertRaises(EventError):
+            with self.subTest(config=c), self.assertRaises(EconomyError):
                 EventRooms(EventHost(self.economy, (c,)))
         duplicate = replace(self.configs[1], card_channel=source.card_channel.lower())
-        with self.assertRaises(EventError):
+        with self.assertRaises(EconomyError):
             EventRooms(EventHost(self.economy, (source, duplicate)))
 
     def test_boundaries_and_custom_room_advertisements(self):

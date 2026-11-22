@@ -6,7 +6,6 @@ from unittest.mock import patch
 from tests.events import test_event_matchmaking as match_tests
 from tmserver.cards.catalog import Catalog
 from tmserver.economy.errors import EconomyError
-from tmserver.events.models import EventError
 from tmserver.game.packets import packet
 
 
@@ -66,7 +65,7 @@ class EventSelectionExpiryTests(unittest.TestCase):
                     output = fixture.send("1", request, fixture.cfg.init_id)
                 save.assert_not_called()
                 self.assert_released(fixture, before, ("1",), output)
-                with self.assertRaisesRegex(EventError, "no current event selection session"):
+                with self.assertRaisesRegex(EconomyError, "no current event selection session"):
                     fixture.send("1", request, fixture.cfg.init_id)
 
     def test_new_and_duplicate_selection_cannot_succeed_after_either_boundary(self):
@@ -138,7 +137,7 @@ class EventSelectionExpiryTests(unittest.TestCase):
             ("2", self.deck_packet(session)),
             ("1", self.deck_packet(session + 1)),
         ):
-            with self.subTest(key=key), self.assertRaisesRegex(EventError, "session mismatch"):
+            with self.subTest(key=key), self.assertRaisesRegex(EconomyError, "session mismatch"):
                 fixture.c.handle("1", key, fixture.cfg.init_id, request)
         self.assertEqual(fixture.economy.snapshot(), before)
         self.assertEqual(fixture.c.session("1"), session)
@@ -155,7 +154,7 @@ class EventSelectionExpiryTests(unittest.TestCase):
             "1", packet(0xB2, 0x17, session, f"@Quit=/No={session}"), fixture.cfg.init_id
         )
         self.assert_released(fixture, before, ("1",), output)
-        with self.assertRaisesRegex(EventError, "no current event selection session"):
+        with self.assertRaisesRegex(EconomyError, "no current event selection session"):
             fixture.send("1", self.deck_packet(session), fixture.cfg.init_id)
         self.assertEqual(fixture.economy.snapshot(), before)
 
