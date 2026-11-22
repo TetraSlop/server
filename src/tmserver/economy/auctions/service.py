@@ -29,7 +29,7 @@ from tmserver.cards.catalog import collection_points
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
-from tmserver.cards.edits import apply_card_edits, parse_edit_records
+from tmserver.cards.edits import apply_card_edits, parse_edit_section
 from tmserver.protocol.commands import Command, encode_service, parse
 
 
@@ -376,21 +376,10 @@ class AuctionService:
 
     @staticmethod
     def _edit_collection(state, subtype, sections):
-        token = "Erase" if subtype == 0x10 else "Decks"
-        if subtype == 0x10 and sections == {"Erase": {"Mode": "2"}}:
+        parsed = parse_edit_section(sections, subtype, error=EconomyError)
+        if parsed is None:
             return
-        head = sections.get(token)
-        if head is None or set(head) != ({"Mode", "C"} if subtype == 0x10 else {"C"}):
-            raise EconomyError("invalid collection edit header")
-        if subtype == 0x10 and head["Mode"] != "1":
-            raise EconomyError("invalid collection erase mode")
-        values, renamed = parse_edit_records(
-            sections,
-            token,
-            number=_number,
-            name=lambda value: _hex_name(value, 17),
-            error=EconomyError,
-        )
+        values, renamed = parsed
         cards, _ = apply_card_edits(
             state.cards, values, discard=subtype == 0x10, error=EconomyError
         )

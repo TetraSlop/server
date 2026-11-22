@@ -16,7 +16,7 @@ from functools import partial
 from tmserver.checks import decimal, exact_keys, hex_bytes, stable_id
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
-from tmserver.cards.edits import apply_card_edits, parse_edit_records
+from tmserver.cards.edits import apply_card_edits, parse_edit_section
 
 
 PrizeError = EconomyError
@@ -284,22 +284,10 @@ class PrizeService:
         return []
 
     def _edit(self, session, subtype, sections):
-        token = "Erase" if subtype == 0x10 else "Decks"
-        if token not in sections:
-            raise PrizeError("missing edit section")
-        fields = sections[token]
-        if subtype == 0x10:
-            mode = _integer(fields.get("Mode"), 2)
-            if mode == 2:
-                if sections != {"Erase": {"Mode": "2"}}:
-                    raise PrizeError("Mode2 carries no card list")
-                return
-            if mode != 1:
-                raise PrizeError("unsupported Erase mode")
-            _fields(fields, ("Mode", "C"))
-        else:
-            _fields(fields, ("C",))
-        values, renamed = parse_edit_records(sections, token, number=_integer, error=PrizeError)
+        parsed = parse_edit_section(sections, subtype, error=PrizeError)
+        if parsed is None:
+            return
+        values, renamed = parsed
         pending = session.pending
         current = session.token.account.cards if pending is None else pending.cards
         names = session.token.account.deck_names if pending is None else pending.names

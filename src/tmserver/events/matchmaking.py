@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from tmserver.economy.errors import EconomyError
 from tmserver.protocol.admission import validate_admission
 from tmserver.cards.catalog import collection_points
-from tmserver.cards.edits import match_owned, parse_edit_records
+from tmserver.cards.edits import match_owned, parse_edit_section
 from tmserver.cards.model import card_values
 from tmserver.events.matches import (
     EventMatchRound,
@@ -349,11 +349,7 @@ class EventMatchmaking:
         return None if entry is None else entry.session
 
     def _decks(self, key, msg, e=None):
-        if set(msg.sections.get("Decks", {})) != {"C"}:
-            raise EconomyError("invalid event Decks header")
-        values, names = parse_edit_records(
-            msg.sections, "Decks", number=lambda v: numbers(v, 1)[0], error=EconomyError
-        )
+        values, names = parse_edit_section(msg.sections, 0x22, error=EconomyError)
         view = (
             self.economy.account_view(key)
             if e is None

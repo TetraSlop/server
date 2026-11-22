@@ -1,4 +1,4 @@
-"""Existing service dialects and physical-card identity survive shared edit parsing."""
+"""Every service reads card edits with one strict rule and keeps physical-card identity."""
 
 import unittest
 from dataclasses import replace
@@ -116,12 +116,13 @@ class InventoryEditCompatibilityTests(unittest.TestCase):
                 case.send(subtype, body)
             self.assertEqual((case.state(), case.economy.snapshot()), before)
 
-    def test_mode_and_count_spelling_remain_service_specific(self):
+    def test_one_mode_and_count_spelling_for_every_service(self):
         for kind in ROUTES:
             for subtype, token, fields, accepted in (
-                (0x10, "Erase", "/Mode=01/C=0", kind not in ("event", "auction")),
-                (0x10, "Erase", "/Mode=02", kind in ("trade", "result")),
-                (0x22, "Decks", "/C=-0", kind in ("shop", "auction")),
+                (0x10, "Erase", "/Mode=2", True),
+                (0x10, "Erase", "/Mode=01/C=0", False),
+                (0x10, "Erase", "/Mode=02", False),
+                (0x22, "Decks", "/C=-0", False),
                 (0x22, "Decks", "/C=00", True),
             ):
                 with self.subTest(service=kind, fields=fields):
@@ -138,21 +139,21 @@ class InventoryEditCompatibilityTests(unittest.TestCase):
                 body = self.head(kind, "Decks", "/C=1")
                 body += "@0=/D=" + "|".join(map(str, cards[0].reduced())) + "|-0"
                 expected = (replace(cards[0], deck=0), *cards[1:]), names
-                self.check(case, 0x22, body, kind in ("shop", "auction"), expected)
+                self.check(case, 0x22, body, False, expected)
             with self.subTest(service=kind, field="side"):
                 case = self.fixture(kind)
                 # Trade/result require the authenticated side; the other
                 # services prohibit the field altogether.
                 self.check(case, 0x22, "@Decks=/P=1/C=0", False, case.state())
 
-    def test_deck_name_controls_and_del_keep_auction_printability_rule(self):
+    def test_deck_names_accept_controls_and_del_everywhere(self):
         for kind in ROUTES:
             for name in (b"\x01", b"\x7f"):
                 with self.subTest(service=kind, name=name):
                     case = self.fixture(kind)
                     cards, names = case.state()
                     body = self.head(kind, "Decks", "/C=0") + "@DN1=/S=" + name.hex()
-                    self.check(case, 0x22, body, kind != "auction", (cards, names | {1: name}))
+                    self.check(case, 0x22, body, True, (cards, names | {1: name}))
 
     def test_duplicate_wire_cards_edit_the_first_owned_copy(self):
         for kind in ROUTES:
