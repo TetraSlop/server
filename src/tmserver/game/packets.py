@@ -1,17 +1,12 @@
-"""Match packet codec, preserving the original match-specific dialect."""
+"""Match envelopes in the lenient dialect, and the match's decimal-array fields."""
 
 import re
-from dataclasses import dataclass
+from functools import partial
 
 from tmserver.game.errors import MatchError
+from tmserver.protocol.envelope import encode, parse
 
-
-@dataclass(frozen=True)
-class Packet:
-    primary: int
-    subtype: int
-    argument: int
-    sections: dict
+_ENVELOPE = re.compile(rb"GTM0G[0-9A-Fa-f]{8}[^\x00\r\n]*")
 
 
 def numbers(text, count=None):
@@ -25,43 +20,11 @@ def numbers(text, count=None):
     return [int(p) for p in parts]
 
 
-def packet(primary, subtype=0, argument=0, body=""):
-    if any(not 0 <= v <= 255 for v in (primary, subtype, argument)):
-        raise MatchError("header byte out of range")
-    raw = body.encode("ascii")
-    if len(raw) > 447 or any(c in raw for c in (0, 10, 13)):
-        raise MatchError("packet exceeds demonstrated single-body contract")
-    return f"GTM0G{primary:02X}00{subtype:02X}{argument:02X}".encode() + raw
+packet = partial(encode, printable=False, error=MatchError)
 
 
 def decode(payload):
-    m = re.fullmatch(
-        rb"GTM0G([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([^\x00\r\n]*)",
-        payload,
-    )
-    if m is None:
+    """None for anything that is not a match envelope, so dispatch can fall through."""
+    if not _ENVELOPE.fullmatch(payload):
         return None
-    if len(m[5]) > 447:
-        raise MatchError("fragmented/oversized match request unsupported")
-    try:
-        text = m[5].decode("ascii")
-    except UnicodeDecodeError as e:
-        raise MatchError("match fields must be ASCII") from e
-    sections = {}
-    if text:
-        if not text.startswith("@"):
-            raise MatchError("section header required")
-        for item in text[1:].split("@"):
-            chunks = item.split("/")
-            name, equal, value = chunks[0].partition("=")
-            if not equal or value or name in sections:
-                raise MatchError("invalid/duplicate section")
-            fields = {}
-            for item in chunks[1:]:
-                key, equal, value = item.partition("=")
-                if not equal or not key or key in fields:
-                    raise MatchError("invalid/duplicate field")
-                fields[key] = value
-            sections[name] = fields
-    return Packet(int(m[1], 16), int(m[3], 16), int(m[4], 16), sections)
-
+    return parse(payload, strict=False, error=MatchError)
