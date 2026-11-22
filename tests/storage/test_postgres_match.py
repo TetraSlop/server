@@ -1,4 +1,4 @@
-"""Actual encrypted native gameplay with real PostgreSQL persistence."""
+"""Complete encrypted matches stored in real PostgreSQL."""
 
 import unittest
 from typing import ClassVar

@@ -50,9 +50,7 @@ jobs:
       - name: Assemble release files
         run: |
           cd artifacts
-          zip tmserver-native-win32.zip tm_original_rules.dll
-          rm tm_original_rules.dll
-          sha256sum *.whl *.zip > SHA256SUMS
+          sha256sum *.whl > SHA256SUMS
       - name: Attach files and publish
         env:
           GH_TOKEN: ${{ github.token }}

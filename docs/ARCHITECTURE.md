@@ -12,7 +12,7 @@ owning package rather than a generic service layer.
 | `network` | Server ownership, connections, dispatch, chat and diagnostics. |
 | `protocol` | Encryption, command envelopes, identities and table controls. |
 | `cards` | Card values, catalogue and inventory edits. |
-| `game` | Match phases, computer opponents and the native rules bridge. |
+| `game` | Match phases, computer opponents and the client's battle, growth and AI rules. |
 | `rooms` | Ordinary room configuration, tables, admission and spectators. |
 | `events` | Configured event rooms, matchmaking, results and card grants. |
 | `economy` | Accounts, shop, trade, auctions, prizes and transaction boundaries. |
@@ -23,7 +23,7 @@ owning package rather than a generic service layer.
 
 Tests mirror these packages under `tests/`, with shared fixtures in
 `tests/fixtures/`. `examples/` holds optional room, shop and event configurations;
-`research/` holds the native rules checks; `tools/` holds the check, packaging and
+`research/` holds the frozen results of the client's rules; `tools/` holds the check, packaging and
 load-test commands. `results/` and `var/` are ignored output and local state.
 
 ## Find the code
@@ -59,8 +59,7 @@ in their economy and ranking owners.
 The optional Starlette Admin listener runs on the same event loop and borrows
 that host. Request-local detached projections are captured before rendering;
 the panel never opens storage or enrolls accounts. `cli.serve` stops HTTP first,
-then profiles and game, before releasing storage and the required native rules
-context. The base installation never imports the web framework.
+then profiles and game, before releasing storage. The base installation never imports the web framework.
 
 The optional auth gateway verifies a provider identity before asking
 `accounts.provisioning` to allocate a native account. Account data and the
@@ -78,12 +77,11 @@ only the event-card and audit journals; account inventory, balance and event
 progress remain unchanged until normal collection. Restoration loads event grants before
 audit receipts so it can check their original facts even after collection.
 
-`MatchService` borrows a `rules_backend` with the native battle, growth, target
-and COM placement calls. The CLI validates and opens native ABI 3 before any save or listener,
-then closes it after the services drain. Direct API users can supply an owned
-`NativeRules` context; the default loads the environment-configured process
-context on first calculation. There is no Python algorithm backend or capability
-fallback. Python retains match state and random state. A calculation failure
+`MatchService` calls battle, growth, target and COM placement through
+`match.RULES`: `rules.calculate_battle`, `rules.grow_card`, `ai.choose_target` and
+`ai.choose_special_move`, ported from the client's routines. Tests can pass a
+`rules_backend` with the same four calls. The match owns the random state and
+passes its CRT draw function to each call. A calculation failure
 aborts the affected round without retrying already consumed randomness.
 Final card snapshots publish together after every player's growth succeeds.
 A late failure therefore cannot expose a partially completed result.

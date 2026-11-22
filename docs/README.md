@@ -2,8 +2,6 @@
 
 Running the server:
 
-- [Native rules](NATIVE_RULES.md): build the required Win32 bridge and supply the
-  game image.
 - [Rooms](ROOMS.md) and [weekly rankings](WEEKLY_RANKINGS.md).
 - [Offline administration](ADMIN.md) and the optional [admin panel](ADMIN_PANEL.md).
 - [Authentication](AUTHENTICATION.md) and the [loader contract](LOADER_AUTH_SPEC.md):

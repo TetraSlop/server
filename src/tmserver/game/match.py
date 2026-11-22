@@ -9,10 +9,12 @@ flows/results-and-prizes.md and irc/G/43.md.
 """
 
 import re
+from types import SimpleNamespace
 from dataclasses import astuple
 from typing import Callable
 
 from tmserver.cards.catalog import Catalog
+from tmserver.game import ai, rules
 from tmserver.game import special_rules as special
 from tmserver.game.ai import Personality
 from tmserver.game.boards import generate_board
@@ -38,11 +40,18 @@ from tmserver.game.prizes import (
     choose_computer_prize,
 )
 from tmserver.game.rules import CRTLCG, GrowthBaseline
-from tmserver.game.original.runtime import NativeRuntime
 from tmserver.protocol.admission import validate_admission
 from tmserver.rankings.stats import PracticeStats
 from tmserver.rooms.metadata import TableMetadataError, table_info
 from tmserver.rooms.rules import RoomRules
+
+# The client's routines; tests swap in recording or failing stand-ins.
+RULES = SimpleNamespace(
+    calculate_battle=rules.calculate_battle,
+    grow_card=rules.grow_card,
+    choose_target=ai.choose_target,
+    choose_special_move=ai.choose_special_move,
+)
 
 
 def _game_rules(values, message):
@@ -82,7 +91,7 @@ class MatchService:
         if mode not in ("computer", "versus"):
             raise ValueError("mode must be computer or versus")
         self.mode = mode
-        self.rules_backend = rules_backend if rules_backend is not None else NativeRuntime()
+        self.rules_backend = rules_backend if rules_backend is not None else RULES
         self._rules_failure = None
         if not 0 < npc_nickname_id < 1 << 64:
             raise ValueError("NPC nickname identity must be a nonzero uint64")
@@ -219,7 +228,7 @@ class MatchService:
         try:
             return getattr(self.rules_backend, operation)(*args, **kwargs)
         except Exception as error:
-            # A failed native call can consume randomness. End the round before
+            # A failed rules call can consume randomness. End the round before
             # adapter cleanup; neither retry nor departure substitution is safe.
             self.phase = "finished"
             self.pending_move = None

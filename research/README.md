@@ -1,14 +1,13 @@
-# Native rules checks
+# Frozen client results
 
-These files check the native rules bridge against frozen results. They need the
-game image and 32-bit Windows Python; see the [native rules guide](../docs/NATIVE_RULES.md).
+Results captured from the client's own battle, growth, target and computer-move
+routines, which the Python rules in `src/tmserver/game` must reproduce exactly.
+`tests/game/test_rules_vectors.py` regenerates every case and checks them.
 
-- `native_backend_tests.py` checks native guards, lifecycle and frozen results.
-- `native_primitive_cases.py` generates deterministic regression inputs.
 - `native_vectors.json` stores result and draw digests and small explicit vectors.
+  Growth was recorded at 64-bit x87 precision (600 cases at 53 bits).
 - `native_special_vectors.json` stores special-board and three-player placement
   vectors.
-- `probe_original_rules.py` runs the corpus and reports timings.
 
 The protocol itself is documented in
 [TetraPackets](https://github.com/sruon/TetraPackets).

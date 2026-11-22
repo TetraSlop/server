@@ -2,10 +2,10 @@
 
 ## Where things stand
 
-- Gameplay runs through the native rules bridge (ABI 3): battles, growth, target
-  selection and computer moves on ordinary, special and three-player boards.
-  Python owns board effects and generation, match order, departures, policy,
-  storage and transport.
+- Battles, growth, target selection and computer moves on ordinary, special and
+  three-player boards are ported from the client to Python and checked against
+  8,067 results frozen from its own code. Board effects and generation, match
+  order, departures, policy, storage and transport are Python too.
 - Discord sign-in through Supabase works with tmloader. A verified user gets a
   saved account on first Play. See [authentication](AUTHENTICATION.md) and the
   [loader contract](LOADER_AUTH_SPEC.md).

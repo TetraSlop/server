@@ -8,37 +8,13 @@ skips fail the run. The aggregate **All checks** job fails if any required job
 fails or is cancelled, and can be selected as a branch-protection requirement.
 
 Packaging checks exact wheel contents before installing in a new environment,
-then smokes the installed entry points, admin templates and auth imports. A
-separate Windows x86 job compiles the required C++23 rules bridge and validates
-its ABI without an original game image. Successful builds retain the
-`tmserver-wheel` and `tmserver-native-win32` artifacts for 14 days.
+then starts the installed services and smokes the entry points, admin templates
+and the auth gateway. Successful builds retain the `tmserver-wheel` artifact for
+14 days.
 
-The **Native gameplay** workflow runs the image-dependent `native` test lane,
-8,067 frozen original-routine cases, and installed-package startup and auth checks
-on 32-bit Windows. It runs only when started by hand from the Actions tab. It
-downloads the game image from the `TM_ORIGINAL_IMAGE_URL` repository secret, an
-HTTPS URL the maintainer controls, and checks its size and SHA-256 before use.
-Secrets are not available to forks or outside contributors, so they cannot run
-this workflow; run the native lane locally with your own copy instead. The image
-is never a repository or release artifact. Passing Checks does not mean the
-native lane passes.
-
-`tests/native_modules.json` assigns image-dependent modules to the native lane.
-The remaining portable/admin/auth/PostgreSQL lanes cannot silently skip native
-failures. Collection checks ensure every maintained test module has one lane.
-Locally, set `TM_ORIGINAL_IMAGE` and `TM_NATIVE_BRIDGE`, install
-`".[dev,admin,auth]"` into 32-bit Python, then run
-`python -m tools.check_tests native` and
-`python -m unittest research.native_backend_tests`.
-
-Two complete-match PostgreSQL tests use the separate `native-postgres` lane;
-the hosted PostgreSQL job runs the other database tests without an image. The
-Native gameplay workflow runs the combined lane after the native lane: no
-32-bit libpq is published for Windows, so it builds the client library with
-vcpkg and uses the runner's preinstalled PostgreSQL server. Locally, run it on
-Windows x86 with a matching libpq on `PATH`;
-`python -m tools.check_tests native-postgres` creates a Docker test host, or set
-`TM_TEST_DATABASE_URL` to an already prepared disposable host and add `--worker`.
+The portable lane includes `tests/game/test_rules_vectors.py`, which checks the
+Python rules against the 8,067 results frozen from the client's own code in
+`research/`. No lane needs game files.
 
 ## Versioning
 
@@ -62,8 +38,7 @@ in the repository workflow settings. No personal token is required.
 
 Release packages validates that the tag is exactly `v<pyproject version>`, reruns
 the Checks workflow on that tag, and publishes only after every check passes. It
-does not run Native gameplay; start that by hand before tagging a release. It attaches the Python wheel, `tmserver-native-win32.zip` containing our
-required bridge, and `SHA256SUMS`. Original game DLLs, private configuration,
+attaches the Python wheel and `SHA256SUMS`. Original game DLLs, private configuration,
 account saves and local logs are not packaged. Nothing is deployed to a server
 or uploaded to PyPI by these workflows.
 
@@ -77,8 +52,7 @@ and Python dependency updates; web and PostgreSQL dependencies are grouped.
 
 ## Local checks
 
-Use 32-bit Windows Python for the native lanes; the others also run on 64-bit
-Python and Linux.
+Every lane runs on Windows and Linux.
 
 ```powershell
 .venv/Scripts/python -m pip install -e ".[dev,admin,auth]"
@@ -87,9 +61,8 @@ Python and Linux.
 .venv/Scripts/python -m tools.check_tests portable
 .venv/Scripts/python -m tools.check_tests admin
 .venv/Scripts/python -m tools.check_tests auth
-.venv/Scripts/python -m tools.check_tests native
 .venv/Scripts/python -m build --wheel
-.venv/Scripts/python -m tools.check_wheel dist/tmserver-0.1.0-py3-none-any.whl --native --admin --auth
+.venv/Scripts/python -m tools.check_wheel dist/tmserver-0.1.0-py3-none-any.whl --admin --auth
 ```
 
 The portable lane needs no database. It checks source import boundaries, rejects

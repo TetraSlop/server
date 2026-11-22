@@ -14,29 +14,28 @@ Square Enix.
 
 ## What you need
 
-- Your own copy of the game. tmserver ships none of the game's files.
-  [retail-files.txt](retail-files.txt) lists the file the server needs, with its
-  SHA-256.
+- Your own copy of the game. tmserver ships none of the game's files and reads
+  none of them: the client's battle, growth and computer-player rules are ported
+  to Python, and the card catalogue it uses is in
+  `src/tmserver/data/economy_catalog.json`.
 - [tmloader](https://github.com/sruon/tmloader), which starts the client and
   points it at this server.
-- Windows and **32-bit** Python 3.13 or newer. Gameplay runs the client's own
-  rules code through a small native bridge, which only works in a 32-bit process.
-- CMake 3.29+ and the MSVC x86 build tools, to build that bridge.
-- PostgreSQL 16 or newer, which holds the save, and a 32-bit `libpq.dll` for the
-  32-bit Python (see [PostgreSQL storage](docs/DATABASE.md)).
+- Python 3.13 or newer, on Windows or Linux.
+- PostgreSQL 16 or newer, which holds the save (see
+  [PostgreSQL storage](docs/DATABASE.md)).
 
 ## Get started
 
-1. Build the bridge and set up the game image as described in the
-   [native rules guide](docs/NATIVE_RULES.md).
-2. Install the server into a 32-bit Python environment:
+1. Install the server:
 
    ```powershell
-   & 'C:/path/to/32-bit/python.exe' -m venv .venv
+   python -m venv .venv
    .venv/Scripts/python -m pip install -e ".[postgres,admin,auth]"
    ```
 
-3. Create a database and bring its schema up to date, as described in
+   On Linux the scripts are in `.venv/bin`.
+
+2. Create a database and bring its schema up to date, as described in
    [PostgreSQL storage](docs/DATABASE.md):
 
    ```powershell
@@ -44,7 +43,7 @@ Square Enix.
    .venv/Scripts/tmserver-db upgrade
    ```
 
-4. Start the server, then point [tmloader](https://github.com/sruon/tmloader) at
+3. Start the server, then point [tmloader](https://github.com/sruon/tmloader) at
    its game and profile ports. One to three game windows can connect to the same
    server.
 

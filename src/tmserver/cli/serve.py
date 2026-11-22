@@ -69,10 +69,6 @@ def arguments(argv=None):
         "--admin-password-file", type=Path,
         help="operator password file; otherwise read TM_ADMIN_PASSWORD when admin is enabled",
     )
-    parser.add_argument("--rules-image", type=Path, default=os.environ.get("TM_ORIGINAL_IMAGE"),
-                        help="required TM memory image (or TM_ORIGINAL_IMAGE)")
-    parser.add_argument("--rules-bridge", type=Path, default=os.environ.get("TM_NATIVE_BRIDGE"),
-                        help="required Win32 bridge (or TM_NATIVE_BRIDGE)")
     parser.add_argument(
         "--database-url", default=os.environ.get("TM_DATABASE_URL"),
         help="PostgreSQL URL; prefer TM_DATABASE_URL to keep credentials out of command history",
@@ -199,7 +195,7 @@ async def run(args):
     async with running_services(args) as services:
         print(
             f"Tetra Master services ready: game 127.0.0.1:{services.game_port}, "
-            f"profile 127.0.0.1:{services.profile_port}; rules: native x86",
+            f"profile 127.0.0.1:{services.profile_port}",
             flush=True,
         )
         if services.admin is not None:
@@ -273,15 +269,11 @@ async def running_services(args):
         auth.account_bindings(account_specs(args.accounts))
     events, tables, progress = load_event_setup(args.events) if args.events else ((), (), "none")
     with ExitStack() as resources:
-        from tmserver.game.original.runtime import configured_rules
-
-        rules_backend = resources.enter_context(configured_rules(args.rules_image, args.rules_bridge))
         args.log_dir.mkdir(parents=True, exist_ok=True)
         store = resources.enter_context(open_store(args.database_url))
         game = Server(
             args.log_dir / "local_traffic.jsonl",
             store=store,
-            rules_backend=rules_backend,
             match_mode=args.mode,
             match_player_count=args.players,
             match_start_fields=args.board,
