@@ -54,38 +54,12 @@ class BattleSide:
     selector: int
     multiplier: int
 
-    def wire(self, board_index):
-        """Five decimal-array values for BattleData/A or /D; no framing."""
-        return (
-            _integer(board_index, "board index", 0, 24),
-            self.start,
-            self.final,
-            self.selector,
-            self.multiplier,
-        )
-
 
 @dataclass(frozen=True)
 class BattleResult:
     attacker: BattleSide
     defender: BattleSide
     raw_draws: tuple[int, ...]
-
-    @property
-    def comparison(self):
-        """1 attacker wins, -1 defender wins, 0 tie requiring another battle."""
-        return (self.attacker.final > self.defender.final) - (
-            self.attacker.final < self.defender.final
-        )
-
-    @property
-    def tied(self):
-        return self.comparison == 0
-
-    @property
-    def calculator_return(self):
-        """Original 100D31D0 returns2 on ties too; not the presentation outcome."""
-        return 1 if self.comparison > 0 else 2
 
 
 def _battle_stats(card):

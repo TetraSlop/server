@@ -59,17 +59,8 @@ def next_turn(player_count, rule, departed, sequence, active, substitutes=()):
     )
 
 
-@dataclass(frozen=True)
-class Ranking:
-    scores: tuple[int, ...]
-    classes: tuple[int, ...]
-    lower: tuple[int, ...]
-    multipliers: tuple[int, ...]
-    order: tuple[int, ...]
-
-
-def result_ranking(scores, rule=0, departed=()):
-    """Exact100CBD80 ranking stores including the departure-only branches.
+def result_classes(scores, rule=0, departed=()):
+    """Result classes from 100CBD80, including the departure-only branches.
 
     'scores' is the pre-ranking board tally. Departure rank presets originate
     in 100C0AB0, so chronology is part of this contract. gs1 removes departures
@@ -81,43 +72,16 @@ def result_ranking(scores, rule=0, departed=()):
     if any(type(s) is not int or not 0 <= s <= 255 for s in scores):
         raise DepartureError("byte scores required")
     if not rule or not departed:
-        lower = tuple(sum(o < s for o in scores) for s in scores)
-        classes = tuple(2 + sum(o > s for o in scores) - lower[i] for i, s in enumerate(scores))
-        return Ranking(
-            scores,
-            classes,
-            lower,
-            tuple(3 if s == sum(scores) else 1 for s in scores),
-            tuple(sorted(range(n), key=lambda i: (-lower[i], i))),
-        )
-    total = sum(scores)
+        return tuple(2 + sum(o > s for o in scores) - sum(o < s for o in scores) for s in scores)
     live = [i for i in range(n) if i not in departed]
     classes = [0] * n
-    lower = [0] * n
-    mult = [1] * n
-    ranks = [0] * n
     for ordinal, seat in enumerate(departed, 1):
         classes[seat] = n - 2 * ordinal + 3
-        if rule == 1:
-            ranks[seat] = n - ordinal
     for seat in live:
         equal = sum(scores[i] == scores[seat] for i in live)
         higher = sum(scores[i] > scores[seat] for i in live)
         classes[seat] = (equal + 2 * higher + (0 if rule == 1 else 2 - n)) & 255
-        lower[seat] = (2 if rule == 1 else n) - equal - higher
-        mult[seat] = 3 if scores[seat] == total and (rule == 1 or total > 0) else 1
-    eligible = live if rule == 1 else range(n)
-    for rank, seat in enumerate(sorted(eligible, key=lambda i: (-lower[i], i))):
-        ranks[seat] = rank
-    # 100CC4C2..535 compares positions1/2, but its stores write1 and 2 to
-    # those SAME records. Preserve the resulting order, not an assumed swap.
-    return Ranking(
-        tuple(0 if i in departed else s for i, s in enumerate(scores)),
-        tuple(classes),
-        tuple(lower),
-        tuple(mult),
-        tuple(sorted(range(n), key=ranks.__getitem__)),
-    )
+    return tuple(classes)
 
 
 def result_slots(remaining, board_slots, *, departed=False, rule=0):

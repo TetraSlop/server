@@ -48,41 +48,18 @@ class PrizeAward:
 
 @dataclass(frozen=True)
 class PrizeSettlement:
-    surviving: tuple  # Per-seat tuple[PrizeCard]; original slots remain stable.
-    awards: tuple  # Per-seat tuple[PrizeAward] in original transfer order.
     transfers: tuple  # All PrizeAward entries in global presentation order.
 
 
-def poll_computer_prize(choice, raw_rng, denominator=60):
+def choose_computer_prize(choice, raw_rng):
     """Original 100CA258..100CA284 for an ambiguous simulated-player prize.
 
-    The caller has already checked simulated-player/local-simulation flags.
+    The client polls rand() % 60 < 2 before choosing; the server chooses at once
+    but keeps that first draw so the CRT stream matches a successful poll.
     Sole/perfect prizes belong to PrizeLedger's automatic path and draw nothing.
     """
-    if not isinstance(choice, PrizeChoice) or not 2 <= len(choice.options) <= 5:
-        raise PrizeError("computer choice needs an ambiguous prize candidate list")
-    indices = tuple(o.hand_index for o in choice.options)
-    if any(type(i) is not int or not 0 <= i < 5 for i in indices) or len(set(indices)) != len(
-        indices
-    ):
-        raise PrizeError("prize candidates must be distinct compacted hand indices")
-    if type(denominator) is not int or not 1 <= denominator <= 0x7FFFFFFF:
-        raise PrizeError("prize pacing denominator must be a positive signed DWORD")
-
-    def draw():
-        value = raw_rng()
-        if type(value) is not int or not 0 <= value <= 32767:
-            raise PrizeError("prize raw_rng must return CRT values0..32767")
-        return value
-
-    if draw() % denominator >= 2:
-        return None
-    return indices[draw() % len(indices)]
-
-
-def choose_computer_prize(choice, raw_rng):
-    """Immediate scheduler policy; retain both original successful-poll draws."""
-    return poll_computer_prize(choice, raw_rng, denominator=1)
+    raw_rng()
+    return choice.options[raw_rng() % len(choice.options)].hand_index
 
 
 class PrizeLedger:
@@ -238,11 +215,4 @@ class PrizeLedger:
             self._grant(winner, loser, options[0].hand_index)
             if not perfect or not self._hands[loser]:
                 self._pair += 1
-        transfers = tuple(self._transfers)
-        self._settlement = PrizeSettlement(
-            tuple(tuple(hand) for hand in self._hands),
-            tuple(
-                tuple(a for a in transfers if a.winner == seat) for seat in range(self.player_count)
-            ),
-            transfers,
-        )
+        self._settlement = PrizeSettlement(tuple(self._transfers))

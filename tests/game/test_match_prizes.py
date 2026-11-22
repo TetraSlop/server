@@ -11,7 +11,6 @@ from tmserver.game.prizes import (
     PrizeLedger,
     PrizeOption,
     choose_computer_prize,
-    poll_computer_prize,
 )
 from tmserver.game.models import Card
 
@@ -62,15 +61,12 @@ class PrizeTests(unittest.TestCase):
         self.assertTrue(ledger.complete)
         self.assertIsNone(ledger.pending)
         result = ledger.settlement()
-        self.assertEqual([len(x) for x in result.surviving], [0, 5, 0])
-        self.assertEqual([len(x) for x in result.awards], [0, 10, 0])
         self.assertEqual(
-            [(a.loser, a.hand_index) for a in result.transfers], [(0, 0)] * 5 + [(2, 0)] * 5
+            [(a.winner, a.loser, a.hand_index) for a in result.transfers],
+            [(1, 0, 0)] * 5 + [(1, 2, 0)] * 5,
         )
         self.assertEqual(
-            sorted(c.card.model for h in result.surviving for c in h)
-            + sorted(a.card.model for a in result.transfers),
-            list(range(5, 10)) + list(range(5)) + list(range(10, 15)),
+            sorted(a.card.model for a in result.transfers), list(range(5)) + list(range(10, 15))
         )
 
     def test_draw_and_absent_captures_never_transfer(self):
@@ -82,7 +78,6 @@ class PrizeTests(unittest.TestCase):
             ledger = PrizeLedger(scores, hands(owners))
             self.assertTrue(ledger.complete)
             self.assertFalse(ledger.settlement().transfers)
-            self.assertEqual([len(x) for x in ledger.settlement().surviving], [5] * len(scores))
 
     def test_invalid_input_and_no_partial_settlement(self):
         valid = hands([[0] * 5, [1] * 5])

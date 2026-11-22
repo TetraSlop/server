@@ -3,6 +3,7 @@
 import json
 import random
 import unittest
+from dataclasses import astuple
 from pathlib import Path
 
 from tests import FIXTURES
@@ -581,7 +582,7 @@ class MatchTests(unittest.TestCase):
             self.assertEqual(dd[0], 15 if kind == 0 else 5)
             reference = default_rules().calculate_battle(a, d, CRTLCG(1))
             self.assertEqual(
-                (aa, dd), (reference.attacker.wire(0)[1:], reference.defender.wire(0)[1:])
+                (aa, dd), (astuple(reference.attacker), astuple(reference.defender))
             )
         s, _ = service()
         self.assertEqual(Card.parse(CARDS[0].full()), CARDS[0])
@@ -1070,8 +1071,8 @@ class SpecialMatchTests(unittest.TestCase):
         data = next(
             decode(d.payload).sections["BattleData"] for d in out if decode(d.payload).subtype == 12
         )
-        self.assertEqual(tuple(map(int, data["A"].split("|"))), expected.attacker.wire(5))
-        self.assertEqual(tuple(map(int, data["D"].split("|"))), expected.defender.wire(6))
+        self.assertEqual(tuple(map(int, data["A"].split("|"))), (5, *astuple(expected.attacker)))
+        self.assertEqual(tuple(map(int, data["D"].split("|"))), (6, *astuple(expected.defender)))
         self.assertEqual((s.board[5].property, s.board[6].property), (0, 2))
 
     def test_strength_tile_modifies_active_cards_without_changing_inventory(self):
