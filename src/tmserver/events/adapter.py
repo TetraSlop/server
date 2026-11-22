@@ -1,4 +1,4 @@
-"""Ordered encrypted delivery adapter for configured original event matches."""
+"""Ordered, encrypted delivery for event matches."""
 
 from tmserver.protocol.messages import service_notice
 

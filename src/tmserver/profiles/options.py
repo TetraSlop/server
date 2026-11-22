@@ -1,4 +1,4 @@
-"""Native84/85 option save; persistence precedes the positive acknowledgement."""
+"""Client 84/85 option save; the save happens before the positive acknowledgement."""
 
 import re
 

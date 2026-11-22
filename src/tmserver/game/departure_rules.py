@@ -1,7 +1,7 @@
-"""Original ordinary departure/ranking rules; no hosted economic policy.
+"""Client departure and ranking rules for ordinary matches.
 
-gs0 Substitute, gs1 Invalid, gs2 Loss. Addresses and comparisons are recorded
-in NATIVE_DEPARTURE_NOTES.md. Seat indices here are always server order.
+gs0 Substitute, gs1 Invalid, gs2 Loss. Seat indices are always in server order.
+Details: TetraPackets flows/departures.md.
 """
 
 from dataclasses import dataclass
@@ -15,7 +15,7 @@ def _inputs(player_count, rule, departed):
     if type(player_count) is not int or player_count not in (2, 3):
         raise DepartureError("two or three players required")
     if type(rule) is not int or rule not in (0, 1, 2):
-        raise DepartureError("departure rule must be0..2")
+        raise DepartureError("departure rule must be 0..2")
     departed = tuple(departed)
     if len(set(departed)) != len(departed) or any(
         type(s) is not int or not 0 <= s < player_count for s in departed
@@ -72,7 +72,7 @@ def result_ranking(scores, rule=0, departed=()):
     """Exact100CBD80 ranking stores including the departure-only branches.
 
     'scores' is the pre-ranking board tally. Departure rank presets originate
-    in100C0AB0, so chronology is part of this contract. gs1 removes departures
+    in 100C0AB0, so chronology is part of this contract. gs1 removes departures
     from comparisons; gs2 counts them as losses irrespective of their tally.
     """
     scores = tuple(scores)
@@ -109,7 +109,7 @@ def result_ranking(scores, rule=0, departed=()):
     eligible = live if rule == 1 else range(n)
     for rank, seat in enumerate(sorted(eligible, key=lambda i: (-lower[i], i))):
         ranks[seat] = rank
-    # 100CC4C2..535 compares positions1/2, but its stores write1 and2 to
+    # 100CC4C2..535 compares positions1/2, but its stores write1 and 2 to
     # those SAME records. Preserve the resulting order, not an assumed swap.
     return Ranking(
         tuple(0 if i in departed else s for i, s in enumerate(scores)),

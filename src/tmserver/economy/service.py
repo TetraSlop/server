@@ -119,7 +119,7 @@ class EconomyService:
     def save_options(self, key, values):
         """Persist the twelve mapped profile bytes as one validated update.
 
-        Original1014D9F0 imports these offsets. Cu/Vi are preserved as raw
+        Original 1014D9F0 imports these offsets. Cu/Vi are preserved as raw
         bytes because this PC build has no proved editor semantics for them.
         Other ranges follow RULES_SETTINGS; CT accepts the importer's30..70.
         """
@@ -822,7 +822,7 @@ class EconomyService:
 
         GLD0 is the initial probe, including for an already registered account:
         the original caller sends before its concurrent profile read completes.
-        A nonzero selection may change only guild0 to1..3. Same-guild retries
+        A nonzero selection may change only guild0 to 1..3. Same-guild retries
         return Ans2 again so the original client strictly reloads the save.
         No starter cards, money, rating, or options are reset by registration.
         The adapter must persist before sending this reply.
@@ -841,7 +841,7 @@ class EconomyService:
                 raise EconomyError("profile initialization identity mismatch")
         if _hex(fields["CN"], 16) != account.name:
             raise EconomyError("profile initialization name mismatch")
-        _int(fields["HID"], maximum=0)  # Original10087FCF always serializes0.
+        _int(fields["HID"], maximum=0)  # Original 10087FCF always serializes0.
         _int(fields["Dm"], maximum=255)
         _int(fields["Vol"], maximum=65535)
         _int(fields["L"], minimum=-0x80000000, maximum=0x7FFFFFFF)

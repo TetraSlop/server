@@ -1,4 +1,4 @@
-"""Encoder validation; original x86 round trips live in table_metadata_vectors.py."""
+"""Table metadata encoder validation."""
 
 import unittest
 

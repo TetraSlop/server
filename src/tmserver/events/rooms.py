@@ -29,7 +29,7 @@ def _raw(identity):
 
 
 def _room_channel(raw):
-    # Eight base36 digits represent every original41-bit identity; no hash or
+    # Eight base36 digits represent every original 41-bit identity; no hash or
     # ordinal, so channels remain stable and unique when configs are reordered.
     alphabet = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     digits = bytearray()
@@ -85,7 +85,7 @@ class EventRooms:
             if region not in regions:
                 regions.append(region)
         if len(regions) > 32:
-            raise EventError("event zones exceed the original32-zone file")
+            raise EventError("event zones exceed the original 32-zone file")
         self.regions = tuple(regions)
         self._by_service = {}
         self._by_channel = {}

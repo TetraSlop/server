@@ -1,7 +1,6 @@
 """Settings/menu-generated boards over authenticated encrypted loopback TCP.
 
-Portable board integration fixtures shared by custom-board tests. Original x86
-generator checks remain in research/tests/test_generated_boards_integration.py.
+Portable board integration fixtures shared by custom-board tests.
 """
 
 import asyncio

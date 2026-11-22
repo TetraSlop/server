@@ -2,12 +2,12 @@
   "evidence": "Original isolated x86 instructions with production ComGameInit and synthetic room/player/widget state.",
   "code_image_sha256": "422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879",
   "original": {
-    "hosted_constructor": "100B9B0A..100B9DA7; BL==0 at100B9D1B, gs write100B9DA1",
+    "hosted_constructor": "100B9B0A..100B9DA7; BL==0 at 100B9D1B, gs write100B9DA1",
     "complete_init_receiver": "10101A10 subtype2 -> 10102D21..10103039",
     "settings_event": "100EB99D..100EBC0B event0400002F -> 100EBABB state5",
     "settings_open": "100EBCAF..100EBD52 -> 100ED480",
     "editor_initialization": "100ED480..100ED58E; optional du reset100ED4F6",
-    "editor_apply": "100EE8E5..100EE960; original43/06 header0 sender",
+    "editor_apply": "100EE8E5..100EE960; original 43/06 header0 sender",
     "final_sender": "100EBBD0..100EBBEE -> 10106E30; gs serialized101071E8"
   },
   "boundaries": [

@@ -1,7 +1,7 @@
 """Monotonic application deadlines against actual MatchService state.
 
-Synthetic battle/result scenes isolate deadline policy; original client timer
-arithmetic is separately exercised by protocol_map/match_timeout_vectors.py.
+Synthetic battle and result scenes isolate the deadline policy; the client's own
+timer arithmetic is not exercised here.
 """
 
 import unittest

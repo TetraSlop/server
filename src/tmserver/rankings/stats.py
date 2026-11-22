@@ -1,12 +1,12 @@
-"""Coherent result/profile statistics with optional authoritative money credits.
+"""Result and profile statistics, with optional money credits.
 
-Field consumers:10104282..1010448F, profile importer101011F0, result setup
-100CC63A..100CC906. This is an explicit replacement-server policy: practice
-counts/streaks advance; default practice preserves reward totals. An explicit
-actual reward updates the recovered money statistics without choosing its
-payout formula. Rating is preserved unless a trusted original-ring quote is
-explicitly supplied. Human matches advance VS. Player Games. RN (Memorable Win),
-RT (VS. Rating) and prize points remain unchanged.
+Client readers: 10104282..1010448F, profile importer 101011F0, result setup
+100CC63A..100CC906. Server choice: practice counts and streaks advance; practice
+keeps reward totals unless a reward is passed, which updates the money statistics
+without choosing a payout formula. Rating changes only when a ring quote is
+supplied. Human matches advance VS. Player Games. RN (Memorable Win), RT (VS.
+Rating) and prize points do not change. Details: TetraPackets
+client/ratings-and-statistics.md.
 """
 
 import struct
@@ -58,7 +58,7 @@ class PracticeStats:
             if type(value) is not int or not -32768 <= value <= 32767:
                 raise ResultStatsError(name + " must be a signed WORD")
         if not isinstance(self.rn, bytes) or len(self.rn) > 31 or b"\0" in self.rn:
-            raise ResultStatsError("RN must leave room for a terminator in its32-byte buffer")
+            raise ResultStatsError("RN must leave room for a terminator in its 32-byte buffer")
         if type(self.current_reward) is not int or not 0 <= self.current_reward <= 99_999_999:
             raise ResultStatsError("current reward must be an actual bounded money credit")
 
@@ -93,11 +93,11 @@ class PracticeStats:
         """outcome=-1 loss,0 draw,+1 win; inputs/state remain immutable.
 
         Signed streak transitions and WORD sequence wrap match the original
-        offline bookkeeping. D5 saturates at65535 instead of wrapping to0:
+        offline bookkeeping. D5 saturates at 65535 instead of wrapping to 0:
         the online client divides by D5 without a zero check. Zero reward leaves
         the previous total/maximum intact; average must match total/new count.
         Fully tied refunds do not increase reward sum or maximum, matching
-        100CC7B3..100CC7CB and100CC8D3..100CC8EC. A three-player middle finish
+        100CC7B3..100CC7CB and 100CC8D3..100CC8EC. A three-player middle finish
         may have outcome0 without being fully tied; callers must distinguish it.
         Native cumulative sum wrapsDWORD. current_reward is transient D1 only.
         Explicit rating_change is a validated original-ring RatingQuote from a
@@ -162,7 +162,7 @@ class PracticeStats:
     def result_section(self, seat):
         """Bounded ordinary ResultData section; D0 is neutral/uninterpreted."""
         if type(seat) is not int or seat not in (0, 1, 2):
-            raise ResultStatsError("ordinary seat must be0..2")
+            raise ResultStatsError("ordinary seat must be 0..2")
         if self.count == 0:
             raise ResultStatsError("ResultData D5 must not be zero")
         values = (

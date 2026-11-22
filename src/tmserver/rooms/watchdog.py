@@ -1,9 +1,9 @@
-"""Application-level watchdog policy for a local practice match.
+"""Watchdog for stalled matches.
 
-Original clients time out choices by sending normal CardSelect/PutData/
-BattleSelect packets. They expose no proved participant resume handshake.
-These monotonic server grace periods are local policy, not retail deadlines.
-This observer never advances a match, sends a packet or changes ownership.
+Clients time out their own choices by sending normal CardSelect, PutData or
+BattleSelect packets, and have no known resume handshake. Server choice: the grace
+periods, on a monotonic clock. The watchdog only observes; it never advances a
+match, sends a packet or changes ownership.
 """
 
 import math

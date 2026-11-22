@@ -1,8 +1,8 @@
-"""Generic GTM0P character profiles, separate from TM0DataFile.
+"""GTM0P character profiles, separate from TM0DataFile.
 
-All71 PO positions are retained. Known editor tags apply partial updates;
-opaque positions stay intact. Registration/name/summary mapping is explicit
-local policy from PROFILE_CONTRACT.md, not a historical database reconstruction.
+All 71 PO positions are kept. Known editor tags apply partial updates; other
+positions stay as they are. Server choice: how registration, name and summary map
+to fields. Layout: TetraPackets irc/P.md.
 """
 
 import re
@@ -187,7 +187,7 @@ class CharacterProfiles:
                 or len(values) != 71
                 or any(not isinstance(v, str) for v in values)
             ):
-                raise ValueError("character profile needs71 preserved fields")
+                raise ValueError("character profile needs 71 preserved fields")
             for field, value in zip(LAYOUT, values):
                 raw = value.encode("latin1")
                 kind = field["type"]

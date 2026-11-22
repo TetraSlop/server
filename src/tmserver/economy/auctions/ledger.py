@@ -1,10 +1,9 @@
-"""Synchronous local auction escrow; caller persists accounts + ledger together.
+"""Auction escrow; the caller saves accounts and the ledger together.
 
-Client contracts are in AUCTION_RANK_CONTRACT and AUCTION_COLLECTION_SEQUENCE.
-Local policy: no fees, Unix-second caller clock, 1..168-hour listings, 0..3
-automatic reoffers, full bid escrow, separate refunds and no seller self-bids.
-BC is this implementation's revision token, not a recovered historical meaning.
-No sockets, timers, file writes or fabricated auction-cancel wire command.
+Server choice: no fees, a caller-supplied Unix-second clock, listings of 1..168
+hours, 0..3 automatic reoffers, full bid escrow, separate refunds and no bids on
+your own listing. BC is a revision token chosen by this server. Layout:
+TetraPackets irc/A.md and file/auction-files.md.
 """
 
 import re

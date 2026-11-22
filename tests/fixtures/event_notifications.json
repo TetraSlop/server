@@ -1,7 +1,7 @@
 {
   "provenance": {
     "image_sha256": "422e46ab2ad6fd02db570a2384424dd1540b197e1ccd7e3da2645ca2b40b1879",
-    "evidence": "Archived protocol_map/event_contract_vectors.py and EVENT_CONTRACT.md; research/tests/test_event_service.py:67-82,302-309",
+    "evidence": "Original client event routines run under an emulator; harness retired. Layout: TetraPackets flows/event-rooms.md",
     "source_vector_count": 44,
     "consumers": {
       "update": "1008BFA0",

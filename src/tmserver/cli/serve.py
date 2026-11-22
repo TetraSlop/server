@@ -33,7 +33,7 @@ def board(value):
         ) from exc
     if len(values) not in (16, 25) or any(v not in range(19) for v in values):
         raise argparse.ArgumentTypeError(
-            "board requires sixteen or twenty-five tile values from0 through18"
+            "board requires sixteen or twenty-five tile values from 0 through 18"
         )
     return values
 
@@ -60,7 +60,7 @@ def arguments(argv=None):
         help="operator password file; otherwise read TM_ADMIN_PASSWORD when admin is enabled",
     )
     parser.add_argument("--rules-image", type=Path, default=os.environ.get("TM_ORIGINAL_IMAGE"),
-                        help="required unpacked TM image (or TM_ORIGINAL_IMAGE)")
+                        help="required TM memory image (or TM_ORIGINAL_IMAGE)")
     parser.add_argument("--rules-bridge", type=Path, default=os.environ.get("TM_NATIVE_BRIDGE"),
                         help="required Win32 bridge (or TM_NATIVE_BRIDGE)")
     storage = parser.add_mutually_exclusive_group()
@@ -113,7 +113,7 @@ def arguments(argv=None):
         "--ratings",
         choices=("preserve", "local-history"),
         default="preserve",
-        help="optional original offline32-result rating as explicit local policy",
+        help="optional rating from the client's offline 32-result ring (server choice)",
     )
     parser.add_argument(
         "--weekly-rankings",
@@ -130,7 +130,7 @@ def arguments(argv=None):
         action="store_true",
         help="opt-in spectator playback with unverified native pacing",
     )
-    parser.add_argument("--events", type=Path, help="explicit local event configuration JSON")
+    parser.add_argument("--events", type=Path, help="event configuration JSON")
     parser.add_argument(
         "--rooms",
         type=Path,
@@ -158,9 +158,9 @@ def arguments(argv=None):
         parser.error("weekly rankings require --ratings local-history")
     args.players = 3 if args.flexible_seats else int(args.players)
     if not 2 <= args.accounts <= MAX_ACCOUNTS:
-        parser.error(f"accounts must be between2 and{MAX_ACCOUNTS}")
+        parser.error(f"accounts must be between 2 and {MAX_ACCOUNTS}")
     if not all(0 <= port <= 65535 for port in (args.game_port, args.profile_port)):
-        parser.error("ports must be between0 and65535")
+        parser.error("ports must be between 0 and 65535")
     if args.admin_port is not None and not 0 <= args.admin_port <= 65535:
         parser.error("admin port must be between 0 and 65535")
     if (args.auth_port is not None or args.auth_insecure_loopback) and args.auth_config is None:

@@ -1,7 +1,7 @@
-"""Recovered named-chat entry, roster pages and raw text contract.
+"""Named chat entry, roster pages and raw text.
 
-Counters and membership policy are local; packet shapes and page ordering are
-from CHAT_SUPPLEMENT.md/CHAT_LIFECYCLE.md. Byte text is never slash-split.
+Server choice: counters and membership. Packet shapes and page order:
+TetraPackets irc/G/42.md. Text bytes are never split on slashes.
 """
 
 import re
@@ -36,7 +36,7 @@ def validate_name(name, *, limit=15):
 
 
 def display_name(canonical_name):
-    """Keep native account names intact; chat presentation accepts at most15 bytes."""
+    """Keep native account names intact; chat presentation accepts at most 15 bytes."""
     validate_name(canonical_name, limit=16)
     return canonical_name[:15]
 

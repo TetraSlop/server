@@ -1,13 +1,11 @@
-"""Small, deterministic local practice match service for the original PC client.
+"""Match state machine for two- and three-player games.
 
-Recovered wire contracts: protocol_map/{TABLE_ADMISSION,MATCH_SEQUENCE,
-COMBAT_SEQUENCE,TURN_PACING,RESULT_REWARD_SEQUENCE}. No native proof is implied.
-Defaults: two or three seats, empty board, zero wager/reward, no persistent card
-transfer. Opt-in economic callbacks authorize stakes and quote actual credits.
-Original battle/growth/effects retain a per-human turn ack gate. Explicit
-non-CBC special boards are supported for two- and three-player matches.
-The caller owns IRC identity/framing and emits each Delivery from one stable
-published table-service identity. No filesystem, networking, or timers live here.
+Covers admission, card selection, turns, battles, growth, special boards and
+results; wagers and prizes go through optional callbacks. Each human acknowledges
+a turn's battle, growth and effects before the next. The caller owns IRC identity
+and framing and sends each Delivery from one table-service identity. Layout:
+TetraPackets flows/match-admission.md, flows/tables.md,
+flows/results-and-prizes.md and irc/G/43.md.
 """
 
 import re
@@ -236,7 +234,7 @@ class MatchService:
         self._result_sequence = None
 
     def _shared_r(self):
-        """Replacement-server policy: eight CRT low bytes, in transmitted order."""
+        """Server choice: eight CRT low bytes, in transmitted order."""
         return tuple(self.draw() & 255 for _ in range(8))
 
     def _backend_call(self, operation, *args, **kwargs):
@@ -469,9 +467,9 @@ class MatchService:
         self._pending_battle = None
 
     def advance(self, max_battles=1):
-        """Run at most1..16 battle packets per human, then yield to the adapter."""
+        """Run at most 1..16 battle packets per human, then yield to the adapter."""
         if type(max_battles) is not int or not 1 <= max_battles <= 16:
-            raise ValueError("max_battles must be in1..16")
+            raise ValueError("max_battles must be in 1..16")
         out = []
         for _ in range(max_battles):
             if not self.pending_work:
@@ -746,13 +744,13 @@ class MatchService:
             self.special_flags = {key: game[key] for key in ("st", "cb", "ca")}
         self.settings_applied = True
         self.settings_revision += 1
-        # Original Apply posts a local editor event immediately after10087410;
+        # Original Apply posts a local editor event immediately after 10087410;
         # no settings-specific wire acknowledgement is mapped. Adapter publishes
         # TD then admission_notice separately, after the GameEA queue cleanup.
         return []
 
     def admission_notice(self, peer):
-        """After accepted14, add CPU and build roster/owner notices for post-TD delivery."""
+        """After accepted 14, add CPU and build roster/owner notices for post-TD delivery."""
         if not self.settings_applied or self.phase != "lobby":
             return []
         self._add_ai()
@@ -807,7 +805,7 @@ class MatchService:
 
     def leave_lobby_member(self, peer, subtype):
         """Keep a configured pre-start table; oldest remaining seat becomes host.
-        This is an explicit local election policy, not recovered server policy.
+        This election is a server choice.
         """
         if not self.lobby_departure_supported():
             raise MatchError("table cannot preserve this departure")
@@ -869,7 +867,7 @@ class MatchService:
     def depart(self, peer, *, replacement=1, await_result=False):
         """Apply one active departure, emitting23 before optional24 exactly once.
 
-        Replacement NPC1 is an explicit hosted choice. Its original personality
+        Replacement NPC1 is a server choice. Its original personality
         controls the existing remaining hand; no fresh NPC cards are generated.
         No network grace period, account penalty or historical policy is claimed.
         """
@@ -994,7 +992,7 @@ class MatchService:
         post-debit balance. The adapter must save the debit and refreshed tokens
         atomically before returning; exceptions emit no successful transition.
         Computer menu updates and unsuccessful/partial Continue votes do not call
-        this hook. The original computer menu sends its final rule choice in06.
+        this hook. The original computer menu sends its final rule choice in 06.
         A changed computer-menu seat count is passed as player_count before the
         engine resizes, so the durable reservation uses the intended geometry.
         """
@@ -1241,7 +1239,7 @@ class MatchService:
         ]
 
     def result_classes(self):
-        """Original100CBD80 ordinary and departure-specific ranking."""
+        """Original 100CBD80 ordinary and departure-specific ranking."""
         return result_ranking(self._scores(), self.game_rules["gs"], self.departure_seats).classes
 
     def legal_fields(self):
@@ -1361,8 +1359,8 @@ class MatchService:
 
     def _place(self, hand, cell):
         # H indexes the current compacted hand, not an immutable selection slot.
-        # The active original client shifts later cards left at100C710F..7152,
-        # using100B2A80, then clears the trailing slot at100C7185.
+        # The active original client shifts later cards left at 100C710F..7152,
+        # using 100B2A80, then clears the trailing slot at 100C7185.
         player = self.players[self.active]
         card = player.hand.pop(hand)
         original_slot = player.hand_slots.pop(hand)
@@ -1550,7 +1548,7 @@ class MatchService:
             for peer in result_peers:
                 # 10104141..101044F9 reads full profile fields only for the
                 # receiving ordinary player; remote sections read D2 rating.
-                # Keep one complete logical packet within447 even with long RN.
+                # Keep one complete logical packet within 447 even with long RN.
                 body = prefix + "".join(
                     (
                         p.result_stats.result_section(i)
@@ -1636,7 +1634,7 @@ class MatchService:
             peer,
         )
         # Remote NPC selection waits in native3C; queue it after the first TCList
-        # so the original39->3A->3B->3C path consumes authoritative hands first.
+        # so the original 39->3A->3B->3C path consumes authoritative hands first.
         for payload in self._computer_prize_packets:
             out += self._emit(payload, peer)
         return self._prize_gate(out)
@@ -1932,7 +1930,7 @@ class MatchService:
             for receipt in tuple(self.lobby_exit_receipts):
                 if receipt[0] == peer:
                     self.lobby_exit_receipts.pop(receipt)
-            # EN1 takes the new-owner settings scene at10090114..143;
+            # EN1 takes the new-owner settings scene at 10090114..143;
             # EN2 joins the existing table and takes its local stake debit.
             admission_result = 1 if peer == self.owner_peer else 2
             return self._emit(

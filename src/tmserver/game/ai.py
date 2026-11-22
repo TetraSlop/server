@@ -1,4 +1,4 @@
-"""COM input models and native decision entry points; no Python scoring engine."""
+"""Computer-player inputs and the native decision calls."""
 
 from dataclasses import dataclass
 

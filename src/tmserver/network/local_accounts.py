@@ -1,4 +1,4 @@
-"""Explicit synthetic local accounts shared by both legacy transports."""
+"""Local test accounts shared by the game and profile listeners."""
 
 from tmserver.protocol.wire import POLID_CHARS, polid_from_string, polid_scramble
 
@@ -21,7 +21,7 @@ NAMES = tuple(account_name(i) for i in range(1, MAX_ACCOUNTS + 1))
 
 def account_specs(count=2):
     if type(count) is not int or not 2 <= count <= MAX_ACCOUNTS:
-        raise ValueError(f"local account count must be2..{MAX_ACCOUNTS}")
+        raise ValueError(f"local account count must be 2..{MAX_ACCOUNTS}")
     return {
         polid_scramble(polid_from_string(name)).decode("ascii"): (
             name.encode("ascii"),

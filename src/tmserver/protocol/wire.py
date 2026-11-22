@@ -1,8 +1,7 @@
-"""Reference encoders for the PlayOnline IRC (polcore sqIrc*) wire format.
+"""Encoders for the PlayOnline IRC wire format.
 
-Derived from the PS2 decomp (FFXI-PS2 src/_unmapped.cpp) and cross-checked against
-PC polcore_unpacked.dll.  See irc_protocol.md next to this file.
-Run directly for the self-check.
+Reverse engineered from the PlayOnline client. Layout: TetraPackets
+irc/session.md.
 """
 
 import os
@@ -11,7 +10,6 @@ import struct
 B64 = b"TSG8IncW3HFKokOg79qzeCmZs2yBYEQVAUxR5rbwi4P@jMDLtpvad0f_J1hlN6uX"  # polcore 0x10065DE0
 B32 = b"N43OVHBJ1Y2C0WSXED5QFILRZMUTAPGK"  # polcore 0x10071464
 POLID_CHARS = b"EFKAOYMJVNGTDSWBQLPCIRHZXU6328401795"  # polcore 0x100742EC
-HEADER_POLID_XOR = 0x1C273E4567891133  # __sqChangeCryptPolId constant
 
 
 def b64enc(data, pad=True):
@@ -191,109 +189,3 @@ def rsa_wrap_session_key(modulus_blob, bf_key, e=0xFFFF):
     c = pow(int.from_bytes(block, "big"), e, n)
     return b64enc(c.to_bytes(32, "big"))
 
-
-def notice_header(
-    polid_a=0, polid_b=0, fields=b"", payload_len=0, handle=0, msg_type=0x1F, system=True
-):
-    """0x48-byte message header; fields = bytes for +0x10..+0x37."""
-    hdr = bytearray(0x48)
-    struct.pack_into("<QQ", hdr, 0, polid_a ^ HEADER_POLID_XOR, polid_b ^ HEADER_POLID_XOR)
-    hdr[0x10 : 0x10 + len(fields)] = fields
-    struct.pack_into("<Q", hdr, 0x38, payload_len | handle << 32 | (msg_type & 0x1F) << 55)
-    struct.pack_into("<Q", hdr, 0x40, 0x10000 if system else 0)
-    return b64enc(bytes(hdr))
-
-
-def polpro_available_notice(mail_count=0, mail_time=0):
-    f = bytearray(0x28)
-    f[0x00] = 1  # +0x10
-    f[0x01] = mail_count  # +0x11
-    struct.pack_into("<I", f, 0x04, mail_time)  # +0x14
-    f[0x08] = 0xFF  # +0x18
-    f[0x0B] = 1  # +0x1B
-    f[0x0C] = 0xFF  # +0x1C
-    return notice_header(fields=bytes(f))
-
-
-def friend_status_notice(
-    friend_polid_wire,
-    list_index,
-    handle6,
-    online_status,
-    timestamp,
-    level=0,
-    active=False,
-    active_slot=0,
-    content_class=0,
-    slots=None,
-):
-    f = bytearray(0x28)
-    f[0x00] = level  # +0x10
-    f[0x01] = online_status + 1  # +0x11: 0 offline .. 4 autoreply
-    f[0x02] = (1 if active else 0) | (active_slot & 7) << 1  # +0x12
-    struct.pack_into("<H", f, 0x04, content_class & 0x3FF)  # +0x14
-    f[0x08] = handle6 & 0x3F  # +0x18
-    f[0x0B] = 1  # +0x1B
-    f[0x0C] = list_index  # +0x1C
-    struct.pack_into("<Q", f, 0x20, timestamp)  # +0x30
-    body = b64enc(slots) if slots else b""
-    return notice_header(friend_polid_wire, 0, bytes(f), payload_len=len(body)) + body
-
-
-def vectors():
-    """Deterministic vectors (self-derived from the PC transcription; not yet checked against a live client)."""
-    key = bytes(range(1, 9))
-    bf = SqBlowfish(key)
-    iv = 0x0807060504030201
-    out = {
-        "bf.P[0..3]": [hex(x) for x in bf.p[:4]],
-        "bf.S0[0..1]": [hex(x) for x in bf.s[0][:2]],
-        "bf.E(0)": hex(bf.encrypt_u64(0)),
-        "keystream(iv)[0:16]": crypt64(bf, iv, bytes(16)).hex(),
-        "checksum('PING a')": checksum_chars(b"PING a").decode(),
-        "checksum('NOTICE U:x')": checksum_chars(b"NOTICE U:x").decode(),
-        "nick(0x123456789)": polid_scramble(0x123456789).decode(),
-        "framed_enc(':s 422 U :x')": frame_line(b":s 422 U :x", bf, iv).hex(),
-        "b32(bytes 0..24)": b32enc(bytes(range(25))).decode(),
-        "b64(bytes 0..5)": b64enc(bytes(range(6))).decode(),
-        "polpro_notice": polpro_available_notice(0, 0).decode(),
-    }
-    for k, v in out.items():
-        print(k, "=", v)
-
-
-if __name__ == "__main__":
-    for v in (0, 1, 12345678901, 0x1FFFFFFFFFF):
-        nick = polid_scramble(v)
-        assert len(nick) == 9 and polid_unscramble(nick) == v, (v, nick)
-    assert polid_scramble(polid_from_string("EEEEEEEE")) == polid_scramble(0)
-    blob = os.urandom(0x48)
-    assert b64dec(b64enc(blob)) == blob and len(b64enc(blob)) == 96
-    assert md5_iv(b"abc", MD5_IV).hex() == "900150983cd24fb0d6963f7d28e17f72"
-    bf = SqBlowfish(os.urandom(8))
-    line = b":srv 422 U00000000 :no motd" + b"\x0a\x0d" * 3
-    enc = crypt64(bf, 0x1122334455667788, line)
-    assert crypt64(bf, 0x1122334455667788, enc) == line
-    framed = frame_line(b"NOTICE x :y", bf, 42)
-    assert framed.endswith(b"\r\n") and b"\n" not in framed[:-1]
-    # rsa round trip with a throwaway key where gcd(e, phi) == 1
-    import math
-
-    def prime128():
-        while True:
-            x = int.from_bytes(os.urandom(16), "big") | 1 << 127 | 1
-            if (
-                all(pow(a, x - 1, x) == 1 for a in (2, 3, 5, 7, 11))
-                and math.gcd(0xFFFF, x - 1) == 1
-            ):
-                return x
-
-    p, q = prime128(), prime128()
-    n, d = p * q, pow(0xFFFF, -1, (p - 1) * (q - 1))
-    key = os.urandom(8)
-    wrapped = b64dec(rsa_wrap_session_key(n.to_bytes(32, "little"), key))[:32]
-    block = pow(int.from_bytes(wrapped, "big"), d, n).to_bytes(32, "big")
-    assert block[:2] == b"\0\x02" and block[-8:][::-1] == key
-    assert len(polpro_available_notice()) == 96
-    print("ok")
-    vectors()

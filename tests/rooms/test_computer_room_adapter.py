@@ -85,7 +85,7 @@ class ComputerRoomTests(unittest.TestCase):
         first = {0x1FF + number for number in range(1, 128)}
         second = {0x3FF + number for number in range(1, 128)}
         self.assertFalse(first & second)
-        # All configured raw identities are41-bit, so XOR preserves these high bits.
+        # All configured raw identities are 41-bit, so XOR preserves these high bits.
         self.assertNotEqual(GAME_KEY >> 41, 0)
         self.assertTrue(all(identity >> 41 == 0 for identity in first | second))
         for raw in (0, 1, 128, 0x100, 0x200, 0x400, 0x1FFFFFFFFFF):

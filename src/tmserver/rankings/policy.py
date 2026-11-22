@@ -1,7 +1,7 @@
-"""Optional rating coordinator: joint in-memory growth/stat/history commit.
+"""Optional rating coordinator: growth, statistics and history commit together.
 
-The adapter selects mode explicitly and persists snapshot with economy before
-delivering ResultData. No socket, CLI, file write, or implicit profile reset.
+The adapter selects the mode and saves the snapshot with the economy before
+delivering ResultData.
 """
 
 import time

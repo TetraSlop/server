@@ -1,9 +1,9 @@
-"""Opt-in connection adapter for original active practice departure rules.
+"""Connection adapter for the client's departure rules during a match (opt-in).
 
 Requests are synchronous: a failed send may call Session.close while the match
 lock is held. A separate worker applies departures after that publication, so
-cleanup never waits recursively for the same lock. Account capabilities remain
-owned by the table until its result/abort path releases them.
+cleanup never waits recursively for the same lock. The table owns account
+capabilities until its result or abort path releases them.
 """
 
 import asyncio

@@ -1,9 +1,9 @@
-"""Durable automatic CBC rewards, accepted at the native Continue barrier.
+"""Automatic CBC rewards, accepted at the client's Continue step.
 
-Growth/statistics already belong to the saved result. This module stages only
-earned extras and result Erase/Decks edits. Interrupted extras recover through
-the existing auction Returned Card UI, an explicit local compatibility policy.
-Persist economy + auction + this snapshot atomically before sending completion.
+Growth and statistics are already part of the saved result; this module stages
+only earned extras and the result's Erase/Decks edits. Server choice: interrupted
+extras come back through the auction Returned Card screen. Save economy, auction
+and this snapshot together before sending completion.
 """
 
 import hashlib
@@ -250,7 +250,7 @@ class ResultRewardService:
         return True
 
     def handle(self, key, payload):
-        """43/10 Erase and43/22 Decks only; None leaves other messages to match.
+        """43/10 Erase and 43/22 Decks only; None leaves other messages to match.
 
         After acceptance only delayed Decks is admitted, either with its live
         table token or a release_context snapshot of an unchanged idle account.

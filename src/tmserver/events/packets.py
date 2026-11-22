@@ -1,7 +1,7 @@
-"""Event file fields, wire validation and bounded packet constructors.
+"""Event file fields, wire validation and packet constructors.
 
-Configured data are explicit local fixtures. These codecs preserve opaque
-metadata and do not infer historical tournaments or mission award predicates.
+The codecs keep unknown metadata as-is. Layout: TetraPackets
+file/event-files.md.
 """
 
 import re
@@ -52,7 +52,7 @@ def cstring(out, offset, size, value):
 def event_list(records=(), *, template=None):
     records = tuple(records)
     if len(records) > 32:
-        raise ValueError("event directory capacity is32")
+        raise ValueError("event directory capacity is 32")
     out = buffer(0x2C08, template)
     struct.pack_into("<I", out, 4, len(records))
     keys = set()
@@ -140,7 +140,7 @@ def event_data(
 def event_members(records=(), *, template=None):
     records = tuple(records)
     if len(records) > 256:
-        raise ValueError("event member capacity is256")
+        raise ValueError("event member capacity is 256")
     out = buffer(0x2808, template)
     struct.pack_into("<I", out, 4, len(records))
     seen = set()

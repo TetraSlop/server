@@ -1,4 +1,4 @@
-"""One verified, already-unpacked TM memory image, supplied by the operator."""
+"""Load and check the operator's TM memory image."""
 
 from hashlib import sha256
 from pathlib import Path
@@ -13,12 +13,12 @@ class OriginalCodeError(RuntimeError):
 
 
 def read_image(path: str | Path) -> bytes:
-    """The research dump is RVA-indexed, not an ordinary on-disk PE file."""
+    """The image is RVA-indexed, not an on-disk PE file."""
     path = Path(path)
     if path.stat().st_size != IMAGE_SIZE:
         raise OriginalCodeError(
-            "Expected the unpacked TM_emulated_mapped.dll memory image; "
-            "the loader's packed TM_native.dll cannot be used directly"
+            "Expected the TM_emulated_mapped.dll memory image; "
+            "the loader's TM_native.dll cannot be used directly"
         )
     data = path.read_bytes()
     if sha256(data).hexdigest() != IMAGE_SHA256:

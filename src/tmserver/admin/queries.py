@@ -1,8 +1,8 @@
 """Read-only account projections from validated service state.
 
-These functions neither perform I/O nor advance recovery, collection, expiry or
-rankings. Returned dictionaries contain detached JSON-compatible values and can
-be shared by offline administration and a future server-owned admin interface.
+These functions do no I/O and do not advance recovery, collection, expiry or
+rankings. They return detached JSON-compatible dictionaries, shared by offline
+administration and the admin panel.
 """
 
 import json

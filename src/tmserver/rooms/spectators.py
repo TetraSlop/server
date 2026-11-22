@@ -1,8 +1,8 @@
-"""Opt-in original-client spectator preview, disabled until native validation.
+"""Spectators for ordinary tables (opt-in, off by default).
 
-Bootstrap fields have original-consumer tests. Delays are local heuristics:
-role4 has no recovered presentation-complete acknowledgement. This module
-cannot promise liveness for a slow observer and never gates participant play.
+Server choice: the delays, because role 4 has no known "presentation complete"
+acknowledgement. A slow spectator may fall behind but never holds up the players.
+Layout: TetraPackets flows/spectators.md.
 """
 
 import math
@@ -113,7 +113,7 @@ def bootstrap(snapshot):
     rules = dict(snapshot.game_rules)
     # VsGameInit's leading bm is absent here; WatchInfo shifts the vector.
     # WatchInfo R6 becomes P+D9. Both original watch setup branches create
-    # the chat panel only when it is zero; in2 therefore omits that panel.
+    # the chat panel only when it is zero; in 2 therefore omits that panel.
     if type(snapshot.observation) is not int or snapshot.observation not in (0, 1, 2):
         raise SpectatorError("invalid observation rule")
     r = [rules[k] for k in ("st", "cb", "ca", "tl", "du", "gs")] + [snapshot.observation]
@@ -217,9 +217,9 @@ class SpectatorService:
             if not isinstance(delay, (int, float)) or not math.isfinite(delay) or delay < 0:
                 raise ValueError("spectator delays must be finite and nonnegative")
         if type(max_backlog) is not int or not 1 <= max_backlog <= 4096:
-            raise ValueError("max_backlog must be1..4096")
+            raise ValueError("max_backlog must be 1..4096")
         if type(max_observers) is not int or not 1 <= max_observers <= 256:
-            raise ValueError("max_observers must be1..256")
+            raise ValueError("max_observers must be 1..256")
         self.enabled, self.clock = enabled, clock
         self.bootstrap_delay, self.turn_delay, self.action_delay, self.packet_delay = (
             bootstrap_delay,

@@ -1,9 +1,10 @@
-"""Durable, explicitly granted F/90 event prize collection.
+"""Granted F/90 event prizes and their collection.
 
-The caller persists economy + EventHost + this ledger atomically before replies.
-Money has no native acknowledgement: claim it before EcmInit. Cards are claimed
-only by B2/Get, whether before reveal or after overflow Erase/Decks. No historical
-award formula, automatic mission reward or repeatable prize mint is implemented.
+The caller saves the economy, EventHost and this ledger together before replying.
+Money has no client acknowledgement, so it is claimed before EcmInit. Cards are
+claimed only by B2/Get, before reveal or after an overflow Erase/Decks. Server
+choice: prizes come only from explicit grants. Layout: TetraPackets
+flows/event-cards.md.
 """
 
 import re
@@ -120,7 +121,7 @@ class EventCardService:
             for c in cards
         )
         if len(cards) > 30 or any(c.deck != 255 for c in cards):
-            raise EventCardError("grant needs at most30 undecked cards")
+            raise EventCardError("grant needs at most 30 undecked cards")
         _integer(money, MAX_MONEY)
         identity = (key, event_id, grant_id)
         old = self._grants.get(identity)
@@ -209,7 +210,7 @@ class EventCardService:
                         message = self._init(key, view, number, money, candidate)
                     except EconomyError:
                         full = True
-                        break  # Original named body is447 bytes.
+                        break  # Original named body is 447 bytes.
                     incoming = candidate
                     selected.append((ident, index))
                     init = message

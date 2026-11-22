@@ -1,15 +1,14 @@
-"""Read-only local ranking requests and original PC binary result files.
+"""Ranking requests and the client's binary ranking files.
 
-Wire: GTM0R RR(category),PI(owner,directory,version,selector) -> RF,LN / RG.
-Files: E8-byte ranking rows; b/g/TM0RkData is seven little-endian DWORDs.
-Sources: ../protocol_map/{AUCTION_RANK_CONTRACT,FILE_COVERAGE,RESULT_REWARD_SEQUENCE}.
+Wire: GTM0R RR(category), PI(owner, directory, version, selector) -> RF, LN / RG.
+Files: E8-byte ranking rows; b/g/TM0RkData is seven little-endian DWORDs. Layout:
+TetraPackets irc/R.md and file/ranking-files.md.
 
-Local policy: committed synthetic accounts; score descending unless the
-optional local-history rating policy is enabled (lower rating wins). Stable
-identity/key ties. Current rating and total prize money come from canonical
-profile fields30/50. Historical categories require recorded weekly play or
-explicit history. Weekly tracking is opt-in local policy; retail aggregation,
-eligibility, reset and award rules remain unknown.
+Server choice: committed local accounts, ranked by score, or by rating (lower
+wins) when the local-history rating policy is on. Ties break by identity and key.
+Current rating and total prize money come from profile fields 30 and 50. Past
+categories need recorded weekly play or saved history. The original server's
+aggregation, eligibility, reset and award rules are unknown.
 """
 
 import re
@@ -70,7 +69,7 @@ class RankingService:
         self.rating_policy = rating_policy
         self.update_time = _uint(update_time, 32, "update_time")
         if type(max_snapshots) is not int or not 1 <= max_snapshots <= 1024:
-            raise RankingError("max_snapshots must be1..1024 per account")
+            raise RankingError("max_snapshots must be 1..1024 per account")
         self.max_snapshots = max_snapshots
         history = dict(historical_stats or {})
         if any(
@@ -143,7 +142,7 @@ class RankingService:
     def records(self, rank_id):
         """Fresh bytes for an explicit category, before request snapshotting."""
         rows = self._eligible(self._entries(), rank_id)
-        # Top30 is locally limited to30; all other readers are bounded to100.
+        # Top30 is locally limited to 30; all other readers are bounded to 100.
         return b"".join(encode_record(row) for row in rows[: 30 if rank_id == 3 else 100])
 
     def metadata(self):
