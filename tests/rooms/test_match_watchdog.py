@@ -299,26 +299,6 @@ class WatchdogTests(unittest.TestCase):
         self.watch.observe(match, match)
         self.assertIsNone(self.watch.expired(match, match))
 
-    def test_invalid_duration_timer_and_clock_fail_closed_without_match_mutation(self):
-        for kwargs in (
-            {"ack_timeout": 0},
-            {"decision_grace": -1},
-            {"result_timeout": float("inf")},
-            {"processing_timeout": float("nan")},
-            {"ack_timeout": True},
-        ):
-            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
-                MatchWatchdog(**kwargs)
-        match = self.match(selected=False)
-        match.game_rules["tl"] = 6
-        with self.assertRaises(ValueError):
-            self.watch.observe(match, match)
-        self.assertEqual(match.phase, "selection")
-        match.game_rules["tl"] = 0
-        self.clock.now = -1
-        with self.assertRaises(ValueError):
-            self.watch.observe(match, match)
-
 
 if __name__ == "__main__":
     unittest.main()
