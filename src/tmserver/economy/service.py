@@ -32,7 +32,7 @@ from tmserver.economy.models import (
 )
 from tmserver.economy.packets import _hex, _int, _keys, named, parse_named
 from tmserver.economy.shop_offers import ShopOffers
-from tmserver.rankings.stats import PracticeStats
+from tmserver.rankings.stats import PracticeStats, result_outcome
 
 
 class EconomyService:
@@ -520,20 +520,6 @@ class EconomyService:
         if rating_changes_by_key is not None:
             if stats_by_key is None or not isinstance(rating_changes_by_key, dict):
                 raise EconomyError("rating changes need account mapping and completed statistics")
-            from tmserver.rankings.history import RatingHistoryError, validate_quote
-
-            try:
-                proofs = [validate_quote(quote) for quote in rating_changes_by_key.values()]
-            except RatingHistoryError as exc:
-                raise EconomyError(str(exc)) from exc
-            if (
-                not proofs
-                or any(key != quote.key for key, quote in rating_changes_by_key.items())
-                or len({quote.match_id for quote in proofs}) != 1
-                or len({quote.scores for quote in proofs}) != 1
-                or len({quote.seat for quote in proofs}) != len(proofs)
-            ):
-                raise EconomyError("incoherent rating participant proofs")
         states = {}
         templates = {}
         for reservation, original, updated in rounds:
@@ -589,18 +575,13 @@ class EconomyService:
                         for outcome, tied in ((-1, False), (0, False), (0, True), (1, False))
                     )
                 else:
-                    from tmserver.rankings.stats import ResultStatsError
-
-                    try:
-                        coherent = result == previous.next_result(
-                            (change.result_class < 2) - (change.result_class > 2),
-                            reward,
-                            fully_tied=len(set(change.scores)) == 1,
-                            rating_change=change,
-                            vs_player_game=vs_player_game,
-                        )
-                    except ResultStatsError as exc:
-                        raise EconomyError(str(exc)) from exc
+                    coherent = result == previous.next_result(
+                        result_outcome(change.result_class),
+                        reward,
+                        fully_tied=len(set(change.scores)) == 1,
+                        rating_change=change,
+                        vs_player_game=vs_player_game,
+                    )
                 if not coherent:
                     raise EconomyError("result statistics are not one coherent quoted transition")
                 templates[view.key] = result.apply_to_profile(self._accounts[view.key].template)

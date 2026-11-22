@@ -14,8 +14,6 @@ from dataclasses import dataclass, replace
 
 from tmserver.rankings.errors import RankingError
 
-ResultStatsError = RankingError  # Name still imported by economy/service.py.
-
 PROFILE_SIZE = 0x3028
 RN = slice(0x7D, 0x9D)
 # TM0DataFile statistics: field, profile offset, little-endian struct format.
@@ -35,6 +33,11 @@ _RANGES = {
     "H": (0, 65535, "an unsigned WORD"),
     "h": (-32768, 32767, "a signed WORD"),
 }
+
+
+def result_outcome(result_class):
+    """-1 loss, 0 draw, +1 win for a native result class (lower is better)."""
+    return (result_class < 2) - (result_class > 2)
 
 
 def _profile(profile):
@@ -89,7 +92,8 @@ class PracticeStats:
         divides by it. Zero reward and fully tied refunds leave reward sum and
         maximum alone (100CC7B3..100CC7CB, 100CC8D3..100CC8EC); a three-player
         middle finish can be a draw without being fully tied. rating_change (a
-        RatingQuote) sets D2. vs_player_game advances T2/profile+130 (100CC84F);
+        RatingQuote, checked when RatingPolicy commits it) sets D2.
+        vs_player_game advances T2/profile+130 (100CC84F);
         online clients read that count without incrementing it again.
         """
         if type(outcome) is not int or outcome not in (-1, 0, 1):
@@ -102,22 +106,7 @@ class PracticeStats:
             fully_tied = outcome == 0
         if type(fully_tied) is not bool or fully_tied and outcome != 0:
             raise RankingError("fully tied result must have draw outcome")
-        rating = self.rating
-        if rating_change is not None:
-            from tmserver.rankings.history import validate_quote
-
-            change = validate_quote(rating_change)
-            if (
-                change.before.sequence != self.sequence
-                or change.before.revision > 0
-                and change.before.rating != self.rating
-            ):
-                raise RankingError("rating history differs from the current profile")
-            if outcome != (change.result_class < 2) - (change.result_class > 2) or fully_tied != (
-                len(set(change.scores)) == 1
-            ):
-                raise RankingError("rating quote and result outcome disagree")
-            rating = change.d2
+        rating = self.rating if rating_change is None else rating_change.d2
         if outcome > 0:
             streak = 1 if self.streak < 0 else _signed_word(self.streak + 1)
         elif outcome < 0:

@@ -16,8 +16,6 @@ from dataclasses import dataclass
 from tmserver.game.departure_rules import result_classes
 from tmserver.rankings.errors import RankingError
 
-RatingHistoryError = RankingError  # Name still imported by economy/service.py.
-
 
 def _integer(value, low, high, label):
     if type(value) is not int or not low <= value <= high:
@@ -89,23 +87,6 @@ class RatingQuote:
         return self.after.rating
 
 
-def validate_quote(quote):
-    """Validate a trusted coordinator's typed proof, independently of a ledger."""
-    if type(quote) is not RatingQuote:
-        raise RankingError("expected an immutable rating quote")
-    _identifier(quote.key, "account key")
-    _identifier(quote.match_id, "stable match ID")
-    if type(quote.scores) is not tuple:
-        raise RankingError("quoted scores must be immutable")
-    result_class = classify_result(quote.scores, quote.seat)
-    _integer(quote.result_class, 0, 4, "result class")
-    if type(quote.before) is not HistoryState or type(quote.after) is not HistoryState:
-        raise RankingError("rating quote needs immutable history states")
-    if quote.result_class != result_class or quote.after != quote.before.next(result_class):
-        raise RankingError("rating quote does not match original arithmetic")
-    return quote
-
-
 class LocalRatingHistory:
     def __init__(self):
         self._initial = {}
@@ -161,6 +142,8 @@ class LocalRatingHistory:
     def commit_many(self, quotes):
         """Validate every participant before changing any account.
 
+        This is the only rating quote check: each quote must equal the quote
+        this ledger issues now, so altered fields and stale quotes both fail.
         Quotes must refer to one stable match ID and distinct enrolled accounts.
         Committed duplicates are idempotent, even after later rounds. Quoting
         does not reserve an account; a competing result invalidates stale quotes.
@@ -174,7 +157,8 @@ class LocalRatingHistory:
         match_id = None
         scores = None
         for quote in quotes:
-            validate_quote(quote)
+            if type(quote) is not RatingQuote:
+                raise RankingError("expected a rating quote")
             if quote.key in seen:
                 raise RankingError("duplicate account in result")
             seen.add(quote.key)

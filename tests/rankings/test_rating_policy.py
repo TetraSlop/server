@@ -11,7 +11,7 @@ from tmserver.rankings.history import HistoryState, LocalRatingHistory
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.rankings.errors import RankingError
 from tmserver.rankings.policy import RatingPolicy
-from tmserver.rankings.stats import PracticeStats
+from tmserver.rankings.stats import PracticeStats, result_outcome
 
 KEYS = ("first", "second", "third")
 
@@ -56,7 +56,7 @@ def prepare(
     for seat, key in enumerate(keys):
         prior = PracticeStats.from_profile(service.profile_bytes(key))
         stats[key] = prior.next_result(
-            (classes[seat] < 2) - (classes[seat] > 2),
+            result_outcome(classes[seat]),
             0 if payouts is None else payouts[key],
             fully_tied=len(set(scores)) == 1,
             rating_change=None if changes is None else changes[key],
@@ -245,24 +245,19 @@ class RatingPolicyTests(unittest.TestCase):
                 policy.quote("bad", seats, (7, 3))
             self.assertEqual(policy.snapshot()["history"]["accounts"], {})
 
-    def test_stats_quote_must_match_outcome_tie_sequence_and_established_rating(self):
+    def test_quote_sets_d2_and_mismatched_keys_are_rejected(self):
         history = LocalRatingHistory()
         history.enroll("a")
         quote = history.quote("a", "r", (6, 6, 3), 0)
-        prior = PracticeStats(rating=300)
-        for outcome, tied in ((-1, False), (0, False), (1, True)):
-            with self.assertRaises(RankingError):
-                prior.next_result(outcome, fully_tied=tied, rating_change=quote)
-        with self.assertRaises(RankingError):
-            replace(prior, sequence=1).next_result(1, fully_tied=False, rating_change=quote)
-        correct = prior.next_result(1, fully_tied=False, rating_change=quote)
-        history.commit(quote)
-        quote = history.quote("a", "r2", (7, 3), 0)
-        with self.assertRaises(RankingError):
-            replace(correct, rating=300).next_result(1, fully_tied=False, rating_change=quote)
-        self.assertEqual(
-            correct.next_result(1, fully_tied=False, rating_change=quote).rating, quote.d2
-        )
+        self.assertEqual(PracticeStats().next_result(1, rating_change=quote).rating, quote.d2)
+        service = economy(2)
+        policy = RatingPolicy(service, mode="local-history")
+        rounds, stats, changes = prepare(service, policy, (7, 3))
+        swapped = {"first": changes["second"], "second": changes["first"]}
+        before = service.snapshot(), policy.snapshot()
+        with self.assertRaises(EconomyError):
+            policy.commit_growth(rounds, stats, rating_changes_by_key=swapped)
+        self.assertEqual((service.snapshot(), policy.snapshot()), before)
 
 
 if __name__ == "__main__":
