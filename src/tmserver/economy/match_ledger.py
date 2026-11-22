@@ -383,6 +383,18 @@ class MatchEconomy:
                     self.economy.release_match(token)
         return count
 
+    def prune_closed(self):
+        """Startup only, after recover_all: forget every closed round.
+
+        Round IDs are a table instance's uuid4 plus a round number, so no table
+        in this process can begin, settle, hand off or abort a round that an
+        earlier process created. recover_all has closed every round left open.
+        """
+        closed = [round_id for round_id, row in self._rounds.items() if row.closed]
+        for round_id in closed:
+            del self._rounds[round_id]
+        return len(closed)
+
     def snapshot(self):
         return {
             "version": 1,

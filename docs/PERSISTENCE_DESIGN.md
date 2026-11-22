@@ -184,6 +184,22 @@ refund once; paid results remain paid; unclaimed cards retain the returned-card
 collection path. An active board, socket, encryption stream, trade consent and
 unaccepted shop offer remain transient.
 
+After recovery, startup drops the exactly-once rows that no client or recovery
+path can replay, and saves if it dropped any. The format is unchanged; the
+journals only get shorter.
+
+| Journal | Dropped at startup | Why it is safe |
+|---|---|---|
+| `match_economy.rounds` | every closed round | A round ID is the table instance's uuid4 plus a number, so no table in a new process can begin, settle, hand off or abort an earlier round. Recovery has already closed every open round. |
+| `result_rewards.known` | IDs without a pending row | Reward IDs embed the round's table instance ID, so no later stage can reuse one. A pending row keeps its ID because restore checks it. Recovery has already moved every pending row to the auction. |
+| `auction.external_returns` | every source ID | Sources are match rounds and pending result rewards. After recovery neither can enqueue an old source again. The returned cards stay pending for collection. |
+
+Kept: Prize Center `known_awards` and event card grants. Administration receipts
+are kept as the audit trail and must find their award or grant on restore, and
+an operator can resubmit the same award or grant ID at any time, so there is no
+retry window after which these IDs could be forgotten. Rating history receipts
+belong to the rankings journal and stay as well.
+
 ## Verification
 
 Real PostgreSQL tests cover schema/model agreement, repeatable migrations,

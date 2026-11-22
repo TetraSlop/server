@@ -185,7 +185,13 @@ class Server:
         try:
             recovered = self.match_economy.recover_all(self.auction_ledger)
             recovered = self.result_rewards.recover_all() or recovered
-            if recovered:
+            # Exactly-once IDs from earlier processes can no longer be replayed.
+            pruned = (
+                self.match_economy.prune_closed()
+                + self.result_rewards.prune_known()
+                + self.auction_ledger.prune_external_returns()
+            )
+            if recovered or pruned:
                 self.persist()
         except BaseException:
             self._close_log()

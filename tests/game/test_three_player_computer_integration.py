@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from tests import ROOT
 from tests.game import test_computer_menu_integration as computer
+from tests.economy.test_journal_pruning import after_restart
 from tests.economy.test_match_prizes_integration import full
 from tests.support.irc import Client
 from tests.support.memory_store import MemoryStore
@@ -199,7 +200,7 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
         )
         restored = Server(store=self.store, rating_mode="local-history")
         try:
-            self.assertEqual(restored.snapshot(), self.server.snapshot())
+            self.assertEqual(restored.snapshot(), after_restart(self.server.snapshot()))
             self.assertEqual(set(restored.account_keys), {self.key, self.other})
         finally:
             await restored.stop()
@@ -290,7 +291,7 @@ class ThreePlayerComputerPractice(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.server.economy.is_reserved(self.key))
         restored = Server(store=self.store)
         try:
-            self.assertEqual(restored.snapshot(), self.server.snapshot())
+            self.assertEqual(restored.snapshot(), after_restart(self.server.snapshot()))
         finally:
             await restored.stop()
 

@@ -360,6 +360,19 @@ class ResultRewardService:
             count += self.recover(key)
         return count
 
+    def prune_known(self):
+        """Startup only, after recover_all: keep reward IDs of pending rows only.
+
+        Reward IDs embed the round's table instance ID, so no later stage can
+        reuse one from an earlier process. A pending row keeps its ID because
+        restore checks the row against it.
+        """
+        pending = {(row.key, row.reward_id) for row in self._pending.values()}
+        stale = [identity for identity in self._known if identity not in pending]
+        for identity in stale:
+            del self._known[identity]
+        return len(stale)
+
     def forget(self, key):
         if key in self._pending:
             raise ResultRewardError("recover or accept pending rewards before leaving table")

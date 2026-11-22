@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests import ROOT
+from tests.economy.test_journal_pruning import after_restart_auction
 from tests.game import test_versus_integration as versus
 from tests.support.irc import Client
 from tests.support.memory_store import MemoryStore, failing_commits
@@ -345,7 +346,8 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
             self.assertEqual(
-                restored.auction_ledger.snapshot(), self.server.auction_ledger.snapshot()
+                restored.auction_ledger.snapshot(),
+                after_restart_auction(self.server.auction_ledger.snapshot()),
             )
         finally:
             await restored.stop()
@@ -389,7 +391,8 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         restored, store = await self.restore_copy()
         try:
             self.assertEqual(
-                restored.auction_ledger.snapshot(), self.server.auction_ledger.snapshot()
+                restored.auction_ledger.snapshot(),
+                after_restart_auction(self.server.auction_ledger.snapshot()),
             )
         finally:
             await restored.stop()

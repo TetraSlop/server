@@ -5,6 +5,7 @@ from collections import Counter
 from contextlib import asynccontextmanager
 
 from tests.economy import test_match_prize_edges as prizes
+from tests.economy.test_journal_pruning import after_restart
 from tmserver.protocol.identities import TABLE_RAW, service_nick
 from tmserver.game.packets import packet
 from tmserver.network.server import Server
@@ -94,8 +95,8 @@ class RematchEligibilityTests(unittest.IsolatedAsyncioTestCase):
         saved = self.store.load()
         restored = Server(store=self.store)
         try:
-            self.assertEqual(restored.snapshot(), after)
-            self.assertEqual(self.store.load(), saved)
+            self.assertEqual(restored.snapshot(), after_restart(after))
+            self.assertEqual(self.store.load(), after_restart(saved))
         finally:
             await restored.stop()
 

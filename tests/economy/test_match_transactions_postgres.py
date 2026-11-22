@@ -95,8 +95,8 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
         self.lose_ack(self.begin)
         restored = self.restart_twice()
         self.assertEqual([restored.economy.balance(k) for k in self.keys], [10000] * 3)
-        row = restored.match_economy.snapshot()["rounds"][0]
-        self.assertEqual(row["money"], "refunded")
+        # The first restart refunded and closed the round, then pruned it.
+        self.assertEqual(restored.match_economy.snapshot()["rounds"], [])
 
     def test_lost_result_ack_preserves_one_payout_rating_and_cbc_award(self):
         self.begin()
