@@ -8,7 +8,6 @@ together.
 
 import hashlib
 import json
-from contextlib import contextmanager
 from datetime import UTC, datetime
 
 from tmserver.cards.model import Card
@@ -24,20 +23,12 @@ from .audit import (
 )
 
 
-class AdminActionError(ValueError):
+class AdminActionError(EconomyError):
     """The requested action cannot be applied to the current account state."""
 
 
 class AdminActionConflict(AdminActionError):
     """A request ID or reference is already recorded with different facts."""
-
-
-@contextmanager
-def _domain_errors():
-    try:
-        yield
-    except EconomyError as exc:
-        raise AdminActionError(str(exc)) from exc
 
 
 def _committed(host, request):
@@ -80,9 +71,8 @@ def apply_prize_award(host, request):
     if receipt is not None:
         return receipt
     key = request.account_key
-    with _domain_errors():
-        account = _idle_account(host, key, "audited awards")
-        current_points = host.economy.prize_points(key)
+    account = _idle_account(host, key, "audited awards")
+    current_points = host.economy.prize_points(key)
     row = host.prize.snapshot()["accounts"].get(key, {})
     receipt = PrizeAwardReceipt(
         request=request,
@@ -98,11 +88,10 @@ def apply_prize_award(host, request):
     )
     with host.economy.edit_accounts((key,)) as economy:
         prize = host.prize.stage_state(economy, key)
-        with _domain_errors():
-            added = prize.grant_award(
-                key, request.award_id, top30=request.top30, lucky=request.lucky,
-                rookies=request.rookies, lucky_cards=request.lucky_cards,
-            )
+        added = prize.grant_award(
+            key, request.award_id, top30=request.top30, lucky=request.lucky,
+            rookies=request.rookies, lucky_cards=request.lucky_cards,
+        )
         if not added:
             raise AdminActionConflict("award ID already exists without this audited request")
         _commit(host, economy.snapshot()["accounts"], {"prize": prize.snapshot()}, receipt)
@@ -116,21 +105,20 @@ def apply_event_grant(host, request):
     if receipt is not None:
         return receipt
     key, event_id = request.account_key, request.event_id
-    with _domain_errors():
-        account = _idle_account(host, key, "audited grants")
-        config = host.events.config(event_id)
-        member = host.events.member(key, event_id)
-        if member is None:
-            raise AdminActionError("grant requires a registered event member")
-        cards = tuple(
-            GrantedEventCard(
-                **card.model_dump(), deck=255,
-                points=host.economy.catalog.points(
-                    card.model, card.attack, card.physical, card.magical
-                ),
-            )
-            for card in request.cards
+    account = _idle_account(host, key, "audited grants")
+    config = host.events.config(event_id)
+    member = host.events.member(key, event_id)
+    if member is None:
+        raise AdminActionError("grant requires a registered event member")
+    cards = tuple(
+        GrantedEventCard(
+            **card.model_dump(), deck=255,
+            points=host.economy.catalog.points(
+                card.model, card.attack, card.physical, card.magical
+            ),
         )
+        for card in request.cards
+    )
     rows = [
         row for row in host.event_cards.snapshot()["grants"]
         if row["key"] == key and row["event_id"] == event_id
@@ -150,11 +138,10 @@ def apply_event_grant(host, request):
         collection_enabled=config.card_service_enabled,
     )
     staged = host.event_cards.stage_state(host.economy, host.events, (key,))
-    with _domain_errors():
-        staged.grant(
-            key, event_id, request.grant_id,
-            cards=tuple(Card(*card.full()) for card in cards), money=request.money,
-        )
+    staged.grant(
+        key, event_id, request.grant_id,
+        cards=tuple(Card(*card.full()) for card in cards), money=request.money,
+    )
     _commit(host, {}, {"event_cards": staged.snapshot()}, receipt)
     host.event_cards.publish_state(staged)
     return receipt
@@ -166,20 +153,19 @@ def apply_event_member(host, request):
     if receipt is not None:
         return receipt
     key, event_id = request.account_key, request.event_id
-    with _domain_errors():
-        account = _idle_account(host, key, "event corrections")
-        config = host.events.config(event_id)
-        member = host.events.member(key, event_id)
-        if member is None:
-            raise AdminActionError("event corrections require a registered event member")
-        staged = host.events.stage_state(host.economy)
-        if isinstance(request, EventEligibilityRequest):
-            staged.set_eligibility(key, event_id, request.value)
-        elif not staged.update_progress(
-            key, event_id, request.update_id,
-            steps_delta=request.steps_delta, completed_missions=request.completed_missions,
-        ):
-            raise AdminActionConflict("progress ID already exists without this audited request")
+    account = _idle_account(host, key, "event corrections")
+    config = host.events.config(event_id)
+    member = host.events.member(key, event_id)
+    if member is None:
+        raise AdminActionError("event corrections require a registered event member")
+    staged = host.events.stage_state(host.economy)
+    if isinstance(request, EventEligibilityRequest):
+        staged.set_eligibility(key, event_id, request.value)
+    elif not staged.update_progress(
+        key, event_id, request.update_id,
+        steps_delta=request.steps_delta, completed_missions=request.completed_missions,
+    ):
+        raise AdminActionConflict("progress ID already exists without this audited request")
     before = EventMemberState.from_member(member)
     after = EventMemberState.from_member(staged.member(key, event_id))
     receipt = EventMemberReceipt(
