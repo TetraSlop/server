@@ -20,40 +20,50 @@ Square Enix.
   `src/tmserver/data/economy_catalog.json`.
 - [tmloader](https://github.com/TetraSlop/loader), which starts the client and
   points it at this server.
-- Python 3.13 or newer, on Windows or Linux.
-- PostgreSQL 16 or newer, which holds the save (see
-  [PostgreSQL storage](docs/DATABASE.md)).
+- [Docker](https://docs.docker.com/get-docker/) with Compose. The server runs
+  from the `ghcr.io/tetraslop/server` image, with PostgreSQL 17 beside it.
 
 ## Get started
 
-1. Install the server:
+From a checkout of this repository:
 
-   ```powershell
-   python -m venv .venv
-   .venv/Scripts/python -m pip install -e ".[postgres,admin]"
-   ```
+```sh
+docker compose up --detach
+```
 
-   On Linux the scripts are in `.venv/bin`.
+This starts PostgreSQL 17, keeping the save in the `db` volume, and the server.
+On a checkout, Compose builds the image from source; `docker compose pull`
+fetches the released image instead. The server brings the database schema up
+to date each time it starts, then listens on the game port 51241 and the
+profile port 51220 of 127.0.0.1. Point [tmloader](https://github.com/TetraSlop/loader)
+at that address. Each player signs in with a username and password; the first
+login creates the account (see [Accounts](#accounts)). Any number of players can
+connect, and a table seats two or three.
 
-2. Create a database and bring its schema up to date, as described in
-   [PostgreSQL storage](docs/DATABASE.md):
+Set `POSTGRES_PASSWORD` in a `.env` file next to `compose.yaml` before the first
+start. The database is reachable only from the Compose network, and the password
+only takes effect when the `db` volume is created.
 
-   ```powershell
-   $env:TM_DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@127.0.0.1:5432/tetramaster'
-   .venv/Scripts/tmserver-db upgrade
-   ```
+Server options go in the server service's `command`, for example
+`command: ["--mode", "versus", "--players", "auto"]` in a `compose.override.yaml`.
+Run `docker compose run --rm --no-deps --entrypoint tmserver server --help` for
+rooms, events, human tables, prizes and ratings. `docker compose logs server`
+shows the server's output; its traffic logs are in `/var/lib/tmserver/var` in
+the container. Stop the server with `docker compose stop server` before you run
+an offline tool, such as `docker compose run --rm --entrypoint tmserver-admin server --help`.
 
-3. Start the server, then point [tmloader](https://github.com/TetraSlop/loader) at
-   its address. Each player signs in with a username and password; the first
-   login creates the account (see [Accounts](#accounts)). Any number of players
-   can connect, and a table seats two or three.
+### Run from source
 
-   ```powershell
-   .venv/Scripts/tmserver --log-dir var
-   ```
+For development, use Python 3.13 or newer on Windows or Linux and a PostgreSQL 16
+or newer database (see [PostgreSQL storage](docs/DATABASE.md)):
 
-Logs go to `var/` in the working directory. Run `tmserver --help` for rooms,
-events, human tables, prizes and ratings.
+```sh
+python -m venv .venv
+.venv/bin/python -m pip install -e ".[postgres,admin]"   # .venv/Scripts on Windows
+export TM_DATABASE_URL='postgresql+psycopg://USER:PASSWORD@127.0.0.1:5432/tetramaster'
+.venv/bin/tmserver-db upgrade
+.venv/bin/tmserver --log-dir var
+```
 
 ## Accounts
 
@@ -70,22 +80,39 @@ password `tm-local-test`. They are accepted from this machine only.
 
 ## Running a public server
 
-The game and profile listeners bind to 127.0.0.1 unless you say otherwise. To
-let other people connect, bind them to a public IPv4 address and open both TCP
-ports (51241 and 51220 by default) in the firewall:
+Copy `compose.yaml` from this repository to the server. Next to it, create a
+`.env` file that publishes both ports on every address:
 
-```powershell
-.venv/Scripts/tmserver --bind 0.0.0.0 --log-dir var
+```sh
+POSTGRES_PASSWORD=a-long-random-password
+TM_PUBLISH_ADDRESS=0.0.0.0
 ```
 
+Then start the released image and open both TCP ports (51241 and 51220) in the
+firewall:
+
+```sh
+docker compose pull
+docker compose up --detach
+```
+
+To upgrade, run the same two commands again. Compose replaces the server
+container, and the new one upgrades the schema before it listens.
 Players then point tmloader at the server's address. Before you do this:
 
 - Login is encrypted against eavesdroppers but the server is not authenticated,
   so someone who can intercept traffic can read passwords. Tell players not to
   reuse a password.
 - Failed-login and registration limits are per process and reset on restart.
-- Keep the admin panel on loopback; it never binds anywhere else.
-- Back up the PostgreSQL database; it holds every account and password hash.
+  They count by source address; Docker Engine on Linux keeps the players'
+  addresses, while Docker Desktop shows every player as the same address.
+- The built-in test accounts sign in from loopback only, which excludes
+  connections through Docker's published ports.
+- Keep the admin panel on loopback. In the container it can listen on all
+  addresses only when you publish its port on the host's loopback; see the
+  [admin panel](docs/ADMIN_PANEL.md#in-the-container).
+- Back up the PostgreSQL database; it holds every account and password hash,
+  for example with `docker compose exec db pg_dump -U tetramaster tetramaster`.
 
 ## Features and options
 

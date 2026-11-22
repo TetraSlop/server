@@ -10,8 +10,13 @@ and can be selected as a branch-protection requirement.
 
 Packaging checks exact wheel contents before installing in a new environment,
 then starts the installed services and smokes the entry points and admin
-templates. Successful builds retain the `tmserver-wheel` artifact for
-14 days.
+templates.
+
+The **Container image** job builds the Docker image with the GitHub Actions layer
+cache, without pushing it. It then starts `compose.yaml` (PostgreSQL 17, the
+schema upgrade and the server), waits for every service to be healthy, and runs
+`tools/check_container.py`. That script registers a new account with LOGIN and
+signs in to the game with it.
 
 The portable lane includes `tests/game/test_rules_vectors.py`, which checks the
 Python rules against the 8,067 results frozen from the client's own code in
@@ -51,9 +56,11 @@ in the repository workflow settings. No personal token is required.
 
 Release packages validates that the tag is exactly `v<pyproject version>`, reruns
 the Checks workflow on that tag, and publishes only after every check passes. It
-attaches the Python wheel and `SHA256SUMS`. Original game DLLs, private configuration,
-account saves and local logs are not packaged. Nothing is deployed to a server
-or uploaded to PyPI by these workflows.
+pushes the image for linux/amd64 and linux/arm64 to `ghcr.io/tetraslop/server`,
+tagged with the version (`0.1.0` for `v0.1.0`) and `latest`, then publishes the
+release notes. Releases carry no wheel or binary attachments. Original game DLLs,
+private configuration, account saves and local logs are not in the image.
+Nothing is deployed to a server or uploaded to PyPI by these workflows.
 
 For a failed release, correct the cause and rerun failed jobs, or manually run
 Release packages on the same version tag. A draft remains unpublished until

@@ -59,6 +59,29 @@ Stop the owning server and run `tmserver-db upgrade` to revision
 `0002_admin_audit` or later first. Existing accounts and Prize Center records
 remain unchanged.
 
+
+### In the container
+
+The panel binds to 127.0.0.1 unless you pass `--admin-bind`. Inside the
+container, loopback is not reachable from the host, so bind it to all addresses
+there and publish the port on the host's loopback only. Use the same port on
+both sides, because the panel checks that the browser's origin is
+`http://127.0.0.1:<port>`. Put this in a `compose.override.yaml`, and set
+`TM_ADMIN_PASSWORD` in `.env`:
+
+```yaml
+services:
+  server:
+    command: ["--admin-port", "8080", "--admin-bind", "0.0.0.0"]
+    environment:
+      TM_ADMIN_PASSWORD: ${TM_ADMIN_PASSWORD}
+    ports:
+      - "127.0.0.1:8080:8080"
+```
+
+Then open `http://127.0.0.1:8080/admin/` on the host. Never publish this port on
+a public address.
+
 ## Product scope
 
 | View | First version |
