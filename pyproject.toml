@@ -15,8 +15,8 @@ Repository = "https://github.com/sruon/tmserver"
 Issues = "https://github.com/sruon/tmserver/issues"
 
 [project.optional-dependencies]
-admin = ["starlette-admin==1.0.1", "starlette==1.7.0", "uvicorn==0.54.0"]
-auth = ["starlette==1.7.0", "uvicorn==0.54.0", "httpx==0.28.1", "websockets==17.1"]
+admin = ["starlette-admin==1.0.3", "starlette==1.10.0", "uvicorn==0.54.0"]
+auth = ["starlette==1.10.0", "uvicorn==0.54.0", "httpx==0.28.1", "websockets==17.3"]
 postgres = [
     "SQLAlchemy==2.0.54", "alembic==1.20.0",
     "psycopg==3.3.6; sys_platform == 'win32'",
