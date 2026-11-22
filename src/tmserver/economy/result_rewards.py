@@ -8,13 +8,23 @@ and this snapshot together before sending completion.
 
 import hashlib
 import json
-import re
 from copy import copy
 from dataclasses import dataclass, replace
 from functools import partial
+from typing import Annotated
+
+from pydantic import BaseModel, Field
 
 from tmserver.checks import stable_id
-from tmserver.economy.models import AccountView, MatchReservation
+from tmserver.economy.models import (
+    SAVED,
+    AccountView,
+    Digest,
+    MatchReservation,
+    SavedCard,
+    StableId,
+    Version1,
+)
 from tmserver.cards.model import Card
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import parse_named
@@ -345,22 +355,22 @@ class ResultRewardService:
     def snapshot(self):
         # No wire/GUI resumption is invented. Restored pending rows are recovery-
         # only; unaccepted edits intentionally roll back to committed account data.
-        return {
-            "version": 1,
-            "known": [
-                {"key": key, "id": rid, "digest": digest}
+        return _Journal(
+            version=1,
+            known=[
+                _SavedKnown(key=key, id=rid, digest=digest)
                 for (key, rid), digest in sorted(self._known.items())
             ],
-            "pending": [
-                {
-                    "key": p.key,
-                    "id": p.reward_id,
-                    "seat": p.seat,
-                    "extras": [list(c.full()) for c in p.extras],
-                }
+            pending=[
+                _SavedPending(
+                    key=p.key,
+                    id=p.reward_id,
+                    seat=p.seat,
+                    extras=[list(c.full()) for c in p.extras],
+                )
                 for p in self._pending.values()
             ],
-        }
+        ).model_dump()
 
     @classmethod
     def restore(cls, economy, auction, snapshot=None):
@@ -368,37 +378,44 @@ class ResultRewardService:
         if snapshot is None:
             return result
         try:
-            if not isinstance(snapshot, dict) or set(snapshot) != {"version", "known", "pending"}:
-                raise ResultRewardError("unsupported result reward snapshot fields")
-            if snapshot["version"] != 1:
-                raise ResultRewardError("unsupported result reward snapshot")
-            for row in snapshot["known"]:
-                if not isinstance(row, dict) or set(row) != {"key", "id", "digest"}:
-                    raise ResultRewardError("unsupported known result reward fields")
-                economy.account_view(row["key"])
-                rid = _id(row["id"])
-                identity = (row["key"], rid)
-                if identity in result._known or not re.fullmatch(r"[0-9a-f]{64}", row["digest"]):
+            saved = _Journal.model_validate(snapshot)
+            for row in saved.known:
+                economy.account_view(row.key)
+                if (row.key, row.id) in result._known:
                     raise ResultRewardError("invalid known result reward")
-                result._known[identity] = row["digest"]
-            for row in snapshot["pending"]:
-                if not isinstance(row, dict) or set(row) != {"key", "id", "seat", "extras"}:
-                    raise ResultRewardError("unsupported pending result reward fields")
-                key = row["key"]
-                economy.account_view(key)
-                rid = _id(row["id"])
-                extras = result._cards(Card(*c) for c in row["extras"])
-                if (
-                    key in result._pending
-                    or type(row["seat"]) is not int
-                    or row["seat"] not in (0, 1, 2)
-                ):
+                result._known[row.key, row.id] = row.digest
+            for row in saved.pending:
+                economy.account_view(row.key)
+                extras = result._cards(Card(*c) for c in row.extras)
+                if row.key in result._pending:
                     raise ResultRewardError("invalid pending result identity")
-                if result._known.get((key, rid)) != _digest(extras):
+                if result._known.get((row.key, row.id)) != _digest(extras):
                     raise ResultRewardError("pending reward disagrees with durable ID")
-                result._pending[key] = _Pending(key, rid, row["seat"], extras)
+                result._pending[row.key] = _Pending(row.key, row.id, row.seat, extras)
         except (TypeError, ValueError, KeyError, AttributeError) as exc:
             if isinstance(exc, ResultRewardError):
                 raise
             raise ResultRewardError("invalid result reward snapshot") from exc
         return result
+
+
+class _SavedKnown(BaseModel):
+    model_config = SAVED
+    key: str
+    id: StableId
+    digest: Digest
+
+
+class _SavedPending(BaseModel):
+    model_config = SAVED
+    key: str
+    id: StableId
+    seat: Annotated[int, Field(ge=0, le=2)]
+    extras: list[SavedCard]
+
+
+class _Journal(BaseModel):
+    model_config = SAVED
+    version: Version1
+    known: list[_SavedKnown]
+    pending: list[_SavedPending]
