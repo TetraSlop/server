@@ -2,7 +2,6 @@
 
 import re
 import time
-from copy import copy
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from tmserver.checks import STABLE_ID
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
+from tmserver.staging import Staged
 
 from .models import (
     EventAdmission,
@@ -73,13 +73,16 @@ EMPTY_FILES = {
 }
 
 
-class EventHost:
+class EventHost(Staged):
     """Authenticated event control and durable member/progress storage.
 
     Network adapters persist snapshot jointly with accounts before replies.
     DE membership validation/routing and match reservation remain adapter work.
     This object never accepts progress facts from the wire or grants a prize.
     """
+
+    _staged_fields = ("_members", "_updates", "_present", "_admissions")
+    _dependencies = ("economy",)
 
     def __init__(self, economy, configs=(), *, clock=time.time):
         self.economy = economy
@@ -94,21 +97,10 @@ class EventHost:
         self._present = {}
         self._admissions = {}
 
-    def stage_state(self, economy):
-        """Membership, progress facts and admissions are immutable map values."""
-        staged = copy(self)
-        staged.economy = economy
+    def _stage_keys(self, staged, keys):
+        # Membership and progress rows are immutable; their per-event maps are not.
         staged._members = {event: dict(rows) for event, rows in self._members.items()}
         staged._updates = {event: dict(rows) for event, rows in self._updates.items()}
-        staged._present = dict(self._present)
-        staged._admissions = dict(self._admissions)
-        return staged
-
-    def publish_state(self, staged):
-        self._members = staged._members
-        self._updates = staged._updates
-        self._present = staged._present
-        self._admissions = staged._admissions
 
     def config(self, event_id):
         try:

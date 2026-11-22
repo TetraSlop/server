@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+from types import SimpleNamespace
 from copy import deepcopy
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -27,7 +28,7 @@ class CommerceTests(unittest.TestCase):
         for index, key in enumerate(("alice", "bob", "carol"), 1):
             self.economy.provision(key, nn=index, name=key.encode())
         self.save = Mock()
-        self.commerce = Commerce(self.economy, self.save)
+        self.commerce = Commerce(SimpleNamespace(economy=self.economy, persist_changes=self.save))
 
     def enter(self):
         replies = self.commerce.shop("alice", shop_entry(self.economy, "alice"))
@@ -124,7 +125,9 @@ class TradeCommitTests(unittest.TestCase):
     def setUp(self):
         trade_tests.TradeTests.setUp(self)
         self.save = Mock()
-        self.trade = TradeService(self.economy, Commerce(self.economy, self.save))
+        self.trade = TradeService(
+            self.economy, Commerce(SimpleNamespace(economy=self.economy, persist_changes=self.save))
+        )
         self.trade._next_session = 17
         self.trade.bind("peer0", "left")
         self.trade.bind("peer1", "right")

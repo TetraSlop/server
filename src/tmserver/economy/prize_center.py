@@ -8,7 +8,6 @@ TetraPackets flows/prize-center.md.
 """
 
 import random
-from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, replace
 from functools import partial
 from typing import Annotated
@@ -20,6 +19,7 @@ from tmserver.economy.errors import EconomyError
 from tmserver.economy.models import SAVED, StableId, Version1
 from tmserver.economy.packets import check_entry, named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
+from tmserver.staging import Staged
 
 
 PrizeError = EconomyError
@@ -57,7 +57,10 @@ class _Session:
     pending: _Purchase | None = None
 
 
-class PrizeService:
+class PrizeService(Staged):
+    _staged_fields = ("_rng", "_pending_awards", "_known_awards", "_last", "_active", "_closed")
+    _dependencies = ("economy",)
+
     def __init__(self, economy, *, seed=None):
         self.economy = economy
         self._rng = random.Random(seed)
@@ -67,33 +70,16 @@ class PrizeService:
         self._active = {}
         self._closed = {}
 
-    def stage_state(self, economy, key):
-        """Keep draws and working purchases isolated until the joint save."""
-        staged = copy(self)
-        staged.economy = economy
-        staged._rng = deepcopy(self._rng)
-        staged._pending_awards = dict(self._pending_awards)
-        staged._known_awards = dict(self._known_awards)
-        staged._last = dict(self._last)
-        staged._active = dict(self._active)
-        staged._closed = dict(self._closed)
-        if key in self._known_awards:
+    def _stage_keys(self, staged, keys):
+        # Draws and working purchases stay isolated until the joint save.
+        for key in keys.intersection(self._known_awards):
             staged._known_awards[key] = set(self._known_awards[key])
-        if key in self._active:
+        for key in keys.intersection(self._active):
             row = self._active[key]
             pending = row.pending
             if pending is not None:
                 pending = replace(pending, cards=list(pending.cards), names=dict(pending.names))
             staged._active[key] = replace(row, pending=pending)
-        return staged
-
-    def publish_state(self, staged):
-        self._rng = staged._rng
-        self._pending_awards = staged._pending_awards
-        self._known_awards = staged._known_awards
-        self._last = staged._last
-        self._active = staged._active
-        self._closed = staged._closed
 
     def _draw(self):
         # Bind to this service's generator, including a staged service copy.

@@ -32,6 +32,7 @@ class EventMemberActionTests(AuditedActionCases, unittest.TestCase):
     apply = staticmethod(apply_event_member)
     request = staticmethod(request)
     journals = {"events"}
+    accounts = {"one"}
     changes = (dict(steps_delta=4), dict(kind="eligibility"), dict(update_id="other"))
 
     def correct(self, command):

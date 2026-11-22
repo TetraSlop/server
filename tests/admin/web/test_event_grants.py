@@ -12,7 +12,7 @@ from tests.events.test_event_rooms import config
 from tests.support.memory_store import MemoryStore
 from tmserver.admin.actions import apply_prize_award
 from tmserver.admin.audit import PrizeAwardRequest
-from tmserver.economy.claim_transactions import event_transaction
+from tmserver.transactions import EVENT_SERVICES, transaction
 from tmserver.economy.packets import named, parse_named
 from tmserver.network.server import Server
 
@@ -100,13 +100,13 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
         payload = named(
             0x90, 0, 0, f"@CardReq=/NN={view.nn:016X}/HID=0/Dm=1/Vol=1/CN={view.name.hex()}"
         )
-        with event_transaction(self.host, (self.key,)) as event:
-            replies = event.cards.handle(self.key, payload, event_id="festival")
+        with transaction(self.host, (self.key,), *EVENT_SERVICES) as event:
+            replies = event.event_cards.handle(self.key, payload, event_id="festival")
         fields = parse_named(replies[1])[3]["EcmInit"]
         number = int(fields["N"])
         for subtype, token in ((0x15, "Get"), (0x17, "Quit")):
-            with event_transaction(self.host, (self.key,)) as event:
-                event.cards.handle(
+            with transaction(self.host, (self.key,), *EVENT_SERVICES) as event:
+                event.event_cards.handle(
                     self.key,
                     named(0xB2, subtype, number, f"@{token}=/No={number}"),
                     event_id="festival",

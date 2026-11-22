@@ -6,7 +6,6 @@ your own listing. BC is a revision token chosen by this server. Layout:
 TetraPackets irc/A.md and file/auction-files.md.
 """
 
-from copy import copy
 from dataclasses import dataclass, replace
 from functools import partial
 
@@ -23,6 +22,7 @@ from tmserver.economy.auctions.models import (
 )
 
 from tmserver.economy.auctions.persistence import AuctionSnapshot, ExternalReturn
+from tmserver.staging import Staged
 
 INCREMENTS = (20, 50, 100, 200, 500, 1000)
 MAX_EXHIBITS = 30
@@ -41,7 +41,10 @@ class _Collection:
     phase: int = 0
 
 
-class AuctionEconomy:
+class AuctionEconomy(Staged):
+    _staged_fields = ("_listings", "_history", "_collections", "_external_returns")
+    _dependencies = ("economy",)
+
     def __init__(self, economy):
         self.economy = economy
         self._listings = {}
@@ -52,26 +55,10 @@ class AuctionEconomy:
         self._collections = {}
         self._external_returns = {}
 
-    def stage_state(self, economy, keys):
-        """Isolate selected collection editors; retain their capability identity."""
-        staged = copy(self)
-        staged.economy = economy
-        staged._external_returns = dict(self._external_returns)
-        staged._listings = dict(self._listings)  # Frozen rows.
-        staged._history = dict(self._history)  # Tuples of frozen bids.
-        staged._collections = dict(self._collections)
-        for key in set(keys).intersection(self._collections):
+    def _stage_keys(self, staged, keys):
+        # Collection editors keep their reservation objects.
+        for key in keys.intersection(self._collections):
             staged._collections[key] = replace(self._collections[key])
-        return staged
-
-    def publish_state(self, staged):
-        self._pending = staged._pending
-        self._next_pending = staged._next_pending
-        self._external_returns = staged._external_returns
-        self._listings = staged._listings
-        self._history = staged._history
-        self._next_id = staged._next_id
-        self._collections = staged._collections
 
     def _actor(self, key):
         v = self.economy.account_view(key)

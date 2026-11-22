@@ -9,7 +9,6 @@ from tmserver.protocol.messages import service_notice
 
 from contextlib import AsyncExitStack
 
-from tmserver.economy.claim_transactions import auction_transaction, prize_transaction
 from tmserver.economy.packets import parse_named
 from tmserver.events.routing import dispatch_event
 from tmserver.protocol.identities import SHOP_RAW, TRADE_RAW, game_id, service_nick
@@ -17,6 +16,7 @@ from tmserver.profiles.options import save_options
 from tmserver.profiles.transactions import character_profile_request
 from tmserver.rooms.routing import leave_other_rooms, validate_room_entry
 from tmserver.protocol.commands import parse
+from tmserver.transactions import transaction
 
 # Directory 1, version 1 for every list; Shm names the shop service.
 TEACH_DV_ANSWER = b"GTM0GE2000000@TeachDVAns=/D=1/V=1/AC=1|1/RK=1|1/Shm=%016X|1|1" % game_id(
@@ -65,8 +65,8 @@ async def dispatch(session, target, payload):
                 # advancement above can change the durable auction ledger.
                 replies = session.server.auction.handle(key, payload)
             else:
-                with auction_transaction(session.server, (key,)) as auction:
-                    replies = auction.handle(key, payload)
+                with transaction(session.server, (key,), "auction") as tx:
+                    replies = tx.auction.handle(key, payload)
             for answer in replies:
                 await session.send(service_notice(target, session.nick, answer))
             return True
@@ -82,8 +82,8 @@ async def dispatch(session, target, payload):
         collecting = session.server.auction.collection_active(key)
         if collection_entry or (prefix == b"GTM0GB2" and collecting):
             session.server.advance_auctions()
-            with auction_transaction(session.server, (key,)) as auction:
-                replies = auction.handle(key, payload)
+            with transaction(session.server, (key,), "auction") as tx:
+                replies = tx.auction.handle(key, payload)
         elif (
             prefix != b"GTM0GB0"
             and not collecting
@@ -93,8 +93,8 @@ async def dispatch(session, target, payload):
                 or session.server.prize.can_replay_quit(key, payload)
             )
         ):
-            with prize_transaction(session.server, key) as prize:
-                replies = prize.handle(key, payload)
+            with transaction(session.server, (key,), "prize") as tx:
+                replies = tx.prize.handle(key, payload)
         if replies is not None:
             source = service_nick(SHOP_RAW)
             for answer in replies:

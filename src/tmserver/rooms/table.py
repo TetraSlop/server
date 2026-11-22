@@ -13,7 +13,6 @@ from tmserver.game.match import MatchService
 from tmserver.game.errors import RulesExecutionError
 from tmserver.game.packets import decode as decode_match
 from tmserver.game.packets import packet as match_packet
-from tmserver.economy.match_transactions import match_transaction
 from tmserver.rooms.watchdog import MatchWatchdog
 from tmserver.economy.result_rewards import ResultRewardError
 from tmserver.rankings.stats import PracticeStats
@@ -24,6 +23,7 @@ from tmserver.rooms.admission import rejected as reject_admission
 from tmserver.protocol.table import channel_exit, viewer_state
 from tmserver.profiles.preferences import parse_save
 from tmserver.rooms.roster import TableRoster
+from tmserver.transactions import MATCH_SERVICES, transaction
 
 
 class OrdinaryTable:
@@ -123,7 +123,7 @@ class OrdinaryTable:
                 self.host.economy.release_match(reservation)
         else:
             keys = [peer.nick.decode("ascii") for peer in self.match_reservations]
-            with match_transaction(self.host, keys) as state:
+            with transaction(self.host, keys, *MATCH_SERVICES) as state:
                 reservations = dict(self.match_reservations)
                 if (
                     self.match_economy_round is not None
@@ -195,7 +195,7 @@ class OrdinaryTable:
     def authorize_match_round(self, match, number, stake, *, player_count=None):
         round_id = f"{self.match_instance_id}:{number}"
         tokens = self.match_tokens(match)
-        with match_transaction(self.host, (t.account.key for t in tokens.values())) as state:
+        with transaction(self.host, (t.account.key for t in tokens.values()), *MATCH_SERVICES) as state:
             # The final all-yes Continue accepts the previous reward inventory
             # and deducts the next stake in the same durable transaction.
             for seat, token in tokens.items():
@@ -258,7 +258,7 @@ class OrdinaryTable:
         if round_id != self.match_economy_round:
             raise ValueError("prize settlement has no durable admitted round")
         tokens = self.match_tokens(match)
-        with match_transaction(self.host, (t.account.key for t in tokens.values())) as state:
+        with transaction(self.host, (t.account.key for t in tokens.values()), *MATCH_SERVICES) as state:
             tokens = self.settle_match_cards(
                 match, round_id, result.settlement.transfers, state, tokens
             )
@@ -286,7 +286,7 @@ class OrdinaryTable:
         managed = match.card_prizes or match.allow_wagers
         inputs = self.match_result_inputs.get(marks[0][0], {})
         tokens = self.match_tokens(match)
-        with match_transaction(self.host, stats) as state:
+        with transaction(self.host, stats, *MATCH_SERVICES) as state:
             refreshed = state.ratings.commit_growth(
                 rounds,
                 stats_by_key=stats,
@@ -496,7 +496,7 @@ class OrdinaryTable:
                 if session in self.spectator_admissions:
                     raise ValueError("observer cannot submit participant result edits")
                 key = self.host.ensure_account(session.nick)
-                with match_transaction(self.host, (key,)) as state:
+                with transaction(self.host, (key,), *MATCH_SERVICES) as state:
                     replies = state.result_rewards.handle(key, payload)
                     token = state.result_rewards.reservation(key)
                 if replies is not None:
@@ -627,7 +627,7 @@ class OrdinaryTable:
                         economy.save_table_preferences(key, **preference_update)
                 if accepting_result:
                     token = self.match_reservations[session]
-                    with match_transaction(self.host, (key,)) as state:
+                    with transaction(self.host, (key,), *MATCH_SERVICES) as state:
                         if state.result_rewards.has_pending(key):
                             token = state.result_rewards.commit(key)
                         if responses is not None and "PR" in msg.sections["Continue"]:

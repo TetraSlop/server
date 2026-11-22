@@ -130,12 +130,12 @@ class AwardPostgresTests(PostgresActionCases, DatabaseFixture, unittest.TestCase
         return self.host
 
     def redeem(self, key):
-        from tmserver.economy.claim_transactions import prize_transaction
+        from tmserver.transactions import transaction
         from tmserver.economy.packets import named
 
         view = self.host.economy.account_view(key)
-        with prize_transaction(self.host, key) as prize:
-            prize.handle(key, named(
+        with transaction(self.host, (key,), "prize") as prize:
+            prize.prize.handle(key, named(
                 0x70, 0, 0, f"@CvReq=/NN={view.nn:016X}/HID=0/Dm=1/Vol=1/CN={view.name.hex()}"
             ))
 

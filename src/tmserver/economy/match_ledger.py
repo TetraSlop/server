@@ -7,7 +7,7 @@ use the client's offline formula.
 
 import hashlib
 import json
-from copy import copy, deepcopy
+from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Annotated, Literal
@@ -18,6 +18,7 @@ from tmserver.cards.model import Card, card_values
 from tmserver.checks import stable_id, uint
 from tmserver.economy.models import MAX_MONEY, SAVED, Digest, SavedCard, StableId, Version1
 from tmserver.economy.errors import EconomyError
+from tmserver.staging import Staged
 
 
 MatchEconomyError = EconomyError
@@ -106,24 +107,18 @@ class _Journal(BaseModel):
     rounds: list[_SavedRound]
 
 
-class MatchEconomy:
+class MatchEconomy(Staged):
+    _staged_fields = ("_rounds",)
+    _dependencies = ("economy",)
 
     def __init__(self, economy):
         self.economy = economy
         self._rounds = {}
 
-    def stage_state(self, economy, keys):
-        keys = frozenset(keys)
-        staged = copy(self)
-        staged.economy = economy
-        staged._rounds = {
-            identity: deepcopy(row) if keys.intersection(row.seats.values()) else row
-            for identity, row in self._rounds.items()
-        }
-        return staged
-
-    def publish_state(self, staged):
-        self._rounds = staged._rounds
+    def _stage_keys(self, staged, keys):
+        for identity, row in self._rounds.items():
+            if keys.intersection(row.seats.values()):
+                staged._rounds[identity] = deepcopy(row)
 
     def status(self, round_id):
         row = self._row(round_id)

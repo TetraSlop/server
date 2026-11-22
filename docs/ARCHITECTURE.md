@@ -43,7 +43,7 @@ load-test commands. `results/` and `var/` are ignored output and local state.
 | Event configuration and matchmaking | [events/config.py](../src/tmserver/events/config.py), [events/adapter.py](../src/tmserver/events/adapter.py), [events/matchmaking.py](../src/tmserver/events/matchmaking.py) |
 | Accounts, purchases, trade and rewards | [economy/service.py](../src/tmserver/economy/service.py), [economy/](../src/tmserver/economy/) |
 | LOGIN, registration and password hashes | [accounts/credentials.py](../src/tmserver/accounts/credentials.py), [accounts/provisioning.py](../src/tmserver/accounts/provisioning.py), `Server.login` in [network/server.py](../src/tmserver/network/server.py) |
-| Auction records, protocol and escrow | [economy/auctions/](../src/tmserver/economy/auctions/), [economy/claim_transactions.py](../src/tmserver/economy/claim_transactions.py) |
+| Auction records, protocol and escrow | [economy/auctions/](../src/tmserver/economy/auctions/) |
 | Profile files and saved player settings | [profiles/service.py](../src/tmserver/profiles/service.py), [profiles/characters.py](../src/tmserver/profiles/characters.py), [profiles/preferences.py](../src/tmserver/profiles/preferences.py) |
 | Ratings, statistics and ranking files | [rankings/policy.py](../src/tmserver/rankings/policy.py), [rankings/stats.py](../src/tmserver/rankings/stats.py), [rankings/service.py](../src/tmserver/rankings/service.py) |
 | Save, validate or recover durable state | [storage/postgres.py](../src/tmserver/storage/postgres.py), [storage/restore.py](../src/tmserver/storage/restore.py), [storage/validation.py](../src/tmserver/storage/validation.py) |
@@ -114,7 +114,7 @@ Use the same boundaries when adding or changing substantial feature code:
 | Models | Shared dataclasses, state values, capabilities and field invariants. | [game/models.py](../src/tmserver/game/models.py), [economy/models.py](../src/tmserver/economy/models.py), [events/models.py](../src/tmserver/events/models.py) |
 | Packets | Parse requests, validate wire fields and encode replies or native files. | [game/packets.py](../src/tmserver/game/packets.py), [economy/packets.py](../src/tmserver/economy/packets.py), [events/packets.py](../src/tmserver/events/packets.py) |
 | Services | Feature behavior, permissions, state transitions and operation-specific staging. | `game/match.py`, `economy/service.py`, `events/service.py` |
-| Transactions | Coordinate the affected accounts/journals; save before publishing or replying. | `economy/commerce.py`, `economy/claim_transactions.py`, `economy/match_transactions.py`, `profiles/transactions.py` |
+| Transactions | Stage the affected accounts/journals; save before publishing or replying. | [transactions.py](../src/tmserver/transactions.py), [staging.py](../src/tmserver/staging.py), `economy/commerce.py` |
 | Storage | Implement the save contract with SQLAlchemy Core on PostgreSQL. | [storage/validation.py](../src/tmserver/storage/validation.py), `storage/postgres.py`, `storage/schema.py` |
 
 Import a shared value or codec from its owner, not through a service that happens
@@ -137,9 +137,9 @@ requests and connection-local state, and `ledger.py` for escrow and settlement.
 Tests mirror that package under `tests/economy/auctions/`. A small cohesive
 feature can stay in a single file until that separation helps readers.
 
-Cross-feature commits stay in the transaction coordinator. An auction purchase
+Cross-feature commits go through one `transaction()`. An auction purchase
 changes both account balances and the auction journal, so
-`economy/claim_transactions.py` saves both through one storage call. SQL edits
+`transaction(host, keys, "auction")` saves both through one storage call. SQL edits
 stay in the shared backend; splitting them into independent feature saves would
 break that atomic boundary. Packet encoders can consume model values without
 importing the ledger, service or storage backend.
@@ -237,13 +237,15 @@ cleanup; a persistence failure retains the existing fail-closed behavior.
 
 ## A durable operation
 
-1. A handler opens the appropriate concrete transaction context.
-2. The economy stages only the affected accounts. Each affected service's
-   `stage_state` method copies its own mutable editors, random generator or
-   journal maps. Immutable values and unrelated capabilities retain identity.
+1. A handler opens `transaction(host, keys, *services)`.
+2. The economy stages only the affected accounts. Each named service (and the
+   services it depends on) is staged through the `Staged` mixin: the containers
+   in its `_staged_fields` are shallow-copied and its `_stage_keys` hook copies
+   the mutable editors of the keyed accounts. Other accounts' rows and every
+   reservation object keep their identity.
 3. Domain methods apply the operation to these staged objects.
-4. The coordinator saves the affected accounts and service journals together.
-5. After a successful save, `publish_state` updates the existing service objects;
+4. The context saves the affected accounts and service journals together.
+5. After a successful save, `publish_staged` updates the existing service objects;
    the handler can then send a success reply.
 
 An exception before publication discards the staged changes. A storage error
@@ -258,13 +260,12 @@ before recovery can write. A configured path that cannot be opened fails before
 recovery; a later recovery failure closes the log even while its exception is
 retained. Save errors retain the fail-closed behavior above.
 
-Use [economy/commerce.py](../src/tmserver/economy/commerce.py) for account-only
-edits, [economy/match_transactions.py](../src/tmserver/economy/match_transactions.py)
-for match settlement, [economy/claim_transactions.py](../src/tmserver/economy/claim_transactions.py)
-for auction/prize/event claims and [profiles/transactions.py](../src/tmserver/profiles/transactions.py)
-for character-profile records. Each coordinator shows its participants and
-commit order explicitly. Copy rules belong beside the service fields they protect.
-Do not add a service field without deciding how staging and publication treat it.
+[transactions.py](../src/tmserver/transactions.py) lists every staged service,
+its journal and its dependencies. Match settlement stages `MATCH_SERVICES`,
+event claims `EVENT_SERVICES`; [economy/commerce.py](../src/tmserver/economy/commerce.py)
+wraps the account-only edits. Copy rules belong beside the service fields they
+protect: add a field that the service changes to `_staged_fields`, and copy its
+per-account mutable rows in `_stage_keys`.
 
 These contexts are synchronous and must never cross an `await`. Live service
 references remain stable, including table capabilities and cross-service reads.

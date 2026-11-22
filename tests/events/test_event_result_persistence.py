@@ -145,12 +145,12 @@ class EventResultPersistenceTests(unittest.TestCase):
             detached["rounds"][0][field].clear()
         detached["rounds"].pop()
         self.assertEqual(journal.snapshot(), json.loads(SAVED))
-        staged = journal.stage_state()
+        staged = journal.stage_copy()
         self.assertIs(staged._rows["local:0"], journal._rows["local:0"])
         outcome = EventRoundOutcome((1, 2), (7, 3), (1, 3), False)
         staged.record(self.host, "festival", "new", outcome, ("0", "1"))
         self.assertEqual(journal.snapshot(), json.loads(SAVED))
-        journal.publish_state(staged)
+        journal.publish_staged(staged)
         self.assertEqual(journal.snapshot()["rounds"][-1]["id"], "new")
 
 

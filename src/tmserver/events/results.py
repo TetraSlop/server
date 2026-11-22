@@ -1,11 +1,11 @@
 """Event outcome receipts and step counting (server choice)."""
 
-from copy import copy
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tmserver.checks import STABLE_ID
+from tmserver.staging import Staged
 
 
 _Identifier = Annotated[str, Field(pattern=rf"\A{STABLE_ID}\z")]
@@ -49,17 +49,11 @@ class _Journal(BaseModel):
     rounds: list[_Result]
 
 
-class EventResults:
+class EventResults(Staged):
+    _staged_fields = ("_rows",)  # Existing receipts are never edited.
+
     def __init__(self):
         self._rows = {}
-
-    def stage_state(self):
-        staged = copy(self)
-        staged._rows = dict(self._rows)  # Existing receipts are never edited.
-        return staged
-
-    def publish_state(self, staged):
-        self._rows = staged._rows
 
     def record(self, host, event_id, round_id, outcome, keys, policy="none"):
         if outcome.aborted:
@@ -92,10 +86,10 @@ class EventResults:
             if delta:
                 updates.append((key, delta))
         if updates:
-            staged = host.stage_state(host.economy)
+            staged = host.stage_copy(economy=host.economy)
             for key, delta in updates:
                 staged.update_progress(key, row.event, row.id, steps_delta=delta)
-            host.publish_state(staged)
+            host.publish_staged(staged)
         self._rows[row.id] = row
         return True
 

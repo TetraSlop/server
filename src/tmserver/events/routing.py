@@ -2,10 +2,10 @@
 
 from tmserver.protocol.messages import service_notice
 
-from tmserver.economy.claim_transactions import event_transaction
 from tmserver.profiles.options import save_options
 from tmserver.rooms.routing import leave_other_rooms, validate_room_entry
 from tmserver.protocol.commands import parse
+from tmserver.transactions import EVENT_SERVICES, transaction
 
 
 async def dispatch_event(session, target, payload):
@@ -50,7 +50,7 @@ async def dispatch_event(session, target, payload):
         if entering and session in binding.room.members:
             await leave_other_rooms(server, session, key, binding.room)
         if commands[0].token != b"DR":
-            with event_transaction(server, (key,)) as state:
+            with transaction(server, (key,), *EVENT_SERVICES) as state:
                 if entering and session in binding.room.members:
                     responses.extend((session, p) for p in state.events.admit_room(key, event_id))
                 if commands[0].token == b"PC":
@@ -71,11 +71,11 @@ async def dispatch_event(session, target, payload):
         or route == "card"
         and family == b"GTM0GB2"
     ):
-        with event_transaction(server, (key,)) as state:
+        with transaction(server, (key,), *EVENT_SERVICES) as state:
             if payload.startswith(b"GTM0G84"):
                 replies = [save_options(state.events.economy, key, payload)]
             elif route == "card" and family in (b"GTM0G90", b"GTM0GB2"):
-                replies = state.cards.handle(key, payload, event_id=event_id)
+                replies = state.event_cards.handle(key, payload, event_id=event_id)
             else:
                 replies = state.events.handle(key, payload, event_id=event_id, route=route)
     else:

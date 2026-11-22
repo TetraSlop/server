@@ -1,53 +1,48 @@
-"""Scoped account transactions for shop, trade, profile and deck updates.
+"""Account-only commits for shop, trade, profile and deck updates.
 
-Validate and change isolated accounts, commit them, then publish live state.
-The caller sends protocol replies only after these synchronous operations return.
+Commerce stands in for EconomyService where a caller needs the same methods
+saved: TradeService and EventMatchmaking take either. Each method runs in one
+transaction(); the caller sends protocol replies only after it returns.
 """
 
 from contextlib import contextmanager
 
+from tmserver.transactions import transaction
+
 
 class Commerce:
-    def __init__(self, economy, persist_changes):
-        self.economy = economy
-        self.persist_changes = persist_changes
+    def __init__(self, host):
+        self.host = host
 
     @contextmanager
     def edit_account(self, key):
         """Stage profile/preferences using the same one-account save boundary."""
-        with self.economy.edit_accounts((key,)) as staged:
-            yield staged
-            self.persist_changes(staged.snapshot()["accounts"], {})
+        with transaction(self.host, (key,)) as tx:
+            yield tx.economy
 
     def initialize_profile(self, key, payload):
         """Init probes and retries only save when they select a new guild."""
-        with self.economy.edit_accounts((key,)) as staged:
-            guild = staged.account_view(key).guild
-            reply = staged.initialize_profile(key, payload)
-            if staged.account_view(key).guild != guild:
-                self.persist_changes(staged.snapshot()["accounts"], {})
+        with transaction(self.host, (key,)) as tx:
+            guild = tx.economy.account_view(key).guild
+            reply = tx.economy.initialize_profile(key, payload)
+            tx.save = tx.economy.account_view(key).guild != guild
             return reply
 
     def shop(self, key, payload):
-        with self.economy.edit_accounts((key,)) as staged:
-            replies = staged.handle(key, payload)
-            if replies is not None:
-                self.persist_changes(staged.snapshot()["accounts"], {})
+        with transaction(self.host, (key,)) as tx:
+            replies = tx.economy.handle(key, payload)
+            tx.save = replies is not None
             return replies
 
     def commit_exchange(self, reservation, cards_by_key, deck_names_by_key=None):
         keys = tuple(view.key for view in reservation.accounts)
-        with self.economy.edit_accounts(keys) as staged:
-            staged.commit_exchange(reservation, cards_by_key, deck_names_by_key)
-            self.persist_changes(staged.snapshot()["accounts"], {})
+        with transaction(self.host, keys) as tx:
+            tx.economy.commit_exchange(reservation, cards_by_key, deck_names_by_key)
 
     def apply_deck_changes(self, key, cards, names=None):
-        with self.economy.edit_accounts((key,)) as staged:
-            staged.apply_deck_changes(key, cards, names)
-            self.persist_changes(staged.snapshot()["accounts"], {})
+        with transaction(self.host, (key,)) as tx:
+            tx.economy.apply_deck_changes(key, cards, names)
 
     def apply_match_deck_changes(self, reservation, cards, names=None):
-        with self.economy.edit_accounts((reservation.account.key,)) as staged:
-            token = staged.apply_match_deck_changes(reservation, cards, names)
-            self.persist_changes(staged.snapshot()["accounts"], {})
-        return token
+        with transaction(self.host, (reservation.account.key,)) as tx:
+            return tx.economy.apply_match_deck_changes(reservation, cards, names)

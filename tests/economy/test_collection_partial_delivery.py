@@ -14,11 +14,7 @@ from tests.economy.entries import collection_request, prize_entry
 from tests.events.test_event_rooms import config
 from tests.support.irc import Client
 from tests.support.memory_store import MemoryStore
-from tmserver.economy.claim_transactions import (
-    auction_transaction,
-    event_transaction,
-    prize_transaction,
-)
+from tmserver.transactions import EVENT_SERVICES, transaction
 from tmserver.cards.model import Card
 from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import SHOP_RAW, service_nick
@@ -156,8 +152,8 @@ class CollectionPartialDeliveryTests(unittest.IsolatedAsyncioTestCase):
         for cutoff in range(2):  # CvEnter, ExcInit.
             with self.subTest(failed_response=cutoff):
                 async with self.case():
-                    with prize_transaction(self.game, self.key) as prize:
-                        prize.grant_award(self.key, "partial.prize", top30=5000)
+                    with transaction(self.game, (self.key,), "prize") as prize:
+                        prize.prize.grant_award(self.key, "partial.prize", top30=5000)
                     before = self.game.economy.inventory(self.key)
                     await self.interrupt_entry(SHOP, prize_entry(self.game.economy, self.key), cutoff)
                     self.assertEqual(self.game.economy.prize_points(self.key), 5000)
@@ -188,9 +184,9 @@ class CollectionPartialDeliveryTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(failed_response=cutoff):
                 async with self.case():
                     card = replace(self.game.economy.inventory(self.key)[0], deck=255)
-                    with event_transaction(self.game, (self.key,)) as state:
+                    with transaction(self.game, (self.key,), *EVENT_SERVICES) as state:
                         state.events.admit_room(self.key, "festival")
-                        state.cards.grant(
+                        state.event_cards.grant(
                             self.key, "festival", "partial.event", cards=(card,) * 12, money=75
                         )
                     before = self.game.economy.inventory(self.key)
@@ -224,14 +220,14 @@ class CollectionPartialDeliveryTests(unittest.IsolatedAsyncioTestCase):
         for cutoff in range(4):  # Init, Data/payment, two Returned Cards pages.
             with self.subTest(failed_response=cutoff):
                 async with self.case():
-                    with auction_transaction(self.game, (self.key, self.buyer)) as auction:
-                        auction.handle(self.key, exhibit_request(auction.economy, self.key))
-                        auction.handle(
-                            self.buyer, bid_request(auction.economy, self.buyer, 1, 100, 0)
+                    with transaction(self.game, (self.key, self.buyer), "auction") as auction:
+                        auction.auction.handle(self.key, exhibit_request(auction.auction.economy, self.key))
+                        auction.auction.handle(
+                            self.buyer, bid_request(auction.auction.economy, self.buyer, 1, 100, 0)
                         )
-                        catalog = auction.economy.catalog
+                        catalog = auction.auction.economy.catalog
                         card = Card(249, 255, 3, 255, 255, catalog.points(249, 255, 255, 255), 255)
-                        auction.ledger.enqueue_returned(self.key, "partial.return", (card,) * 30)
+                        auction.auction.ledger.enqueue_returned(self.key, "partial.return", (card,) * 30)
                     self.now = self.game.auction_ledger.listing(1).expires
                     self.game.advance_auctions()
                     before = self.game.economy.inventory(self.key)

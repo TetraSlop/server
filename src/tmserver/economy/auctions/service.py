@@ -8,7 +8,6 @@ collection capabilities belong to one connection.
 import re
 import struct
 import time
-from copy import copy
 from dataclasses import dataclass, replace
 
 from tmserver.economy.auctions.models import AuctionError
@@ -30,6 +29,7 @@ from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import card_pages, check_entry, named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
 from tmserver.protocol.commands import Command, encode_service, parse
+from tmserver.staging import Staged
 
 
 @dataclass
@@ -41,13 +41,16 @@ class _Collection:
     names: dict
 
 
-class AuctionService:
+class AuctionService(Staged):
     """handle(key,bytes)->replies|None; file/delete use account-scoped paths.
 
     Query operations never reserve an account. ER/BR reserve only their atomic
     ledger mutation. B0/01 collection owns the account until its second Get or
     disconnect. No client request exists for cancelling an active exhibit.
     """
+
+    _staged_fields = ("_sessions", "_snapshots", "_collections")
+    _dependencies = ("ledger", "economy")
 
     MAX_SNAPSHOTS = 64  # Search files kept per connection.
 
@@ -56,13 +59,7 @@ class AuctionService:
         self._snapshots, self._collections, self._sessions = {}, {}, {}
         self._next_id = 1
 
-    def stage_state(self, ledger, keys):
-        """Stage wire sessions against the transaction's account/ledger view."""
-        staged = copy(self)
-        staged.ledger, staged.economy = ledger, ledger.economy
-        staged._sessions = dict(self._sessions)
-        staged._snapshots = dict(self._snapshots)
-        staged._collections = dict(self._collections)
+    def _stage_keys(self, staged, keys):
         for key in keys:
             if key in self._snapshots:
                 staged._snapshots[key] = dict(self._snapshots[key])
@@ -71,13 +68,6 @@ class AuctionService:
                 staged._collections[key] = replace(
                     row, cards=list(row.cards), names=dict(row.names)
                 )
-        return staged
-
-    def publish_state(self, staged):
-        self._sessions = staged._sessions
-        self._snapshots = staged._snapshots
-        self._collections = staged._collections
-        self._next_id = staged._next_id
 
     def collection_active(self, key):
         return key in self._collections
