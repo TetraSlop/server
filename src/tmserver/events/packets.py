@@ -5,7 +5,9 @@ Layout: TetraPackets file/event-files.md.
 
 import re
 import struct
+from functools import partial
 
+from tmserver.checks import decimal, exact_keys, stable_id
 from tmserver.game.packets import packet
 
 from .models import EventError, PrizeDisplay
@@ -187,25 +189,9 @@ def announcement(identifier, contents, loops=1):
     )
 
 
-def _id(value):
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value):
-        raise EventError("invalid stable event/update ID")
-    return value
-
-
-def _keys(values, expected):
-    if set(values) != set(expected):
-        raise EventError("unexpected event fields")
-
-
-def _number(value, maximum=0xFFFFFFFF):
-    if (
-        not isinstance(value, str)
-        or not re.fullmatch(r"[0-9]{1,10}", value)
-        or int(value) > maximum
-    ):
-        raise EventError("invalid event decimal")
-    return int(value)
+_id = partial(stable_id, error=EventError, what="stable event/update ID")
+_keys = partial(exact_keys, error=EventError, what="event fields")
+_number = partial(decimal, error=EventError, what="event decimal")
 
 
 def _identity(value):

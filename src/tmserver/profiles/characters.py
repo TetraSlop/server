@@ -8,7 +8,9 @@ to fields. Layout: TetraPackets irc/P.md.
 import re
 import struct
 from copy import copy
+from functools import partial
 
+from tmserver import checks
 from tmserver.data.resources import read_json
 from tmserver.protocol.commands import Command, encode_service, parse
 
@@ -17,10 +19,7 @@ VISIBILITY = {b"FO": 8, b"VO": 40}
 NO_VISIBILITY = {6: 47, 14: 55}
 
 
-def decimal(value, maximum):
-    if re.fullmatch(rb"[0-9]{1,10}", value) is None or int(value) > maximum:
-        raise ValueError("profile integer outside field domain")
-    return int(value)
+decimal = partial(checks.decimal, what="profile integer")
 
 
 def locator(value):

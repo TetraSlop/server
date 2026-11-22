@@ -11,7 +11,9 @@ import random
 import re
 from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, replace
+from functools import partial
 
+from tmserver.checks import decimal, exact_keys, hex_bytes, stable_id
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.packets import named, parse_named
 from tmserver.cards.edits import apply_card_edits, parse_edit_records
@@ -20,28 +22,9 @@ from tmserver.cards.edits import apply_card_edits, parse_edit_records
 PrizeError = EconomyError
 
 
-def _integer(value, maximum=0xFFFFFFFF):
-    if (
-        not isinstance(value, str)
-        or not re.fullmatch(r"[0-9]{1,10}", value)
-        or int(value) > maximum
-    ):
-        raise PrizeError("invalid Prize Center integer")
-    return int(value)
-
-
-def _fields(value, names):
-    if set(value) != set(names):
-        raise PrizeError("unexpected or missing Prize Center fields")
-
-
-def _hex(value, maximum):
-    if len(value) > maximum * 2 or len(value) % 2 or not re.fullmatch(r"[0-9A-Fa-f]*", value):
-        raise PrizeError("invalid Prize Center string")
-    data = bytes.fromhex(value)
-    if b"\0" in data:
-        raise PrizeError("embedded string terminator")
-    return data
+_integer = partial(decimal, error=PrizeError, what="Prize Center integer")
+_fields = partial(exact_keys, error=PrizeError, what="Prize Center fields")
+_hex = partial(hex_bytes, error=PrizeError, what="Prize Center string")
 
 
 @dataclass(frozen=True)
@@ -138,8 +121,7 @@ class PrizeService:
 
     @staticmethod
     def _award(award_id, top30, lucky, rookies, lucky_cards):
-        if not isinstance(award_id, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", award_id):
-            raise PrizeError("award requires a stable bounded policy ID")
+        stable_id(award_id, error=PrizeError, what="award ID")
         if any(type(v) is not int or not 0 <= v <= 65535 for v in (top30, lucky, rookies)):
             raise PrizeError("award exceeds original WORD field")
         cards = tuple(lucky_cards)

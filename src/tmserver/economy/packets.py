@@ -1,7 +1,9 @@
 """Bounded named economy envelopes and their field validation dialect."""
 
 import re
+from functools import partial
 
+from tmserver.checks import decimal, exact_keys, hex_bytes
 from tmserver.economy.errors import EconomyError
 
 _HEADER = re.compile(rb"GTM0G([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})")
@@ -11,27 +13,10 @@ _SECTION = re.compile(r"([A-Za-z][A-Za-z0-9]*|[0-9]+)=(.*)\Z")
 _FIELD = re.compile(r"([A-Za-z][A-Za-z0-9]*)=([^/@]*)\Z")
 
 
-def _int(text, minimum=0, maximum=0xFFFFFFFF):
-    if not isinstance(text, str) or not re.fullmatch(r"-?[0-9]{1,10}", text):
-        raise EconomyError("invalid decimal field")
-    number = int(text)
-    if not minimum <= number <= maximum:
-        raise EconomyError("number outside supported field width")
-    return number
-
-
-def _hex(text, maximum):
-    if len(text) % 2 or len(text) > maximum * 2 or not re.fullmatch(r"[0-9A-Fa-f]*", text):
-        raise EconomyError("invalid hexadecimal string")
-    value = bytes.fromhex(text)
-    if b"\0" in value:
-        raise EconomyError("embedded string terminator")
-    return value
-
-
-def _keys(fields, expected):
-    if set(fields) != set(expected):
-        raise EconomyError("unexpected or missing fields")
+# Economy fields accept a signed spelling (-0 included) and bound it afterwards.
+_int = partial(decimal, signed=True, error=EconomyError, what="decimal field")
+_hex = partial(hex_bytes, error=EconomyError)
+_keys = partial(exact_keys, error=EconomyError)
 
 
 def parse_named(payload):

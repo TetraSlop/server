@@ -439,9 +439,7 @@ class EconomyService:
         Ordinary money, result statistics and prize points are unchanged.
         """
         view = self._match_view(reservation)
-        earned = tuple(self.catalog.validate(c) for c in earned)
-        if len(earned) > 30 or any(c.deck != 255 for c in earned):
-            raise EconomyError("invalid generated result reward batch")
+        earned = self.catalog.validate_batch(earned)
         expected = list(view.cards) + list(earned)
         final, names = self._replacement(
             view, expected, cards, deck_names, allow_discard=True, label="result"
