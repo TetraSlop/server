@@ -8,7 +8,7 @@ from collections import deque
 from tmserver.protocol.admission import validate_admission
 from tmserver.protocol.identities import GAME_KEY, service_nick
 from tmserver.game.packets import decode, packet
-from tmserver.rooms.spectators import SpectatorError, SpectatorService
+from tmserver.rooms.spectators import SpectatorError
 from tmserver.protocol.table import channel_exit, viewer_state
 
 
@@ -31,17 +31,7 @@ class EventSpectators:
             return old
         if old is not None:
             self._evict_target(target)
-        template = self.adapter.server.default_table.spectators
-        service = SpectatorService(
-            enabled=template.enabled,
-            clock=template.clock,
-            bootstrap_delay=template.bootstrap_delay,
-            turn_delay=template.turn_delay,
-            action_delay=template.action_delay,
-            packet_delay=template.packet_delay,
-            max_backlog=template.max_backlog,
-            max_observers=template.max_observers,
-        )
+        service = self.adapter.server.default_table.spectators.fresh()
         self.contexts[target] = (engine, service)
         return engine, service
 

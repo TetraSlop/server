@@ -232,6 +232,12 @@ class SpectatorService:
         self._observers = {}
         self._evicted = []
 
+    def fresh(self):
+        """A service with the same settings and no observers, for another table."""
+        settings = ("bootstrap_delay", "turn_delay", "action_delay", "packet_delay")
+        settings += ("enabled", "clock", "max_backlog", "max_observers")
+        return SpectatorService(**{name: getattr(self, name) for name in settings})
+
     def active(self, peer):
         return peer in self._observers
 
@@ -284,15 +290,13 @@ class SpectatorService:
         msg = decode(payload)
         if msg is None or msg.primary != 0x43:
             raise SpectatorError("not a spectator gameplay packet")
-        return (
-            self.bootstrap_delay
-            if msg.subtype in (8, 0x25, 0x26)
-            else (
-                self.turn_delay
-                if msg.subtype == 9
-                else self.action_delay if msg.subtype in (0x0A, 0x0C) else self.packet_delay
-            )
-        )
+        if msg.subtype in (8, 0x25, 0x26):
+            return self.bootstrap_delay
+        if msg.subtype == 9:
+            return self.turn_delay
+        if msg.subtype in (0x0A, 0x0C):
+            return self.action_delay
+        return self.packet_delay
 
     def record_sent(self, peer, payload, *, epoch):
         """Complete an ordered delivery after drain, ignoring retired epochs.

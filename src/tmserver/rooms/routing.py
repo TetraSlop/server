@@ -23,23 +23,22 @@ def validate_room_entry(server, peer, room, *, allow_lobby_exit=False):
 async def leave_other_rooms(server, peer, key, room):
     # Called only after destination DE succeeded. Detach every old roster
     # before awaiting delivery, so a full/invalid destination never moves us.
+    others = [
+        (service_nick(t.room.room_id ^ GAME_KEY), t.room.room_root, None)
+        for t in server.ordinary_room_routes.values()
+    ]
+    others += [(service_nick(b.raw_owner), b.room, b.event_id) for b in server.event_rooms.rooms]
     updates = []
     chat_updates = []
-    for previous in server.ordinary_room_routes.values():
-        if previous.room.room_root is not room.room_root:
-            source = service_nick(previous.room.room_id ^ GAME_KEY)
-            was_member = peer in previous.room.members
-            updates.append((source, previous.room.leave(peer)))
-            if was_member:
-                chat_updates.extend(server.chat.leave(peer, source))
-    for binding in server.event_rooms.rooms:
-        if binding.room is not room.room_root:
-            source = service_nick(binding.raw_owner)
-            was_member = peer in binding.room.members
-            updates.append((source, binding.room.leave(peer)))
-            if was_member:
-                chat_updates.extend(server.chat.leave(peer, source))
-            server.events.leave_room(key, binding.event_id)
+    for source, previous, event_id in others:
+        if previous is room.room_root:
+            continue
+        was_member = peer in previous.members
+        updates.append((source, previous.leave(peer)))
+        if was_member:
+            chat_updates.extend(server.chat.leave(peer, source))
+        if event_id is not None:
+            server.events.leave_room(key, event_id)
     for source, deliveries in updates:
         if deliveries:
             await server.room_updates(deliveries, source=source)
