@@ -21,7 +21,6 @@ class EventAdapter:
         server,
         configs=(),
         *,
-        hand_provider=None,
         progress_policy="none",
         allow_observers=False,
     ):
@@ -34,7 +33,6 @@ class EventAdapter:
             server.events,
             server.event_rooms,
             configs,
-            hand_provider=hand_provider,
             allow_observers=allow_observers,
             transactions=server.commerce,
             rules_backend=server.rules_backend,
