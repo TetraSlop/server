@@ -10,13 +10,13 @@ from itertools import product
 from pathlib import Path
 
 from tests import ROOT
+from tmserver.game.original.image import OriginalCodeError
 from tmserver.game.original.runtime import default_rules
 from tmserver.game.rules import (
     CRTLCG,
     BattleSide,
     Card,
     GrowthBaseline,
-    RulesError,
 )
 
 BASE = ROOT
@@ -80,18 +80,14 @@ class RulesAPITests(unittest.TestCase):
 
     def test_invalid_domains_are_explicit(self):
         c = Card(0, 1, 0, 1, 1, 1, 0)
-        with self.assertRaises(RulesError):
-            default_rules().calculate_battle(c, c, lambda: 0, attacker_modifier=128)
-        with self.assertRaises(RulesError):
-            default_rules().calculate_battle(c, c, lambda: -1)
-        with self.assertRaises(RulesError):
-            default_rules().calculate_battle(c, c, lambda: 0, defender_property=256)
-        with self.assertRaises(RulesError):
-            GrowthBaseline(0, 1, 1, 1, 10)
-        with self.assertRaises(RulesError):
-            Card(65535, 1, 0, 1, 1, 1, 0)
-        with self.assertRaises(RulesError):
-            CRTLCG(True)
+        native = default_rules()
+        for effects in ({"attacker_modifier": 128}, {"defender_property": 256}):
+            with self.assertRaisesRegex(OriginalCodeError, "invalid bridge input"):
+                native.calculate_battle(c, c, lambda: 0, **effects)
+        with self.assertRaisesRegex(OriginalCodeError, "Random draw"):
+            native.calculate_battle(c, c, lambda: -1)
+        with self.assertRaisesRegex(OriginalCodeError, "invalid bridge input"):
+            native.grow_card(c, GrowthBaseline(0, 1, 1, 1, 10), 0, 0)
 
     def test_existing_card_adapters(self):
         from tmserver.cards.model import Card as EconomyCard

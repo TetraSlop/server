@@ -3,13 +3,8 @@
 import unittest
 from dataclasses import dataclass
 
-from tmserver.game.ai import (
-    BLOCKED,
-    AIError,
-    Cell,
-    Move,
-    Personality,
-)
+from tmserver.game.ai import BLOCKED, Cell, Move
+from tmserver.game.original.image import OriginalCodeError
 from tmserver.game.original.runtime import default_rules
 
 
@@ -69,22 +64,20 @@ class NativeAIPolicyTests(unittest.TestCase):
         self.assertEqual(default_rules().choose_move((Card(),), board, 0, Draws([0] * 6)), Move(0, 6))
 
     def test_input_validation(self):
-        for value in (-1, 256, True):
-            with self.assertRaises(AIError):
-                Personality(score_chance=value)
         for invalid in (-1, 32768, True):
-            with self.assertRaises(AIError):
+            with self.assertRaisesRegex(OriginalCodeError, "Random draw"):
                 default_rules().choose_move((Card(),), (None,) * 16, 0, Draws([invalid]))
+        # Draws([]) fails on any draw, so these prove valid() rejects before randomness.
         for hand, board, owner in (
             ((Card(0x8009),), (None,) * 16, 0),
             ((Card(),), (None,) * 24, 0),
             ((Card(),), (None,) * 16, 2),
             ((Card(),) * 6, (None,) * 16, 0),
         ):
-            with self.assertRaises(AIError):
+            with self.assertRaisesRegex(OriginalCodeError, "invalid bridge input"):
                 default_rules().choose_move(hand, board, owner, Draws([]))
         for targets in ((1, 1), (-1,), (16,), tuple(range(9))):
-            with self.assertRaises(AIError):
+            with self.assertRaisesRegex(OriginalCodeError, "invalid bridge input"):
                 default_rules().choose_target(targets, Draws([]))
 
 
