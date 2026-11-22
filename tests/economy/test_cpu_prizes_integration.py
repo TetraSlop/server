@@ -10,6 +10,7 @@ from tests import ROOT
 from tests.game import test_computer_menu_integration as computer
 from tests.economy.test_match_prizes_integration import full
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.protocol.identities import TABLE_RAW
 from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
@@ -25,8 +26,8 @@ class CPUPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.state_path = Path(self.temp.name) / "state.json"
-        self.server = Server(state_path=self.state_path, allow_wagers=self.wagers, card_prizes=True)
+        self.store = MemoryStore()
+        self.server = Server(store=self.store, allow_wagers=self.wagers, card_prizes=True)
         self.port = await self.server.start(0)
         self.client = Client()
         await self.client.open(self.port)
@@ -75,7 +76,7 @@ class CPUPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 Counter(map(full, self.server.economy.inventory(self.key))), Counter(kept + earned)
             )
         self.assertTrue(transfers, "fixture must exercise an actual CPU card transfer")
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
             self.assertFalse(restored.auction_ledger.pending(self.key))
@@ -85,9 +86,9 @@ class CPUPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_crash_before_continue_recovers_only_human_prizes(self):
         await self.menu()
         match, kept, earned, settlement = await self.round(1)
-        crash = self.state_path.with_name("crash.json")
-        crash.write_bytes(self.state_path.read_bytes())
-        restored = Server(state_path=crash)
+        crash = MemoryStore()
+        crash.save(self.store.load())
+        restored = Server(store=crash)
         try:
             self.assertEqual(
                 Counter(map(full, restored.economy.inventory(self.key))), Counter(kept)

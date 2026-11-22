@@ -80,7 +80,7 @@ class PrivacyIntegration(unittest.IsolatedAsyncioTestCase):
         await self.play()
         await self.request(TABLE_RAW, packet(0x43, 17, 0, "@Continue=/Ans=2/PR=1/Conf=0"))
         self.check(1)
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.profile_bytes(self.key)[0xB6], 1)
             self.assertEqual(RankingService(restored.economy).records(2)[0xC0], 1)

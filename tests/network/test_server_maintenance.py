@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from tests.economy.auctions.test_auction_service import bid_request, exhibit_request
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.claim_transactions import auction_transaction
 from tmserver.rooms.config import OrdinaryRoomConfig
 from tmserver.network.server import Server
@@ -35,7 +36,7 @@ class ServerMaintenanceTests(unittest.IsolatedAsyncioTestCase):
         folder = Path(
             self.enterContext(tempfile.TemporaryDirectory(prefix="tmserver-maintenance-"))
         )
-        self.path = folder / "state.json"
+        self.store = MemoryStore()
         self.log_path = folder / "game.jsonl"
         self.clock = MaintenanceClock()
         # Patching asyncio.sleep itself would also intercept every table watchdog.
@@ -44,7 +45,7 @@ class ServerMaintenanceTests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch("tmserver.network.server.asyncio", server_asyncio))
         extra = OrdinaryRoomConfig(b"Second Room", 0x101, 0x201, b"#ROOM2", b"#TABLE2")
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             log_path=self.log_path,
             auction_clock=lambda: self.clock.now,
             ordinary_rooms=(extra,),
@@ -94,11 +95,11 @@ class ServerMaintenanceTests(unittest.IsolatedAsyncioTestCase):
         purchases = self.server.auction_ledger.pending(self.buyer)
         self.assertEqual([(p.kind, p.amount) for p in payments], [("payment", 100)])
         self.assertEqual([(p.kind, p.card) for p in purchases], [("won", first.card)])
-        saved = json.loads(self.path.read_text(encoding="utf8"))
+        saved = self.store.load()
         self.assertEqual(saved["auction"], self.server.auction_ledger.snapshot())
 
         before_stop = self.server.snapshot()
-        before_bytes = self.path.read_bytes()
+        before_bytes = self.store.load()
         await self.server.stop()
         self.assertTrue(maintenance.done())
         self.assertTrue(pending.cancelled())
@@ -106,7 +107,7 @@ class ServerMaintenanceTests(unittest.IsolatedAsyncioTestCase):
         self.clock.now = later.expires + 1
         await asyncio.sleep(0)
         self.assertEqual(self.server.snapshot(), before_stop)
-        self.assertEqual(self.path.read_bytes(), before_bytes)
+        self.assertEqual(self.store.load(), before_bytes)
         self.assertEqual(self.server.auction_ledger.listing(later.id).status, "active")
 
     async def test_expiry_write_failure_keeps_listing_and_stops_maintenance_without_retry(self):
@@ -116,7 +117,7 @@ class ServerMaintenanceTests(unittest.IsolatedAsyncioTestCase):
         maintenance = self.server.auction_task
         pending = await self.clock.paused()
         before = self.server.snapshot()
-        before_bytes = self.path.read_bytes()
+        before_bytes = self.store.load()
         failure = OSError("injected auction storage failure")
 
         with patch.object(self.server.store, "save_changes", side_effect=failure):
@@ -127,7 +128,7 @@ class ServerMaintenanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(self.server.storage_failed, failure)
         self.assertFalse(self.server.listener.is_serving())
         self.assertEqual(self.server.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), before_bytes)
+        self.assertEqual(self.store.load(), before_bytes)
         self.assertEqual(self.server.auction_ledger.listing(item.id).status, "active")
         self.assertEqual(self.server.auction_ledger.pending(self.seller), ())
         self.assertEqual(self.server.auction_ledger.pending(self.buyer), ())

@@ -1,10 +1,12 @@
 """Three-player WatchInfo/WatchCard consumers and encrypted observer isolation."""
 
 import unittest
+from pathlib import Path
 
 from tests.game import test_three_player_integration as versus
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.rooms.harness import instant_spectators, read_notice, serve
+from tests.support.memory_store import DATABASE
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.network.local_accounts import account_specs
 from tmserver.game.packets import decode, packet
@@ -72,7 +74,7 @@ class ThreePlayerSpectatorIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([m.argument for m in live if m.subtype == 10], list(range(15)))
         self.assertFalse(any(m.subtype == 0x1A for m in live))
         self.assertEqual(self.server.economy.profile_bytes(key), before)
-        profile = ProfileServer(self.state_path.parent / "profile.jsonl", self.server)
+        profile = ProfileServer(Path(self.harness_temp.name) / "profile.jsonl", self.server)
         port = await profile.start(0)
         try:
             row = account_specs(4)[key]
@@ -96,7 +98,7 @@ class ThreePlayerSpectatorIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(not self.server.nicks[c.nick].closed for c in self.clients[:3]))
 
     def test_four_accounts_option_survives_three_player_auto_enrollment(self):
-        args = arguments(["--mode", "versus", "--players", "3", "--accounts", "4"])
+        args = arguments([*DATABASE, "--mode", "versus", "--players", "3", "--accounts", "4"])
         self.assertEqual(args.accounts, 4)
 
 

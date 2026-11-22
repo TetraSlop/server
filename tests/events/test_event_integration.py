@@ -14,6 +14,7 @@ from tests.events.test_event_rooms import presence
 from tests.profiles.test_profile_accounts import transact
 from tests.profiles.test_profile_location import request as file_request
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.economy.packets import named, parse_named
 from tmserver.events.models import EventConfig, EventListing
 from tmserver.events.packets import event_data
@@ -29,7 +30,7 @@ class EventIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.now = 200
         self.config = EventConfig(
             "festival",
@@ -46,7 +47,7 @@ class EventIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def start(self):
         self.server = Server(
-            state_path=self.path, event_configs=(self.config,), event_clock=lambda: self.now
+            store=self.store, event_configs=(self.config,), event_clock=lambda: self.now
         )
         self.port = await self.server.start(0)
         self.profile = ProfileServer(Path(self.temp.name) / "profile.jsonl", self.server)
@@ -173,13 +174,13 @@ class EventIntegrationTests(unittest.IsolatedAsyncioTestCase):
         card = replace(self.server.economy.inventory(self.key)[0], deck=255)
         self.server.event_cards.grant(self.key, "festival", "earned3", cards=(card,), money=100)
         self.server.persist()
-        saved = self.path.read_bytes()
+        saved = self.store.load()
         from tmserver.protocol.identities import service_nick
 
-        with patch.object(Path, "replace", side_effect=OSError("injected event save failure")):
+        with failing_commits("injected event save failure"):
             await self.client.send(b"NOTICE " + service_nick(0x1002) + b" :" + self.card_request())
             self.assertEqual(await self.client.read(), b"")
-        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(self.store.load(), saved)
         await self.stop()
         await self.start()
         await self.enter_room()

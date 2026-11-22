@@ -13,4 +13,3 @@ results/
 *.log
 *.tmp
 *.lock
-local_state.json

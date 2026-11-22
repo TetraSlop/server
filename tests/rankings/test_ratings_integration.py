@@ -13,6 +13,7 @@ from tests.game import test_computer_menu_integration as computer
 from tests.economy import test_match_prizes_integration as prizes
 from tests.economy import test_match_wagers_integration as wagers
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.rankings.history import HistoryState, classify_result
 from tmserver.game.packets import decode, packet
 from tmserver.rankings.packets import RECORD_SIZE
@@ -32,9 +33,9 @@ class RatingIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             match_mode="versus",
             match_player_count=self.player_count,
             account_count=self.player_count,
@@ -87,10 +88,10 @@ class RatingIntegrationTests(unittest.IsolatedAsyncioTestCase):
             + self.server.default_table.match.round_stake * self.player_count,
             10000 * self.player_count,
         )
-        crash = self.path.with_name("restart.json")
-        crash.write_bytes(self.path.read_bytes())
+        crash = MemoryStore()
+        crash.save(self.store.load())
         restored = Server(
-            state_path=crash, account_count=self.player_count, rating_mode="local-history"
+            store=crash, account_count=self.player_count, rating_mode="local-history"
         )
         try:
             self.assertEqual(restored.ratings.snapshot(), self.server.ratings.snapshot())
@@ -114,21 +115,19 @@ class RatingIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
         def save(accounts, journals):
             if any(a["results"] for a in journals["ratings"]["history"]["accounts"].values()):
-                with patch.object(
-                    Path, "replace", side_effect=OSError("injected rated-result save failure")
-                ):
+                with failing_commits("injected rated-result save failure"):
                     return original(accounts, journals)
             return original(accounts, journals)
 
         with patch.object(self.server, "persist_changes", side_effect=save):
             with self.assertRaises((AssertionError, ConnectionError)):
                 await self.play()
-        stored = json.loads(self.path.read_text())
+        stored = self.store.load()
         self.assertEqual(stored["ratings"]["history"]["accounts"], {})
-        crash = self.path.with_name("restart.json")
-        crash.write_bytes(self.path.read_bytes())
+        crash = MemoryStore()
+        crash.save(self.store.load())
         restored = Server(
-            state_path=crash, account_count=self.player_count, rating_mode="local-history"
+            store=crash, account_count=self.player_count, rating_mode="local-history"
         )
         try:
             for key in self.keys:
@@ -153,9 +152,9 @@ class CpuRatingIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.state_path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.server = Server(
-            state_path=self.state_path, allow_wagers=True, rating_mode="local-history"
+            store=self.store, allow_wagers=True, rating_mode="local-history"
         )
         self.port = await self.server.start(0)
         self.client = Client()

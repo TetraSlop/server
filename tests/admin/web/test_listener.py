@@ -8,10 +8,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from tests.support.memory_store import DATABASE, MemoryStore, opened_by
 from tmserver.cli.serve import arguments, running_services
 from tmserver.network.server import Server
 from tmserver.profiles.service import ProfileServer
-from tmserver.storage.json import writer_lease
 
 
 class AdminListenerTests(unittest.IsolatedAsyncioTestCase):
@@ -21,24 +21,22 @@ class AdminListenerTests(unittest.IsolatedAsyncioTestCase):
 
         self.httpx, self.admin_server = httpx, server
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.state = self.root / "state.json"
+        self.store = MemoryStore()
+        self.enterContext(opened_by("tmserver.cli.serve", self.store))
         self.enterContext(patch.dict(os.environ, {"TM_ADMIN_PASSWORD": "test-operator-password"}))
         self.args = arguments([
-            "--state", str(self.state), "--log-dir", str(self.root / "logs"),
+            *DATABASE, "--log-dir", str(self.root / "logs"),
             "--game-port", "0", "--profile-port", "0", "--admin-port", "0",
         ])
 
     def assert_owned(self):
-        with self.assertRaisesRegex(OSError, "JSON writer lease"):
-            with writer_lease(self.state):
-                self.fail("writer lease released while a service was still stopping")
+        self.assertFalse(self.store.closed, "store closed while a service was still stopping")
 
     async def assert_closed(self, ports):
         for port in ports:
             with self.assertRaises(OSError):
                 await asyncio.open_connection("127.0.0.1", port)
-        with writer_lease(self.state):
-            pass
+        self.assertTrue(self.store.closed)
 
     async def test_http_inspects_the_same_host_as_encrypted_game_and_profile_connections(self):
         from tests.support.irc import Client
@@ -86,7 +84,7 @@ class AdminListenerTests(unittest.IsolatedAsyncioTestCase):
                 await client.close()
         await self.assert_closed(ports)
 
-    async def test_occupied_admin_port_releases_both_protocol_listeners_and_writer_lease(self):
+    async def test_occupied_admin_port_releases_both_protocol_listeners_and_store(self):
         occupied = await asyncio.start_server(lambda reader, writer: writer.close(), "127.0.0.1", 0)
         self.addAsyncCleanup(occupied.wait_closed)
         self.addCleanup(occupied.close)
@@ -110,7 +108,7 @@ class AdminListenerTests(unittest.IsolatedAsyncioTestCase):
         await self.assert_closed(ports)
         self.assertTrue(occupied.is_serving())
 
-    async def test_cancellation_drains_http_before_protocols_and_releases_lease(self):
+    async def test_cancellation_drains_http_before_protocols_and_closes_store(self):
         ready = asyncio.Event()
         ports = []
 
@@ -145,7 +143,7 @@ class AdminListenerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(raised.exception, failure)
         await self.assert_closed(ports)
 
-    async def test_http_shutdown_failure_still_stops_protocols_under_writer_lease(self):
+    async def test_http_shutdown_failure_still_stops_protocols_with_store_open(self):
         stop = self.admin_server._stop
         order = []
 

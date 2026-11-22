@@ -8,6 +8,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.game import test_versus_integration as versus_tests
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.rankings.stats import PracticeStats
@@ -20,9 +21,9 @@ class ThreePlayerIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.server = Server(
-            state_path=self.path, match_mode="versus", match_player_count=3, account_count=3
+            store=self.store, match_mode="versus", match_player_count=3, account_count=3
         )
         self.port = await self.server.start(0)
         self.clients = []
@@ -128,7 +129,7 @@ class ThreePlayerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         for key in self.keys:
             self.assertFalse(self.server.economy.is_reserved(key))
         restored = Server(
-            state_path=self.path, match_mode="versus", match_player_count=3, account_count=3
+            store=self.store, match_mode="versus", match_player_count=3, account_count=3
         )
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())

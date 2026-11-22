@@ -4,7 +4,6 @@
   "tests.auth.test_config",
   "tests.cards.test_native_card_values",
   "tests.cli.test_admin",
-  "tests.cli.test_local_play",
   "tests.economy.test_combined_three_player_rewards",
   "tests.economy.test_cpu_prizes_integration",
   "tests.economy.test_match_prize_edges",
@@ -53,7 +52,5 @@
   "tests.rooms.test_table_kick",
   "tests.rooms.test_three_player_computer_observers",
   "tests.rooms.test_three_player_spectators",
-  "tests.storage.test_json_state_store",
-  "tests.storage.test_startup_snapshot_validation",
-  "tests.storage.test_writer_lease"
+  "tests.storage.test_startup_snapshot_validation"
 ]

@@ -158,7 +158,7 @@ class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
             self.assertEqual([m.argument for m in puts], list(range(first_put, 15)))
             self.assertEqual({m.sections["PutCard"]["A"] for m in puts}, {"0", "1", "2"})
             self.assertEqual(sum(m.subtype == 13 for m in stream), 1)
-        saved = json.loads(self.state_path.read_text(encoding="utf-8"))
+        saved = self.store.load()
         for client in (early, late):
             key = client.nick.decode()
             self.assertFalse(self.server.economy.is_busy(key))

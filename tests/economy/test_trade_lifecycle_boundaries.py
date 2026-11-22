@@ -15,8 +15,8 @@ from tmserver.cards.catalog import Catalog
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import player_id
 from tests.support.irc import ACCOUNTS
+from tests.support.memory_store import MemoryStore
 from tmserver.network.server import Server
-from tmserver.storage.json import JsonStateStore
 from tmserver.economy.trade import TradeError
 
 
@@ -61,7 +61,7 @@ class TradeLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         economy = EconomyService(seed=1)
         for side, nick in enumerate(ACCOUNTS):
             economy.provision(
@@ -71,8 +71,8 @@ class TradeLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 name=(b"Left", b"Right")[side],
                 cards=[card(economy.catalog, model) for model in range(side * 30, side * 30 + 30)],
             )
-        JsonStateStore(self.path).save(economy.snapshot())
-        self.server = Server(state_path=self.path)
+        self.store.save(economy.snapshot())
+        self.server = Server(store=self.store)
         self.port = await self.server.start(0)
         self.clients = [Client(), Client()]
         for client, nick in zip(self.clients, ACCOUNTS):
@@ -82,7 +82,7 @@ class TradeLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_first_page_retry_preserves_progress_and_changed_page_restarts_upload(self):
         original = [self.server.economy.inventory(key) for key in self.keys]
-        before, saved = self.server.snapshot(), self.path.read_bytes()
+        before, saved = self.server.snapshot(), self.store.load()
         await self.enter()
         peer = self.server.nicks[self.clients[0].nick]
         trade = self.server.trade._active[peer]
@@ -122,7 +122,7 @@ class TradeLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 offered.append(changed)
         self.assertIs(trade.reservation, reservation)
         self.assertEqual(self.server.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(self.store.load(), saved)
 
         for mode in (1, 2):
             for side in (0, 1):
@@ -137,7 +137,7 @@ class TradeLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
             await self.operation(0, 0x22, edits(0, "Decks", name=(1, b"After Get"))), []
         )
         self.assertEqual(self.server.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(self.store.load(), saved)
         replies = await self.operation(1, 0x1D, "@Get=/P=1")
         self.assertEqual(len(replies), 2)
         for side, key in enumerate(self.keys):
@@ -148,10 +148,10 @@ class TradeLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             dict(self.server.economy.account_view(self.keys[0]).deck_names)[1], b"After Get"
         )
-        committed = self.server.snapshot(), self.path.read_bytes()
+        committed = self.server.snapshot(), self.store.load()
         self.assertEqual(len(await self.operation(0, 0x1D, "@Get=/P=0")), 1)
-        self.assertEqual((self.server.snapshot(), self.path.read_bytes()), committed)
-        restored = Server(state_path=self.path)
+        self.assertEqual((self.server.snapshot(), self.store.load()), committed)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.snapshot(), committed[0])
         finally:

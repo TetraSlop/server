@@ -12,6 +12,7 @@ from tests.admin.test_actions import AuditedActionCases, request as prize_reques
 from tests.events.test_event_rooms import config, presence
 from tests.network import test_services_integration as service_tests
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.admin.actions import (
     AdminActionConflict,
     AdminActionError,
@@ -103,7 +104,7 @@ class EventGrantActionTests(AuditedActionCases, unittest.TestCase):
 
     def setUp(self):
         self.folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.path = self.folder / "state.json"
+        self.store = MemoryStore()
         self.now = 200
         self.configs = (
             config(card_service_enabled=True),
@@ -118,7 +119,7 @@ class EventGrantActionTests(AuditedActionCases, unittest.TestCase):
 
     def server(self):
         return Server(
-            state_path=self.path, event_configs=self.configs, event_clock=lambda: self.now
+            store=self.store, event_configs=self.configs, event_clock=lambda: self.now
         )
 
     def grant(self, **changes):
@@ -322,9 +323,9 @@ class EncryptedEventGrantTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_audited_grant_is_only_delivered_by_original_encrypted_f_collection(self):
         folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        path = folder / "state.json"
+        store = MemoryStore()
         event = config(card_service_enabled=True)
-        self.server = Server(state_path=path, event_configs=(event,), event_clock=lambda: 200)
+        self.server = Server(store=store, event_configs=(event,), event_clock=lambda: 200)
         self.addAsyncCleanup(self.server.stop)
         port = await self.server.start(0)
         self.client = Client()
@@ -363,7 +364,7 @@ class EncryptedEventGrantTests(unittest.IsolatedAsyncioTestCase):
         await self.request(0x1002, named(0xB2, 0x17, number, f"@Quit=/No={number}"))
         self.assertEqual(len(self.server.economy.inventory(key)), len(before.cards) + 1)
         self.assertEqual(apply_event_grant(self.server, value), receipt)
-        saved = json.loads(path.read_text())
+        saved = store.load()
         self.assertEqual(saved["event_cards"]["grants"][0]["card_offset"], 1)
         self.assertEqual(saved["event_cards"]["grants"][0]["money_claimed"], 25)
         self.assertEqual(saved["admin_audit"]["receipts"], [receipt.model_dump(mode="json")])

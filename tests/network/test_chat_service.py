@@ -9,6 +9,7 @@ from pathlib import Path
 from tests import FIXTURES
 from tests.support.irc import ACCOUNTS, Client
 from tests.profiles.test_profile_accounts import file_request, transact
+from tests.support.memory_store import MemoryStore
 from tmserver.network.chat import ChatService, Member, relay_text, roster_pages
 from tmserver.protocol.identities import ROOM_RAW, player_id, service_nick
 from tmserver.network.local_accounts import MAX_ACCOUNTS
@@ -18,7 +19,6 @@ from tmserver.profiles.packets import checked
 from tmserver.profiles.service import ProfileServer
 from tmserver.protocol.messages import FRAME_OVERHEAD, MAX_LINE
 from tmserver.protocol.wire import frame_line
-from tmserver.storage.json import JsonStateStore
 
 NATIVE_NAMES = json.loads((FIXTURES / "chat_native_names.json").read_text())
 
@@ -378,9 +378,9 @@ class ChatAccountNameIntegrationTests(unittest.IsolatedAsyncioTestCase):
         asyncio.get_running_loop().slow_callback_duration = 1
         nicks = list(ACCOUNTS)
         with tempfile.TemporaryDirectory() as folder:
-            state = Path(folder) / "state.json"
+            store = MemoryStore()
             for restored in (False, True):
-                server = Server(state_path=state)
+                server = Server(store=store)
                 profile = (
                     ProfileServer(Path(folder) / "profile.jsonl", server)
                     if check_profiles
@@ -395,7 +395,7 @@ class ChatAccountNameIntegrationTests(unittest.IsolatedAsyncioTestCase):
                             server.account_keys.add(nick.decode())
                         server.persist()
                     before = server.snapshot()
-                    saved = state.read_bytes()
+                    saved = store.load()
                     native = {key: server.economy.profile_bytes(key) for key in server.account_keys}
                     port = await server.start(0)
                     profile_port = await profile.start(0) if profile is not None else None
@@ -405,12 +405,12 @@ class ChatAccountNameIntegrationTests(unittest.IsolatedAsyncioTestCase):
                                 server, port, nicks, names, profile_port=profile_port
                             )
                             self.assertEqual(server.snapshot(), before)
-                            self.assertEqual(state.read_bytes(), saved)
+                            self.assertEqual(store.load(), saved)
                             for nick, name in zip(nicks, names, strict=True):
                                 key = nick.decode()
                                 self.assertEqual(server.economy.account_view(key).name, name)
                                 self.assertEqual(server.economy.profile_bytes(key), native[key])
-                    self.assertEqual(JsonStateStore(state).load()["accounts"], before["accounts"])
+                    self.assertEqual(store.load()["accounts"], before["accounts"])
                 finally:
                     if profile is not None:
                         await profile.stop()

@@ -10,6 +10,7 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.events.test_event_rooms import config, presence
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.events.models import EventTableConfig
 from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
 from tmserver.game.packets import decode, packet
@@ -40,7 +41,7 @@ class EventMatchHelpers:
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.cfg = config(match_enabled=True, card_service_enabled=True)
         self.table = EventTableConfig("festival", game_id(0x1003), b"#EVTABLE001")
         self.clients = []
@@ -51,7 +52,7 @@ class EventMatchHelpers:
 
         self.table = replace(self.table, player_count=n)
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             account_count=n,
             event_configs=(self.cfg,),
             event_tables=(self.table,),
@@ -214,7 +215,7 @@ class EventMatchIntegrationTests(EventMatchHelpers, unittest.IsolatedAsyncioTest
         await self.play()
         outcome = self.engine.outcome
         self.assertEqual(sum(outcome.scores), n * 5)
-        saved = json.loads(self.path.read_text())
+        saved = self.store.load()
         self.assertEqual(len(saved["event_results"]["rounds"]), 1)
         for side, key in enumerate(self.keys):
             results = [p for _, p in self.inbox[side] if b"@EventResult=" in p]
@@ -248,7 +249,7 @@ class EventMatchIntegrationTests(EventMatchHelpers, unittest.IsolatedAsyncioTest
         await self.send(0, self.table.table_id, packet(0x43, 14, n * 5, "@Ready=/Ans=0"))
         self.assertEqual(len(self.server.event_results.snapshot()["rounds"]), 1)
         restored = Server(
-            state_path=self.path,
+            store=self.store,
             account_count=n,
             event_configs=(self.cfg,),
             event_tables=(self.table,),
@@ -352,11 +353,7 @@ class EventMatchIntegrationTests(EventMatchHelpers, unittest.IsolatedAsyncioTest
 
         def fail_after_outcome(accounts, journals):
             if journals.get("event_results", {}).get("rounds"):
-                with patch.object(
-                    Path,
-                    "replace",
-                    side_effect=OSError("injected event result persistence failure"),
-                ):
+                with failing_commits("injected event result persistence failure"):
                     return original(accounts, journals)
             return original(accounts, journals)
 
@@ -364,7 +361,7 @@ class EventMatchIntegrationTests(EventMatchHelpers, unittest.IsolatedAsyncioTest
         with patch.object(self.server, "persist_changes", side_effect=fail_after_outcome):
             with self.assertRaises((AssertionError, ConnectionError)):
                 await self.play()
-        stored = json.loads(self.path.read_text())
+        stored = self.store.load()
         self.assertEqual(stored["event_results"]["rounds"], [])
         self.assertTrue(all(not any(b"@EventResult=" in p for _, p in box) for box in self.inbox))
 

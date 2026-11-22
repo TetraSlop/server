@@ -6,18 +6,18 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.network.server import Server
 from tmserver.rankings.stats import PracticeStats
-from tmserver.storage.json import JsonStateStore
 
 
 class StartupLoggingTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.path = self.root / "traffic.jsonl"
-        self.state = self.root / "state.json"
+        self.store = MemoryStore()
         self.streams = []
         self.failures = []  # Retain traceback frames; cleanup must not rely on GC.
         original_open = Path.open
@@ -50,13 +50,13 @@ class StartupLoggingTests(unittest.IsolatedAsyncioTestCase):
             key
         ]
         host.result_rewards.stage(key, reservation, "startup.reward", 0, (hand[0],))
-        self.state.write_text(json.dumps(host.snapshot()), encoding="utf8")
+        self.store.save(host.snapshot())
         return key
 
-    def test_malformed_saved_json_never_opens_the_log(self):
-        self.state.write_text("{bad json", encoding="utf8")
-        error = self.failed_start(state_path=self.state)
-        self.assertIsInstance(error, OSError)
+    def test_malformed_saved_state_never_opens_the_log(self):
+        self.store.save({"version": 1, "accounts": []})
+        error = self.failed_start(store=self.store)
+        self.assertIsInstance(error, ValueError)
         self.assertFalse(self.path.exists())
         self.assertEqual(self.streams, [])
 
@@ -73,23 +73,23 @@ class StartupLoggingTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_log_open_failure_happens_before_recovery_or_durable_writes(self):
         await self.pending_recovery()
-        before = self.state.read_bytes()
+        before = self.store.load()
         self.path.mkdir()
         with (
             patch.object(MatchEconomy, "recover_all") as matches,
             patch.object(ResultRewardService, "recover_all") as rewards,
-            patch.object(JsonStateStore, "save") as save,
+            patch.object(self.store, "save") as save,
         ):
-            self.assertIsInstance(self.failed_start(state_path=self.state), OSError)
+            self.assertIsInstance(self.failed_start(store=self.store), OSError)
             matches.assert_not_called()
             rewards.assert_not_called()
             save.assert_not_called()
-        self.assertEqual(self.state.read_bytes(), before)
+        self.assertEqual(self.store.load(), before)
 
     async def test_failed_recovery_commit_closes_log_without_closing_borrowed_owners(self):
         await self.pending_recovery()
-        before = self.state.read_bytes()
-        store, backend = Mock(wraps=JsonStateStore(self.state)), Mock()
+        before = self.store.load()
+        store, backend = Mock(wraps=self.store), Mock()
         store.close = Mock()
         failure = OSError("recovery save failed")
         store.save.side_effect = failure
@@ -99,7 +99,7 @@ class StartupLoggingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.streams), 1)
         self.assertTrue(self.streams[0].closed)
         self.path.rename(self.root / "released.jsonl")
-        self.assertEqual(self.state.read_bytes(), before)
+        self.assertEqual(self.store.load(), before)
         store.save.assert_called_once()
         store.close.assert_not_called()
         backend.close.assert_not_called()
@@ -126,7 +126,7 @@ class StartupLoggingTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_successful_recovery_keeps_log_open_until_stop(self):
         key = await self.pending_recovery()
-        store, backend = Mock(wraps=JsonStateStore(self.state)), Mock()
+        store, backend = Mock(wraps=self.store), Mock()
         store.close = Mock()
         host = Server(log_path=self.path, store=store, rules_backend=backend)
         self.addAsyncCleanup(host.stop)

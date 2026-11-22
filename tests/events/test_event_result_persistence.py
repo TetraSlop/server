@@ -9,7 +9,6 @@ from pathlib import Path
 from tests.events import test_event_results as results_tests
 from tmserver.events.matches import EventRoundOutcome
 from tmserver.events.results import EventResults
-from tmserver.storage.json import JsonStateStore
 
 
 # Captured from the pre-model writer, including receipt and seat ordering.
@@ -55,24 +54,6 @@ class EventResultPersistenceTests(unittest.TestCase):
         row.update(id="a" * 128, event="_-.:AZaz09", characters=[1, 0x7FFFFFFF])
         row["keys"] = ["\u00e9" * 128, "\n\u0000"]
         self.assertEqual(EventResults.restore(saved).snapshot(), saved)
-
-    def test_reordered_legacy_objects_do_not_rewrite_json_store(self):
-        saved = json.loads(SAVED)
-        saved["rounds"] = [dict(reversed(list(row.items()))) for row in saved["rounds"]]
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "state.json"
-            raw = json.dumps(
-                {"version": 1, "accounts": {}, "event_results": saved}, indent=4
-            ).encode()
-            path.write_bytes(raw)
-            store = JsonStateStore(path)
-            loaded = store.load()
-            restored = EventResults.restore(loaded["event_results"])
-            self.assertEqual(restored.snapshot(), json.loads(SAVED))
-            self.assertEqual(path.read_bytes(), raw)
-            store.save_changes({}, {"event_results": restored.snapshot()})
-            self.assertEqual(path.read_bytes(), raw)
-            self.assertFalse(store.failed)
 
     def test_missing_unknown_fields_and_non_arrays_are_rejected(self):
         saved = json.loads(SAVED)

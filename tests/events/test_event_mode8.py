@@ -19,7 +19,7 @@ class EventMode8Integration(events.EventMatchHelpers, unittest.IsolatedAsyncioTe
     async def test_entry_with_zero_owned_cards_is_nonplaying_and_durable(self):
         self.cfg = replace(self.cfg, entry_answer=2)
         self.server = Server(
-            state_path=self.path, event_configs=(self.cfg,), event_clock=lambda: 200
+            store=self.store, event_configs=(self.cfg,), event_clock=lambda: 200
         )
         # Explicitly provision an empty owned collection before authentication.
         nick = next(iter(self.server.accounts))
@@ -56,7 +56,7 @@ class EventMode8Integration(events.EventMatchHelpers, unittest.IsolatedAsyncioTe
         self.assertFalse(self.server.economy.is_busy(key))
         self.assertEqual(self.server.event_matches.coordinator.pending(), ())
         self.assertEqual(self.server.economy.profile_bytes(key), before)
-        restored = Server(state_path=self.path, event_configs=(self.cfg,), event_clock=lambda: 200)
+        restored = Server(store=self.store, event_configs=(self.cfg,), event_clock=lambda: 200)
         try:
             self.assertEqual(restored.economy.profile_bytes(key), before)
         finally:

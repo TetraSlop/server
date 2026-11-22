@@ -45,7 +45,7 @@ class RematchEligibilityTests(unittest.IsolatedAsyncioTestCase):
 
     def result_state(self, match):
         return {
-            "saved": self.path.read_bytes(),
+            "saved": self.store.load(),
             "host": self.server.snapshot(),
             "reservations": dict(self.server.default_table.match_reservations),
             "votes": dict(match.continues),
@@ -91,11 +91,11 @@ class RematchEligibilityTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(Counter(inventory + recovery), Counter(kept + earned))
 
         after = self.server.snapshot()
-        saved = self.path.read_bytes()
-        restored = Server(state_path=self.path)
+        saved = self.store.load()
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.snapshot(), after)
-            self.assertEqual(self.path.read_bytes(), saved)
+            self.assertEqual(self.store.load(), saved)
         finally:
             await restored.stop()
 

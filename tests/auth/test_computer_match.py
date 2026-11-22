@@ -11,10 +11,10 @@ from tests import ROOT
 from tests.auth.test_transport import local_bridge
 from tests.game import test_three_player_computer_integration as computer
 from tests.support.irc import Client
+from tests.support.memory_store import DATABASE, MemoryStore, opened_by
 from tmserver.cli.serve import arguments, running_services
 from tmserver.game.packets import packet
 from tmserver.protocol.identities import TABLE_RAW, service_nick
-from tmserver.storage.json import JsonStateStore
 
 
 USER = "11111111-1111-4111-8111-111111111111"
@@ -39,7 +39,7 @@ class HostedComputerMatchTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             config = root / "auth.json"
-            self.state_path = root / "save.json"
+            self.store = MemoryStore()
             config.write_text(json.dumps(dict(
                 supabase_url="https://fixture.supabase.co", publishable_key="sb_publishable_fixture",
                 public_origin="https://example.test",
@@ -48,10 +48,11 @@ class HostedComputerMatchTests(unittest.IsolatedAsyncioTestCase):
                 "--auth-config", str(config), "--auth-insecure-loopback", "--auth-port", "0",
                 "--game-port", "0", "--profile-port", "0", "--accounts", "3",
                 "--rooms", str(ROOT / "examples/auto_rooms.example.json"),
-                "--state", str(self.state_path), "--log-dir", str(root / "logs"),
+                *DATABASE, "--log-dir", str(root / "logs"),
                 *(["--wagers"] if wagers else []),
             ])
-            with patch("tmserver.auth.provider.SupabaseVerifier.verify", verified):
+            with (patch("tmserver.auth.provider.SupabaseVerifier.verify", verified),
+                  opened_by("tmserver.cli.serve", self.store)):
                 async with running_services(self.args) as services:
                     self.server = services.game
                     origin = f"http://127.0.0.1:{services.auth.port}"
@@ -74,7 +75,7 @@ class HostedComputerMatchTests(unittest.IsolatedAsyncioTestCase):
                             yield
                         finally:
                             await self.client.close()
-                saved = JsonStateStore(self.state_path).load()
+                saved = self.store.load()
                 self.assertEqual(saved["accounts"][self.key]["balance"], self.expected_balance)
 
     async def test_wagered_two_opponent_match_finishes_through_websocket(self):
@@ -84,7 +85,7 @@ class HostedComputerMatchTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(match.phase, "selection")
             self.assertEqual(tuple(player.npc_id for player in match.players[1:]), (3, 4))
             self.assertEqual(self.server.economy.balance(self.key), 9690)
-            self.assertEqual(JsonStateStore(self.state_path).load()["accounts"][self.key]["balance"], 9690)
+            self.assertEqual(self.store.load()["accounts"][self.key]["balance"], 9690)
             await self.play()
             await self.continue_game(leave=True)
             self.assertEqual(match.phase, "finished")

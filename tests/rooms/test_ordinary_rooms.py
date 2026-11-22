@@ -3,6 +3,7 @@
 import asyncio
 import struct
 import unittest
+from pathlib import Path
 from dataclasses import replace
 from unittest.mock import patch
 
@@ -212,7 +213,7 @@ class OrdinaryRoomsIntegration(unittest.IsolatedAsyncioTestCase):
         await self.leave_result(0)
         self.assertTrue(self.tables[1].match_reservations)
         await self.leave_result(1)
-        restored = Server(state_path=self.state_path, account_count=4, ordinary_rooms=(self.cfg,))
+        restored = Server(store=self.store, account_count=4, ordinary_rooms=(self.cfg,))
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
         finally:
@@ -277,7 +278,7 @@ class OrdinaryRoomsIntegration(unittest.IsolatedAsyncioTestCase):
         await self.start()
         await self.admit(0)
         await self.admit(1)
-        p = ProfileServer(self.state_path.parent / "profile.jsonl", self.server)
+        p = ProfileServer(Path(self.harness_temp.name) / "profile.jsonl", self.server)
         port = await p.start(0)
         try:
             for index, table in enumerate(self.tables):

@@ -11,7 +11,6 @@ produced in a temporary database that is dropped afterwards.
 
 import json
 import os
-import tempfile
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,6 +23,7 @@ from tests.economy.test_claim_transactions import ClaimFixture
 from tests.economy.test_match_transactions import Peer, TableFixture
 from tests.events.test_event_rooms import config
 from tests.profiles.test_character_profiles import request as profile_request
+from tests.support.memory_store import MemoryStore
 from tmserver.accounts.identities import IdentityRegistry
 from tmserver.accounts.provisioning import provision_identity
 from tmserver.admin.actions import apply_event_grant, apply_event_member, apply_prize_award
@@ -49,7 +49,7 @@ from tmserver.profiles.characters import CharacterProfiles
 from tmserver.profiles.transactions import character_profile_request
 from tmserver.protocol.commands import Command
 from tmserver.rankings.policy import RatingPolicy
-from tmserver.storage.validation import validate_snapshot_fields
+from tmserver.storage.validation import validate_snapshot, validate_snapshot_fields
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "storage"
 SNAPSHOT = FIXTURES / "golden_snapshot.json"
@@ -71,25 +71,6 @@ def document(snapshot):
 def canonical(value):
     """Order-free comparison that still tells true from 1 and 1.0 from 1."""
     return json.dumps(value, sort_keys=True)
-
-
-class MemoryStore:
-    """Persistent store stand-in. The golden pins the document, not a file format."""
-
-    def __init__(self, snapshot=None):
-        self.snapshot = deepcopy(snapshot)
-
-    def load(self):
-        return deepcopy(self.snapshot)
-
-    def save(self, snapshot):
-        self.snapshot = deepcopy(snapshot)
-
-    def save_changes(self, accounts, services):
-        snapshot = self.snapshot or {"version": 1, "accounts": {}}
-        snapshot["accounts"].update(deepcopy(accounts))
-        snapshot.update(deepcopy(services))
-        self.snapshot = snapshot
 
 
 class _FixedClock(datetime):
@@ -251,16 +232,12 @@ def restore_document(snapshot):
 
 
 def postgres_export(store, snapshot):
-    """Import a snapshot into an empty upgraded store and return the export text."""
-    from tmserver.storage.database import export_json, import_json
-
-    with tempfile.TemporaryDirectory() as folder:
-        source, target = Path(folder) / "source.json", Path(folder) / "export.json"
-        source.write_text(document(snapshot), encoding="utf8", newline="\n")
-        import_json(store, source, event_configs=(EVENT,))
-        export_json(store, target)
-        # export_json writes the platform newline; the document itself uses LF.
-        return target.read_text(encoding="utf8")
+    """Save a validated snapshot into an empty upgraded store; return its SQL reload."""
+    if store.load() is not None:
+        raise ValueError("the golden export needs an empty database")
+    validate_snapshot(snapshot, event_configs=(EVENT,))
+    store.save(snapshot)
+    return document(store.load())
 
 
 def main():

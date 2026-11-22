@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 from pydantic import ValidationError
 
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.admin.actions import AdminActionConflict, AdminActionError, apply_prize_award
 from tmserver.admin.audit import AdminAudit, PrizeAwardReceipt, PrizeAwardRequest
 from tmserver.economy.claim_transactions import prize_transaction
@@ -140,7 +141,7 @@ class AuditedActionCases:
         after = self.host.snapshot()
         for name in before.keys() - self.journals - {"admin_audit", "accounts"}:
             self.assertEqual(after[name], before[name])
-        saved = json.loads(self.path.read_text())
+        saved = self.store.load()
         self.assertEqual(saved, json.loads(json.dumps(after)))
         self.assertEqual(saved["admin_audit"]["receipts"][-1], receipt.model_dump(mode="json"))
         with self.assertRaises(ValidationError):
@@ -183,15 +184,15 @@ class AuditedActionCases:
 
     def test_precommit_failure_publishes_nothing_and_closes_the_owner(self):
         value = self.request()
-        before, disk = self.host.snapshot(), self.path.read_bytes()
+        before, disk = self.host.snapshot(), self.store.load()
         self.host.listener = Mock()
         peer = Mock()
         self.host.sessions.add(peer)
-        with patch.object(Path, "replace", side_effect=OSError("injected replacement failure")):
+        with failing_commits("injected replacement failure"):
             with self.assertRaises(OSError):
                 self.apply(self.host, value)
         self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), disk)
+        self.assertEqual(self.store.load(), disk)
         self.assertIsNotNone(self.host.storage_failed)
         self.host.listener.close.assert_called_once()
         peer.writer.close.assert_called_once()
@@ -213,7 +214,7 @@ class AuditedActionCases:
             with self.assertRaises(OSError):
                 self.apply(self.host, value)
         self.assertEqual(self.host.snapshot(), before)
-        saved = json.loads(self.path.read_text())
+        saved = self.store.load()
         self.assertEqual(len(saved["admin_audit"]["receipts"]), 1)
         with self.assertRaises(OSError):
             self.apply(self.host, value)
@@ -238,14 +239,14 @@ class PrizeAwardActionTests(AuditedActionCases, unittest.TestCase):
 
     def setUp(self):
         self.folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.path = self.folder / "state.json"
+        self.store = MemoryStore()
         self.host = self.server()
         for number, key in enumerate(("one", "two"), 1):
             self.host.economy.provision(key, nn=number, player_id=number, name=key.encode())
         self.host.persist()
 
     def server(self):
-        return Server(state_path=self.path)
+        return Server(store=self.store)
 
     def award(self, **changes):
         return apply_prize_award(self.host, request(**changes))
@@ -263,14 +264,14 @@ class PrizeAwardActionTests(AuditedActionCases, unittest.TestCase):
         self.assertEqual((receipt.current_points, receipt.points_on_redemption), (0, 69))
         self.assertEqual(receipt.status, "queued")
         self.assertEqual(self.host.economy.prize_points("one"), 0)
-        saved = json.loads(self.path.read_text())
+        saved = self.store.load()
         self.assertEqual(saved["prize"]["accounts"]["one"]["pending"]["top30"], 12)
 
     def test_retry_after_redemption_and_restart_keeps_original_receipt(self):
         receipt = self.award()
         self.redeem()
         self.assertEqual(self.host.economy.prize_points("one"), 69)
-        self.host = Server(state_path=self.path)
+        self.host = Server(store=self.store)
         with patch.object(
             self.host.store, "save_changes", side_effect=AssertionError("retry wrote")
         ):
@@ -281,10 +282,10 @@ class PrizeAwardActionTests(AuditedActionCases, unittest.TestCase):
     def test_legacy_award_id_cannot_invent_an_audit_receipt(self):
         with prize_transaction(self.host, "one") as prize:
             prize.grant_award("one", "week.1", top30=12)
-        before = self.path.read_bytes()
+        before = self.store.load()
         with self.assertRaisesRegex(AdminActionConflict, "without this audited request"):
             apply_prize_award(self.host, request())
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.store.load(), before)
         self.assertEqual(self.host.admin_audit.snapshot()["receipts"], [])
         self.redeem()
         with prize_transaction(self.host, "one") as prize:
@@ -316,22 +317,22 @@ class PrizeAwardActionTests(AuditedActionCases, unittest.TestCase):
             self.award(request_id="request.2", award_id="week.2")
 
     def test_missing_or_null_audit_journal_preserves_old_state(self):
-        saved = json.loads(self.path.read_text())
+        saved = self.store.load()
         for mode in ("missing", "null"):
             with self.subTest(mode=mode):
                 old = deepcopy(saved)
                 old.pop("admin_audit")
                 if mode == "null":
                     old["admin_audit"] = None
-                self.path.write_text(json.dumps(old))
+                self.store.save(old)
                 validate_snapshot(old)
-                host = Server(state_path=self.path)
+                host = Server(store=self.store)
                 self.assertEqual(host.admin_audit.snapshot(), dict(version=1, receipts=[]))
                 self.assertEqual(host.economy.snapshot(), self.host.economy.snapshot())
 
     def test_restore_rejects_extensions_strict_numbers_and_orphan_receipts(self):
         self.award()
-        saved = json.loads(self.path.read_text())
+        saved = self.store.load()
         bad = []
         row = deepcopy(saved)
         row["admin_audit"]["extra"] = 1
@@ -383,11 +384,11 @@ class PrizeAwardActionTests(AuditedActionCases, unittest.TestCase):
         self.host.match_economy.begin("interrupted", tokens, 100)
         saved = self.host.snapshot()
         saved["admin_audit"]["receipts"][0]["future_field"] = "must not be lost"
-        self.path.write_text(json.dumps(saved))
-        before = self.path.read_bytes()
+        self.store.save(saved)
+        before = self.store.load()
         with self.assertRaises(ValueError):
-            Server(state_path=self.path)
-        self.assertEqual(self.path.read_bytes(), before)
+            Server(store=self.store)
+        self.assertEqual(self.store.load(), before)
 
 
 if __name__ == "__main__":

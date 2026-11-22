@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from tests.admin import test_event_actions as fixture
 from tests.admin.test_actions import AuditedActionCases
+from tests.support.memory_store import failing_commits
 from tmserver.admin.actions import AdminActionConflict, AdminActionError, apply_event_member
 from tmserver.admin.audit import EventEligibilityRequest, EventProgressRequest
 from tmserver.admin.queries import receipt_rows
@@ -82,7 +83,7 @@ class EventMemberActionTests(AuditedActionCases, unittest.TestCase):
         admission = self.host.events.admission("one")
         self.assertIsNotNone(admission)
         command = request(kind="eligibility")
-        with patch.object(Path, "replace", side_effect=OSError("injected save failure")):
+        with failing_commits("injected save failure"):
             with self.assertRaises(OSError):
                 self.correct(command)
         self.assertIs(self.host.events.admission("one"), admission)

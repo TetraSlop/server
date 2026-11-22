@@ -8,6 +8,7 @@ import unittest
 
 from tests.support.irc import Client
 from tests.profiles.test_profile_accounts import file_request, transact
+from tests.support.memory_store import MemoryStore
 from tmserver.network.server import Server
 from tmserver.profiles.service import ProfileServer
 
@@ -75,7 +76,9 @@ class GatewayTransportTests(unittest.IsolatedAsyncioTestCase):
         from tmserver.network.http import serving_http
 
         self.directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.host = Server(state_path=self.directory / "save.json")
+
+        self.store = MemoryStore()
+        self.host = Server(store=self.store)
         self.addAsyncCleanup(self.host.stop)
         self.profile = ProfileServer(self.directory / "profile.log", self.host)
         self.addAsyncCleanup(self.profile.stop)

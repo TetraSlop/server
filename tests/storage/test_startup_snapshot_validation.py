@@ -9,19 +9,17 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
-from tmserver.cli import play as local_play
+from tests.support.memory_store import MemoryStore
 from tmserver.profiles.characters import CharacterProfiles
 from tmserver.economy.service import EconomyService
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.network.server import Server
 from tmserver.storage.validation import SERVICE_NAMES
-from tmserver.storage.json import JsonStateStore
 
 
 class StartupSnapshotValidationTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.path = self.root / "state.json"
+        self.store = MemoryStore()
         self.economy = EconomyService(seed=1)
         for number, key in enumerate(("a", "b"), 1):
             self.economy.provision(
@@ -35,29 +33,17 @@ class StartupSnapshotValidationTests(unittest.IsolatedAsyncioTestCase):
         return dict(self.economy.snapshot(), match_economy=matches.snapshot())
 
     def seed(self, snapshot):
-        self.path.write_text(json.dumps(snapshot), encoding="utf8")
-        return self.path.read_bytes()
-
-    def play_args(self):
-        args = local_play.arguments(
-            ["--project-dir", str(self.root), "--state", str(self.path), "--check"]
-        )
-        args.loader_dir = self.root / "loader"
-        args.loader = args.loader_dir / "tmloader.exe"
-        args.config = args.loader_dir / "tmloader.ini"
-        for path in (args.loader, args.config, self.root / "examples/auto_rooms.example.json"):
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("test fixture", encoding="utf8")
-        return args
+        self.store.save(snapshot)
+        return self.store.load()
 
     async def test_unknown_journal_rejects_before_recovery_without_rewriting_save(self):
         saved = dict(self.interrupted(), future_journal={"keep": 123})
         original = self.seed(saved)
         with self.assertRaisesRegex(ValueError, "unknown snapshot sections"):
-            game = Server(state_path=self.path)
+            game = Server(store=self.store)
             self.addAsyncCleanup(game.stop)
-        self.assertEqual(self.path.read_bytes(), original)
-        self.assertEqual(JsonStateStore(self.path).load()["accounts"]["a"]["balance"], 900)
+        self.assertEqual(self.store.load(), original)
+        self.assertEqual(self.store.load()["accounts"]["a"]["balance"], 900)
 
     async def test_unsafe_profile_float_rejects_before_recovery_without_rewriting_save(self):
         profiles = CharacterProfiles(self.economy)
@@ -68,10 +54,10 @@ class StartupSnapshotValidationTests(unittest.IsolatedAsyncioTestCase):
             original = self.seed(saved)
             with self.subTest(value=value):
                 with self.assertRaisesRegex(ValueError, "profile float"):
-                    game = Server(state_path=self.path)
+                    game = Server(store=self.store)
                     self.addAsyncCleanup(game.stop)
-                self.assertEqual(self.path.read_bytes(), original)
-                self.assertEqual(JsonStateStore(self.path).load()["accounts"]["a"]["balance"], 900)
+                self.assertEqual(self.store.load(), original)
+                self.assertEqual(self.store.load()["accounts"]["a"]["balance"], 900)
 
     async def test_unknown_account_field_rejects_even_without_pending_recovery(self):
         for recovering in (False, True):
@@ -80,9 +66,9 @@ class StartupSnapshotValidationTests(unittest.IsolatedAsyncioTestCase):
             original = self.seed(saved)
             with self.subTest(recovering=recovering):
                 with self.assertRaisesRegex(ValueError, "unsupported account fields"):
-                    game = Server(state_path=self.path)
+                    game = Server(store=self.store)
                     self.addAsyncCleanup(game.stop)
-                self.assertEqual(self.path.read_bytes(), original)
+                self.assertEqual(self.store.load(), original)
 
     async def test_injected_store_obeys_same_boundary_before_any_save(self):
         saved = dict(self.interrupted(), future_journal={"keep": 123})
@@ -95,47 +81,6 @@ class StartupSnapshotValidationTests(unittest.IsolatedAsyncioTestCase):
         store.save_changes.assert_not_called()
         self.assertEqual(store.load.return_value, saved)
 
-    async def test_setup_rejects_invalid_journals_before_invoking_loader(self):
-        args = self.play_args()
-        child = AsyncMock(returncode=0)
-        child.communicate.return_value = (b"loader check passed", None)
-        for extra in (
-            {"prize": {"version": 999}},
-            {"ratings": {"version": 999}},
-            {"result_rewards": []},
-            {"future_journal": {"keep": 123}},
-        ):
-            original = self.seed(dict(self.economy.snapshot(), **extra))
-            with (
-                self.subTest(extra=extra),
-                patch.object(
-                    local_play.asyncio, "create_subprocess_exec", AsyncMock(return_value=child)
-                ) as spawn,
-                self.assertRaises(ValueError),
-            ):
-                await local_play.preflight(args)
-            spawn.assert_not_awaited()
-            self.assertEqual(self.path.read_bytes(), original)
-
-    async def test_setup_preserves_interrupted_rewards_and_creates_no_listener(self):
-        original = self.seed(self.interrupted())
-        args = self.play_args()
-        child = AsyncMock(returncode=0)
-        child.communicate.return_value = (b"loader check passed", None)
-        with (
-            patch.object(
-                local_play.asyncio, "create_subprocess_exec", AsyncMock(return_value=child)
-            ) as spawn,
-            patch.object(local_play, "running_services") as start,
-            redirect_stdout(io.StringIO()),
-        ):
-            self.assertEqual(await local_play.run(args), 0)
-        start.assert_not_called()
-        spawn.assert_awaited_once()
-        self.assertIn("--check", spawn.call_args.args)
-        self.assertEqual(self.path.read_bytes(), original)
-        self.assertFalse((self.root / "var").exists())
-
     async def test_older_absent_or_null_journals_remain_accepted_without_rewrite(self):
         for nulls in (False, True):
             saved = self.economy.snapshot()
@@ -143,6 +88,6 @@ class StartupSnapshotValidationTests(unittest.IsolatedAsyncioTestCase):
                 saved.update(dict.fromkeys(SERVICE_NAMES))
             original = self.seed(saved)
             with self.subTest(nulls=nulls):
-                game = Server(state_path=self.path)
+                game = Server(store=self.store)
                 await game.stop()
-                self.assertEqual(self.path.read_bytes(), original)
+                self.assertEqual(self.store.load(), original)

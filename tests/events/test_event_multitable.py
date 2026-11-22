@@ -31,7 +31,7 @@ class EventMultiTableHelpers(base.EventMatchHelpers):
             replace(self.table, table_id=game_id(0x1004), channel=b"#EVTABLE002"),
         )
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             account_count=4 + int(observer),
             event_configs=(self.cfg,),
             event_tables=self.tables,
@@ -176,7 +176,7 @@ class EventMultiTable(EventMultiTableHelpers, unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.server.event_matches.coordinator._rounds)
         self.assertEqual([self.server.economy.profile_bytes(k) for k in self.keys], self.before)
         restored = Server(
-            state_path=self.path,
+            store=self.store,
             account_count=4,
             event_configs=(self.cfg,),
             event_tables=self.tables,

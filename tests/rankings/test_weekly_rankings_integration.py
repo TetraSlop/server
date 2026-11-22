@@ -15,6 +15,7 @@ from tests.economy import test_match_wagers_integration as wagers
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.rankings.test_ranking_service import request as rank_request
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, player_id
 from tmserver.game.packets import packet
 from tmserver.profiles.service import ProfileServer
@@ -38,7 +39,7 @@ class WeeklyRankingIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.state_path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.now = MONDAY + WEEK - 1  # Sunday 23:59:59 UTC, frozen during each match.
         self.server = self.client = self.profile = None
 
@@ -59,7 +60,7 @@ class WeeklyRankingIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def start(self, *, weekly_rankings=True):
         self.server = Server(
-            state_path=self.state_path, allow_wagers=True, rating_mode="local-history",
+            store=self.store, allow_wagers=True, rating_mode="local-history",
             weekly_rankings=weekly_rankings, ranking_clock=lambda: self.now,
         )
         self.port = await self.server.start(0)
@@ -85,7 +86,7 @@ class WeeklyRankingIntegrationTests(unittest.IsolatedAsyncioTestCase):
         return PracticeStats.from_profile(self.server.economy.profile_bytes(self.key))
 
     def saved_ratings(self):
-        return json.loads(self.state_path.read_text())["ratings"]
+        return self.store.load()["ratings"]
 
     async def read_file(self, path):
         error, data = await transact(
@@ -244,7 +245,7 @@ class WeeklyRankingIntegrationTests(unittest.IsolatedAsyncioTestCase):
         _, after = await self.finish_cpu()
         before = self.server.ratings.snapshot()
         self.now = MONDAY + WEEK
-        with patch.object(Path, "replace", side_effect=OSError("rollover save failed")):
+        with failing_commits("rollover save failed"):
             if metadata:
                 with self.assertRaises((asyncio.IncompleteReadError, ConnectionError)):
                     await self.read_file(METADATA_PATH)

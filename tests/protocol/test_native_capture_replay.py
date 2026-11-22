@@ -14,6 +14,7 @@ from pathlib import Path
 
 from tests import FIXTURES, ROOT
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.models import PROFILE_SIZE
 from tmserver.cards.model import Card
 from tmserver.protocol.identities import player_id
@@ -39,7 +40,7 @@ class NativeCaptureReplayTests(unittest.IsolatedAsyncioTestCase):
     async def test_recorded_native_room_table_chat_and_selection(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         with tempfile.TemporaryDirectory(dir=(ROOT / "tests")) as folder:
-            server = Server(state_path=Path(folder) / "state.json")
+            server = Server(store=MemoryStore())
             client = Client()
             profile = captured_profile()
             key = next(iter(server.accounts)).decode()

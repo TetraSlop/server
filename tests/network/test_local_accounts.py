@@ -11,6 +11,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.support.irc import Client
+from tests.support.memory_store import DATABASE, MemoryStore
 from tmserver.protocol.identities import player_id
 from tmserver.network.local_accounts import MAX_ACCOUNTS, account_name, account_specs
 from tmserver.protocol.wire import polid_from_string, polid_unscramble
@@ -70,7 +71,7 @@ class ThirdAccountTests(unittest.IsolatedAsyncioTestCase):
     async def test_highest_local_account_has_matching_encrypted_game_and_profile(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         with tempfile.TemporaryDirectory(dir=(ROOT / "tests")) as folder:
-            game = Server(account_count=MAX_ACCOUNTS, state_path=Path(folder) / "state.json")
+            game = Server(account_count=MAX_ACCOUNTS, store=MemoryStore())
             profile = ProfileServer(Path(folder) / "profile.jsonl", game)
             client = Client()
             try:
@@ -94,7 +95,7 @@ class ThirdAccountTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(data[0x10:0x20].split(b"\0")[0], b"LocalPlayer128")
                 game.persist()
-                restored = Server(account_count=MAX_ACCOUNTS, state_path=game.state_path)
+                restored = Server(account_count=MAX_ACCOUNTS, store=game.store)
                 try:
                     self.assertEqual(
                         restored.economy.profile_bytes(key), game.economy.profile_bytes(key)
@@ -116,8 +117,6 @@ class ThirdAccountTests(unittest.IsolatedAsyncioTestCase):
                     "--list-accounts",
                     "--log-dir",
                     folder,
-                    "--state",
-                    str(Path(folder) / "state.json"),
                 ]
             )
             stream = StringIO()
@@ -189,9 +188,9 @@ class AccountPoolTests(unittest.TestCase):
         with redirect_stderr(StringIO()):
             for count in ("1", "129"):
                 with self.assertRaises(SystemExit):
-                    arguments(["--accounts", count])
+                    arguments([*DATABASE, "--accounts", count])
         self.assertEqual(
-            arguments(["--mode", "versus", "--players", "3", "--accounts", "8"]).accounts, 8
+            arguments([*DATABASE, "--mode", "versus", "--players", "3", "--accounts", "8"]).accounts, 8
         )
 
 

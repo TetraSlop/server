@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 
+from tests.support.memory_store import DATABASE, opened_by
 from tmserver.network.local_accounts import account_specs
 
 
@@ -58,7 +59,8 @@ class AuthConfigurationTests(unittest.IsolatedAsyncioTestCase):
             path.write_text(config.model_dump_json())
             args = arguments(["--auth-config", str(path), "--auth-insecure-loopback",
                               "--auth-port", "0", "--game-port", "0", "--profile-port", "0",
-                              "--state", str(root / "state.json"), "--log-dir", str(root / "logs")])
+                              *DATABASE, "--log-dir", str(root / "logs")])
+            self.enterContext(opened_by("tmserver.cli.serve"))
             async with running_services(args) as services:
                 async with httpx.AsyncClient(trust_env=False) as client:
                     result = await client.get(f"http://127.0.0.1:{services.auth.port}/v1/auth/config")
@@ -92,10 +94,10 @@ class AuthConfigurationTests(unittest.IsolatedAsyncioTestCase):
             data["bindings"][next(iter(data["bindings"]))] = "NOTREAL1"
             config = root / "auth.json"
             config.write_text(json.dumps(data))
-            args = arguments(["--auth-config", str(config), "--state", str(root / "state.json"),
+            args = arguments(["--auth-config", str(config), *DATABASE,
                               "--log-dir", str(root / "logs")])
-            with self.assertRaisesRegex(ValueError, "not enabled"):
+            with opened_by("tmserver.cli.serve") as opened, self.assertRaisesRegex(ValueError, "not enabled"):
                 async with running_services(args):
                     self.fail("invalid enrollment started services")
-            self.assertFalse((root / "state.json").exists())
+            opened.assert_not_called()
             self.assertFalse((root / "logs").exists())

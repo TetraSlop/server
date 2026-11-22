@@ -12,6 +12,7 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.game import test_versus_integration as versus
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
@@ -30,9 +31,9 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             match_mode="versus",
             match_player_count=self.player_count,
             account_count=self.player_count,
@@ -168,16 +169,16 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.play()
         _, settlement = await self.choose()
         self.assertTrue(settlement.transfers, "fixture must exercise an actual card transfer")
-        crash = self.path.with_name("crash.json")
-        crash.write_bytes(self.path.read_bytes())
-        restored = Server(state_path=crash)
+        crash = MemoryStore()
+        crash.save(self.store.load())
+        restored = Server(store=crash)
         try:
             for seat, key in enumerate(self.keys):
                 kept, awards = self.expected(settlement, seat)
                 self.assertEqual(Counter(map(full, restored.economy.inventory(key))), Counter(kept))
                 self.assertEqual(len(restored.auction_ledger.pending(key)), len(awards))
                 self.assertFalse(restored.result_rewards.has_pending(key))
-            again = Server(state_path=crash)
+            again = Server(store=crash)
             try:
                 self.assertEqual(
                     again.auction_ledger.snapshot(), restored.auction_ledger.snapshot()
@@ -202,8 +203,8 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 packet(0x43, 15, choice.winner, f"@GetSelect=/H={choice.options[0].hand_index}"),
             )
             choice = self.server.default_table.match.prize_choice
-        before = self.path.read_bytes()
-        with patch.object(Path, "replace", side_effect=OSError("injected prize save failure")):
+        before = self.store.load()
+        with failing_commits("injected prize save failure"):
             await self.clients[choice.winner].send(
                 b"NOTICE "
                 + service_nick(TABLE_RAW)
@@ -213,8 +214,8 @@ class PrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
             for client in self.clients:
                 self.assertEqual(await client.read(), b"")
         self.assertIsNotNone(self.server.storage_failed)
-        self.assertEqual(self.path.read_bytes(), before)
-        restored = Server(state_path=self.path)
+        self.assertEqual(self.store.load(), before)
+        restored = Server(store=self.store)
         try:
             for key, cards in zip(self.keys, self.before):
                 self.assertEqual(len(restored.economy.inventory(key)), len(cards))

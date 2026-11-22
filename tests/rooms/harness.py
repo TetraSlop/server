@@ -7,6 +7,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.support.irc import Client
 from tests.network.test_session_recovery import Writer
+from tests.support.memory_store import MemoryStore
 from tmserver.network.server import Server
 from tmserver.network.session import Session
 from tmserver.rooms.spectators import SpectatorService
@@ -19,14 +20,14 @@ def instant_spectators():
     )
 
 
-def state_path(case):
-    """Give case a save path in a temporary directory and register teardown."""
+def prepare(case):
+    """Give case an empty store and a temporary directory, and register teardown."""
     asyncio.get_running_loop().slow_callback_duration = 1
     case.harness_temp = tempfile.TemporaryDirectory(dir=ROOT / "tests")
-    case.state_path = Path(case.harness_temp.name) / "state.json"
+    case.store = MemoryStore()
     case.clients = []
     case.addAsyncCleanup(teardown, case)
-    return case.state_path
+    return case.store
 
 
 async def serve(case, *, clients=None, **server_kwargs):
@@ -35,8 +36,8 @@ async def serve(case, *, clients=None, **server_kwargs):
     Sets case.server, case.port and case.clients; teardown runs as a cleanup.
     """
     if not hasattr(case, "harness_temp"):
-        state_path(case)
-    case.server = Server(state_path=case.state_path, **server_kwargs)
+        prepare(case)
+    case.server = Server(store=case.store, **server_kwargs)
     case.port = await case.server.start(0)
     for nick in list(case.server.accounts)[:clients]:
         client = Client()

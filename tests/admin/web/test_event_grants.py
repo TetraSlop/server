@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 
 from tests.admin.web.test_awards import Inputs
 from tests.events.test_event_rooms import config
+from tests.support.memory_store import MemoryStore
 from tmserver.admin.actions import apply_prize_award
 from tmserver.admin.audit import PrizeAwardRequest
 from tmserver.economy.claim_transactions import event_transaction
@@ -23,10 +24,11 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
 
         self.httpx, self.create_app = httpx, create_app
         self.directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.store = MemoryStore()
         self.options = dict(
             event_configs=(config(card_service_enabled=True),), event_clock=lambda: 200
         )
-        self.host = Server(state_path=self.directory / "state.json", **self.options)
+        self.host = Server(store=self.store, **self.options)
         self.addAsyncCleanup(self.host.stop)
         self.key = self.host.ensure_account(next(iter(self.host.accounts)))
         self.host.events.admit_room(self.key, "festival")
@@ -88,7 +90,7 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
 
     async def restart(self):
         await self.host.stop()
-        self.host = Server(state_path=self.directory / "state.json", **self.options)
+        self.host = Server(store=self.store, **self.options)
         self.addAsyncCleanup(self.host.stop)
         self.client = await self.browser()
         await self.login()
@@ -364,7 +366,7 @@ class EventGrantFormTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(receipt.status_code, 503)
         cookies = self.httpx.Cookies(self.client.cookies)
         await self.host.stop()
-        self.host = Server(state_path=self.directory / "state.json", **self.options)
+        self.host = Server(store=self.store, **self.options)
         self.addAsyncCleanup(self.host.stop)
         self.client = await self.browser(cookies=cookies)
         old_token = self.client.cookies["starlette_admin_csrftoken"]

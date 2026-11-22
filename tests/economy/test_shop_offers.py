@@ -12,6 +12,7 @@ from tests import ROOT
 from tests.economy.entries import shop_entry
 from tests.network import test_services_integration as services
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.cards.model import Card
 from tmserver.cards.catalog import Catalog
 from tmserver.economy.service import EconomyService
@@ -120,8 +121,8 @@ class EncryptedShopOfferTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
-        self.server = Server(state_path=self.path, shop_offers=OFFERS)
+        self.store = MemoryStore()
+        self.server = Server(store=self.store, shop_offers=OFFERS)
         self.port = await self.server.start(0)
         self.client = Client()
         await self.client.open(self.port)
@@ -197,7 +198,7 @@ class EncryptedShopOfferTests(unittest.IsolatedAsyncioTestCase):
             for card in incoming:
                 self.server.economy.catalog.validate(card)
         await self.quit()
-        restored = Server(state_path=self.path, shop_offers=ShopOffers())
+        restored = Server(store=self.store, shop_offers=ShopOffers())
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
             self.assertEqual(
@@ -224,9 +225,9 @@ class EncryptedShopOfferTests(unittest.IsolatedAsyncioTestCase):
         await self.buy(5)
         await self.get()
         await self.buy(76)
-        saved = self.path.read_bytes()
+        saved = self.store.load()
         expected = self.server.economy.snapshot()
-        with patch.object(Path, "replace", side_effect=OSError("injected offer Get save failure")):
+        with failing_commits("injected offer Get save failure"):
             await self.client.send(
                 b"NOTICE "
                 + service_nick(SHOP_RAW)
@@ -235,8 +236,8 @@ class EncryptedShopOfferTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(await self.client.read(), b"")
         self.assertIsNotNone(self.server.storage_failed)
-        self.assertEqual(self.path.read_bytes(), saved)
-        restored = Server(state_path=self.path, shop_offers=OFFERS)
+        self.assertEqual(self.store.load(), saved)
+        restored = Server(store=self.store, shop_offers=OFFERS)
         try:
             self.assertEqual(restored.economy.snapshot(), expected)
             self.assertEqual(

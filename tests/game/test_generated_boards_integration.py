@@ -17,6 +17,7 @@ from tests import ROOT
 from tests.game import test_versus_integration as versus
 from tests.game.test_match_service import NATIVE_SETTINGS
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.economy.match_ledger import offline_payout
@@ -40,9 +41,9 @@ class GeneratedBoardsIntegrationTests(unittest.IsolatedAsyncioTestCase):
     @asynccontextmanager
     async def scenario(self, n=2, *, cpu=False, money=False, start_fields=None):
         self.case_number += 1
-        self.path = Path(self.temp.name) / f"state-{self.case_number}.json"
+        self.store = MemoryStore()
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             match_mode="computer" if cpu else "versus",
             match_player_count=n,
             account_count=n,
@@ -194,7 +195,7 @@ class GeneratedBoardsIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 latest[1], self.server.default_table.match.players[seat].result_stats.current_reward
             )
-        durable = EconomyService.restore(json.loads(self.path.read_text()))
+        durable = EconomyService.restore(self.store.load())
         self.assertEqual(durable.snapshot(), self.server.economy.snapshot())
 
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.network import test_services_integration as service_tests
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.cards.catalog import collection_points
 from tmserver.protocol.identities import TABLE_RAW, player_id
 from tmserver.game.packets import decode, packet
@@ -23,8 +24,8 @@ class ComputerMenuIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.state_path = Path(self.temp.name) / "state.json"
-        self.server = Server(state_path=self.state_path)
+        self.store = MemoryStore()
+        self.server = Server(store=self.store)
         self.port = await self.server.start(0)
         self.client = Client()
         await self.client.open(self.port)
@@ -131,7 +132,7 @@ class ComputerMenuIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.request(TABLE_RAW, packet(0x43, 17, 0, "@Continue=/Ans=2/PR=0/Conf=0"))
         self.assertEqual(self.server.default_table.match.phase, "finished")
         self.assertFalse(self.server.economy.is_reserved(self.key))
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
         finally:

@@ -11,6 +11,7 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.economy.models import PROFILE_SIZE
 from tmserver.economy.service import EconomyService
 from tmserver.economy.errors import EconomyError
@@ -84,8 +85,8 @@ class RegistrationTransportTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1.0
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
-        self.server = Server(state_path=self.path)
+        self.store = MemoryStore()
+        self.server = Server(store=self.store)
         self.key = "UGITW5T4U"
         self.server.economy.provision(self.key, nn=player_id(self.key.encode()), guild=0)
         self.server.account_keys.add(self.key)
@@ -130,7 +131,7 @@ class RegistrationTransportTests(unittest.IsolatedAsyncioTestCase):
         expected[0x3B] = 3
         self.assertEqual(after, expected)
         # Registration is durably available before the positive response.
-        restored = Server(state_path=self.path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.profile_bytes(self.key), after)
             self.assertEqual(
@@ -146,20 +147,18 @@ class RegistrationTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.read_profile(), after)
 
     async def test_encrypted_forged_identity_disconnects_without_mutation(self):
-        before = self.path.read_bytes()
+        before = self.store.load()
         self.assertEqual(await self.init(2, GID="0000000000000002"), b"")
         self.assertEqual(self.server.economy.account_view(self.key).guild, 0)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.store.load(), before)
 
     async def test_failed_registration_save_has_no_success_and_preserves_last_save(self):
-        before = self.path.read_bytes()
-        with patch.object(
-            Path, "replace", side_effect=OSError("injected registration save failure")
-        ):
+        before = self.store.load()
+        with failing_commits("injected registration save failure"):
             self.assertEqual(await self.init(2), b"")
         self.assertIsNotNone(self.server.storage_failed)
-        self.assertEqual(self.path.read_bytes(), before)
-        restored = Server(state_path=self.path)
+        self.assertEqual(self.store.load(), before)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.account_view(self.key).guild, 0)
         finally:

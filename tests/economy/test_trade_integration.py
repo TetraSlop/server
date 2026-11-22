@@ -16,14 +16,15 @@ from tmserver.protocol.identities import TRADE_RAW, game_id, player_id, service_
 from tmserver.profiles.service import ProfileServer
 from tmserver.profiles.packets import checked
 from tests.support.irc import ACCOUNTS
+from tests.support.memory_store import MemoryStore
 from tmserver.network.server import Server
 
 
 class TradeIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
-        self.server = Server(state_path=self.path)
+        self.store = MemoryStore()
+        self.server = Server(store=self.store)
         self.port = await self.server.start(0)
         self.clients = [Client(), Client()]
         for client, nick in zip(self.clients, ACCOUNTS):
@@ -124,7 +125,7 @@ class TradeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         committed = self.server.economy.snapshot()
         await self.operation(0, 0x1D, "@Get=/P=0")
         self.assertEqual(self.server.economy.snapshot(), committed)
-        restored = Server(state_path=self.path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.snapshot(), committed)
         finally:
@@ -175,7 +176,7 @@ class TradeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         for client in self.clients:
             await client.close()
         await self.server.stop()
-        self.server = Server(state_path=self.path, account_count=3)
+        self.server = Server(store=self.store, account_count=3)
         self.port = await self.server.start(0)
         self.clients = []
         for nick in self.server.accounts:
@@ -235,13 +236,13 @@ class TradeIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 Counter(self.server.economy.inventory(self.keys[side])),
                 Counter(original[side][1:] + original[1 - side][:1]),
             )
-        saved = self.path.read_bytes()
+        saved = self.store.load()
         stale = self.clients[2]
         await stale.send(b"NOTICE " + service + b" :" + entry_request(stale, self.clients[0]))
         self.assertEqual(await stale.read(), b"")
         self.assertEqual(await self.flush(0), [])
         self.assertFalse(any(self.server.economy.is_reserved(key) for key in self.keys))
-        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(self.store.load(), saved)
 
         await stale.close()
         self.clients[2] = replacement = Client()
@@ -251,7 +252,7 @@ class TradeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(await admit(2, 0), self.session)
         self.assertTrue(self.server.economy.is_reserved(self.keys[0]))
         self.assertTrue(self.server.economy.is_reserved(self.keys[2]))
-        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(self.store.load(), saved)
 
 
 if __name__ == "__main__":

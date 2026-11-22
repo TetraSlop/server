@@ -12,6 +12,7 @@ from tests import ROOT
 from tests.economy import test_match_prizes_integration as prizes
 from tests.game.test_match_service import NATIVE_SETTINGS, finish_arrowless_round, select
 from tests.support.irc import Client
+from tests.support.memory_store import DATABASE, MemoryStore
 from tmserver.protocol.identities import TABLE_RAW, player_id
 from tmserver.game.errors import MatchError
 from tmserver.game.match import MatchService
@@ -131,15 +132,15 @@ class FlexibleSeatUnits(unittest.TestCase):
         self.assertFalse(m.ready_to_start)
 
     def test_configuration_is_explicit_and_rejects_fixed_layout(self):
-        args = arguments(["--mode", "versus", "--players", "auto"])
+        args = arguments([*DATABASE, "--mode", "versus", "--players", "auto"])
         self.assertEqual((args.players, args.accounts, args.flexible_seats), (3, 3, True))
-        self.assertFalse(arguments(["--mode", "versus", "--players", "3"]).flexible_seats)
+        self.assertFalse(arguments([*DATABASE, "--mode", "versus", "--players", "3"]).flexible_seats)
         for opts in (
             ["--players", "auto"],
             ["--mode", "versus", "--players", "auto", "--board", ",".join(["0"] * 25)],
         ):
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                arguments(opts)
+                arguments([*DATABASE, *opts])
         for kw in (
             {"flexible_seats": 1},
             {"mode": "computer"},
@@ -186,9 +187,9 @@ class FlexibleSeatNetwork(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             match_mode="versus",
             match_player_count=3,
             account_count=3,
@@ -229,7 +230,7 @@ class FlexibleSeatNetwork(unittest.IsolatedAsyncioTestCase):
             for side in range(self.player_count):
                 await self.send(side, packet(67, 17, side, "@Continue=/Ans=1/PR=0/Conf=0"))
             self.assertEqual(self.server.default_table.match.player_count, self.player_count)
-        restored = Server(state_path=self.path, account_count=3, rating_mode="local-history")
+        restored = Server(store=self.store, account_count=3, rating_mode="local-history")
         try:
             for key in self.keys:
                 self.assertEqual(

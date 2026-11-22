@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from tests.support.memory_store import MemoryStore
 from tmserver.network.server import Server
 
 
@@ -29,7 +30,9 @@ class AwardFormTests(unittest.IsolatedAsyncioTestCase):
 
         self.httpx, self.create_app = httpx, create_app
         self.directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.host = Server(state_path=self.directory / "state.json")
+        self.store = MemoryStore()
+        self.event_store = MemoryStore()
+        self.host = Server(store=self.store)
         self.addAsyncCleanup(self.host.stop)
         self.key = next(iter(self.host.accounts)).decode()
         self.host.ensure_account(self.key.encode())
@@ -163,7 +166,7 @@ class AwardFormTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(uncertain.status_code, 503)
         self.assertIn("may already have been saved", uncertain.text)
         await self.host.stop()
-        self.host = Server(state_path=self.directory / "state.json")
+        self.host = Server(store=self.store)
         self.addAsyncCleanup(self.host.stop)
         self.client = await self.browser(actions=True)
         await self.login()
@@ -181,7 +184,7 @@ class AwardFormTests(unittest.IsolatedAsyncioTestCase):
 
         await self.host.stop()
         self.host = Server(
-            state_path=self.directory / "event-state.json",
+            store=self.event_store,
             event_configs=(config(card_service_enabled=True),), event_clock=lambda: 200,
         )
         self.addAsyncCleanup(self.host.stop)

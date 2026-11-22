@@ -14,6 +14,7 @@ from tests.economy.auctions.test_auction_service import (
 )
 from tests.support.irc import Client
 from tests.profiles.test_new_profile import request as init_request
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.packets import named
 from tmserver.network.dispatch import dispatch
 from tmserver.network.server import Server
@@ -171,9 +172,9 @@ class EncryptedQueryWriteBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory()
-        self.path = Path(self.temp.name) / "state.json"
+        self.memory = MemoryStore()
         self.now = 1700000000
-        self.host = Server(state_path=self.path, auction_clock=lambda: self.now)
+        self.host = Server(store=self.memory, auction_clock=lambda: self.now)
         self.nick = next(iter(self.host.accounts))
         self.key = self.nick.decode()
         self.host.economy.provision(self.key, nn=player_id(self.nick), guild=0)
@@ -208,7 +209,7 @@ class EncryptedQueryWriteBoundaryTests(unittest.IsolatedAsyncioTestCase):
                     [named(0x81, 0, 0, "@InitAns=/Ans=2")],
                 )
                 self.assertEqual(self.host.store.load()["accounts"][self.key]["guild"], guild)
-            before = self.path.read_bytes()
+            before = self.memory.load()
             requests = (
                 init_request(self.host.economy, self.key, guild),
                 auction_request(self.host.economy, self.key, b"SI"),
@@ -224,7 +225,7 @@ class EncryptedQueryWriteBoundaryTests(unittest.IsolatedAsyncioTestCase):
                     await self.send(payload)
                 changes.assert_not_called()
             self.assertIsNone(self.host.storage_failed)
-            self.assertEqual(self.path.read_bytes(), before)
+            self.assertEqual(self.memory.load(), before)
 
     async def test_exhibit_and_query_expiry_remain_durable(self):
         replies = await self.send(exhibit_request(self.host.economy, self.key))
@@ -245,7 +246,7 @@ class EncryptedQueryWriteBoundaryTests(unittest.IsolatedAsyncioTestCase):
         await self.send(exhibit_request(self.host.economy, self.key))
         listing = self.host.auction_ledger.listings()[0]
         self.now = listing.expires
-        before = self.path.read_bytes(), self.host.snapshot()
+        before = self.memory.load(), self.host.snapshot()
         with patch.object(self.host.store, "save_changes", side_effect=OSError("expiry failure")):
             await self.client.send(
                 b"NOTICE "
@@ -255,5 +256,5 @@ class EncryptedQueryWriteBoundaryTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(await self.client.read(), b"")
         self.assertIsNotNone(self.host.storage_failed)
-        self.assertEqual((self.path.read_bytes(), self.host.snapshot()), before)
+        self.assertEqual((self.memory.load(), self.host.snapshot()), before)
         self.assertEqual(self.host.auction._snapshots, {})

@@ -10,13 +10,13 @@ from unittest.mock import Mock, patch
 
 from tests.economy.test_match_transactions import TableFixture
 from tests.rankings.test_rating_policy import KEYS, economy, prepare
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
 from tmserver.rankings.errors import RankingError
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.rankings.periods import RankingPeriods
 from tmserver.rankings.stats import PracticeStats
-from tmserver.storage.json import JsonStateStore
 
 MONDAY = 1_704_067_200  # 2024-01-01 00:00 UTC.
 WEEK = 7 * 24 * 60 * 60
@@ -236,39 +236,38 @@ class WeeklyRatingPolicyTests(unittest.TestCase):
 
 class WeeklyRatingTransactionTests(TableFixture, unittest.TestCase):
     def test_result_persistence_failure_discards_period_history_and_account_changes(self):
-        with tempfile.TemporaryDirectory() as folder:
-            store = JsonStateStore(Path(folder) / "state.json")
-            self.prepare_table(store)
-            self.server.ratings = RatingPolicy(
-                self.server.economy, mode="local-history", weekly=True, clock=lambda: MONDAY
-            )
-            self.server.ratings.advance_week()
-            self.server.persist()
-            self.begin()
-            self.prepare_result()
-            baseline, saved = self.server.snapshot(), store.path.read_bytes()
-            periods = self.server.ratings.periods
-            proposed = []
+        store = MemoryStore()
+        self.prepare_table(store)
+        self.server.ratings = RatingPolicy(
+            self.server.economy, mode="local-history", weekly=True, clock=lambda: MONDAY
+        )
+        self.server.ratings.advance_week()
+        self.server.persist()
+        self.begin()
+        self.prepare_result()
+        baseline, saved = self.server.snapshot(), store.load()
+        periods = self.server.ratings.periods
+        proposed = []
 
-            def fail(accounts, journals):
-                self.assertEqual(self.server.snapshot(), baseline)
-                self.assertIs(self.server.ratings.periods, periods)
-                proposed.append(deepcopy(journals["ratings"]))
-                self.assertEqual(set(proposed[0]["periods"]["current"]), set(self.keys[:2]))
-                raise OSError("weekly result write")
-
-            with (
-                patch.object(self.server, "persist_changes", side_effect=fail),
-                self.assertRaises(OSError),
-            ):
-                self.server.default_table.commit_match_results(self.match)
+        def fail(accounts, journals):
             self.assertEqual(self.server.snapshot(), baseline)
-            self.assertEqual(store.path.read_bytes(), saved)
             self.assertIs(self.server.ratings.periods, periods)
+            proposed.append(deepcopy(journals["ratings"]))
+            self.assertEqual(set(proposed[0]["periods"]["current"]), set(self.keys[:2]))
+            raise OSError("weekly result write")
+
+        with (
+            patch.object(self.server, "persist_changes", side_effect=fail),
+            self.assertRaises(OSError),
+        ):
             self.server.default_table.commit_match_results(self.match)
-            self.assertEqual(self.server.ratings.snapshot(), proposed[0])
-            self.assertEqual(JsonStateStore(store.path).load()["ratings"], proposed[0])
-            self.assertIsNot(self.server.ratings.periods, periods)
+        self.assertEqual(self.server.snapshot(), baseline)
+        self.assertEqual(store.load(), saved)
+        self.assertIs(self.server.ratings.periods, periods)
+        self.server.default_table.commit_match_results(self.match)
+        self.assertEqual(self.server.ratings.snapshot(), proposed[0])
+        self.assertEqual(store.load()["ratings"], proposed[0])
+        self.assertIsNot(self.server.ratings.periods, periods)
 
 
 if __name__ == "__main__":

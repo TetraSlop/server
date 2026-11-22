@@ -7,6 +7,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from tests.support.memory_store import MemoryStore
 
 
 class AuthHttpTests(unittest.IsolatedAsyncioTestCase):
@@ -20,8 +21,8 @@ class AuthHttpTests(unittest.IsolatedAsyncioTestCase):
         from tmserver.profiles.service import ProfileServer
 
         self.folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.path = self.folder / "state.json"
-        self.host = Server(state_path=self.path)
+        self.store = MemoryStore()
+        self.host = Server(store=self.store)
         self.addAsyncCleanup(self.host.stop)
         self.profile = ProfileServer(self.folder / "profile.jsonl", self.host)
         self.addAsyncCleanup(self.profile.stop)
@@ -73,7 +74,7 @@ class AuthHttpTests(unittest.IsolatedAsyncioTestCase):
                 return case.identities[token]
 
         self.app = create_app(self.host, self.profile, self.config, FakeVerifier())
-        self.before, self.disk = deepcopy(self.host.snapshot()), self.path.read_bytes()
+        self.before, self.disk = deepcopy(self.host.snapshot()), self.store.load()
         for method in ("ensure_account", "persist", "persist_changes", "advance_auctions"):
             self.enterContext(patch.object(self.host, method, side_effect=AssertionError(method)))
         self.sessions = self.app.state.play_sessions
@@ -89,7 +90,7 @@ class AuthHttpTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self):
         self.assertEqual(self.host.snapshot(), self.before)
-        self.assertEqual(self.path.read_bytes(), self.disk)
+        self.assertEqual(self.store.load(), self.disk)
 
     def headers(self, token="one"):
         headers = {"Origin": self.origin}
