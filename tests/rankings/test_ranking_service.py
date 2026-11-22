@@ -8,9 +8,8 @@ from pathlib import Path
 from tmserver.economy.models import PROFILE_SIZE
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import game_id
-from tmserver.rankings.packets import METADATA_PATH, RECORD_SIZE, RESULT_PATH, UI_CATEGORIES
-from tmserver.rankings.models import RankingError, RankingHistory
-from tmserver.rankings.service import RankingService
+from tmserver.rankings.packets import METADATA_PATH, RECORD_SIZE, RESULT_PATH
+from tmserver.rankings.service import MAX_SNAPSHOTS, RankingService
 from tmserver.protocol.commands import Command, encode, parse
 
 
@@ -70,55 +69,21 @@ class RankingTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from("<I", total, 0x94)[0], 900)
         self.assertNotEqual(struct.unpack_from("<I", total, 0x94)[0], self.economy.balance("alice"))
 
-    def test_historical_categories_are_empty_without_supplied_history(self):
+    def test_historical_categories_are_empty_without_weekly_play(self):
         for category in (1, 3, 4):
             with self.subTest(category=category):
                 _, data = self.query(category)
                 self.assertEqual(data, b"")
         self.assertEqual(struct.unpack("<7I", self.service.metadata()), (0, 2, 0, 0, 0, 0, 0))
 
-    def test_explicit_history_produces_weekly_top_and_rookie_records(self):
-        self.service = RankingService(
-            self.economy,
-            update_time=1700000000,
-            historical_stats={
-                "alice": RankingHistory(
-                    weekly_prize=25,
-                    last_week_rating=333,
-                    rookie=True,
-                    previous_ranks=(7, 6, 5, 4, 3),
-                ),
-                "bob": RankingHistory(weekly_prize=50, last_week_rating=444),
-            },
-        )
-        _, weekly = self.query(1)
-        self.assertEqual(weekly[:4], b"Bob\0")
-        _, top = self.query(3)
-        self.assertEqual(struct.unpack_from("<I", top, 0xA4)[0], 444)
-        _, rookie = self.query(4)
-        self.assertEqual(len(rookie), RECORD_SIZE)
-        self.assertEqual(rookie[:6], b"Alice\0")
-        self.assertEqual(list(rookie[0xC3:0xC8]), [3, 4, 5, 7, 6])
-        self.assertEqual(
-            struct.unpack("<7I", self.service.metadata()), (0, 2, 2, 1700000000, 0, 2, 1)
-        )
-
-    def test_name_termination_anonymity_and_rating_qualification(self):
+    def test_name_termination_and_unused_record_bytes(self):
         self.economy.provision("long", nn=game_id(3), player_id=3, name=b"ABCDEFGHIJKLMNOP")
-        self.service = RankingService(
-            self.economy, historical_stats={"bob": RankingHistory(anonymous=True, qualified=False)}
-        )
         _, data = self.query(2)
-        self.assertEqual(len(data), 2 * RECORD_SIZE)
-        self.assertNotIn(b"Bob\0", data)
+        self.assertEqual(len(data), 3 * RECORD_SIZE)
         self.assertIn(b"ABCDEFGHIJKLMNO\0", data)
-        _, data = self.query(0)
-        row = next(
-            data[i : i + RECORD_SIZE]
-            for i in range(0, len(data), RECORD_SIZE)
-            if data[i : i + 4] == b"Bob\0"
-        )
-        self.assertEqual((row[0xC0], row[0xC2]), (1, 0))
+        for row in range(0, len(data), RECORD_SIZE):
+            self.assertEqual(data[row + 0xC2], 1)
+            self.assertEqual(data[row + 0xC3 : row + 0xC8], bytes(5))
         self.assertEqual(self.economy.account_view("long").name, b"ABCDEFGHIJKLMNOP")
 
     def test_prior_query_and_other_account_snapshots_remain_immutable(self):
@@ -160,7 +125,8 @@ class RankingTests(unittest.TestCase):
         self.assertFalse(self.service.delete("alice", "../" + RESULT_PATH))
 
     def test_capacity_failure_does_not_evict_old_file_and_delete_recovers(self):
-        self.service = RankingService(self.economy, max_snapshots=1)
+        for _ in range(MAX_SNAPSHOTS - 1):
+            self.query()
         path, old = self.query()
         reply = self.service.handle("alice", request(0, game_id(1)))[0]
         self.assertEqual(parse(reply[5:]), [Command(b"RG", b"-8809")])
@@ -216,27 +182,9 @@ class RankingTests(unittest.TestCase):
             self.economy.provision(
                 str(index), nn=game_id(index), player_id=index, name=str(index).encode(), cards=[]
             )
-        history = {
-            key: RankingHistory(last_week_rating=1, rookie=True)
-            for key in self.economy.snapshot()["accounts"]
-        }
-        self.service = RankingService(self.economy, historical_stats=history)
         self.assertEqual(len(self.service.records(0)), 100 * RECORD_SIZE)
-        self.assertEqual(len(self.service.records(3)), 30 * RECORD_SIZE)
-        self.assertEqual(len(self.service.records(4)), 100 * RECORD_SIZE)
-        self.assertEqual(struct.unpack_from("<I", self.service.metadata(), 0x14)[0], 104)
-
-    def test_bad_configuration_rejected(self):
-        for kwargs in (
-            {"update_time": -1},
-            {"max_snapshots": 0},
-            {"historical_stats": {"alice": {}}},
-        ):
-            with self.subTest(kwargs=kwargs), self.assertRaises(RankingError):
-                RankingService(self.economy, **kwargs)
-        for kwargs in ({"weekly_prize": -1}, {"rookie": 1}, {"previous_ranks": (0, 0, 0, 0, 128)}):
-            with self.subTest(kwargs=kwargs), self.assertRaises(RankingError):
-                RankingHistory(**kwargs)
+        self.assertEqual(len(self.service.records(2)), 100 * RECORD_SIZE)
+        self.assertEqual(struct.unpack_from("<I", self.service.metadata(), 4)[0], 104)
 
 
 if __name__ == "__main__":

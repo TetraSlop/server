@@ -6,7 +6,6 @@ import unittest
 from datetime import UTC, datetime
 
 from tmserver.rankings.periods import RankingPeriodError, RankingPeriods
-from tmserver.rankings.models import RankingHistory
 
 MONDAY = int(datetime(2026, 9, 21, tzinfo=UTC).timestamp())
 WEEK = 604800
@@ -19,9 +18,8 @@ class RankingPeriodsTests(unittest.TestCase):
         self.assertIsNone(periods.snapshot())
         self.assertEqual(periods.historical_stats(), {})
         self.assertEqual(periods.account_keys, frozenset())
-        self.assertEqual(periods.update_time, 0)
         self.assertTrue(periods.advance(MONDAY + 12.75))
-        self.assertEqual(periods.update_time, MONDAY)
+        self.assertEqual(periods.snapshot()["week_start"], MONDAY)
         self.assertFalse(periods.advance(MONDAY))
         self.assertFalse(periods.advance(MONDAY + WEEK - 0.25))
 
@@ -31,7 +29,7 @@ class RankingPeriodsTests(unittest.TestCase):
         periods.record(MONDAY + 1, {"a": (3, 198)})
         self.assertEqual(
             periods.historical_stats(),
-            {"a": RankingHistory(weekly_prize=2), "b": RankingHistory(weekly_prize=0)},
+            {"a": (2, None), "b": (0, None)},
         )
         self.assertEqual(periods.snapshot()["current"]["a"], {"prize": 2, "rating": 198})
         self.assertEqual(periods.account_keys, frozenset(("a", "b")))
@@ -42,19 +40,18 @@ class RankingPeriodsTests(unittest.TestCase):
         periods.record(MONDAY + WEEK - 0.25, {"a": (10, 198)})
         issued = periods.historical_stats()
         periods.record(MONDAY + WEEK, {"a": (7, 195), "c": (0, 205)})
-        self.assertEqual(periods.update_time, MONDAY + WEEK)
+        self.assertEqual(periods.snapshot()["week_start"], MONDAY + WEEK)
         self.assertEqual(
             periods.historical_stats(),
             {
-                "a": RankingHistory(weekly_prize=7, last_week_rating=198),
-                "b": RankingHistory(last_week_rating=203),
-                "c": RankingHistory(weekly_prize=0),
+                "a": (7, 198),
+                "b": (None, 203),
+                "c": (0, None),
             },
         )
         periods.record(MONDAY + WEEK + 1, {"a": (1, 192)})
-        self.assertEqual(periods.historical_stats()["a"].last_week_rating, 198)
-        self.assertEqual(issued["a"], RankingHistory(weekly_prize=30))
-        self.assertTrue(all(not row.rookie for row in periods.historical_stats().values()))
+        self.assertEqual(periods.historical_stats()["a"][1], 198)
+        self.assertEqual(issued["a"], (30, None))
 
     def test_skipped_weeks_and_an_empty_week_clear_previous(self):
         for jump in (2, 5):
@@ -67,7 +64,7 @@ class RankingPeriodsTests(unittest.TestCase):
         periods = RankingPeriods()
         periods.record(MONDAY, {"a": (10, 198)})
         periods.advance(MONDAY + WEEK)
-        self.assertEqual(periods.historical_stats()["a"].last_week_rating, 198)
+        self.assertEqual(periods.historical_stats()["a"][1], 198)
         periods.advance(MONDAY + 2 * WEEK)
         self.assertEqual(periods.historical_stats(), {})
 
@@ -83,9 +80,9 @@ class RankingPeriodsTests(unittest.TestCase):
         after_rollover.record(MONDAY + WEEK + 1, {"a": (4, 195)})
         self.assertEqual(
             after_rollover.historical_stats()["a"],
-            RankingHistory(weekly_prize=4, last_week_rating=198),
+            (4, 198),
         )
-        self.assertEqual(periods.historical_stats()["a"], RankingHistory(weekly_prize=10))
+        self.assertEqual(periods.historical_stats()["a"], (10, None))
 
     def test_bad_final_contribution_does_not_roll_over_or_partly_apply(self):
         periods = RankingPeriods()
@@ -127,11 +124,10 @@ class RankingPeriodsTests(unittest.TestCase):
         periods = RankingPeriods()
         periods.record(0.0, {"a": (1, 198)})
         self.assertEqual(periods.snapshot()["week_start"], -259200)
-        self.assertEqual(periods.update_time, 0)
         restored = RankingPeriods.restore(periods.snapshot())
         self.assertFalse(restored.advance(345599.9))
         self.assertTrue(restored.advance(345600))  # Monday, January 5, 1970.
-        self.assertEqual(restored.historical_stats()["a"].last_week_rating, 198)
+        self.assertEqual(restored.historical_stats()["a"][1], 198)
         self.assertTrue(restored.advance(float(MAX)))
         self.assertEqual(
             RankingPeriods.restore(restored.snapshot()).snapshot(), restored.snapshot()
@@ -147,8 +143,8 @@ class RankingPeriodsTests(unittest.TestCase):
         snapshot["previous"]["a"] = 999
         self.assertEqual(periods.snapshot(), restored.snapshot())
         restored.record(MONDAY + WEEK, {"a": (3, 192)})
-        self.assertEqual(periods.historical_stats()["a"].weekly_prize, 2)
-        self.assertEqual(restored.historical_stats()["a"].weekly_prize, 5)
+        self.assertEqual(periods.historical_stats()["a"][0], 2)
+        self.assertEqual(restored.historical_stats()["a"][0], 5)
 
     def test_restore_rejects_malformed_schema_and_rows(self):
         periods = RankingPeriods()

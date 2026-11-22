@@ -44,7 +44,7 @@ class WeeklyRankingConfigurationTests(unittest.IsolatedAsyncioTestCase):
             ])
             async with running_services(args) as services:
                 self.assertFalse(services.game.ratings.weekly)
-                self.assertEqual(services.game.ratings.weekly_history(), ({}, 0))
+                self.assertEqual(services.game.ratings.weekly_history(), {})
                 self.assertEqual(state.read_bytes(), before)
 
 
