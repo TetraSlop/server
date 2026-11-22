@@ -20,14 +20,13 @@ nothing; the caller should log it and close or resync the connection.
 Insufficient funds or an unavailable pack get the nonpositive Card response.
 """
 
-import re
 import struct
 
 from tmserver.cards.catalog import collection_points
 from tmserver.cards.edits import apply_card_edits, parse_edit_section
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.models import MAX_MONEY, _Pending, _State, check_inventory
-from tmserver.economy.packets import _hex, _int, _keys, named
+from tmserver.economy.packets import _int, _keys, check_entry, named
 
 
 def _initial_reply(account, offers):
@@ -45,20 +44,9 @@ def _initial_reply(account, offers):
 def handle(account, family, subtype, session, sections, *, catalog, offers, draw):
     """Handle a parsed request against the caller's staged account and RNG."""
     if family == 0xB0:
-        if subtype != 0 or set(sections) != {"ShReq"}:
+        if subtype != 0:
             raise EconomyError("only ordinary shop entry is implemented")
-        fields = sections["ShReq"]
-        _keys(fields, ("NN", "HID", "Dm", "Vol", "CN"))
-        if (
-            not re.fullmatch(r"[0-9A-Fa-f]{16}", fields["NN"])
-            or int(fields["NN"], 16) != account.nn
-        ):
-            raise EconomyError("ShReq identity does not match authenticated account")
-        _int(fields["HID"])
-        _int(fields["Dm"], maximum=255)
-        _int(fields["Vol"], maximum=65535)
-        if _hex(fields["CN"], 16) != account.name:
-            raise EconomyError("ShReq name does not match provisioned account")
+        check_entry(sections, "ShReq", account)
         if account.pending:
             raise EconomyError("cannot reinitialize a pending purchase")
         if account.session is None:
