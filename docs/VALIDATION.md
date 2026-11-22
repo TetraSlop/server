@@ -7,15 +7,14 @@ What the test lanes cover, and what they do not. How to run them is in
 
 | Lane | Needs | Covers |
 | --- | --- | --- |
-| `portable` | Python 3.13, `.[dev]` | Protocol codecs, services, JSON storage, encrypted loopback sessions, tooling. Runs on Windows and Linux. |
+| `portable` | Python 3.13, `.[dev]` | Protocol codecs, services, encrypted loopback sessions on an in-memory store, tooling. Runs on Windows and Linux. |
 | `admin` | `.[dev,admin]` | The admin panel, its sign-in, audited actions and receipts. |
 | `auth` | `.[dev,auth]` | Supabase verification (provider mocked at the HTTP boundary), tickets, WebSocket game and profile streams, automatic registration. |
 | `postgres` | `.[dev,postgres]`, Docker | Joint account and journal commits, rollback, lost commit acknowledgements, writer exclusion and migrations, on a disposable PostgreSQL 16. |
 | `native` | 32-bit Windows Python, the game image, the bridge | Gameplay through the native rules, startup preflight, computer and human matches. |
 | `native-postgres` | both of the above | Two complete matches stored in PostgreSQL. |
 
-No lane may skip a test, except the portable lane's optional PostgreSQL import
-check when those packages are absent. `tests/native_modules.json` assigns
+No lane may skip a test. `tests/native_modules.json` assigns
 image-dependent modules to the native lane, and the collection check fails if a
 module has no lane.
 

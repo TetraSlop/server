@@ -5,9 +5,24 @@ settings). The current build has not been checked.
 
 These checks are for one recorded server and loader build. Headless tests cover
 startup and encrypted requests; what the client shows needs a person playing.
-Use `Play.cmd`, not an old shortcut. Record the server and loader revisions, the
-deployed loader executable's hash and the launch session ID with the results. A
-newer build on disk does not mean it was the one running.
+Record the server and loader revisions, the deployed loader executable's hash
+and the server's log folder with the results. A newer build on disk does not
+mean it was the one running.
+
+## Setup
+
+Set `TM_DATABASE_URL` to a disposable test database (see
+[PostgreSQL storage](DATABASE.md)), then start the server with three local
+accounts and the supplied rooms:
+
+```powershell
+.venv/Scripts/tmserver --accounts 3 --rooms examples/auto_rooms.example.json --log-dir var/checklist
+```
+
+Start one tmloader window per player against the server's game and profile
+ports, each with a different local login from `tmserver --accounts 3
+--list-accounts`. See the tmloader documentation for its options. Add the
+server options named in each pass below.
 
 Start with Pass 1 and Pass 2 below: a computer match and rematch, a shop and deck
 change and a reload, then a two-player match, a trade and a reload. Keep the
@@ -16,7 +31,7 @@ run does not imply they were tried.
 
 ## Room discovery and rules
 
-Restart `Play.cmd` after the room-directory update. Confirm Local Room, Open
+Restart the server after the room-directory update. Confirm Local Room, Open
 Tables, Classic Rules, Special Rules and Quick Play appear in the lobby.
 
 - In Local Room, select an empty table: Computer should be available with at
@@ -46,15 +61,15 @@ Check the complete set below on the build being accepted:
 - The pointer is visible in settings and over the title bar. Alt+Tab and the
   Windows key switch away normally; TM does not jump back to the foreground or
   move the pointer while another window has focus. Size presets keep settings usable.
-- X, Alt+F4 and Quit game each close the client on separate runs, and the launcher
-  stops its services after the last client exits. Window preferences survive relaunch.
+- X, Alt+F4 and Quit game each close the client on separate runs. Window
+  preferences survive relaunch.
 
 These fixes have headless regression coverage and the earlier user confirmations
 above. A complete pass of these controls on the recorded candidate remains pending.
 
 ## Pass 1: one window
 
-1. **Startup:** double-click `Play.cmd`. Confirm the title is visible, mouse
+1. **Startup:** start the server and one loader window. Confirm the title is visible, mouse
    movement/clicks behave normally and room entry succeeds.
 2. **CPU:** enter Local Room, select an empty table, choose Computer and an
    opponent, finish a match, then play a
@@ -64,30 +79,30 @@ above. A complete pass of these controls on the recorded candidate remains pendi
    one opponent. The board should return to 16 cells with no stale second NPC.
 3. **Shop:** note money and card count, buy a pack and accept its cards. Sell one
    unwanted card and change a deck name or assignment. Confirm visible changes.
-4. **Reload:** close the game normally, run `Play.cmd` again and check that the
+4. **Reload:** close the game normally, restart the server and loader, and check that the
    money, inventory, deck change and completed-match progress survived.
 
 Report the first failing step before continuing. A useful short report is:
-`session ID; step; last visible screen/message; expected behavior; what happened`.
-The session ID appears in the launch console; log paths are in LOCAL_PLAY.md.
+`log folder; step; last visible screen/message; expected behavior; what happened`.
+The server writes its traffic logs to the `--log-dir` folder.
 
 ## Pass 2: two windows
 
-Close the first session, then run `.\Play.cmd --clients 2` from `tmserver`.
+Close the first window, then start two loader windows against the same server.
 
 1. Enter Open Tables in both windows. Join the same table; names should appear
    and Start should become available. Finish a match and a rematch.
 2. Leave the table and enter trading in both windows. Exchange one card from
    each account, confirm on both sides, and complete collection. Check that
    each account received exactly one intended card and lost its offered card.
-3. Close both windows, rerun the same command and confirm both inventories and
+3. Close both windows, restart the server and both loaders, and confirm both inventories and
    the human-match counter survived. Verify that the two accounts stay distinct.
 
 ## Pass 3: rewards, then three players
 
-Use `.\Play.cmd --rewards` to check a CPU result with local reward options, then
-`.\Play.cmd --clients 2 --rewards` for human winner-card selection and configured
-stakes. Note cards/money before and after, accept rewards, close and reopen.
+Restart the server with `--card-prizes --allow-cbc --wagers`. Check a CPU result
+with these reward options in one window, then human winner-card selection and
+configured stakes in two. Note cards/money before and after, accept rewards, close and reopen.
 Check that collected rewards appear once. These tests change the local economy.
 
 During a human rematch, change the ranking hide-name option in the Continue
@@ -96,7 +111,7 @@ the final Continue choice. Both clients should remain connected; the next stake
 should be charged once, and the privacy preference and deck edits should survive
 closing and reopening. This path has encrypted regression coverage.
 
-Finally, `.\Play.cmd --clients 3`: enter Open Tables in all windows and start a
+Finally, with three loader windows, enter Open Tables in all windows and start a
 three-player match. Confirm the 25-cell board, all three turns and result/Continue
 screens. A native UI pass is still needed even though the headless game logic passes.
 
@@ -122,7 +137,8 @@ historical automatic reward formula.
 
 ## Optional weekly rankings
 
-Launch with `.\Play.cmd --rewards --ratings local-history --weekly-rankings`.
+Start the server with `--card-prizes --allow-cbc --wagers --ratings local-history
+--weekly-rankings`.
 After completing ordinary matches, check the ranking menu's Weekly Prize Money
 and VS. Rating lists, including the hide-name option. Top 30 is populated from
 the preceding UTC week after Monday rollover; old saves are not backfilled and

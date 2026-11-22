@@ -2,14 +2,14 @@
 
 Running the server:
 
-- [Local play](LOCAL_PLAY.md): run the server with tmloader, in one to three windows.
 - [Native rules](NATIVE_RULES.md): build the required Win32 bridge and supply the
   game image.
 - [Rooms](ROOMS.md) and [weekly rankings](WEEKLY_RANKINGS.md).
 - [Offline administration](ADMIN.md) and the optional [admin panel](ADMIN_PANEL.md).
 - [Authentication](AUTHENTICATION.md) and the [loader contract](LOADER_AUTH_SPEC.md):
   Discord sign-in and the WebSocket game and profile streams.
-- [Database setup](DATABASE.md) and [persistence design](PERSISTENCE_DESIGN.md).
+- [Database setup](DATABASE.md): the PostgreSQL save the server requires, and the
+  [persistence design](PERSISTENCE_DESIGN.md).
 
 Working on it:
 

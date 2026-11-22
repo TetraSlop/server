@@ -55,9 +55,9 @@ original typed receipt. History survives collection and restart. After a
 storage failure, history reports that reload is required instead of presenting
 an empty or potentially stale result.
 
-PostgreSQL users must first stop the owning server and run `tmserver-db upgrade`
-to revision `0002_admin_audit`. Existing accounts and Prize Center records remain
-unchanged. JSON saves accept an absent audit journal and add it when needed.
+Stop the owning server and run `tmserver-db upgrade` to revision
+`0002_admin_audit` or later first. Existing accounts and Prize Center records
+remain unchanged.
 
 ## Product scope
 
@@ -100,8 +100,8 @@ release to loopback on an explicitly configured port.
 Shared read projections live in
 [admin/queries.py](../src/tmserver/admin/queries.py). They return detached values
 without I/O, collection, expiry, recovery or enrollment. Capture these values on
-the host event loop before rendering or awaiting. The existing offline CLI keeps
-its exclusive writer lease and explicit save/database selection.
+the host event loop before rendering or awaiting. The offline CLI keeps
+its exclusive PostgreSQL writer lock and explicit database URL.
 
 Under `src/tmserver/admin/`, `server.py` attaches the panel to the shared
 `network/http.py` listener owner, `web.py` owns the application

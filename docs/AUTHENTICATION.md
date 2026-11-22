@@ -56,13 +56,13 @@ owner or take another identity's account. Legacy bindings must refer to enabled
 local accounts (`tmserver --list-accounts`); disconnect the account before
 importing its ownership. Do not attach saves by email or display name.
 
-JSON saves need no manual migration. PostgreSQL operators must stop the server
-and run `tmserver-db upgrade` to revision `0003_identities` before restarting.
+Stop the server and run `tmserver-db upgrade` to revision `0003_identities`
+before restarting.
 The migration retains account data and adds the identity journal. Durable
 ownership must travel with the save when moving to a new server.
 
 ```powershell
-.venv/Scripts/tmserver --state var/local_state.json --auth-config C:/private/tm-auth.json --auth-port 8081
+.venv/Scripts/tmserver --auth-config C:/private/tm-auth.json --auth-port 8081
 ```
 
 This starts a loopback-only HTTP/WebSocket listener. The configured public origin

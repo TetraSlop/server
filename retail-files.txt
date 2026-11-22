@@ -1,8 +1,8 @@
 # Retail files tmserver needs, in sha256sum format.
 #
 # They come from your own PlayOnline install of Tetra Master and are not
-# distributed with tmserver. Put them at the paths below (Play.cmd looks there,
-# or set TM_ORIGINAL_IMAGE), then check them from the repository root:
+# distributed with tmserver. Put them at the paths below, point TM_ORIGINAL_IMAGE
+# (or --rules-image) at the image, then check them from the repository root:
 #
 #     sha256sum -c retail-files.txt
 #

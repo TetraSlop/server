@@ -18,7 +18,7 @@ owning package rather than a generic service layer.
 | `economy` | Accounts, shop, trade, auctions, prizes and transaction boundaries. |
 | `profiles` | Profile transport, character records, options and saved preferences. |
 | `rankings` | Result statistics, ratings and optional weekly projections. |
-| `storage` | JSON and PostgreSQL stores, validation, recovery and migrations. |
+| `storage` | The PostgreSQL store, save validation and migrations. |
 | `data` | Packaged protocol tables and the card catalogue, read through `data/resources.py`. |
 
 Tests mirror these packages under `tests/`, with shared fixtures in
@@ -47,7 +47,7 @@ load-test commands. `results/` and `var/` are ignored output and local state.
 | Auction records, protocol and escrow | [economy/auctions/](../src/tmserver/economy/auctions/), [economy/claim_transactions.py](../src/tmserver/economy/claim_transactions.py) |
 | Profile files and saved player settings | [profiles/service.py](../src/tmserver/profiles/service.py), [profiles/characters.py](../src/tmserver/profiles/characters.py), [profiles/preferences.py](../src/tmserver/profiles/preferences.py) |
 | Ratings, statistics and ranking files | [rankings/policy.py](../src/tmserver/rankings/policy.py), [rankings/stats.py](../src/tmserver/rankings/stats.py), [rankings/service.py](../src/tmserver/rankings/service.py) |
-| Save, validate or recover durable state | [storage/json.py](../src/tmserver/storage/json.py), [storage/postgres.py](../src/tmserver/storage/postgres.py), [storage/validation.py](../src/tmserver/storage/validation.py) |
+| Save, validate or recover durable state | [storage/postgres.py](../src/tmserver/storage/postgres.py), [storage/validation.py](../src/tmserver/storage/validation.py) |
 | Packaged immutable tables | [data/](../src/tmserver/data/), read through [data/resources.py](../src/tmserver/data/resources.py) |
 
 `cli.serve` constructs the two loopback listeners. `network.server.Server` owns
@@ -102,8 +102,8 @@ and padding are defined there once; callers supply the room's policy values.
 
 Import from the feature package, for example `Server` from
 `tmserver.network.server` and `MatchService` from `tmserver.game.match`. The
-supported entry points are the `tmserver`, `tmserver-db`, `tmserver-play` and
-`tmserver-admin` commands, `python -m tmserver` and `Play.cmd`.
+supported entry points are the `tmserver`, `tmserver-db` and `tmserver-admin`
+commands and `python -m tmserver`.
 
 ## Inside a feature
 
@@ -115,7 +115,7 @@ Use the same boundaries when adding or changing substantial feature code:
 | Packets | Parse requests, validate wire fields and encode replies or native files. | [game/packets.py](../src/tmserver/game/packets.py), [economy/packets.py](../src/tmserver/economy/packets.py), [events/packets.py](../src/tmserver/events/packets.py) |
 | Services | Feature behavior, permissions, state transitions and operation-specific staging. | `game/match.py`, `economy/service.py`, `events/service.py` |
 | Transactions | Coordinate the affected accounts/journals; save before publishing or replying. | `economy/commerce.py`, `economy/claim_transactions.py`, `economy/match_transactions.py`, `profiles/transactions.py` |
-| Storage | Implement the shared save contract using JSON or SQLAlchemy Core. | [storage/validation.py](../src/tmserver/storage/validation.py), `storage/json.py`, `storage/postgres.py`, `storage/schema.py` |
+| Storage | Implement the save contract with SQLAlchemy Core on PostgreSQL. | [storage/validation.py](../src/tmserver/storage/validation.py), `storage/postgres.py`, `storage/schema.py` |
 
 Import a shared value or codec from its owner, not through a service that happens
 to use it. Models and codecs must be usable without constructing a service,
@@ -147,7 +147,7 @@ importing the ledger, service or storage backend.
 Use this order for a durable request: **decode → stage → change → save → publish
 → reply**. SQL and database row conversion belong in `storage/postgres.py`;
 table declarations belong in `storage/schema.py`. Feature transactions call the
-storage contract, and JSON implements the same contract. Domain dataclasses,
+storage contract; tests use an in-memory store with the same contract. Domain dataclasses,
 native packets and SQL rows have different validation and representation needs;
 their conversions stay explicit. No generic CRUD service or inferred packet
 serializer is required.
@@ -271,10 +271,9 @@ references remain stable, including table capabilities and cross-service reads.
 Single-account commits share token-type, identity and account-view checks; Prize
 Center also checks its independent points. Release checks only token type and
 identity so cleanup can discard a reservation whose account view is outdated.
-Both stores share three operations: load, full save, and save selected accounts
-with named journals. Supported service-journal names live in `storage.validation`;
-PostgreSQL, schema declarations and snapshot validation do not import the JSON
-implementation.
+A store has three operations: load, full save, and save selected accounts with
+named journals. Supported service-journal names live in `storage.validation`.
+`storage.open_store(url)` opens the PostgreSQL writer for the command-line tools.
 
 ## Tests and packaged resources
 
@@ -302,22 +301,17 @@ Immutable JSON/TSV resources stay in `tmserver/data/`; callers use
 `storage/database.py` and `storage/migrations/` stay together so offline
 migration lookup works in an installed wheel. Package data includes these
 resources and migration scripts. Test fixtures, research binaries, captures and
-live saves are excluded. Runtime saves and logs belong in the selected working
-directory's `var/`, as described in [local play](LOCAL_PLAY.md).
+live saves are excluded. Runtime logs belong in the selected working directory's
+`var/`; the save is in PostgreSQL.
 
 ## Current limits
 
-One process owns one economy. PostgreSQL uses a session writer lock. Packaged
-JSON services and offline administration share `writer_lease(path)` for their
-whole lifetime, before loading or recovering state until shutdown completes.
-JSON also uses a separate short commit lock and checks the previous file
-contents before replacing a save. Callers using `Server` or `JsonStateStore`
-directly must acquire the lifetime lease themselves; low-level save methods
-retain their existing optimistic writer checks.
-All writes are synchronous. JSON rewrites the complete save; PostgreSQL limits
-account writes but stores each service journal as a complete JSONB document.
+One process owns one economy. PostgreSQL uses a session writer lock, held from
+startup until shutdown completes, and offline administration takes the same
+lock. `Server(store=None)` keeps state in memory only and saves nothing.
+All writes are synchronous. PostgreSQL limits account writes but stores each
+service journal as a complete JSONB document.
 Large journals and slow storage can therefore pause all clients on the event loop.
 
 The local test account pool is capped at 128 accounts; hosted accounts come from
-Discord sign-in. The server is one process, not a distributed service. The load tool can create additional dormant accounts to measure storage
-growth; those accounts are not additional connected players.
+Discord sign-in. The server is one process, not a distributed service.
