@@ -14,6 +14,7 @@ from pathlib import Path
 
 from tmserver.admin.audit import AdminAudit
 from tmserver.accounts.identities import IdentityRegistry
+from tmserver.accounts.provisioning import provision_account
 from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.auctions.models import AuctionError
 from tmserver.economy.auctions.service import AuctionService
@@ -30,7 +31,7 @@ from tmserver.events.rooms import EventRooms
 from tmserver.events.service import EventHost
 from tmserver.protocol.identities import GAME_KEY, ROOM_RAW, TRADE_RAW, player_id, service_nick
 from tmserver.network.session import MAX_LINE, Session
-from tmserver.network.local_accounts import account_specs, display_name
+from tmserver.network.local_accounts import account_specs
 from tmserver.protocol.wire import polid_to_string, polid_unscramble
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.rooms.config import configure_rooms
@@ -324,13 +325,7 @@ class Server:
             return key
         with self.economy.edit_accounts((key,) if existing else ()) as staged:
             if not existing:
-                character = self.account_specs[key][2]
-                staged.provision(
-                    key,
-                    nn=player_id(nick),
-                    player_id=character,
-                    name=display_name(character),
-                )
+                provision_account(staged, key, self.account_specs[key][2])
             if name is not None:
                 staged.set_display_name(key, name)
             self.persist_changes(staged.snapshot()["accounts"], self.journal_snapshot())

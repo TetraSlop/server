@@ -11,6 +11,12 @@ from tmserver.protocol.identities import player_id
 from tmserver.protocol.wire import polid_scramble, polid_unscramble
 
 
+def check_native_identity(economy, key):
+    """A saved account's native player identity must still derive from its key."""
+    if economy.account_view(key).nn != player_id(key.encode("ascii")):
+        raise ValueError("identity account has a different native player identity")
+
+
 class IdentityLink(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
     issuer: Annotated[str, Field(max_length=2048)]
@@ -93,7 +99,5 @@ class IdentityRegistry:
         journal = _Journal.model_validate_json(json.dumps(snapshot))
         registry = cls(journal.links)
         for link in journal.links:
-            account = economy.account_view(link.account_key)
-            if account.nn != player_id(link.account_key.encode("ascii")):
-                raise ValueError("identity account has a different native player identity")
+            check_native_identity(economy, link.account_key)
         return registry
