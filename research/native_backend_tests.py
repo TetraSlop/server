@@ -15,7 +15,7 @@ from tmserver.game import ai, rules
 from tmserver.game.original.image import OriginalCodeError
 from tmserver.game.original.native import NativeRules
 from tmserver.game.original import native as native_api
-from tools.probe_original_rules import Draws, SPECIAL_VECTORS, VECTORS, snapshot, verify_vectors
+from research.probe_original_rules import Draws, SPECIAL_VECTORS, VECTORS, snapshot, verify_vectors
 
 CARD = rules.Card(1, 50, 0, 40, 30, 1, 255)
 HAND = (CARD,) * 5

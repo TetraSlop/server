@@ -115,7 +115,7 @@ WebSocket stream framing, refresh/revoke behavior and acceptance checklist.
 ```powershell
 .venv/Scripts/python -m pip install -e ".[dev,auth]"
 .venv/Scripts/python -m tools.check_tests auth
-.venv/Scripts/python -m tools.build_wheel
+.venv/Scripts/python -m build --wheel
 .venv/Scripts/python -m tools.check_wheel dist/tmserver-0.1.0-py3-none-any.whl --auth
 ```
 

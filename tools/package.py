@@ -1,8 +1,7 @@
-"""The intended package files, shared by clean builds and wheel verification."""
+"""The intended package files and the check that a built wheel contains exactly them."""
 
 from collections import Counter
 from pathlib import Path
-import shutil
 import tomllib
 import zipfile
 
@@ -45,15 +44,3 @@ def verify_wheel(wheel, source=ROOT):
         if unexpected:
             raise ValueError(f"unexpected files outside the package: {unexpected}")
     return {"files": len(names), "runtime_files": len(expected), "exact_source": True}
-
-
-def stage_source(destination, source=ROOT):
-    """Populate a new staging directory without copying caches or live state."""
-    destination, source = Path(destination), Path(source)
-    destination.mkdir()  # Refuse to reuse an existing build tree.
-    for name in ("pyproject.toml", "README.md", "LICENSE"):
-        shutil.copy2(source / name, destination / name)
-    for name, data in runtime_manifest(source).items():
-        target = destination / "src" / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)

@@ -49,5 +49,5 @@ jobs:
       - run: python -m tools.check_native_bridge $env:TM_NATIVE_BRIDGE
       - run: python -m unittest research.native_backend_tests -v
       - run: python -m tools.check_tests native
-      - run: python -m tools.build_wheel
+      - run: python -m build --wheel
       - run: python -m tools.check_wheel (Get-ChildItem dist/*.whl).FullName --native --admin --auth

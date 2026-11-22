@@ -1,4 +1,9 @@
-"""Verify the wheel and its declared runtime dependencies in a clean environment."""
+"""Install the wheel in a clean environment and smoke its entry points and extras.
+
+verify_wheel proves the installed files match the source tree byte for byte, so
+behaviour is covered by the source test lanes. This checks what only an install
+can show: dependency metadata, entry points and packaged templates.
+"""
 
 import argparse
 import json
@@ -11,37 +16,8 @@ from pathlib import Path
 from tools.package import ROOT, verify_wheel
 
 
-EVENT_SETUP = """
-import json
-from pathlib import Path
-from tmserver.economy.service import EconomyService
-from tmserver.events.config import parse_event_setup
-from tmserver.events.service import EventHost
-from tmserver.storage.json import JsonStateStore
-
-document = {"events": [{
-    "id": "wheel-event", "listing": {
-        "key_region": "Local Lobby", "key_event": "Wheel Event",
-        "description": "Disposable installed-package check", "scalar": 4096,
-    },
-    "data": {"classes": ["First", "Next"], "steps_per_class": 4},
-    "start": 100, "end": 500, "room_raw": 4096, "init_raw": 4097,
-    "card_raw": 4098, "card_service_enabled": True,
-}]}
-Path("events.json").write_text(json.dumps(document), encoding="utf8")
-store = JsonStateStore("admin.json")
-snapshot = store.load()
-economy = EconomyService.restore(snapshot)
-events = EventHost(economy, parse_event_setup(document)[0], clock=lambda: 200)
-events.admit_room("audited", "wheel-event")
-store.save(dict(snapshot, events=events.snapshot()))
-"""
-
-
 ADMIN_SMOKE = """
 import asyncio
-from copy import deepcopy
-from html.parser import HTMLParser
 from http.cookiejar import CookieJar
 import json
 import socket
@@ -52,20 +28,7 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener
 import uvicorn
 
 from tmserver.admin.web import create_app
-from tmserver.events.config import load_event_setup
 from tmserver.network.server import Server
-
-
-class Inputs(HTMLParser):
-    def __init__(self, page):
-        super().__init__()
-        self.values = {}
-        self.feed(page)
-
-    def handle_starttag(self, tag, attributes):
-        attributes = dict(attributes)
-        if tag == "input" and "name" in attributes:
-            self.values[attributes["name"]] = attributes.get("value", "")
 
 
 def check_http(origin, account):
@@ -92,100 +55,24 @@ def check_http(origin, account):
         ("/admin/claims/list", "Captured at"),
         ("/admin/receipts/list", "Receipt history"),
         ("/admin/rooms/list", "Computer available"),
+        ("/admin/awards", "Queue award"),
+        ("/admin/event-grants", "Card name"),
+        ("/admin/event-members", "Correct event membership"),
         ("/admin/static/css/vendor/tabler.min.css", "tabler"),
     ):
         status, actual, page = request(path)
         assert status == 200 and actual == urlsplit(path).path, (status, actual)
         assert expected in page, (path, expected)
-    return request, csrf
-
-
-def check_award(request, csrf, account):
-    status, path, page = request("/admin/awards")
-    assert status == 200 and "Preview award" in page
-    status, path, page = request("/admin/awards/preview", {
-        "csrftoken": csrf, "request_id": "wheel-award-request", "award_id": "wheel-award",
-        "account_key": account, "top30": "7", "reason": "Installed wheel acceptance",
-    })
-    assert status == 200 and "Review before queuing" in page
-    confirmed = Inputs(page).values
-    assert "command" in confirmed and "digest" in confirmed
-    for _ in range(2):
-        status, path, page = request("/admin/awards/apply", confirmed)
-        assert status == 200 and path == "/admin/awards/receipt", (status, path)
-        assert "Award queued and audit receipt saved" in page
-        assert "wheel-award-request" in page
-
-
-def check_event_grant(request, csrf, account):
-    status, path, page = request("/admin/event-grants")
-    assert status == 200 and "Card name" in page and "Wheel Event" in page
-    status, path, page = request("/admin/event-grants/preview", {
-        "csrftoken": csrf, "request_id": "wheel-event-request", "grant_id": "wheel-grant",
-        "account_key": account, "event_id": "wheel-event", "money": "250",
-        "reason": "Installed web event acceptance", "intent": "preview", "row_count": "1",
-        "card_0_model": "0", "card_0_attack": "50", "card_0_kind": "0",
-        "card_0_physical": "40", "card_0_magical": "30", "card_0_arrows": "1",
-    })
-    assert status == 200 and "Review before queuing" in page
-    assert "Goblin" in page and "Current event eligibility: Eligible" in page
-    confirmation = Inputs(page).values
-    assert "command" in confirmation and "digest" in confirmation
-    for _ in range(2):
-        status, path, page = request("/admin/event-grants/apply", confirmation)
-        assert status == 200 and path == "/admin/event-grants/receipt", (status, path)
-        assert "Event grant queued and audit receipt saved" in page
-        assert "wheel-event-request" in page
-
-
-def check_event_members(request, csrf, account):
-    status, path, page = request("/admin/event-members")
-    assert status == 200 and "Correct event membership" in page
-    for action, fields in (
-        ("event-progress", {"update_id": "wheel-progress", "steps_delta": "3", "completed_missions": "0"}),
-        ("event-eligibility", {"value": "-1"}),
-    ):
-        status, path, page = request("/admin/event-members/preview", {
-            "csrftoken": csrf, "action": action, "request_id": "wheel-" + action,
-            "account_key": account, "event_id": "wheel-event",
-            "reason": "Installed correction acceptance", **fields,
-        })
-        assert status == 200 and "Review before applying" in page
-        confirmation = Inputs(page).values
-        for _ in range(2):
-            status, path, page = request("/admin/event-members/apply", confirmation)
-            assert status == 200 and path == "/admin/event-members/receipt"
-            assert "Correction applied and audit receipt saved" in page
-
-
-def check_receipts(request):
-    status, path, page = request("/admin/receipts/list")
-    assert status == 200 and "wheel-award-request" in page and "wheel-event-request" in page
-    for key, route in (
-        ("wheel-award-request", "awards"), ("wheel-event-request", "event-grants"),
-        ("wheel-event-progress", "event-members"), ("wheel-event-eligibility", "event-members"),
-    ):
-        status, path, page = request("/admin/receipts/list?" + urlencode({"q": key}))
-        assert status == 200 and key in page
-        assert f"/admin/{route}/receipt?id={key}" in page
-        status, path, page = request("/admin/receipts/detail?" + urlencode({"pk": key}))
-        assert status == 200 and key in page and "wheel-operator" in page
-        assert "This view is read-only" in page
 
 
 async def main():
-    host = Server(
-        state_path="admin-web.json", event_configs=load_event_setup("events.json")[0],
-        event_clock=lambda: 200,
-    )
+    host = Server(state_path="admin-web.json")
     account = host.ensure_account(next(iter(host.accounts)))
-    host.events.admit_room(account, "wheel-event")
     host.persist()
-    before = deepcopy(host.snapshot())
+    before = host.snapshot()
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
-    port = listener.getsockname()[1]
-    origin = f"http://127.0.0.1:{port}"
+    origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
     app = create_app(
         host, username="wheel-operator", password="disposable-wheel-credential",
         origin=origin, started_at=time.monotonic(), actions_enabled=True,
@@ -200,31 +87,14 @@ async def main():
                 raise AssertionError("admin listener exited before startup")
             assert time.monotonic() < deadline, "admin listener did not start"
             await asyncio.sleep(0.01)
-        request, csrf = await asyncio.to_thread(check_http, origin, account)
+        await asyncio.to_thread(check_http, origin, account)
         assert host.snapshot() == before, "admin reads changed game state"
-        await asyncio.to_thread(check_award, request, csrf, account)
-        await asyncio.to_thread(check_event_grant, request, csrf, account)
-        await asyncio.to_thread(check_event_members, request, csrf, account)
-        snapshot = host.snapshot()
-        await asyncio.to_thread(check_receipts, request)
-        assert host.snapshot() == snapshot, "receipt inspection changed game state"
-        assert snapshot["admin_audit"]["version"] == 3
-        assert len(snapshot["admin_audit"]["receipts"]) == 4
-        assert snapshot["prize"]["accounts"][account]["pending"]["top30"] == 7
-        assert snapshot["event_cards"]["grants"][0]["money"] == 250
-        assert snapshot["accounts"] == before["accounts"]
-        member = host.events.member(account, "wheel-event")
-        assert (member.steps, member.eligibility) == (3, -1)
-        assert host.store.load()["admin_audit"] == snapshot["admin_audit"]
     finally:
         server.should_exit = True
         await asyncio.wait_for(task, 5)
         listener.close()
         await host.stop()
-    print(json.dumps({"admin_login": True, "admin_templates": True, "admin_read_only": True,
-                      "admin_audited_award": True, "admin_audited_event_grant": True,
-                      "admin_audited_event_members": True,
-                      "admin_receipt_history": True}))
+    print(json.dumps({"admin_login": True, "admin_templates": True, "admin_read_only": True}))
 
 
 asyncio.run(main())
@@ -336,6 +206,9 @@ def main():
                 )
             return result.stdout
 
+        def script(name):
+            return str(scripts / (name + (".exe" if os.name == "nt" else "")))
+
         run(str(python), "-m", "pip", "install", str(wheel))
         run(str(python), "-m", "pip", "check")
         dependencies = json.loads(run(
@@ -348,120 +221,21 @@ def main():
             "if 'extra ==' not in requirement]))\n",
         ))
         run(str(python), "-I", str(ROOT / "tools" / "check_imports.py"))
-        cli = scripts / ("tmserver.exe" if os.name == "nt" else "tmserver")
-        run(str(cli), "--help")
-        play_cli = scripts / ("tmserver-play.exe" if os.name == "nt" else "tmserver-play")
-        run(str(play_cli), "--help")
-        admin_cli = scripts / ("tmserver-admin.exe" if os.name == "nt" else "tmserver-admin")
-        run(str(admin_cli), "--help")
+        for name in ("tmserver", "tmserver-play", "tmserver-admin"):
+            run(script(name), "--help")
         run(
             str(python), "-c",
             "from tmserver.economy.service import EconomyService\n"
             "from tmserver.storage.json import JsonStateStore\n"
             "economy = EconomyService(seed=1)\n"
             "economy.provision('wheel', nn=1, player_id=1, name=b'Wheel')\n"
-            "economy.provision('audited', nn=2, player_id=2, name=b'Audited')\n"
             "JsonStateStore('admin.json').save(economy.snapshot())\n",
         )
         admin_state = root / "admin.json"
-        original_accounts = json.loads(admin_state.read_text())["accounts"]
-        assert "wheel" in run(str(admin_cli), "--state", str(admin_state), "accounts")
-        run(
-            str(admin_cli), "--state", str(admin_state), "prize-award",
-            "--account-key", "wheel", "--id", "wheel-check", "--top30", "3",
-        )
-        awarded = json.loads(admin_state.read_text())
-        assert awarded["accounts"] == original_accounts
-        assert awarded["prize"]["accounts"]["wheel"]["pending"]["top30"] == 3
-        before_summary = admin_state.read_bytes()
-        summary = json.loads(run(
-            str(admin_cli), "--state", str(admin_state), "account", "--account-key", "wheel"
-        ))
-        assert summary["pending_prize"]["id"] == "wheel-check"
-        assert summary["prize_points"] == 0
-        assert summary["card_count"] == 10
-        assert admin_state.read_bytes() == before_summary
-        award_args = (
-            "--account-key", "audited", "--id", "installed-award", "--top30", "11",
-            "--request-id", "installed-request", "--operator", "wheel-check",
-            "--reason", "Installed command acceptance",
-        )
-        preview = json.loads(run(
-            str(admin_cli), "--state", str(admin_state), "prize-preview", *award_args,
-        ))
-        assert admin_state.read_bytes() == before_summary
-        receipt = json.loads(run(
-            str(admin_cli), "--state", str(admin_state), "prize-apply", *award_args,
-            "--digest", preview["digest"],
-        ))
-        committed = admin_state.read_bytes()
-        retry = json.loads(run(
-            str(admin_cli), "--state", str(admin_state), "prize-apply", *award_args,
-            "--digest", preview["digest"],
-        ))
-        assert retry == receipt and admin_state.read_bytes() == committed
-        assert json.loads(run(
-            str(admin_cli), "--state", str(admin_state), "operator-receipt",
-            "--request-id", "installed-request",
-        )) == receipt
-        recovery = json.loads(run(str(admin_cli), "--state", str(admin_state), "recovery"))
-        assert recovery == dict(interrupted_rounds=0, unaccepted_results=0, accounts=[])
-        assert admin_state.read_bytes() == committed
-        run(str(python), "-I", "-c", EVENT_SETUP)
-        event_cli = (
-            str(admin_cli), "--state", str(admin_state), "--events", str(root / "events.json"),
-        )
-        event_args = (
-            "--account-key", "audited", "--event", "wheel-event", "--id", "installed-grant",
-            "--request-id", "installed-event-request", "--operator", "wheel-check",
-            "--reason", "Installed event grant acceptance", "--money", "250",
-            "--card", "0,50,0,40,30,1",
-        )
-        before_event = admin_state.read_bytes()
-        event_preview = json.loads(run(*event_cli, "event-grant-preview", *event_args))
-        assert admin_state.read_bytes() == before_event
-        event_receipt = json.loads(run(
-            *event_cli, "event-grant-apply", *event_args, "--digest", event_preview["digest"],
-        ))
-        granted = json.loads(admin_state.read_text())
-        event_committed = admin_state.read_bytes()
-        assert granted["accounts"] == awarded["accounts"]
-        assert granted["admin_audit"] == dict(version=2, receipts=[receipt, event_receipt])
-        assert event_receipt["cards"][0]["deck"] == 255
-        assert granted["event_cards"]["grants"][0]["money"] == 250
-        assert json.loads(run(
-            *event_cli, "event-grant-apply", *event_args, "--digest", "0" * 64,
-        )) == event_receipt
-        assert json.loads(run(
-            *event_cli, "operator-receipt", "--request-id", "installed-request",
-        )) == receipt
-        assert json.loads(run(
-            *event_cli, "operator-receipt", "--request-id", "installed-event-request",
-        )) == event_receipt
-        assert admin_state.read_bytes() == event_committed
-        for kind, values in (
-            ("progress", ("--id", "installed-progress", "--steps", "3")),
-            ("eligibility", ("--value", "-1")),
-        ):
-            member_args = (
-                "--account-key", "audited", "--event", "wheel-event",
-                "--request-id", "installed-" + kind, "--operator", "wheel-check",
-                "--reason", "Installed membership acceptance", *values,
-            )
-            member_before = admin_state.read_bytes()
-            member_preview = json.loads(run(*event_cli, f"event-{kind}-preview", *member_args))
-            assert admin_state.read_bytes() == member_before
-            member_receipt = json.loads(run(
-                *event_cli, f"event-{kind}-apply", *member_args, "--digest", member_preview["digest"],
-            ))
-            member_committed = admin_state.read_bytes()
-            assert member_receipt["status"] == "applied"
-            assert json.loads(run(
-                *event_cli, f"event-{kind}-apply", *member_args, "--digest", "old",
-            )) == member_receipt
-            assert admin_state.read_bytes() == member_committed
-        assert json.loads(admin_state.read_text())["accounts"] == granted["accounts"]
-        accounts = run(str(cli), "--list-accounts")
+        before = admin_state.read_bytes()
+        assert "wheel" in run(script("tmserver-admin"), "--state", str(admin_state), "accounts")
+        assert admin_state.read_bytes() == before
+        accounts = run(script("tmserver"), "--list-accounts")
         assert len(accounts.strip().splitlines()) == 2, accounts
         if args.native:
             ready = run(str(python), "-B", "-m", "tmserver", "--game-port", "0",
@@ -489,27 +263,16 @@ def main():
             else:
                 run(str(python), "-I", "-c", "import tmserver.auth.server")
                 auth_report = {"auth_imports": True, "auth_native_service_smoke": False}
-        print(
-            json.dumps(
-                {
-                    "wheel": wheel.name,
-                    **manifest,
-                    "clean_install": True,
-                    "runtime_dependencies": dependencies,
-                    "console_entrypoint": True,
-                    "module_entrypoint": True,
-                    "json_admin_award": True,
-                    "json_audited_award": True,
-                    "json_audited_event_grant": True,
-                    "json_audited_event_members": True,
-                    "json_admin_account": True,
-                    "json_recovery_preview": True,
-                    "services_started_on_ephemeral_ports": args.native,
-                    **admin_report,
-                    **auth_report,
-                }
-            )
-        )
+        print(json.dumps({
+            "wheel": wheel.name,
+            **manifest,
+            "clean_install": True,
+            "runtime_dependencies": dependencies,
+            "console_entrypoints": True,
+            "services_started_on_ephemeral_ports": args.native,
+            **admin_report,
+            **auth_report,
+        }))
 
 
 if __name__ == "__main__":

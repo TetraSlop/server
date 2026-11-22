@@ -16,15 +16,9 @@ from tmserver.game import ai, rules, special_rules
 from tmserver.game.original.image import IMAGE_SHA256
 from tmserver.game.original.native import NativeRules
 
-VECTORS = json.loads(
-    (Path(__file__).resolve().parents[1] / "research/native_vectors.json").read_text(
-        encoding="utf-8"
-    )
-)
+VECTORS = json.loads(Path(__file__).with_name("native_vectors.json").read_text(encoding="utf-8"))
 SPECIAL_VECTORS = json.loads(
-    (Path(__file__).resolve().parents[1] / "research/native_special_vectors.json").read_text(
-        encoding="utf-8"
-    )
+    Path(__file__).with_name("native_special_vectors.json").read_text(encoding="utf-8")
 )["cases"]
 
 

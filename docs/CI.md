@@ -87,13 +87,12 @@ Python and Linux.
 .venv/Scripts/python -m tools.check_tests admin
 .venv/Scripts/python -m tools.check_tests auth
 .venv/Scripts/python -m tools.check_tests native
-.venv/Scripts/python -m tools.build_wheel
+.venv/Scripts/python -m build --wheel
 .venv/Scripts/python -m tools.check_wheel dist/tmserver-0.1.0-py3-none-any.whl --native --admin --auth
 ```
 
 The portable lane needs no database. It checks source import boundaries, rejects
-duplicate test IDs and fails on unexpected skips; its one allowed skip is the
-admin panel's optional PostgreSQL import check when those packages are absent.
+duplicate test IDs and fails on any skipped test.
 
 For the PostgreSQL lane, install `".[dev,postgres]"`, start Docker and run
 `python -m tools.check_tests postgres`. It starts a PostgreSQL 16 container with a
@@ -101,7 +100,8 @@ random password on a loopback port, runs every database test with no skips
 allowed, and removes the container and its data afterwards. No lane reads
 `TM_DATABASE_URL` or `TM_TEST_DATABASE_URL` from your environment.
 
-`tools.build_wheel` builds from a fresh staging directory, so files left in
-`build/` cannot leak into a release. `tools.check_wheel` checks the wheel's exact
-file list and bytes against the source tree before installing it into a new
-environment.
+`tools.check_wheel` checks the wheel's exact file list and bytes against the
+source tree before installing it into a new environment, so a stale file left in
+`build/` fails the check instead of reaching a release; delete `build/lib` and
+rebuild. It then smokes the installed entry points and extras; behaviour itself
+is covered by the source test lanes.
