@@ -78,7 +78,7 @@ class FixedRoomIntegration(unittest.IsolatedAsyncioTestCase):
         await self.admit(0)
         await self.save_other_defaults()
         replies = await self.send(0, packet(0x12, body="@Rule="))
-        query = next(p for p in self.game_messages(replies, 0) if p.primary == 0x13)
+        query = next(p for p in self.game_messages(replies, 0) if p.family == 0x13)
         self.assertEqual(
             {k: int(v) for k, v in query.sections["Tet"].items()}, self.rules.as_dict()
         )
@@ -88,11 +88,11 @@ class FixedRoomIntegration(unittest.IsolatedAsyncioTestCase):
             await self.send(side, self.room_presence(side, ready=True), room=True)
         offered = await self.send(0, packet(0x41, 10, body="@GameReady="))
         self.assertTrue(
-            any((p.primary, p.subtype) == (0x41, 7) for p in self.game_messages(offered, 1))
+            any((p.family, p.subtype) == (0x41, 7) for p in self.game_messages(offered, 1))
         )
         for side in (0, 1):
             replies = await self.send(side, packet(1, body=native_identity(self.view(side), "Req")))
-            ack = next(p for p in self.game_messages(replies, side) if p.primary == 2)
+            ack = next(p for p in self.game_messages(replies, side) if p.family == 2)
             self.assertEqual(
                 {k: int(v) for k, v in ack.sections["Tet"].items()}, self.rules.as_dict()
             )

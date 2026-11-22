@@ -97,7 +97,7 @@ class MatchTests(unittest.TestCase):
         notices = s.admission_notice("alice")
         self.assertTrue(s.ready_to_start)
         self.assertEqual(
-            [(decode(d.payload).primary, decode(d.payload).subtype) for d in notices],
+            [(decode(d.payload).family, decode(d.payload).subtype) for d in notices],
             [(0x41, 4), (0x1A, 0)],
         )
         self.assertIn(b"@GameML=/Num=2", notices[0].payload)
@@ -213,7 +213,7 @@ class MatchTests(unittest.TestCase):
         self.assertIn(b"B62DC763E1554B74", out[0].payload)
         out = s.handle("a", packet(0x41, 8, body="@GameOK="))
         self.assertEqual(
-            [(decode(x.payload).primary, decode(x.payload).subtype) for x in out],
+            [(decode(x.payload).family, decode(x.payload).subtype) for x in out],
             [(0x41, 9), (0x43, 1)],
         )
         self.assertEqual(s.handle("a", packet(0x41, 8, body="@GameOK=")), [])
@@ -497,7 +497,7 @@ class MatchTests(unittest.TestCase):
         self.assertEqual(s.continues, {})
         s.handle("alice", packet(0x43, 17, 0, "@Continue=/Ans=1/PR=0/Conf=0"))
         stopped = s.handle("bob", packet(0x43, 17, 1, "@Continue=/Ans=2/PR=0/Conf=0"))
-        self.assertEqual([decode(d.payload).argument for d in stopped], [2, 2])
+        self.assertEqual([decode(d.payload).session for d in stopped], [2, 2])
         self.assertEqual(s.phase, "finished")
 
     def test_result_statistics_continue_authenticated_history_and_commit_snapshot(self):
@@ -618,7 +618,7 @@ class MatchTests(unittest.TestCase):
         s.draw = iter([40, 40, 5, 5] + [0] * 8 + [50] * 8).__next__
         more = s.advance()
         self.assertEqual([decode(d.payload).subtype for d in more], [12, 9])
-        self.assertEqual(decode(more[0].payload).argument, 0)
+        self.assertEqual(decode(more[0].payload).session, 0)
         self.assertTrue(decode(more[0].payload).sections["BattleData"]["D"].startswith("6|"))
         self.assertEqual(s.players[0].updated[0].kind, 2)
         self.assertFalse(s.pending_work or s._unlocked())
@@ -1293,7 +1293,7 @@ class SpecialMatchTests(unittest.TestCase):
         after = s.observer_snapshot()
         self.assertEqual((snapshot.players[0].remaining, snapshot.board[5].model), (5, 0x8003))
         self.assertEqual((after.players[0].remaining, after.board[5].identity), (4, (0, 0)))
-        self.assertEqual(decode(after.turn_packet).argument, 1)
+        self.assertEqual(decode(after.turn_packet).session, 1)
 
     def test_CBC_explicit_gate_generated_packet_and_snapshot_reward(self):
         fields = [0] * 16
@@ -1519,7 +1519,7 @@ class OriginalComputerTests(unittest.TestCase):
         self.assertEqual(decode(entered[0].payload).subtype, 0x13)
         out = s.handle("alice", packet(1, body="@Req=/NN=0000000000000123/HID=1"))
         self.assertEqual(
-            [(decode(d.payload).primary, decode(d.payload).subtype) for d in out],
+            [(decode(d.payload).family, decode(d.payload).subtype) for d in out],
             [(2, 0), (0x43, 2)],
         )
         return s, out
@@ -2089,7 +2089,7 @@ class WagerHookTests(unittest.TestCase):
         self.assertEqual(len(b.starts), 1)
         out = s.handle("p1", packet(0x43, 17, 1, "@Continue=/Ans=2/Conf=0"))
         self.assertEqual(s.phase, "finished")
-        self.assertEqual([decode(d.payload).argument for d in out], [2, 2])
+        self.assertEqual([decode(d.payload).session for d in out], [2, 2])
         self.assertEqual(len(b.starts), 1)
 
     def test_three_player_middle_finish_credits_are_not_classified_as_tied_refunds(self):
@@ -2193,7 +2193,7 @@ class WagerHookTests(unittest.TestCase):
         out = self.yes(s)
         self.assertEqual((s.phase, s.game_rules["bm"], len(b.starts)), ("selection", 75, 3))
         self.assertEqual(b.starts[-1][:2], (3, 75))
-        self.assertEqual(decode(out[0].payload).argument, 1)
+        self.assertEqual(decode(out[0].payload).session, 1)
 
 
 class DepartureMatchTests(unittest.TestCase):

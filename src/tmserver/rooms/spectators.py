@@ -121,9 +121,9 @@ def bootstrap(snapshot):
     turn = decode(snapshot.turn_packet) if snapshot.turn_packet else None
     if (
         turn is None
-        or turn.primary != 0x43
+        or turn.family != 0x43
         or turn.subtype != 9
-        or turn.argument != snapshot.sequence
+        or turn.session != snapshot.sequence
         or "TurnData" not in turn.sections
     ):
         raise SpectatorError("snapshot requires the exact current TurnData packet")
@@ -249,7 +249,7 @@ class SpectatorService:
     def delay_after(self, payload):
         """Preview policy after actual emission; not an original timing bound."""
         msg = decode(payload)
-        if msg is None or msg.primary != 0x43:
+        if msg is None or msg.family != 0x43:
             raise SpectatorError("not a spectator gameplay packet")
         if msg.subtype in (8, 0x25, 0x26):
             return self.bootstrap_delay
@@ -284,11 +284,11 @@ class SpectatorService:
         if not self.enabled:
             return None
         msg = decode(payload)
-        if msg is None or msg.primary != 0x43 or msg.subtype != 0x25:
-            if self.active(peer) and msg is not None and msg.primary == 0x43:
+        if msg is None or msg.family != 0x43 or msg.subtype != 0x25:
+            if self.active(peer) and msg is not None and msg.family == 0x43:
                 raise SpectatorError("observer cannot submit participant gameplay actions")
             return None
-        if msg.argument != 0 or msg.sections != {"Data": {"Watch": "0"}}:
+        if msg.session != 0 or msg.sections != {"Data": {"Watch": "0"}}:
             raise SpectatorError("unsupported watch request")
         self._sync(snapshot, epoch)
         if any(p.peer == peer for p in snapshot.players):
@@ -334,7 +334,7 @@ class SpectatorService:
         events = []
         for payload in self._events(deliveries):
             msg = decode(payload)
-            if msg is not None and msg.primary == 0x43 and msg.subtype in self.PUBLIC_SUBTYPES:
+            if msg is not None and msg.family == 0x43 and msg.subtype in self.PUBLIC_SUBTYPES:
                 events.append((msg, payload))
         out = []
         for peer, state in tuple(self._observers.items()):
@@ -351,9 +351,9 @@ class SpectatorService:
                 if state.result_seen:
                     continue
                 if msg.subtype == 9:
-                    if msg.argument == state.last_turn:
+                    if msg.session == state.last_turn:
                         continue
-                    state.last_turn = msg.argument
+                    state.last_turn = msg.session
                 state.queue.append(payload)
                 if msg.subtype == 0x0D:
                     state.result_seen = True

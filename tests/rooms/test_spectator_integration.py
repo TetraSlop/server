@@ -24,7 +24,7 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.player(packet(20, body=NATIVE_SETTINGS.replace("/in=0", f"/in={observation}")))
         await self.player(packet(0x41, 10, body="@GameReady="))
         replies = await self.player(packet(1, body=native_identity(view, "Req")))
-        playack = next(decode(reply) for reply in replies if decode(reply).primary == 2)
+        playack = next(decode(reply) for reply in replies if decode(reply).family == 2)
         self.assertEqual(playack.sections["Tab"]["in"], str(observation))
         await self.player(packet(0x41, 8, body="@GameOK="))
         cards = self.server.economy.inventory(self.clients[0].nick.decode())[:5]
@@ -60,14 +60,14 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def admit_watch(self):
         c = self.clients[1]
         await c.send(b"NOTICE " + self.target + b" :" + packet(0x2D, body="@CheckJoinTable="))
-        self.assertEqual(decode(await self.read_watch()).primary, 0x2E)
+        self.assertEqual(decode(await self.read_watch()).family, 0x2E)
         await c.join(TABLE_CHANNEL)
         view = self.server.economy.account_view(c.nick.decode())
         await c.send(
             b"NOTICE " + self.target + b" :" + packet(1, body=native_identity(view, "Req"))
         )
         reply = decode(await self.read_watch())
-        self.assertEqual(reply.primary, 2)
+        self.assertEqual(reply.family, 2)
         self.assertEqual(reply.sections["PLAYACK"]["EN"], "1")
         self.assertFalse(self.server.economy.is_reserved(c.nick.decode()))
         self.assertEqual(len(self.server.default_table.match.players), 2)
@@ -129,8 +129,8 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 break
         else:
             self.fail("observer never received result")
-        self.assertEqual([msg.argument for msg in live if msg.subtype == 9], list(range(1, 10)))
-        self.assertEqual([msg.argument for msg in live if msg.subtype == 10], list(range(10)))
+        self.assertEqual([msg.session for msg in live if msg.subtype == 9], list(range(1, 10)))
+        self.assertEqual([msg.session for msg in live if msg.subtype == 10], list(range(10)))
         self.assertEqual(sum(msg.subtype == 13 for msg in live), 1)
         self.assertFalse(any(msg.subtype == 0x1A for msg in live))
         await self.clients[1].send(

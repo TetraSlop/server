@@ -125,7 +125,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         return [
             decode(p)
             for p in self.received[side]
-            if decode(p).primary == 0x43 and decode(p).subtype == subtype
+            if decode(p).family == 0x43 and decode(p).subtype == subtype
         ]
 
     async def finish(self):

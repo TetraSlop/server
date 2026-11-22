@@ -34,7 +34,7 @@ class TableDispatchTests(unittest.IsolatedAsyncioTestCase):
         source, reply = replies[0][0]
         self.assertEqual(source, service_nick(other.table_raw))
         message = decode(reply)
-        self.assertEqual((message.primary, message.subtype), (0x41, 4))
+        self.assertEqual((message.family, message.subtype), (0x41, 4))
         self.assertEqual(message.sections["GameML"]["ID"], f"{identity:016X}")
         self.assertEqual(message.sections["GameML"]["Num"], "1")
         self.assertEqual(

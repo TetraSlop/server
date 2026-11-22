@@ -102,7 +102,7 @@ class ChatService:
 
     def enter(self, peer, group, payload, *, identity, name):
         message = decode(payload)
-        if message is None or message.argument != 0 or set(message.sections) != {"Chat"}:
+        if message is None or message.session != 0 or set(message.sections) != {"Chat"}:
             raise ValueError("invalid chat entry")
         fields = message.sections["Chat"]
         nn = fields.get("NN", "")

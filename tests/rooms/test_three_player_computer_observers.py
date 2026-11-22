@@ -52,14 +52,14 @@ class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
             b"NOTICE " + self.target + b" :" + packet(1, body=native_identity(view, "Req"))
         )
         reply = decode(await self.read_watch(client))
-        self.assertEqual((reply.primary, reply.sections["PLAYACK"]["EN"]), (2, "1"))
+        self.assertEqual((reply.family, reply.sections["PLAYACK"]["EN"]), (2, "1"))
         await client.send(
             b"NOTICE " + self.target + b" :" + packet(0x43, 0x25, 0, "@Data=/Watch=0")
         )
 
     def check_roster(self, payload):
         message = decode(payload)
-        self.assertEqual((message.primary, message.subtype), (0x43, 0x25))
+        self.assertEqual((message.family, message.subtype), (0x43, 0x25))
         info = message.sections["WatchInfo"]
         self.assertEqual(info["N"], "3")
         self.assertEqual(info["C"], "0|1|30")
@@ -110,7 +110,7 @@ class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
         before = match.snapshot()
         await self.watch(early, joined=True)
         boot = await self.read_watch(early)
-        self.assertEqual(decode(boot).argument, 0)
+        self.assertEqual(decode(boot).session, 0)
         self.assertNotIn("H", self.check_roster(boot))
         self.assertEqual(match.snapshot(), before)
         cards = self.server.economy.inventory(human.nick.decode())[:5]
@@ -126,7 +126,7 @@ class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
         await self.watch(late, joined=True)
         bootstrap = [await self.read_watch(late) for _ in range(3)]
         self.assertEqual([decode(p).subtype for p in bootstrap], [0x25, 0x26, 9])
-        self.assertEqual(decode(bootstrap[0]).argument, 1)
+        self.assertEqual(decode(bootstrap[0]).session, 1)
         info = self.check_roster(bootstrap[0])
         self.assertEqual((info["T"], info["A"]), ("3", str(snapshot.active)))
         self.assertEqual(tuple(map(int, info["H"].split("|"))), (4, 4, 4))
@@ -154,8 +154,8 @@ class ThreePlayerComputerObservers(unittest.IsolatedAsyncioTestCase):
         for stream, first_turn, first_put in ((early_live, 0, 0), (late_live, 4, 3)):
             turns = [m for m in stream if m.subtype == 9]
             puts = [m for m in stream if m.subtype == 10]
-            self.assertEqual([m.argument for m in turns], list(range(first_turn, 15)))
-            self.assertEqual([m.argument for m in puts], list(range(first_put, 15)))
+            self.assertEqual([m.session for m in turns], list(range(first_turn, 15)))
+            self.assertEqual([m.session for m in puts], list(range(first_put, 15)))
             self.assertEqual({m.sections["PutCard"]["A"] for m in puts}, {"0", "1", "2"})
             self.assertEqual(sum(m.subtype == 13 for m in stream), 1)
         saved = self.store.load()

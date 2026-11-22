@@ -83,7 +83,7 @@ class KickUnit(unittest.TestCase):
                 self.assertEqual(m.phase, "lobby")
                 self.assertEqual(m.rules_body(), rules)
                 self.assertEqual(
-                    len([d for d in out if decode(d.payload).primary == 26]), 2 if side == 0 else 0
+                    len([d for d in out if decode(d.payload).family == 26]), 2 if side == 0 else 0
                 )
                 self.assertEqual(out[0].peer, side)
                 self.assertEqual(
@@ -127,7 +127,7 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
         removed_profile = self.server.economy.profile_bytes(removed_key)
         replies = await self.send(0, kick(player_id(removed.nick)))
         self.assertEqual(
-            [[(decode(p).primary, decode(p).subtype) for p in r] for r in replies],
+            [[(decode(p).family, decode(p).subtype) for p in r] for r in replies],
             [[(65, 6), (65, 12)], [(65, 12)], [(65, 12)], []],
         )
         self.assertIs(self.server.default_table.match, match)
@@ -170,7 +170,7 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
         request = packet(65, 5, body="@GameQT=")
         replies = await self.send(0, request)
         self.assertEqual(
-            [[(decode(p).primary, decode(p).subtype) for p in r] for r in replies],
+            [[(decode(p).family, decode(p).subtype) for p in r] for r in replies],
             [[(65, 6)], [(65, 4), (26, 0)], [(65, 4), (26, 0)], []],
         )
         self.assertIs(self.server.default_table.match, match)
@@ -209,7 +209,7 @@ class KickIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertIn(b" 366 ", await guest.read())
         replies = await self.send(1, packet(65, 13, body="@GameExit="))
         self.assertEqual(
-            [[(decode(p).primary, decode(p).subtype) for p in r] for r in replies],
+            [[(decode(p).family, decode(p).subtype) for p in r] for r in replies],
             [[(65, 4)], [(65, 14)], [(65, 4)], []],
         )
         await guest.send(b"PART " + channel)

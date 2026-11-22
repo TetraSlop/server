@@ -202,7 +202,7 @@ class SpectatorLimitsIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(table.match_reservations, tokens)
         for packets in replies:
             self.assertTrue(
-                any(decode(p).subtype == 9 and decode(p).argument == 9 for p in packets)
+                any(decode(p).subtype == 9 and decode(p).session == 9 for p in packets)
             )
         while match.phase != "result":
             await self.move()

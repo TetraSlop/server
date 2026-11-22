@@ -43,7 +43,7 @@ class EnvelopeTests(unittest.TestCase):
                     continue
                 message = decode(raw)
                 self.assertEqual(
-                    (message.primary, message.subtype, message.argument), tuple(row["metadata"][:3])
+                    (message.family, message.subtype, message.session), tuple(row["metadata"][:3])
                 )
                 self.assertIn(row["token"][1:], message.sections)
 

@@ -72,7 +72,7 @@ class SpectatorTests(unittest.TestCase):
         out = bootstrap(m.observer_snapshot())
         self.assertEqual(len(out), 1)
         msg = decode(out[0])
-        self.assertEqual((msg.subtype, msg.argument), (0x25, 0))
+        self.assertEqual((msg.subtype, msg.session), (0x25, 0))
         self.assertNotIn("H", msg.sections["WatchInfo"])
         rules = dict(m.observer_snapshot().game_rules)
         self.assertEqual(
@@ -158,7 +158,7 @@ class SpectatorTests(unittest.TestCase):
         second = self.poll(1)
         self.assertEqual(len(second), 1)
         self.assertEqual(decode(second[0].payload).subtype, 9)
-        self.assertEqual(decode(second[0].payload).argument, 1)
+        self.assertEqual(decode(second[0].payload).session, 1)
         self.assertEqual(self.poll(), [])
 
     def test_equal_repeated_battle_packets_are_not_deduplicated_as_events(self):
@@ -184,7 +184,7 @@ class SpectatorTests(unittest.TestCase):
         output = self.move()
         out = self.publish(output)
         self.assertEqual([decode(d.payload).subtype for d in out], [0x25, 0x26, 9])
-        self.assertEqual(decode(out[-1].payload).argument, 1)
+        self.assertEqual(decode(out[-1].payload).session, 1)
         self.assertEqual(self.poll(), [])
 
     def test_backlog_and_capacity_are_bounded_and_do_not_close_participants(self):

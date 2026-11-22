@@ -252,7 +252,7 @@ class CoordinatorTests(unittest.TestCase):
                     for d in out
                     if d.peer == key and d.payload.startswith(b"GTM0G")
                 ]
-                indices = [i for i, m in enumerate(own) if m.primary == 0x41 and m.subtype == 9]
+                indices = [i for i, m in enumerate(own) if m.family == 0x41 and m.subtype == 9]
                 event_index = next(i for i, m in enumerate(own) if "EventGameInit" in m.sections)
                 self.assertLess(indices[0], event_index)
             r = self.c._rounds[self.table.table_id]

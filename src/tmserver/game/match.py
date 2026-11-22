@@ -394,7 +394,7 @@ class MatchService:
         if choice is None:
             return []
         seat = self._seat(peer)
-        if peer not in self.ready or msg.argument != seat:
+        if peer not in self.ready or msg.session != seat:
             raise MatchError("prize selection requires this participant's TCList and seat")
         hand = numbers(msg.sections["GetSelect"].get("H"), 1)[0]
         self._prizes.select(seat, hand, choice_id=choice.choice_id)
@@ -634,7 +634,7 @@ class MatchService:
 
     @staticmethod
     def _parse_settings(msg):
-        expected = {"Tet", "Tab"} | ({"Save"} if msg.primary == 0x24 else set())
+        expected = {"Tet", "Tab"} | ({"Save"} if msg.family == 0x24 else set())
         if set(msg.sections) != expected:
             raise MatchError("settings require complete Tet and Tab sections")
         result = []
@@ -686,10 +686,10 @@ class MatchService:
         return True
 
     def _settings(self, peer, msg):
-        if self.phase != "lobby" or msg.subtype != 0 or msg.argument != 0:
+        if self.phase != "lobby" or msg.subtype != 0 or msg.session != 0:
             raise MatchError("table settings are only accepted before a match")
         game, table = self._parse_settings(msg)
-        if msg.primary == 0x24:
+        if msg.family == 0x24:
             flags = msg.sections["Save"]
             if set(flags) != {"Tbl", "Game"}:
                 raise MatchError("Save requires Tbl and Game flags")
@@ -1103,14 +1103,14 @@ class MatchService:
         if not self.computer_menu or self.phase != "computer_menu" or self._seat(peer) != 0:
             raise MatchError("computer configuration is outside its admitted menu")
         fields = msg.sections["ComGame"]
-        if msg.argument not in (0, 2, 3) or set(msg.sections) != {"ComGame"}:
+        if msg.session not in (0, 2, 3) or set(msg.sections) != {"ComGame"}:
             raise MatchError("computer selection requires one human and one or two NPCs")
-        if set(fields) != ({"Rule"} if msg.argument == 0 else {"Rule", "Com"}):
+        if set(fields) != ({"Rule"} if msg.session == 0 else {"Rule", "Com"}):
             raise MatchError("invalid computer configuration fields")
-        rules = numbers(fields["Rule"], 7 if msg.argument == 0 else 8)
+        rules = numbers(fields["Rule"], 7 if msg.session == 0 else 8)
         game = dict(self.game_rules)
         game.update(zip(("bm", "st", "cb", "ca", "tl", "du"), rules[:6]))
-        if msg.argument:
+        if msg.session:
             game["gs"] = rules[7]
         _game_rules(game, "computer menu rules are invalid")
         if rules[6] not in (0, 1, 2):
@@ -1125,25 +1125,25 @@ class MatchService:
             raise MatchError("computer rule flags must match the explicitly configured board")
         self._check_room_rules(game)
         npc_ids = ()
-        if msg.argument:
-            npc_ids = tuple(numbers(fields["Com"], msg.argument - 1))
+        if msg.session:
+            npc_ids = tuple(numbers(fields["Com"], msg.session - 1))
             for npc_id in npc_ids:
                 opponent(npc_id)
             if len(set(npc_ids)) != len(npc_ids):
                 raise MatchError("computer opponents must be distinct")
-            if self.explicit_start_fields and msg.argument != self.player_count:
+            if self.explicit_start_fields and msg.session != self.player_count:
                 raise MatchError("computer player count must match the explicitly configured board")
-            self._authorize_round(rules[0], player_count=msg.argument)
+            self._authorize_round(rules[0], player_count=msg.session)
         # Validate all wire fields before changing configuration or drawing.
         self.game_rules.update(zip(("bm", "st", "cb", "ca", "tl", "du"), rules[:6]))
         if not self.explicit_start_fields:
             self.special_flags = {key: self.game_rules[key] for key in ("st", "cb", "ca")}
         self.computer_view = rules[6]
         self.table_rules["in"] = self.computer_view
-        if msg.argument:
+        if msg.session:
             self.game_rules["gs"] = rules[7]
-            if msg.argument != self.player_count:
-                self._resize_lobby(msg.argument)
+            if msg.session != self.player_count:
+                self._resize_lobby(msg.session)
             self._prepare_npcs(npc_ids)
             self._choose_cards(self.players[0], ())
             self.phase = "selection"
@@ -1154,7 +1154,7 @@ class MatchService:
     def _select(self, peer, msg):
         seat = self._seat(peer)
         fields = msg.sections["CardSelect"]
-        if self.phase != "selection" or msg.argument != seat or numbers(fields.get("C"), 1) != [5]:
+        if self.phase != "selection" or msg.session != seat or numbers(fields.get("C"), 1) != [5]:
             raise MatchError("unexpected CardSelect phase, seat or count")
         try:
             cards = tuple(Card.parse(msg.sections[f"N{i}"]["D"]) for i in range(5))
@@ -1247,7 +1247,7 @@ class MatchService:
 
     def _ack(self, peer, msg):
         seat = self._seat(peer)
-        if msg.argument != self.sequence or self.phase not in ("turn", "battle"):
+        if msg.session != self.sequence or self.phase not in ("turn", "battle"):
             return []  # A stale ack must never rewind the match or duplicate a turn.
         if numbers(msg.sections["TurnData"].get("Ans"), 1) != [seat]:
             raise MatchError("ack seat does not match authenticated peer")
@@ -1293,7 +1293,7 @@ class MatchService:
         seat = self._seat(peer)
         values = msg.sections["PutData"]
         h, f = numbers(values.get("H"), 1)[0], numbers(values.get("F"), 1)[0]
-        if self.phase != "turn" or seat != self.active or msg.argument != self.sequence:
+        if self.phase != "turn" or seat != self.active or msg.session != self.sequence:
             raise MatchError("placement is not for the current active turn")
         if numbers(values.get("P"), 1) != [seat] or not 0 <= h < len(self.players[seat].hand):
             raise MatchError("invalid seat or remaining-hand index")
@@ -1595,7 +1595,7 @@ class MatchService:
         if self.card_prizes and not self._prizes_confirmed:
             raise MatchError("Continue requires completed and committed card prizes")
         seat = self._seat(peer)
-        if msg.argument != seat:
+        if msg.session != seat:
             raise MatchError("Continue header is not the authenticated seat")
         conf = numbers(msg.sections["Continue"].get("Conf"), 1)[0]
         if conf not in ((0, 1) if self.computer_menu else (0,)):
@@ -1656,7 +1656,7 @@ class MatchService:
         p = self.players[seat]
         if p.departed:
             return []  # Old/rebound input cannot control the substitute.
-        if msg.primary != 0x43:
+        if msg.family != 0x43:
             return self._table_message(peer, msg, p)
         section = {
             7: "CardSelect",
@@ -1703,12 +1703,12 @@ class MatchService:
             }[self.phase]
             if self.phase == "turn" and self.sequence == 0 and peer not in self.acks:
                 majors = majors | {8, 9}  # Client can still be closing selection.
-            if msg.argument not in majors:
+            if msg.session not in majors:
                 return []
-        elif msg.argument != 3 or numbers(msg.sections["Break"].get("ID"), 1) != [p.character_id]:
+        elif msg.session != 3 or numbers(msg.sections["Break"].get("ID"), 1) != [p.character_id]:
             raise MatchError("Break must identify this authenticated character with header3")
         reply = (
-            self._emit(packet(0x43, 5, msg.argument, f"@Quit=/No={seat}/B=0"), peer)
+            self._emit(packet(0x43, 5, msg.session, f"@Quit=/No={seat}/B=0"), peer)
             if section == "Quit"
             else []
         )
@@ -1723,7 +1723,7 @@ class MatchService:
         if (
             self.phase != "battle"
             or self.active != self._seat(peer)
-            or self.sequence != msg.argument
+            or self.sequence != msg.session
             or not self._unlocked()
         ):
             raise MatchError("battle choice is not for the active turn")
@@ -1739,7 +1739,7 @@ class MatchService:
         # bit distinguishes them; emitting TCList twice risks a stale list.
         if self.phase != "result" or peer in self.ready:
             return []
-        if msg.argument != self.sequence or numbers(msg.sections["Ready"].get("Ans"), 1) != [
+        if msg.session != self.sequence or numbers(msg.sections["Ready"].get("Ans"), 1) != [
             self._seat(peer)
         ]:
             raise MatchError("Ready is not for this participant and final turn")
@@ -1770,9 +1770,9 @@ class MatchService:
             ]
         admission = (
             "Req"
-            if msg.primary == 1 and "Req" in msg.sections
+            if msg.family == 1 and "Req" in msg.sections
             else {1: "GameEN", 0x12: "GameENC"}.get(msg.subtype)
-            if msg.primary == 0x41
+            if msg.family == 0x41
             else None
         )
         if admission:
@@ -1803,9 +1803,9 @@ class MatchService:
                 # it once admitted; it is display identity, never authorization.
                 p.nickname_id = int(identity, 16)
                 p.identity_confirmed = True
-        if msg.primary == 0x41:
+        if msg.family == 0x41:
             return self._lobby_control(peer, msg, p)
-        if msg.primary == 1 and "Req" in msg.sections:
+        if msg.family == 1 and "Req" in msg.sections:
             p.requested = True
             out = self._emit(self.playack(peer), peer)
             if self.computer_menu:
@@ -1813,11 +1813,11 @@ class MatchService:
                 self.phase = "computer_menu"
                 out += self._emit(self._com_init(peer), peer)
             return out
-        if msg.primary in (0x14, 0x24):
+        if msg.family in (0x14, 0x24):
             return self._settings(peer, msg)
-        if msg.primary == 0x12:
+        if msg.family == 0x12:
             return self._emit(packet(0x13, body=self.rules_body()), peer)
-        if msg.primary == 0x2D:
+        if msg.family == 0x2D:
             return self._emit(packet(0x2E, body="@CheckJoinTable_Ans=/Join=1/Mem=1"), peer)
         return None
 

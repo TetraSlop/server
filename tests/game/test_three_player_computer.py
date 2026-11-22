@@ -126,7 +126,7 @@ class ThreePlayerComputerTests(unittest.TestCase):
             {(1, opponent(1).personality), (2, opponent(30).personality)},
         )
         moves = [decode(d.payload) for d in out if decode(d.payload).subtype == 10]
-        self.assertEqual([m.argument for m in moves], list(range(15)))
+        self.assertEqual([m.session for m in moves], list(range(15)))
         self.assertEqual([int(m.sections["PutCard"]["A"]) for m in moves], [0, 1, 2] * 5)
         self.assertEqual(sum(service._scores()), 15)
         self.assertEqual(service.sequence, 15)
@@ -302,7 +302,7 @@ class ThreePlayerComputerPrizeTests(unittest.TestCase):
         with self.assertRaises(MatchError):
             service.handle("alice", packet(0x43, 17, 0, "@Continue=/Ans=1/Conf=0"))
         released = service.confirm_prize_commit(1)
-        self.assertEqual([decode(d.payload).argument for d in released], [0, 2])
+        self.assertEqual([decode(d.payload).session for d in released], [0, 2])
         self.assertEqual([decode(d.payload).subtype for d in released], [15, 15])
         self.assertEqual(service.confirm_prize_commit(1), [])
         self.assertEqual(service.handle("alice", packet(0x43, 15, 0, "@GetSelect=/H=0")), [])
@@ -318,7 +318,7 @@ class ThreePlayerComputerPrizeTests(unittest.TestCase):
         self.assertEqual([decode(d.payload).subtype for d in service.confirm_prize_commit(1)], [13])
         out = service.handle("alice", packet(0x43, 14, 15, "@Ready=/Ans=0"))
         self.assertEqual([decode(d.payload).subtype for d in out], [26, 15, 15])
-        self.assertEqual([decode(d.payload).argument for d in out[1:]], [1, 2])
+        self.assertEqual([decode(d.payload).session for d in out[1:]], [1, 2])
         service.handle("alice", packet(0x43, 17, 0, "@Continue=/Ans=1/Conf=0"))
         self.assertEqual((service.phase, len(service.players)), ("selection", 3))
 

@@ -337,7 +337,7 @@ class EventMultiTable(EventMultiTableHelpers, unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decode(await read_table()).sections["CheckJoinTable_Ans"]["Join"], "1")
         await observer.send(b"JOIN " + table.channel)
         await send(table.table_id, packet(1, body=f"@Req=/NN={view.nn:016X}/HID={view.player_id}"))
-        self.assertEqual(decode(await read_table()).primary, 2)
+        self.assertEqual(decode(await read_table()).family, 2)
         await send(table.table_id, packet(0x43, 0x25, 0, "@Data=/Watch=0"))
         self.assertEqual([decode(await read_table()).subtype for _ in range(3)], [0x25, 0x26, 9])
         self.closed = {0, 1}
@@ -358,10 +358,10 @@ class EventMultiTable(EventMultiTableHelpers, unittest.IsolatedAsyncioTestCase):
         else:
             self.fail("missing second-table observer result")
         self.assertEqual(
-            [decode(p).argument for p in received if decode(p).subtype == 9], list(range(1, 10))
+            [decode(p).session for p in received if decode(p).subtype == 9], list(range(1, 10))
         )
         self.assertEqual(
-            [decode(p).argument for p in received if decode(p).subtype == 10], list(range(10))
+            [decode(p).session for p in received if decode(p).subtype == 10], list(range(10))
         )
         self.assertFalse(any(b"@EventCard=" in p or b"@TCList=" in p for p in received))
         await self.release(1)

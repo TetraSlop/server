@@ -229,7 +229,7 @@ class EventMatchRound:
         if peer not in self._seat:
             raise MatchError("not an event participant")
         msg = decode(payload)
-        if msg is None or msg.primary != 0x43:
+        if msg is None or msg.family != 0x43:
             return None
         if self._closed:
             return []
@@ -241,7 +241,7 @@ class EventMatchRound:
                 set(msg.sections) != {"Ready"}
                 or set(msg.sections["Ready"]) != {"Ans"}
                 or numbers(msg.sections["Ready"]["Ans"], 1) != [seat]
-                or msg.argument != self._combat.sequence
+                or msg.session != self._combat.sequence
             ):
                 raise MatchError("invalid event result Ready")
             if self._combat.phase != "result":

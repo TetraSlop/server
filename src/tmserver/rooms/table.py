@@ -377,12 +377,12 @@ class OrdinaryTable:
 
     async def _dispatch_query(self, session, msg):
         """Answer lobby inspection and discovery while match_lock is held."""
-        if msg.primary == 0x41 and msg.subtype == 3:
+        if msg.family == 0x41 and msg.subtype == 3:
             key = self.host.ensure_account(session.nick)
             identity = self.host.economy.account_view(key).nn
             fields = msg.sections.get("GameM")
             if (
-                msg.argument
+                msg.session
                 or fields is None
                 or set(msg.sections) != {"GameM"}
                 or set(fields) - {"ID"}
@@ -395,9 +395,9 @@ class OrdinaryTable:
             await self.deliver_table_packet(session, response)
             return True
         # Discovery queries are read-only; they must not claim a seat.
-        if msg.primary == 0x12:
+        if msg.family == 0x12:
             response = match_packet(0x13, body=self.match.rules_body())
-        elif msg.primary == 0x2D:
+        elif msg.family == 0x2D:
             available = int(self.match.accepting_players)
             join = int(
                 bool(available)
@@ -434,7 +434,7 @@ class OrdinaryTable:
                 return True
         if viewing is not None or exiting_channel:
             return True
-        if msg.primary == 0x41 and msg.subtype in (5, 0x0D):
+        if msg.family == 0x41 and msg.subtype in (5, 0x0D):
             receipt = self.match.lobby_exit_receipts.get((session, msg.subtype))
             section = "GameQT" if msg.subtype == 5 else "GameExit"
             if receipt is not None and msg.sections == {section: {}}:
@@ -445,7 +445,7 @@ class OrdinaryTable:
             watching = session in self.spectator_admissions
             active = self.match.phase in ("selection", "turn", "battle")
             if (
-                msg.primary == 1
+                msg.family == 1
                 and "Req" in msg.sections
                 and active
                 and self.table_channel in session.channels
@@ -457,7 +457,7 @@ class OrdinaryTable:
                 reply = self.match.playack(self.match.players[0].peer)
                 self.queue_spectator([(session, reply)], self.match, tracked=False)
                 return True
-            if msg.primary == 0x43 and (msg.subtype == 0x25 or watching):
+            if msg.family == 0x43 and (msg.subtype == 0x25 or watching):
                 if not watching or self.table_channel not in session.channels:
                     raise ValueError("watch request requires table-channel admission")
                 replies = self.spectators.handle(
@@ -484,7 +484,7 @@ class OrdinaryTable:
             if msg is None:
                 return False
             host = self.host
-            if msg.primary == 0x41 and msg.subtype == 3:
+            if msg.family == 0x41 and msg.subtype == 3:
                 # Roster inspection also works for a requester seated elsewhere.
                 return await self._dispatch_query(session, msg)
             owner = host.table_for_peer(session)
@@ -492,7 +492,7 @@ class OrdinaryTable:
                 raise ValueError("leave the current ordinary table before entering another")
             # A detached native deck-name editor can send after Continue/PART.
             # Its saved account context enforces ownership and idle-state checks.
-            if msg.primary == 0x43 and msg.subtype in (0x10, 0x22):
+            if msg.family == 0x43 and msg.subtype in (0x10, 0x22):
                 if session in self.spectator_admissions:
                     raise ValueError("observer cannot submit participant result edits")
                 key = self.host.ensure_account(session.nick)
@@ -503,10 +503,10 @@ class OrdinaryTable:
                     if token is not None:
                         self.match_reservations[session] = token
                     return True
-            admitting = (msg.primary == 1 and "Req" in msg.sections) or (
-                msg.primary == 0x41 and msg.subtype in (1, 0x12)
+            admitting = (msg.family == 1 and "Req" in msg.sections) or (
+                msg.family == 0x41 and msg.subtype in (1, 0x12)
             )
-            if msg.primary == 0x41 and msg.subtype == 0x12 and self.match_mode != "computer":
+            if msg.family == 0x41 and msg.subtype == 0x12 and self.match_mode != "computer":
                 await self.deliver_table_packet(session, reject_admission("GameENC", full=False))
                 return True
             registered = any(p.peer is session for p in self.match.players)
@@ -517,7 +517,7 @@ class OrdinaryTable:
             )
             if handled is not None:
                 return handled
-            if not registered and msg.primary == 1 and session in self.match.kicked_peers:
+            if not registered and msg.family == 1 and session in self.match.kicked_peers:
                 raise ValueError("removed members must explicitly re-enter the table")
             # The wire carries no table generation nonce. Require the existing
             # member to leave before any new admission can replace its table.
@@ -529,14 +529,14 @@ class OrdinaryTable:
                 and not self.match.computer_menu
                 and self.match.phase == "lobby"
                 and not self.match.players
-                and msg.primary == 0x41
+                and msg.family == 0x41
                 and msg.subtype == 0x12
             )
             match = self.match
             account = self.host.economy.account_view(key)
             if admitting:
                 section = (
-                    "Req" if msg.primary == 1 else "GameENC" if msg.subtype == 0x12 else "GameEN"
+                    "Req" if msg.family == 1 else "GameENC" if msg.subtype == 0x12 else "GameEN"
                 )
                 fields = msg.sections.get(section)
                 if fields is None:
@@ -586,13 +586,13 @@ class OrdinaryTable:
             accepting_result = (
                 registered
                 and match.phase == "result"
-                and msg.primary == 0x43
+                and msg.family == 0x43
                 and msg.subtype == 0x11
                 and not next(p for p in match.players if p.peer is session).departed
             )
             aborting_multiplayer = (
                 registered
-                and msg.primary == 0x43
+                and msg.family == 0x43
                 and msg.subtype in (5, 0x27)
                 and match.phase in ("selection", "turn", "battle", "result")
                 and not match.departure_supported(session)
@@ -604,7 +604,7 @@ class OrdinaryTable:
             try:
                 # Validate durable round-trip constraints before the transient
                 # match settings handler can change its saved-default view.
-                preference_update = parse_save(payload) if msg.primary == 0x24 else None
+                preference_update = parse_save(payload) if msg.family == 0x24 else None
                 match.register(
                     session,
                     character_id=account.player_id,
@@ -637,7 +637,7 @@ class OrdinaryTable:
                     self.match_reservations[session] = token
                 if (
                     registered
-                    and msg.primary == 0x43
+                    and msg.family == 0x43
                     and msg.subtype == 7
                     and match.phase in ("selection", "turn")
                 ):
@@ -659,7 +659,7 @@ class OrdinaryTable:
             # Lobby exits/kicks release only the removed account and table chat.
             # Detach before delivery; other seats and chat groups stay bound.
             chat_updates.extend(self.release_removed_players(match, old_players))
-            if msg.primary == 0x41 and msg.subtype in (1, 0x12):
+            if msg.family == 0x41 and msg.subtype in (1, 0x12):
                 self.table_roster.admission(session)
             if match.settings_revision != revision:
                 self.table_roster.ready.add(session)

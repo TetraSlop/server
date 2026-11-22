@@ -123,7 +123,7 @@ class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(after), 10)
             self.assertEqual(self.server.economy.balance(key), 10000)
             self.assertEqual(
-                sum(decode(x).primary == 0x43 and decode(x).subtype == 13 for x in received[side]),
+                sum(decode(x).family == 0x43 and decode(x).subtype == 13 for x in received[side]),
                 1,
             )
             stats = PracticeStats.from_profile(self.server.economy.profile_bytes(key))
@@ -131,7 +131,7 @@ class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):
             result = next(
                 decode(x)
                 for x in received[side]
-                if decode(x).primary == 0x43 and decode(x).subtype == 13
+                if decode(x).family == 0x43 and decode(x).subtype == 13
             )
             self.assertEqual(result.sections[f"No{side}"]["T"], f"0|0|{stats.vs_player_games}")
         saved = self.store.load()

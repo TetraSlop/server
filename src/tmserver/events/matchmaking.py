@@ -384,16 +384,16 @@ class EventMatchmaking:
             if (
                 old is not None
                 and old[:2] == (key, event_id)
-                and msg.argument == old[2]
+                and msg.session == old[2]
                 and msg.subtype == 0x22
             ):
                 return self._decks(key, msg)
             if old is not None and old[:2] == (key, event_id) and msg.subtype == 0x17:
                 f = self._section(msg, "Quit", ("No",))
-                if msg.argument == old[2] and numbers(f["No"], 1) == [old[2]]:
+                if msg.session == old[2] and numbers(f["No"], 1) == [old[2]]:
                     return [EventDelivery(peer, config.init_id, old[3])]
             raise EconomyError("no current event selection session")
-        if e.key != key or e.event_id != event_id or msg.argument != e.session:
+        if e.key != key or e.event_id != event_id or msg.session != e.session:
             raise EconomyError("event selection session mismatch")
         # Init-route traffic bypasses table control. It must expire the same
         # waiting admission before saving decks, replaying Select or closing it.
@@ -447,27 +447,27 @@ class EventMatchmaking:
         if msg is None:
             return None
         route = self.host.event_for_service(target)
-        if route is not None and route[1] == "init" and msg.primary == 0x98:
+        if route is not None and route[1] == "init" and msg.family == 0x98:
             return self._entry(peer, key, route[0], payload)
-        if route is not None and route[1] == "init" and msg.primary == 0xB2:
+        if route is not None and route[1] == "init" and msg.family == 0xB2:
             return self._session(peer, key, route[0], msg)
         event_id = self._tables.get(target) or (route[0] if route and route[1] == "room" else None)
         if event_id is None:
             return None
         e = self._entries.get(peer)
         r = self._round(event_id, e.epoch) if e is not None and e.epoch is not None else None
-        if e is None and msg.primary == 0x43 and msg.subtype == 5:
+        if e is None and msg.family == 0x43 and msg.subtype == 5:
             old = self._quit_replies.get(peer)
             if old is not None and old[:3] == (key, event_id, target) and payload == old[3]:
                 return [EventDelivery(peer, target, old[4])]
-        if e is None and msg.primary == 0x43 and msg.subtype == 0x0E:
+        if e is None and msg.family == 0x43 and msg.subtype == 0x0E:
             finished = self._finished.get(peer)
             if finished is not None and finished[:3] == (key, event_id, target):
                 f = self._section(msg, "Ready", ("Ans",))
-                if msg.argument == finished[3] and numbers(f["Ans"], 1) == [finished[4]]:
+                if msg.session == finished[3] and numbers(f["Ans"], 1) == [finished[4]]:
                     return []
         if e is None or e.key != key or e.event_id != event_id or r is None or e.epoch != r.epoch:
-            if msg.primary in (0xD3, 1, 0x41, 0x43):
+            if msg.family in (0xD3, 1, 0x41, 0x43):
                 raise EconomyError("no current event proposal/participant")
             return None
         if target not in (self.host.config(event_id).room_id, r.config.table_id):
@@ -479,9 +479,9 @@ class EventMatchmaking:
         ):
             return self.cancel(event_id, r.epoch)
         if target == self.host.config(event_id).room_id:
-            if msg.primary != 0xD3:
+            if msg.family != 0xD3:
                 return None
-            if msg.subtype or msg.argument:
+            if msg.subtype or msg.session:
                 raise EconomyError("invalid proposal response header")
             f = self._section(msg, "MuchMakeAns", ("Ans", "TblNo", "TblId"))
             if (
@@ -527,7 +527,7 @@ class EventMatchmaking:
             return []
         if channel_exit(msg):
             return self.cancel(event_id, r.epoch) if r.phase == "admission" else []
-        if msg.primary == 0x43:
+        if msg.family == 0x43:
             if r.phase not in ("playing", "completed"):
                 raise EconomyError("event battle has not started")
             if msg.subtype in (5, 0x27):
@@ -536,13 +536,13 @@ class EventMatchmaking:
                     f = self._section(msg, "Quit", ("No",))
                     if numbers(f["No"], 1) != [seat]:
                         raise EconomyError("cannot quit another event seat")
-                    reply = packet(0x43, 5, msg.argument, f"@Quit=/No={seat}/B=0")
+                    reply = packet(0x43, 5, msg.session, f"@Quit=/No={seat}/B=0")
                     self._quit_replies[peer] = (key, event_id, target, payload, reply)
                     out = self.cancel(event_id, r.epoch)
                     self._closures = [p for p in self._closures if p != peer]
                     return [EventDelivery(peer, target, reply)] + out
                 f = self._section(msg, "Break", ("ID",))
-                if msg.argument != 3 or numbers(f["ID"], 1) != [e.reservation.account.player_id]:
+                if msg.session != 3 or numbers(f["ID"], 1) != [e.reservation.account.player_id]:
                     raise EconomyError("invalid event Break identity")
                 return self.cancel(event_id, r.epoch)
             try:
@@ -553,7 +553,7 @@ class EventMatchmaking:
             if r.engine.phase == "finished":
                 r.phase = "completed"
             return out
-        if msg.primary == 0x41 and msg.subtype in _EXITS:
+        if msg.family == 0x41 and msg.subtype in _EXITS:
             name, reply = _EXITS[msg.subtype]
             f = self._section(msg, name)
             if set(f) - ({"ID"} if msg.subtype == 5 else set()):
@@ -566,27 +566,27 @@ class EventMatchmaking:
             if reply is not None:
                 out.append(EventDelivery(peer, target, packet(0x41, reply[0], body=reply[1])))
             return out + self.cancel(event_id, r.epoch)
-        if r.phase in ("proposal", "backoff") and msg.primary in (1, 0x41):
+        if r.phase in ("proposal", "backoff") and msg.family in (1, 0x41):
             raise EconomyError("table admission requires accepted proposal")
         if r.phase != "admission":
             return []
-        if msg.primary == 0x41 and msg.subtype == 1:
-            if msg.argument not in (0, 1):
+        if msg.family == 0x41 and msg.subtype == 1:
+            if msg.session not in (0, 1):
                 raise EconomyError("invalid GameEN argument")
             self._identity(e, msg, "GameEN")
             r.admitted.add(peer)
             return [EventDelivery(peer, target, packet(0x41, 2, body="@GameEA=/EN=1"))]
-        if msg.primary == 1:
-            if msg.subtype or msg.argument or peer not in r.admitted:
+        if msg.family == 1:
+            if msg.subtype or msg.session or peer not in r.admitted:
                 raise EconomyError("Req before table admission")
             if r.config.channel.upper() not in {v.upper() for v in joined_channels}:
                 raise EconomyError("Req requires table channel membership")
             self._identity(e, msg, "Req")
             r.requested.add(peer)
             return [EventDelivery(peer, target, r.engine.playack(peer))]
-        if msg.primary == 0x41 and msg.subtype == 8:
+        if msg.family == 0x41 and msg.subtype == 8:
             self._section(msg, "GameOK", ())
-            if msg.argument or peer not in r.requested:
+            if msg.session or peer not in r.requested:
                 raise EconomyError("GameOK before Req")
             r.accepted.add(peer)
             if len(r.accepted) < len(r.entries):

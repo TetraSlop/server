@@ -181,7 +181,7 @@ class ChatTests(unittest.TestCase):
         self.assertGreater(len(pages), 1)
         self.assertTrue(all(len(p) - 13 <= 447 for p in pages))
         parsed = [decode(p) for p in pages]
-        self.assertTrue(all(p.argument == len(pages) - 1 for p in parsed))
+        self.assertTrue(all(p.session == len(pages) - 1 for p in parsed))
         self.assertEqual(
             [p.sections["Chat"]["Num"].split("|")[0] for p in parsed],
             [str(i) for i in range(len(pages))],
@@ -206,7 +206,7 @@ class ChatTests(unittest.TestCase):
         for index, payload in enumerate(pages):
             self.assertLessEqual(len(payload) - 13, 447)
             message = decode(payload)
-            self.assertEqual(message.argument, len(pages) - 1)
+            self.assertEqual(message.session, len(pages) - 1)
             fields = message.sections["Chat"]
             self.assertEqual(fields["Num"], f"{index}|8")
             self.assertEqual(fields["C"], "2147483647")

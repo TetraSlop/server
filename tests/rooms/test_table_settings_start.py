@@ -109,7 +109,7 @@ class SettingsStartIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.send(0, packet(0x41, 10, body="@GameReady="))
         if stage != "offer":
             replies = await self.send(1, packet(1, body="@Req="))
-            ack = next(decode(row) for row in replies[1] if decode(row).primary == 2)
+            ack = next(decode(row) for row in replies[1] if decode(row).family == 2)
             self.assertEqual(ack.sections["Tet"]["tl"], "0")
         if stage == "accepted":
             await self.send(1, packet(0x41, 8, body="@GameOK="))
@@ -150,7 +150,7 @@ class SettingsStartIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.send(0, packet(0x41, 10, body="@GameReady="))
         for side in (0, 1):
             replies = await self.send(side, packet(1, body="@Req="))
-            ack = next(decode(row) for row in replies[side] if decode(row).primary == 2)
+            ack = next(decode(row) for row in replies[side] if decode(row).family == 2)
             self.assertEqual(ack.sections["Tet"]["tl"], "5")
             self.assertEqual(bytes.fromhex(ack.sections["Tab"]["pw"]), b"NewPass!")
             await self.send(side, packet(0x41, 8, body="@GameOK="))

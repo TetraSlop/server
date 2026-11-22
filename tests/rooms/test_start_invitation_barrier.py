@@ -79,7 +79,7 @@ class StartInvitationBarrierNetwork(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.server.default_table.match.phase, "lobby")
         late = await self.enter(2, token=b"PD", ready=True)
         self.assertEqual(
-            [(decode(p).primary, decode(p).subtype) for s, p in late[2] if p.startswith(b"GTM0G")],
+            [(decode(p).family, decode(p).subtype) for s, p in late[2] if p.startswith(b"GTM0G")],
             [(65, 4), (65, 7)],
         )
         duplicate = await self.enter(2, token=b"PD", ready=True)
