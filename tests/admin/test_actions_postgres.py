@@ -38,23 +38,23 @@ class PostgresActionCases:
         save_services = self.store._save_services
         wrote = []
 
-        def fail_between(snapshot, previous, *, names):
-            self.assertEqual(set(names), self.journals | {"admin_audit"})
-            first = sorted(names)[0]
-            save_services(snapshot, previous, names=(first,))
+        def fail_between(journals):
+            self.assertEqual(set(journals), self.journals | {"admin_audit"})
+            first = sorted(journals)[0]
+            save_services({first: journals[first]})
             # Establish that an actual journal write happened before the fault.
             inside = self.store.connection.scalar(
                 sa.select(service_state.c.payload).where(service_state.c.name == first)
             )
-            self.assertEqual(inside, snapshot[first])
-            self.assertNotEqual(inside, previous[first])
+            self.assertEqual(inside, journals[first])
+            self.assertNotEqual(inside, saved[first])
             wrote.append(first)
             raise OSError("injected failure between journal writes")
 
         with patch.object(self.store, "_save_services", fail_between), self.assertRaises(OSError):
             self.apply(self.host, request)
         self.assertEqual(len(wrote), 1)
-        self.assertTrue(self.store.failed)
+        self.assertIsNone(self.store.connection)
         self.assertIsNotNone(self.host.storage_failed)
         self.assertEqual(self.host.snapshot(), live)
         with self.assertRaises(OSError):
@@ -80,7 +80,7 @@ class PostgresActionCases:
             self.assertRaises(OSError),
         ):
             self.apply(self.host, request)
-        self.assertTrue(self.store.failed)
+        self.assertIsNone(self.store.connection)
         self.assertIsNotNone(self.host.storage_failed)
         self.assertEqual(self.host.snapshot(), before)
         self.assertIsNone(self.host.admin_audit.get(request.request_id))
