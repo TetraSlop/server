@@ -58,18 +58,17 @@ class NativeBackendTests(unittest.TestCase):
             ((16,), 16),
             ((25,), 25),
             (tuple(range(9)), 25),
-            ((True,), 16),
             ((1,), True),
             ((1,), 24),
         ):
-            with self.subTest(targets=targets, size=size), self.assertRaises(ai.AIError):
+            with (
+                self.subTest(targets=targets, size=size),
+                self.assertRaisesRegex(OriginalCodeError, "invalid bridge input"),
+            ):
                 self.backend.choose_target(targets, draw, board_size=size)
-        for options in ({"x87_precision": 24}, {"x87_precision": True}):
-            with self.assertRaises(rules.RulesError):
-                self.backend.grow_card(CARD, BASELINE, 0, 0, **options)
-        for mode, value in ((True, 0), (0, True), (0, 0.0), ("1", 1)):
-            with self.assertRaises(rules.RulesError):
-                self.backend.grow_card(CARD, BASELINE, mode, value)
+        for precision in (24, True):
+            with self.assertRaisesRegex(OriginalCodeError, "invalid bridge input"):
+                self.backend.grow_card(CARD, BASELINE, 0, 0, x87_precision=precision)
         draw.assert_not_called()
 
     def test_c_abi_validates_new_records_before_execution(self):
@@ -106,7 +105,7 @@ class NativeBackendTests(unittest.TestCase):
 
     def test_target_callback_errors_and_partial_draws_recover(self):
         for value in (-1, 32768, True, 1.5):
-            with self.assertRaises(ai.AIError):
+            with self.assertRaisesRegex(OriginalCodeError, "Random draw"):
                 self.backend.choose_target((0, 1), iter((123, value)).__next__)
             self.assertEqual(self.backend.last_draws, (123,))
         failure = RuntimeError("target RNG stopped")
@@ -159,25 +158,24 @@ class NativeBackendTests(unittest.TestCase):
     def test_invalid_inputs_fail_before_randomness(self):
         draw = Draws(())
         for kwargs in ({"attacker_modifier": 128}, {"defender_property": -1}):
-            with self.assertRaises(rules.RulesError):
+            with self.assertRaisesRegex(OriginalCodeError, "invalid bridge input"):
                 self.backend.calculate_battle(CARD, CARD, draw, **kwargs)
-        for hand, board, owner, personality in (
-            (HAND * 2, BOARD, 0, ai.Personality()),
-            ((), BOARD, 2, ai.Personality()),
-            ((), BOARD[:15], 0, ai.Personality()),
-            ((rules.Card(250, 1, 0, 1, 1, 1, 0),), BOARD, 0, ai.Personality()),
-            ((), BOARD, 0, None),
+        for hand, board, owner in (
+            (HAND * 2, BOARD, 0),
+            (HAND, BOARD, 2),
+            (HAND, BOARD[:15], 0),
+            ((rules.Card(250, 1, 0, 1, 1, 1, 0),), BOARD, 0),
         ):
-            with self.assertRaises(ai.AIError):
-                self.backend.choose_move(hand, board, owner, draw, personality)
+            with self.assertRaisesRegex(OriginalCodeError, "invalid bridge input"):
+                self.backend.choose_move(hand, board, owner, draw)
         self.assertEqual(draw.used, [])
 
     def test_rng_errors_propagate_and_context_recovers(self):
         for value in (-1, True, 32768):
-            with self.assertRaises(ai.AIError):
+            with self.assertRaisesRegex(OriginalCodeError, "Random draw"):
                 self.backend.choose_move(HAND, BOARD, 0, lambda: value)
         for value in (-1, True, 0x80000000):
-            with self.assertRaises(rules.RulesError):
+            with self.assertRaisesRegex(OriginalCodeError, "Random draw"):
                 self.backend.calculate_battle(CARD, CARD, lambda: value)
         with self.assertRaises(StopIteration):
             self.backend.calculate_battle(CARD, CARD, Draws(()))

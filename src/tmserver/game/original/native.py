@@ -1,18 +1,20 @@
 """Windows x86 bridge to original battle, growth, target and board AI code.
 
-Native contexts share one mapped image and allow one operation process-wide.
+Native contexts share one mapped image and allow one operation process-wide;
+the bridge gate rejects concurrent and reentrant calls with status 1, and its
+valid() checks reject out-of-domain requests with status 2 before any draw.
 Close contexts explicitly, preferably with a ``with NativeRules(...)`` block.
 """
 
 import ctypes
+from dataclasses import astuple
 import struct
 import sys
-from contextlib import contextmanager
 from pathlib import Path
-from threading import Lock
 
+from tmserver.cards.model import card_values
 from tmserver.data.resources import read_json
-from tmserver.game import ai, rules, special_rules
+from tmserver.game import ai, rules
 from tmserver.game.original.image import OriginalCodeError, read_image
 
 _U32 = ctypes.c_uint32
@@ -169,7 +171,6 @@ class NativeRules:
     def __init__(self, image: str | Path, bridge: str | Path):
         if sys.platform != "win32" or ctypes.sizeof(ctypes.c_void_p) != 4:
             raise OriginalCodeError("The native rules bridge requires 32-bit Windows Python")
-        self._lock = Lock()
         self._closed = True
         self._last_draws = ()
         self._bridge = _load_bridge(bridge)
@@ -186,14 +187,9 @@ class NativeRules:
         return self._last_draws
 
     def close(self):
-        if not self._lock.acquire(blocking=False):
-            raise OriginalCodeError("This native rules context is already executing")
-        try:
-            if not self._closed:
-                _check_status(self._bridge.tm_rules_close(), "close native rules")
-                self._closed = True
-        finally:
-            self._lock.release()
+        if not self._closed:
+            _check_status(self._bridge.tm_rules_close(), "close native rules")
+            self._closed = True
 
     def __enter__(self):
         if self._closed:
@@ -203,19 +199,14 @@ class NativeRules:
     def __exit__(self, *_):
         self.close()
 
-    @contextmanager
-    def _operation(self):
-        if not self._lock.acquire(blocking=False):
-            raise OriginalCodeError("This native rules context is already executing")
-        try:
-            if self._closed:
-                raise OriginalCodeError("This native rules context is closed")
-            self._last_draws = ()
-            yield
-        finally:
-            self._lock.release()
+    def _start(self):
+        if self._closed:
+            raise OriginalCodeError("This native rules context is closed")
+        self._last_draws = ()
 
-    def _call(self, function, request, result, draw, maximum, draw_error):
+    def _call(self, function, request, result, draw, maximum):
+        """Run one bridge call; a draw is recorded only once it is in range."""
+        self._start()
         draws, failures = [], []
 
         @_Random
@@ -225,7 +216,7 @@ class NativeRules:
             try:
                 value = draw()
                 if type(value) is not int or not 0 <= value <= maximum:
-                    raise draw_error(f"Random draw must be an integer in 0..{maximum}")
+                    raise OriginalCodeError(f"Random draw must be an integer in 0..{maximum}")
                 draws.append(value)
                 output[0] = value
                 return 0
@@ -252,53 +243,36 @@ class NativeRules:
         attacker_property=0,
         defender_property=0,
     ) -> rules.BattleResult:
-        sides = []
-        for card, modifier, prop in (
-            (attacker, attacker_modifier, attacker_property),
-            (defender, defender_modifier, defender_property),
-        ):
-            attack, physical, magical = rules._battle_stats(card)
-            kind = rules._integer(card.kind, "card kind", 0, 3)
-            rules._integer(modifier, "modifier", -128, 127)
-            rules._integer(prop, "property", 0, 255)
-            sides.append((_U32 * 4)(attack, kind, physical, magical))
         request = _BattleRequest(
-            *sides, attacker_modifier, defender_modifier, attacker_property, defender_property
+            *((_U32 * 4)(c.attack, c.kind, c.physical, c.magical) for c in (attacker, defender)),
+            attacker_modifier,
+            defender_modifier,
+            attacker_property,
+            defender_property,
         )
-        with self._operation():
-            result = _BattleResult()
-            self._call(
-                self._bridge.tm_rules_battle, request, result, draw, 0x7FFFFFFF, rules.RulesError
-            )
-            return rules.BattleResult(
-                rules.BattleSide(*result.attacker),
-                rules.BattleSide(*result.defender),
-                self.last_draws,
-            )
+        result = _BattleResult()
+        self._call(self._bridge.tm_rules_battle, request, result, draw, 0x7FFFFFFF)
+        return rules.BattleResult(
+            rules.BattleSide(*result.attacker), rules.BattleSide(*result.defender), self.last_draws
+        )
 
     def choose_move(
         self, hand, board, owner, raw_rng, personality=ai.Personality()
     ) -> ai.Move | None:
-        hand = tuple(ai._card(card) for card in hand)
-        snapshot = ai._board(board, owner)
-        cells = []
-        for cell in snapshot:
-            if cell is None:
-                values = (0xFFFF, 0, 8, 0, 0)
-            elif cell is ai.BLOCKED:
-                values = (0x8000, 0, 9, 0, 0)
-            else:
-                (model, arrows), seat = cell
-                values = (model, arrows, seat, 0, 0)
-            cells.append(_BoardCell(*values))
+        cells = [
+            _BoardCell(0xFFFF, 0, 8, 0, 0)
+            if cell is None
+            else _BoardCell(0x8000, 0, 9, 0, 0)
+            if cell is ai.BLOCKED
+            else _BoardCell(cell.card.model, cell.card.arrows, cell.owner, 0, 0)
+            for cell in board
+        ]
         return self._choose_move(hand, cells, owner, raw_rng, personality)
 
     def choose_special_move(
         self, hand, board, active, raw_rng, personality=None
     ) -> ai.Move | None:
         """Choose on a 4x4 or 5x5 board, preserving tile properties and spinners."""
-        hand = tuple(ai._card(card) for card in hand)
-        special_rules._active(board, active)
         cells = [
             _BoardCell(cell.model, cell.arrows, cell.owner, cell.property, cell.direction)
             for cell in board
@@ -306,74 +280,64 @@ class NativeRules:
         return self._choose_move(hand, cells, active, raw_rng, personality or ai.Personality())
 
     def _choose_move(self, hand, cells, owner, raw_rng, personality):
-        if len(hand) > 5:
-            raise ai.AIError("native hand has at most five cards")
-        if not isinstance(personality, ai.Personality):
-            raise ai.AIError("personality must be a Personality")
-        with self._operation():
-            if not hand or all(cell.owner != 8 for cell in cells):
-                return None
-            request = _MoveRequest()
-            request.count, request.owner = len(hand), owner
-            request.board_size = len(cells)
-            request.personality[:] = (
-                personality.score_chance,
-                personality.preference,
-                personality.preference_chance,
-            )
-            for index, card in enumerate(hand):
-                request.hand[index] = _HandCard(*card)
-            for index, cell in enumerate(cells):
-                request.board[index] = cell
-            result = _MoveResult()
-            self._call(self._bridge.tm_rules_move, request, result, raw_rng, 32767, ai.AIError)
-            if (
-                not 0 <= result.hand < len(hand)
-                or not 0 <= result.field < len(cells)
-                or cells[result.field].owner != 8
-            ):
-                raise OriginalCodeError("Original AI returned an invalid immediate move")
-            return ai.Move(result.hand, result.field)
+        self._start()
+        hand = tuple(hand)
+        if not hand or all(cell.owner != 8 for cell in cells):
+            return None
+        request = _MoveRequest()
+        # Oversized hands and boards keep their real counts so valid() rejects them.
+        request.count, request.owner, request.board_size = len(hand), owner, len(cells)
+        request.personality[:] = (
+            personality.score_chance,
+            personality.preference,
+            personality.preference_chance,
+        )
+        for index, card in enumerate(hand[:5]):
+            request.hand[index] = _HandCard(card.model, card.arrows)
+        for index, cell in enumerate(cells[:25]):
+            request.board[index] = cell
+        result = _MoveResult()
+        self._call(self._bridge.tm_rules_move, request, result, raw_rng, 32767)
+        if (
+            not 0 <= result.hand < len(hand)
+            or not 0 <= result.field < len(cells)
+            or cells[result.field].owner != 8
+        ):
+            raise OriginalCodeError("Original AI returned an invalid immediate move")
+        return ai.Move(result.hand, result.field)
 
     def grow_card(
         self, card, baseline: rules.GrowthBaseline, mode, random_value, *, x87_precision=64
     ) -> rules.GrowthResult:
-        if rules._integer(x87_precision, "x87 precision") not in (53, 64):
-            raise rules.RulesError("supported x87 significands are 53 or 64 bits")
-        card = rules.Card.from_card(card)
-        mode = rules._integer(mode, "growth mode") & 255
-        random_value = rules._integer(random_value, "growth random") & 255
-        values = tuple(
-            getattr(baseline, field)
-            for field in ("attack", "physical", "magical", "points", "price")
-        )
-        rules.GrowthBaseline(*values)
         request = _GrowthRequest(
-            (_U32 * 8)(*card.full()), (_U32 * 5)(*values), mode, random_value, x87_precision
+            (_U32 * 8)(*card_values(card)),
+            (_U32 * 5)(*astuple(baseline)),
+            mode & 255,
+            random_value & 255,
+            x87_precision,
         )
-        with self._operation():
-            result = _GrowthResult()
-            _check_status(
-                self._bridge.tm_rules_growth(ctypes.byref(request), ctypes.byref(result)),
-                "grow native card",
-            )
-            if result.changed not in (-1, 1, 2, 3, 4):
-                raise OriginalCodeError("Original growth returned an invalid changed field")
-            changed = (
-                None
-                if result.changed == -1
-                else ("attack", "kind", "physical", "magical")[result.changed - 1]
-            )
-            return rules.GrowthResult(rules.Card(*result.card), result.sale, changed)
+        self._start()
+        result = _GrowthResult()
+        _check_status(
+            self._bridge.tm_rules_growth(ctypes.byref(request), ctypes.byref(result)),
+            "grow native card",
+        )
+        if result.changed not in (-1, 1, 2, 3, 4):
+            raise OriginalCodeError("Original growth returned an invalid changed field")
+        changed = (
+            None
+            if result.changed == -1
+            else ("attack", "kind", "physical", "magical")[result.changed - 1]
+        )
+        return rules.GrowthResult(rules.Card(*result.card), result.sale, changed)
 
     def choose_target(self, candidates, raw_rng, *, board_size=16) -> int | None:
-        candidates = ai._targets(candidates, board_size)
-        request = _TargetRequest(len(candidates), board_size, (_U32 * 8)(*candidates))
-        with self._operation():
-            result = _TargetResult()
-            self._call(self._bridge.tm_rules_target, request, result, raw_rng, 32767, ai.AIError)
-            if not candidates and result.field == -1:
-                return None
-            if result.field not in candidates:
-                raise OriginalCodeError("Original AI returned an invalid immediate target")
-            return result.field
+        candidates = tuple(candidates)
+        request = _TargetRequest(len(candidates), board_size, (_U32 * 8)(*candidates[:8]))
+        result = _TargetResult()
+        self._call(self._bridge.tm_rules_target, request, result, raw_rng, 32767)
+        if not candidates and result.field == -1:
+            return None
+        if result.field not in candidates:
+            raise OriginalCodeError("Original AI returned an invalid immediate target")
+        return result.field

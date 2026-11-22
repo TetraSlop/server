@@ -81,15 +81,16 @@ class SpecialAPITests(unittest.TestCase):
 
     def test_special_AI_adapter_no_move_and_validation_boundaries(self):
         from tests.game.test_native_ai import Draws
-        from tmserver.game.ai import AIError, Personality
+        from tmserver.game.ai import Personality
+        from tmserver.game.original.image import OriginalCodeError
 
         empty = start_board([0] * 16).cells
         self.assertIsNone(default_rules().choose_special_move((), empty, 0, Draws([])))
         self.assertIsNone(default_rules().choose_special_move((CARD,), start_board([1] * 16).cells, 0, Draws([])))
-        with self.assertRaises(AIError):
+        with self.assertRaisesRegex(OriginalCodeError, "invalid bridge input"):
             default_rules().choose_special_move((CARD,) * 6, empty, 0, Draws([]))
         for raw in (-1, True, 32768):
-            with self.assertRaises(AIError):
+            with self.assertRaisesRegex(OriginalCodeError, "Random draw"):
                 default_rules().choose_special_move((CARD,), empty, 0, Draws([raw]))
         move = default_rules().choose_special_move((CARD,), empty, 0, Draws([0, 0, 0, 0, 0, 5]), Personality())
         self.assertEqual((move.hand_index, move.field), (0, 5))

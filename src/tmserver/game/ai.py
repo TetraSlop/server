@@ -1,10 +1,6 @@
-"""Computer-player inputs and the native decision calls."""
+"""Computer-player inputs for the native decision calls; the bridge checks their ranges."""
 
 from dataclasses import dataclass
-
-
-class AIError(ValueError):
-    """Input outside the demonstrated ordinary-board AI contract."""
 
 
 @dataclass(frozen=True)
@@ -14,11 +10,6 @@ class Personality:
     score_chance: int = 100
     preference: int = 0
     preference_chance: int = 100
-
-    def __post_init__(self):
-        for value in (self.score_chance, self.preference, self.preference_chance):
-            if type(value) is not int or not 0 <= value <= 255:
-                raise AIError("personality values must be original unsigned bytes")
 
 
 @dataclass(frozen=True)
@@ -39,44 +30,3 @@ class _Blocked:
 
 
 BLOCKED = _Blocked()
-
-
-def _card(card):
-    try:
-        model, arrows = card.model, card.arrows
-    except AttributeError as exc:
-        raise AIError("card must expose model and arrows") from exc
-    if type(model) is not int or not 0 <= model < 250:
-        raise AIError("only ordinary catalogue cards are supported")
-    if type(arrows) is not int or not 0 <= arrows <= 255:
-        raise AIError("arrows must be an unsigned byte")
-    return model, arrows
-
-
-def _board(board, owner):
-    players = {16: 2, 25: 3}.get(len(board))
-    if players is None:
-        raise AIError("board must contain sixteen or twenty-five cells")
-    if type(owner) is not int or not 0 <= owner < players:
-        raise AIError("owner outside board mode")
-    result = []
-    for cell in board:
-        if cell is None or cell is BLOCKED:
-            result.append(cell)
-        else:
-            if type(cell.owner) is not int or not 0 <= cell.owner < players:
-                raise AIError("board occupant owner outside board mode")
-            result.append((_card(cell.card), cell.owner))
-    return tuple(result)
-
-
-def _targets(candidates, board_size=16):
-    if type(board_size) is not int or board_size not in (16, 25):
-        raise AIError("target board must contain sixteen or twenty-five cells")
-    candidates = tuple(candidates)
-    if any(type(field) is not int or not 0 <= field < board_size for field in candidates):
-        raise AIError("battle target outside the board")
-    if len(candidates) > 8 or len(set(candidates)) != len(candidates):
-        raise AIError("battle candidates must be at most eight distinct fields")
-    return candidates
-
