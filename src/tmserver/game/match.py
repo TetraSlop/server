@@ -42,7 +42,7 @@ from tmserver.game.prizes import (
 from tmserver.game.rules import CRTLCG, GrowthBaseline
 from tmserver.protocol.admission import validate_admission
 from tmserver.rankings.stats import PracticeStats
-from tmserver.rooms.metadata import TableMetadataError, table_info
+from tmserver.rooms.metadata import table_info
 from tmserver.rooms.rules import RoomRules
 
 # The client's routines; tests swap in recording or failing stand-ins.
@@ -719,10 +719,7 @@ class MatchService:
         # The original editor can emit twelve password bytes, while TD/PTL can
         # carry eight. Validate the full advertised rule representation before
         # changing state; the native client compares this advertised value.
-        try:
-            table_info(1, len(self.players), self.owner_id, game, table)
-        except TableMetadataError as exc:
-            raise MatchError(str(exc)) from exc
+        table_info(1, len(self.players), self.owner_id, game, table)
         self._check_playack(self.players, game, table)
         self.owner_peer = owner
         self.game_rules, self.table_rules = game, table

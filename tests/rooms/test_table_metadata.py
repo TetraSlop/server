@@ -2,7 +2,8 @@
 
 import unittest
 
-from tmserver.rooms.metadata import TableMetadataError, table_info
+from tmserver.game.errors import MatchError
+from tmserver.rooms.metadata import table_info
 
 GAME = dict(bm=0, du=0, st=0, cb=0, ca=0, gs=0, tl=0)
 TABLE = {"in": 0, "lu": 100, "ll": 0, "au": 300, "al": 100, "co": 0, "pa": 0}
@@ -57,18 +58,18 @@ class TableMetadataTests(unittest.TestCase):
             "0a",
             "0d",
         ):
-            with self.subTest(password=password), self.assertRaises(TableMetadataError):
+            with self.subTest(password=password), self.assertRaises(MatchError):
                 self.encode(table=dict(TABLE, pa=1, pw=password))
-        with self.assertRaises(TableMetadataError):
+        with self.assertRaises(MatchError):
             self.encode(table=dict(TABLE, pa=1))
-        with self.assertRaises(TableMetadataError):
+        with self.assertRaises(MatchError):
             self.encode(table=dict(TABLE, pw="2A" * 8))
 
     def test_rank_bounds_cannot_be_silently_changed(self):
         for fields in ({"au": 99999, "al": 0}, {"au": 301}, {"al": 99}):
             with (
                 self.subTest(fields=fields),
-                self.assertRaisesRegex(TableMetadataError, "cannot encode au/al"),
+                self.assertRaisesRegex(MatchError, "cannot encode au/al"),
             ):
                 self.encode(table=dict(TABLE, **fields))
 
@@ -83,11 +84,11 @@ class TableMetadataTests(unittest.TestCase):
             ("tl", 5),
         ]:
             for value in (-1, maximum + 1, 1.0, "1", None):
-                with self.subTest(key=key, value=value), self.assertRaises(TableMetadataError):
+                with self.subTest(key=key, value=value), self.assertRaises(MatchError):
                     self.encode(game=dict(GAME, **{key: value}))
         for key, maximum in [("in", 2), ("lu", 1048575), ("ll", 1048575), ("co", 8), ("pa", 1)]:
             for value in (-1, maximum + 1, 1.0, "1", None):
-                with self.subTest(key=key, value=value), self.assertRaises(TableMetadataError):
+                with self.subTest(key=key, value=value), self.assertRaises(MatchError):
                     self.encode(table=dict(TABLE, **{key: value}))
         for key, minimum, maximum in [
             ("number", 1, 4096),
@@ -95,9 +96,9 @@ class TableMetadataTests(unittest.TestCase):
             ("owner", 0, 2**64 - 1),
         ]:
             for value in (minimum - 1, maximum + 1, 1.0, "1", None, True):
-                with self.subTest(key=key, value=value), self.assertRaises(TableMetadataError):
+                with self.subTest(key=key, value=value), self.assertRaises(MatchError):
                     self.encode(**{key: value})
-        with self.assertRaises(TableMetadataError):
+        with self.assertRaises(MatchError):
             self.encode(table=dict(TABLE, ll=101))
 
     def test_boolean_objects_only_for_boolean_fields(self):
@@ -110,10 +111,10 @@ class TableMetadataTests(unittest.TestCase):
             self.encode(table=dict(TABLE, pa=1, pw="")),
         )
         for key in ("bm", "gs", "tl"):
-            with self.subTest(key=key), self.assertRaises(TableMetadataError):
+            with self.subTest(key=key), self.assertRaises(MatchError):
                 self.encode(game=dict(GAME, **{key: True}))
         for key in ("in", "lu", "ll", "au", "al", "co"):
-            with self.subTest(key=key), self.assertRaises(TableMetadataError):
+            with self.subTest(key=key), self.assertRaises(MatchError):
                 self.encode(table=dict(TABLE, **{key: False}))
 
     def test_missing_and_unknown_fields_rejected(self):
@@ -121,10 +122,10 @@ class TableMetadataTests(unittest.TestCase):
             for key in rules:
                 missing = dict(rules)
                 missing.pop(key)
-                with self.subTest(label=label, key=key), self.assertRaises(TableMetadataError):
+                with self.subTest(label=label, key=key), self.assertRaises(MatchError):
                     self.encode(**{label: missing})
             for value in ([], {}, dict(rules, unknown=0)):
-                with self.subTest(label=label, value=value), self.assertRaises(TableMetadataError):
+                with self.subTest(label=label, value=value), self.assertRaises(MatchError):
                     self.encode(**{label: value})
 
     def test_format_maxima_and_inputs_unchanged(self):
