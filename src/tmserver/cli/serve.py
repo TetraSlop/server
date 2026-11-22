@@ -110,24 +110,29 @@ def arguments(argv=None):
     )
     parser.add_argument(
         "--allow-cbc",
-        action="store_true",
-        help="enable F18 generated-card rewards and durable collection recovery",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="F18 generated-card rewards and durable collection recovery (default: on)",
     )
     parser.add_argument(
         "--card-prizes",
-        action="store_true",
-        help="enable recovered winner-card transfers with durable collection recovery",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="recovered winner-card transfers with durable collection recovery (default: on)",
     )
     parser.add_argument(
         "--wagers",
-        action="store_true",
-        help="enable configured stakes, double-up and documented local money payouts",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="stakes, double-up and documented local money payouts (default: on); when off, "
+             "a chosen stake is dropped and the round plays without one",
     )
     parser.add_argument(
         "--ratings",
         choices=("preserve", "local-history"),
         default="preserve",
-        help="optional rating from the client's offline 32-result ring (server choice)",
+        help="optional rating from the client's offline 32-result ring (server choice); stays "
+             "preserve by default because a save that left local-history refuses to start",
     )
     parser.add_argument(
         "--weekly-rankings",
@@ -136,8 +141,10 @@ def arguments(argv=None):
     )
     parser.add_argument(
         "--departures",
-        action="store_true",
-        help="opt-in recovered practice departure rules; economic/rated rounds still abort safely",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="recovered practice departure rules (default: on); they apply only to rounds "
+             "without wagers, card prizes or local-history ratings, which still abort safely",
     )
     parser.add_argument(
         "--spectator-preview",
@@ -204,6 +211,7 @@ async def run(args):
             f"profile {args.bind}:{services.profile_port}",
             flush=True,
         )
+        print("Gameplay options: " + enabled_options(args), flush=True)
         if services.admin is not None:
             print(f"Admin panel ready: http://127.0.0.1:{services.admin.port}/admin/", flush=True)
             await services.admin.wait(args.seconds)
@@ -211,6 +219,15 @@ async def run(args):
             await asyncio.sleep(args.seconds)
         else:
             await asyncio.Event().wait()
+
+
+def enabled_options(args):
+    names = dict(
+        wagers=args.wagers, card_prizes=args.card_prizes, cbc=args.allow_cbc,
+        departures=args.departures, local_history_ratings=args.ratings == "local-history",
+        weekly_rankings=args.weekly_rankings, spectator_preview=args.spectator_preview,
+    )
+    return ", ".join(name for name, on in names.items() if on) or "none"
 
 
 @dataclass(frozen=True)

@@ -24,6 +24,9 @@ services:
       # Loopback only unless TM_PUBLISH_ADDRESS=0.0.0.0; see the README's public server section.
       - "${TM_PUBLISH_ADDRESS:-127.0.0.1}:${TM_GAME_PORT:-51241}:51241"
       - "${TM_PUBLISH_ADDRESS:-127.0.0.1}:${TM_PROFILE_PORT:-51220}:51220"
+    # Wagers, card prizes, CBC rewards and departures are on by default. To turn
+    # one off, or to opt into local-history ratings and weekly rankings:
+    # command: ["--no-wagers", "--ratings", "local-history", "--weekly-rankings"]
     depends_on:
       db:
         condition: service_healthy
