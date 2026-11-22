@@ -44,8 +44,9 @@ Square Enix.
    ```
 
 3. Start the server, then point [tmloader](https://github.com/TetraSlop/loader) at
-   its game and profile ports. One to three game windows can connect to the same
-   server.
+   its address. Each player signs in with a username and password; the first
+   login creates the account (see [Accounts](#accounts)). Any number of players
+   can connect, and a table seats two or three.
 
    ```powershell
    .venv/Scripts/tmserver --log-dir var
