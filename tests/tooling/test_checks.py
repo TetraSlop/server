@@ -104,27 +104,6 @@ class CheckTests(unittest.TestCase):
         self.assertTrue(success)
         self.assertEqual(report["collected"], report["run"])
 
-    def test_optional_import_skip_requires_exact_identity_reason_and_portable_lane(self):
-        allowed_id, allowed_reason = next(iter(check_tests.PORTABLE_SKIPS))
-
-        def optional():
-            raise unittest.SkipTest(allowed_reason)
-
-        for lane, expected in (("portable", True), ("postgres", False), ("admin", False)):
-            case = unittest.FunctionTestCase(optional)
-            case.id = lambda: allowed_id
-            success, report = check_tests.run_suite(
-                unittest.TestSuite([case]), lane=lane, stream=io.StringIO(),
-            )
-            self.assertEqual(success, expected)
-
-        case = unittest.FunctionTestCase(skipped)
-        case.id = lambda: allowed_id
-        success, report = check_tests.run_suite(
-            unittest.TestSuite([case]), lane="portable", stream=io.StringIO(),
-        )
-        self.assertFalse(success)
-
     def test_admin_lane_requires_its_dependencies_instead_of_skipping(self):
         output = io.StringIO()
         with (

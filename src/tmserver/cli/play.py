@@ -5,7 +5,7 @@ import asyncio
 import json
 import os
 import subprocess
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -60,16 +60,8 @@ def arguments(argv=None):
 
 
 def child_environment():
-    return {
-        key: value
-        for key, value in os.environ.items()
-        if key
-        not in {
-            "TM_DATABASE_URL", "TM_TEST_DATABASE_URL", "TM_LOAD_DATABASE_URL",
-            "TM_ADMIN_PASSWORD", "__COMPAT_LAYER",
-        }
-        and not key.startswith("TM_PROBE_")
-    }
+    hidden = {"TM_DATABASE_URL", "TM_TEST_DATABASE_URL", "TM_ADMIN_PASSWORD", "__COMPAT_LAYER"}
+    return {key: value for key, value in os.environ.items() if key not in hidden}
 
 
 def hidden_process():
@@ -106,28 +98,6 @@ async def preflight(args):
         raise
     if process.returncode:
         raise ValueError(output.decode(errors="replace").strip() or "Loader setup check failed")
-
-
-@contextmanager
-def session_lock(state):
-    """Prevent two launchers from running independent economies on the same save."""
-    state.parent.mkdir(parents=True, exist_ok=True)
-    with state.with_name(state.name + ".play.lock").open("a+b") as stream:
-        try:
-            if os.name == "nt":
-                import msvcrt
-
-                stream.seek(0)
-                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            raise OSError(
-                "Another Play session is using this save; close its game windows first."
-            ) from exc
-        yield
 
 
 def service_settings(args, log_dir):
@@ -206,47 +176,45 @@ async def run(args):
         print("Setup checks passed. No game launched or services started.")
         print(f"Loader: {args.loader}\nSave: {args.state}")
         return 0
-    with session_lock(args.state):
-        session = datetime.now(UTC).strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
-        log_dir = args.project_dir / "var/sessions" / session
-        settings = service_settings(args, log_dir)
-        async with running_services(settings) as services:
-            metadata = {
-                "session": session,
-                "game_port": services.game_port,
-                "profile_port": services.profile_port,
-                "clients": args.clients,
-                "accounts": list(NAMES[: args.clients]),
-                "state": str(args.state),
-                "loader": str(args.loader),
-                "loader_config": str(args.config),
-                "loader_dir": str(args.loader_dir),
-                "rewards": args.rewards,
-                "ratings": args.ratings,
-                "weekly_rankings": args.weekly_rankings,
-                "native_checks": "Awaiting user observation; process exit is not a UI pass.",
-            }
-            (log_dir / "session.json").write_text(
-                json.dumps(metadata, indent=2) + "\n", encoding="utf8"
-            )
-            print(
-                f"Starting {args.clients} Tetra Master window(s). Close all game windows to stop.",
-                flush=True,
-            )
-            print(f"Session: {session}\nSave: {args.state}\nLogs: {log_dir}", flush=True)
-            print(
-                "CPU play: Local Room > empty table > Computer. "
-                "Human play: Open Tables or a rules room.",
-                flush=True,
-            )
-            codes = await play_clients(args, services, session, log_dir)
-            (log_dir / "exits.json").write_text(json.dumps(codes) + "\n", encoding="utf8")
-        if any(codes):
-            raise RuntimeError(
-                f"A game process exited with an error ({codes}). See {log_dir} and runtime/logs/{session}."
-            )
-        print("Game windows closed; services stopped and save retained.")
-        return 0
+    session = datetime.now(UTC).strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
+    log_dir = args.project_dir / "var/sessions" / session
+    settings = service_settings(args, log_dir)
+    async with running_services(settings) as services:
+        metadata = {
+            "session": session,
+            "game_port": services.game_port,
+            "profile_port": services.profile_port,
+            "clients": args.clients,
+            "accounts": list(NAMES[: args.clients]),
+            "state": str(args.state),
+            "loader": str(args.loader),
+            "loader_config": str(args.config),
+            "loader_dir": str(args.loader_dir),
+            "rewards": args.rewards,
+            "ratings": args.ratings,
+            "weekly_rankings": args.weekly_rankings,
+        }
+        (log_dir / "session.json").write_text(
+            json.dumps(metadata, indent=2) + "\n", encoding="utf8"
+        )
+        print(
+            f"Starting {args.clients} Tetra Master window(s). Close all game windows to stop.",
+            flush=True,
+        )
+        print(f"Session: {session}\nSave: {args.state}\nLogs: {log_dir}", flush=True)
+        print(
+            "CPU play: Local Room > empty table > Computer. "
+            "Human play: Open Tables or a rules room.",
+            flush=True,
+        )
+        codes = await play_clients(args, services, session, log_dir)
+        (log_dir / "exits.json").write_text(json.dumps(codes) + "\n", encoding="utf8")
+    if any(codes):
+        raise RuntimeError(
+            f"A game process exited with an error ({codes}). See {log_dir} and runtime/logs/{session}."
+        )
+    print("Game windows closed; services stopped and save retained.")
+    return 0
 
 
 def main():

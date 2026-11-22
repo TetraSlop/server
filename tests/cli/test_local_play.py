@@ -216,21 +216,11 @@ class LocalPlayTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.open_connection("127.0.0.1", ports[0])
         self.assertTrue(occupied.is_serving())
 
-    def test_session_lock_rejects_second_owner_and_releases_on_error(self):
-        with self.assertRaisesRegex(ValueError, "simulated"):
-            with local_play.session_lock(self.args.state):
-                with self.assertRaisesRegex(OSError, "Another Play session"):
-                    with local_play.session_lock(self.args.state):
-                        self.fail("second owner admitted")
-                raise ValueError("simulated")
-        with local_play.session_lock(self.args.state):
-            pass
-
     def test_local_launch_ignores_database_env_and_scrubs_child_environment(self):
         with patch.dict(
             os.environ,
             {"TM_DATABASE_URL": "secret", "TM_ADMIN_PASSWORD": "operator-secret",
-             "TM_PROBE_ADVANCE": "1", "__COMPAT_LAYER": "RUNASADMIN"},
+             "__COMPAT_LAYER": "RUNASADMIN"},
         ):
             settings = local_play.service_settings(self.args, self.root / "logs")
             self.assertIsNone(settings.database_url)
@@ -240,7 +230,6 @@ class LocalPlayTests(unittest.IsolatedAsyncioTestCase):
             child = local_play.child_environment()
             self.assertNotIn("TM_DATABASE_URL", child)
             self.assertNotIn("TM_ADMIN_PASSWORD", child)
-            self.assertNotIn("TM_PROBE_ADVANCE", child)
             self.assertNotIn("__COMPAT_LAYER", child)
         self.assertFalse(settings.card_prizes)
         self.args.rewards = True

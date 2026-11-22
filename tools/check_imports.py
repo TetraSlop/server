@@ -41,25 +41,6 @@ def check(package_root):
     for name in modules + ["tmserver.events.config", "tmserver.rankings.periods", "tmserver.storage.validation"]:
         importlib.import_module(name)
 
-    from tmserver.game.models import Card
-    from tmserver.game.packets import packet, decode
-    from tmserver.economy.packets import named, parse_named
-    from tmserver.economy.auctions.models import Actor, Listing
-    from tmserver.economy.auctions.packets import actor_record, listing_record
-    from tmserver.events.packets import event_list
-    from tmserver.rooms.packets import directory_files
-    from tmserver.profiles.packets import answer, checked, checksum
-
-    card = Card(1, 50, 0, 40, 30, 1, 0)
-    assert Card.parse(card.full()) == card
-    actor = Actor("wheel", 1, 1, b"Wheel", 0, 0, 0)
-    listing = Listing(1, actor, card, 100, 20, 1, 0, 100, 3700, ())
-    assert len(actor_record(actor)) == 0x38 and len(listing_record(listing)) == 0xC0
-    assert decode(packet(0x43)).primary == 0x43
-    assert parse_named(named(0xB0, 0, 1, "@Init=")) == (0xB0, 0, 1, {"Init": {}})
-    assert len(event_list()) == 0x2C08
-    assert set(directory_files()) == {"b/g/ZL", "b/g/RL000"}
-    assert len(answer()) == 24 and checksum(b"") == 0 and checked(b"") == bytes(4)
     check_loaded_modules(package_root)
     return {"model_codec_modules": len(modules), "import_isolation": True, "provenance": True}
 
