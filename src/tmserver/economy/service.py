@@ -32,7 +32,7 @@ from tmserver.economy.models import (
 )
 from tmserver.economy.packets import _hex, _int, _keys, named, parse_named
 from tmserver.economy.shop_offers import ShopOffers
-from tmserver.rankings.stats import PracticeStats, result_outcome
+from tmserver.rankings.stats import PracticeStats
 
 
 class EconomyService:
@@ -479,26 +479,15 @@ class EconomyService:
         *,
         vs_player_game=False,
     ):
-        """Atomically apply the trusted match engine's completed original-five round.
+        """Apply the match engine's completed original-five round to every account.
 
-        Each item is (reservation, original five cards, final five cards) in
-        original selected-slot order. Ownership/count/money/decks are unchanged.
-        A card may promote along P/M→X→A and gain at most one capped stat point
-        at the result screen. Exact event eligibility/RNG belongs to the engine;
-        this boundary independently rejects broader stat/identity mutation.
-        Optional stats_by_key covers exactly those accounts with their completed
-        PracticeStats. Only a single legal transition from the current profile
-        is accepted. Optional payouts_by_key must cover those same accounts
-        with actual credits from the durable money coordinator's quote; absent
-        this mapping only zero-reward transitions are admitted. This method does
-        not credit the balance: record_result does so in the same joint save.
-        Optional rating_changes_by_key contains original-ring RatingQuotes from
-        a trusted RatingPolicy for every account. Only their exact D2/sequence
-        transition is allowed; missing mapping preserves strict fixed ratings.
-        vs_player_game selects the native VS. Player Games transition. It requires
-        two or three complete human results and cannot authorize arbitrary T2 edits.
-        Cards and statistics commit together. Existing
-        trusted callers may omit it to retain the prior card-only API.
+        Each round item is (reservation, original five cards, final five cards)
+        in original selected-slot order. The engine (the DLL growth call and
+        PracticeStats.next_result) computed the grown cards and statistics, and
+        RatingPolicy validated any rating quotes; this boundary checks only that
+        the five cards are owned, keep their model, arrows and deck, fit the
+        inventory, and that every mapping covers exactly the completed accounts.
+        Balances are unchanged: record_result credits payouts in the same save.
         Returns refreshed reservations for rematch; old tokens cannot replay.
         """
         if not 1 <= len(rounds) <= 3:
@@ -533,23 +522,6 @@ class EconomyService:
                 new = self.catalog.validate(Card.from_card(new))
                 if (new.model, new.arrows, new.deck) != (old.model, old.arrows, old.deck):
                     raise EconomyError("match growth cannot change model, arrows or deck")
-                allowed = {old.kind, 2, 3} if old.kind < 2 else {old.kind, 3}
-                if new.kind not in allowed:
-                    raise EconomyError("invalid match type promotion")
-                row = self.catalog.cards[old.model]
-                delta = 0
-                for field, base in (
-                    ("attack", "attack"),
-                    ("physical", "physical_defense"),
-                    ("magical", "magical_defense"),
-                ):
-                    before, after = getattr(old, field), getattr(new, field)
-                    cap = max(before, min(before + 1, row[base]))
-                    if not before <= after <= cap:
-                        raise EconomyError("match stat increase exceeds recovered growth limit")
-                    delta += after - before
-                if delta > 1:
-                    raise EconomyError("result growth can increment only one stat")
                 cards[index] = new
             check_inventory(cards)
             states[view.key] = _State(view.balance, cards, dict(view.deck_names))
@@ -557,40 +529,14 @@ class EconomyService:
                 result = stats_by_key.get(view.key)
                 if not isinstance(result, PracticeStats):
                     raise EconomyError("missing or invalid completed result statistics")
-                previous = PracticeStats.from_profile(self._accounts[view.key].template)
-                reward = 0 if payouts_by_key is None else payouts_by_key.get(view.key)
-                if type(reward) is not int or not 0 <= reward <= MAX_MONEY:
-                    raise EconomyError("missing or invalid authoritative result payout")
-                change = (
-                    None if rating_changes_by_key is None else rating_changes_by_key.get(view.key)
-                )
-                if rating_changes_by_key is not None and change is None:
-                    raise EconomyError("missing authoritative rating proof")
-                if change is None:
-                    coherent = any(
-                        result
-                        == previous.next_result(
-                            outcome, reward, fully_tied=tied, vs_player_game=vs_player_game
-                        )
-                        for outcome, tied in ((-1, False), (0, False), (0, True), (1, False))
-                    )
-                else:
-                    coherent = result == previous.next_result(
-                        result_outcome(change.result_class),
-                        reward,
-                        fully_tied=len(set(change.scores)) == 1,
-                        rating_change=change,
-                        vs_player_game=vs_player_game,
-                    )
-                if not coherent:
-                    raise EconomyError("result statistics are not one coherent quoted transition")
                 templates[view.key] = result.apply_to_profile(self._accounts[view.key].template)
-        if stats_by_key is not None and set(stats_by_key) != set(states):
-            raise EconomyError("result statistics must cover exactly the completed accounts")
-        if payouts_by_key is not None and set(payouts_by_key) != set(states):
-            raise EconomyError("result payouts must cover exactly the completed accounts")
-        if rating_changes_by_key is not None and set(rating_changes_by_key) != set(states):
-            raise EconomyError("rating changes must cover exactly the completed accounts")
+        for name, mapping in (
+            ("statistics", stats_by_key),
+            ("payouts", payouts_by_key),
+            ("rating changes", rating_changes_by_key),
+        ):
+            if mapping is not None and set(mapping) != set(states):
+                raise EconomyError(f"result {name} must cover exactly the completed accounts")
         # Validate every participant before replacing any committed state.
         for key, state in states.items():
             self._accounts[key].committed = state

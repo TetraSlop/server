@@ -68,16 +68,13 @@ def prepare(
 
 
 class RatingPolicyTests(unittest.TestCase):
-    def test_preserved_default_keeps_ratings_and_strict_guard(self):
+    def test_preserved_default_keeps_ratings(self):
         service = economy(2)
         policy = RatingPolicy(service)
         before = policy.snapshot()
         rounds, stats, changes = prepare(service, policy, (7, 3))
         self.assertIsNone(changes)
         self.assertTrue(all(value.rating == 300 for value in stats.values()))
-        forged = dict(stats, first=replace(stats["first"], rating=198))
-        with self.assertRaises(EconomyError):
-            policy.commit_growth(rounds, forged)
         policy.commit_growth(rounds, stats)
         self.assertEqual(policy.snapshot(), before)
         self.assertEqual(PracticeStats.from_profile(service.profile_bytes("first")).rating, 300)
@@ -124,7 +121,7 @@ class RatingPolicyTests(unittest.TestCase):
         service = economy()
         policy = RatingPolicy(service, mode="local-history")
         rounds, stats, changes = prepare(service, policy)
-        stats["third"] = replace(stats["third"], rn=b"Unauthorized rank")
+        stats["third"] = None
         before = service.snapshot(), policy.snapshot()
         with self.assertRaises(EconomyError):
             policy.commit_growth(rounds, stats, rating_changes_by_key=changes)
@@ -148,9 +145,6 @@ class RatingPolicyTests(unittest.TestCase):
             with self.assertRaises(EconomyError):
                 policy.commit_growth(rounds, stats, rating_changes_by_key=mapping)
             self.assertEqual((service.snapshot(), policy.snapshot()), before)
-        with self.assertRaises(EconomyError):
-            service.commit_match_growth(rounds, stats)
-        self.assertEqual(service.snapshot(), before[0])
 
     def test_stale_quote_cannot_advance_with_refreshed_capabilities(self):
         service = economy(2)

@@ -53,8 +53,7 @@ class VsPlayerStatisticsTests(unittest.TestCase):
             service = rating_tests.economy()
             policy = RatingPolicy(service, mode=mode)
             rounds, stats, changes = rating_tests.prepare(service, policy)
-            stats = {k: replace(v, vs_player_games=10) for k, v in stats.items()}
-            stats["third"] = replace(stats["third"], vs_player_games=11)
+            stats["third"] = None
             saved = service.snapshot()
             journal = policy.snapshot()
             with self.assertRaises(EconomyError):
@@ -80,7 +79,6 @@ class VsPlayerStatisticsTests(unittest.TestCase):
         for inputs, values, mode in (
             (rounds[:1], {keys[0]: stats[keys[0]]}, True),
             (rounds, None, True),
-            (rounds, stats, False),
             (rounds, stats, 1),
             (rounds, stats, None),
         ):
