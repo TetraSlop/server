@@ -19,8 +19,8 @@ Issues = "https://github.com/TetraSlop/server/issues"
 [project.optional-dependencies]
 admin = ["starlette-admin==1.0.3", "starlette==1.10.0", "uvicorn==0.54.0"]
 postgres = [
-    "SQLAlchemy==2.1.6", "alembic==1.20.1",
-    "psycopg[binary]==3.3.6",
+    "SQLAlchemy==2.1.9", "alembic==1.20.1",
+    "psycopg[binary]==3.3.9",
 ]
 dev = ["ruff==0.16.9", "build>=1.2,<2", "httpx==0.28.1"]
 
