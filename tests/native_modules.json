@@ -2,6 +2,7 @@
   "tests.admin.web.test_listener",
   "tests.auth.test_computer_match",
   "tests.auth.test_config",
+  "tests.cards.test_native_card_values",
   "tests.cli.test_admin",
   "tests.cli.test_local_play",
   "tests.economy.test_combined_three_player_rewards",
