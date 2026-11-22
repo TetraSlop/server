@@ -17,7 +17,8 @@ from tmserver.economy.service import EconomyService
 from tmserver.game.original.runtime import default_rules
 from tmserver.game.rules import GrowthBaseline
 from tmserver.profiles.service import SYNTHETIC_ACCOUNTS, ProfileServer
-from tmserver.rankings.stats import PracticeStats, ResultStatsError
+from tmserver.rankings.errors import RankingError
+from tmserver.rankings.stats import PracticeStats
 
 
 
@@ -113,15 +114,15 @@ class ResultStatsTests(unittest.TestCase):
             {"rn": b"x" * 32},
             {"rn": b"a\0b"},
         ):
-            with self.assertRaises(ResultStatsError):
+            with self.assertRaises(RankingError):
                 PracticeStats(**kwargs)
         for outcome in (-2, 2, True):
-            with self.assertRaises(ResultStatsError):
+            with self.assertRaises(RankingError):
                 SEEDED.next_result(outcome)
-        with self.assertRaises(ResultStatsError):
+        with self.assertRaises(RankingError):
             PracticeStats().result_section(0)
         self.assertTrue(SEEDED.result_section(2).startswith("@No2="))
-        with self.assertRaises(ResultStatsError):
+        with self.assertRaises(RankingError):
             SEEDED.result_section(3)
         template = bytearray(0x3028)
         template[0x7D:0x9D] = b"x" * 32
@@ -239,11 +240,11 @@ class PaidResultStatsTests(unittest.TestCase):
         self.assertIn("/D=0|900|223|", final.result_section(0))
         self.assertIn("/D=0|0|223|", loaded.result_section(0))
         for reward in (-1, 100000000, True):
-            with self.assertRaises(ResultStatsError):
+            with self.assertRaises(RankingError):
                 SEEDED.next_result(1, reward)
-        with self.assertRaises(ResultStatsError):
+        with self.assertRaises(RankingError):
             SEEDED.next_result(1, 100, fully_tied=True)
-        with self.assertRaises(ResultStatsError):
+        with self.assertRaises(RankingError):
             SEEDED.next_result(0, 100, fully_tied=1)
 
     def test_nonzero_statistics_require_exact_authoritative_credit_mapping(self):

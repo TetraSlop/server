@@ -5,7 +5,8 @@ import json
 import unittest
 from datetime import UTC, datetime
 
-from tmserver.rankings.periods import RankingPeriodError, RankingPeriods
+from tmserver.rankings.errors import RankingError
+from tmserver.rankings.periods import RankingPeriods
 
 MONDAY = int(datetime(2026, 9, 21, tzinfo=UTC).timestamp())
 WEEK = 604800
@@ -101,10 +102,10 @@ class RankingPeriodsTests(unittest.TestCase):
             (7, (1, 200)),
         ):
             with self.subTest(key=key, value=value):
-                with self.assertRaises(RankingPeriodError):
+                with self.assertRaises(RankingError):
                     periods.record(MONDAY + WEEK, {"a": (3, 195), key: value})
                 self.assertEqual(periods.snapshot(), before)
-        with self.assertRaises(RankingPeriodError):
+        with self.assertRaises(RankingError):
             periods.record(MONDAY + WEEK, [("a", (3, 195))])
         self.assertEqual(periods.snapshot(), before)
 
@@ -114,9 +115,9 @@ class RankingPeriodsTests(unittest.TestCase):
         before = periods.snapshot()
         for now in (-1, MAX + 1, True, "123", None, float("nan"), float("inf"), MONDAY - 1):
             with self.subTest(now=now):
-                with self.assertRaises(RankingPeriodError):
+                with self.assertRaises(RankingError):
                     periods.advance(now)
-                with self.assertRaises(RankingPeriodError):
+                with self.assertRaises(RankingError):
                     periods.record(now, {"a": (1, 195)})
                 self.assertEqual(periods.snapshot(), before)
 
@@ -172,7 +173,7 @@ class RankingPeriodsTests(unittest.TestCase):
             bad_snapshots.append(dict(snapshot, **{field: value}))
         for bad in bad_snapshots:
             original = copy.deepcopy(bad)
-            with self.subTest(snapshot=bad), self.assertRaises(RankingPeriodError):
+            with self.subTest(snapshot=bad), self.assertRaises(RankingError):
                 RankingPeriods.restore(bad)
             self.assertEqual(bad, original)
         self.assertEqual(periods.snapshot(), snapshot)

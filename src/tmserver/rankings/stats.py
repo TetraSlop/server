@@ -12,9 +12,9 @@ client/ratings-and-statistics.md.
 import struct
 from dataclasses import dataclass, replace
 
+from tmserver.rankings.errors import RankingError
 
-class ResultStatsError(ValueError):
-    pass
+ResultStatsError = RankingError  # Name still imported by economy/service.py.
 
 
 def _signed_word(value):
@@ -48,24 +48,24 @@ class PracticeStats:
         ):
             value = getattr(self, name)
             if type(value) is not int or not 0 <= value <= 0xFFFFFFFF:
-                raise ResultStatsError(name + " must be an unsigned DWORD")
+                raise RankingError(name + " must be an unsigned DWORD")
         for name in ("count", "sequence", "event_count"):
             value = getattr(self, name)
             if type(value) is not int or not 0 <= value <= 65535:
-                raise ResultStatsError(name + " must be an unsigned WORD")
+                raise RankingError(name + " must be an unsigned WORD")
         for name in ("streak", "best_streak"):
             value = getattr(self, name)
             if type(value) is not int or not -32768 <= value <= 32767:
-                raise ResultStatsError(name + " must be a signed WORD")
+                raise RankingError(name + " must be a signed WORD")
         if not isinstance(self.rn, bytes) or len(self.rn) > 31 or b"\0" in self.rn:
-            raise ResultStatsError("RN must leave room for a terminator in its 32-byte buffer")
+            raise RankingError("RN must leave room for a terminator in its 32-byte buffer")
         if type(self.current_reward) is not int or not 0 <= self.current_reward <= 99_999_999:
-            raise ResultStatsError("current reward must be an actual bounded money credit")
+            raise RankingError("current reward must be an actual bounded money credit")
 
     @classmethod
     def from_profile(cls, profile):
         if len(profile) != 0x3028:
-            raise ResultStatsError("expected canonical TM0DataFile size")
+            raise RankingError("expected canonical TM0DataFile size")
         u16 = lambda offset: struct.unpack_from("<H", profile, offset)[0]
         u32 = lambda offset: struct.unpack_from("<I", profile, offset)[0]
         return cls(
@@ -107,33 +107,30 @@ class PracticeStats:
         Online clients consume this final count without incrementing it again.
         """
         if type(outcome) is not int or outcome not in (-1, 0, 1):
-            raise ResultStatsError("outcome must be -1,0,1")
+            raise RankingError("outcome must be -1,0,1")
         if type(reward) is not int or not 0 <= reward <= 99_999_999:
-            raise ResultStatsError("reward must be an actual bounded money credit")
+            raise RankingError("reward must be an actual bounded money credit")
         if type(vs_player_game) is not bool:
-            raise ResultStatsError("VS. Player Games requires a boolean match mode")
+            raise RankingError("VS. Player Games requires a boolean match mode")
         if fully_tied is None:
             fully_tied = outcome == 0
         if type(fully_tied) is not bool or fully_tied and outcome != 0:
-            raise ResultStatsError("fully tied result must have draw outcome")
+            raise RankingError("fully tied result must have draw outcome")
         rating = self.rating
         if rating_change is not None:
-            from tmserver.rankings.history import RatingHistoryError, validate_quote
+            from tmserver.rankings.history import validate_quote
 
-            try:
-                change = validate_quote(rating_change)
-            except RatingHistoryError as exc:
-                raise ResultStatsError(str(exc)) from exc
+            change = validate_quote(rating_change)
             if (
                 change.before.sequence != self.sequence
                 or change.before.revision > 0
                 and change.before.rating != self.rating
             ):
-                raise ResultStatsError("rating history differs from the current profile")
+                raise RankingError("rating history differs from the current profile")
             if outcome != (change.result_class < 2) - (change.result_class > 2) or fully_tied != (
                 len(set(change.scores)) == 1
             ):
-                raise ResultStatsError("rating quote and result outcome disagree")
+                raise RankingError("rating quote and result outcome disagree")
             rating = change.d2
         if outcome > 0:
             streak = 1 if self.streak < 0 else _signed_word(self.streak + 1)
@@ -162,9 +159,9 @@ class PracticeStats:
     def result_section(self, seat):
         """Bounded ordinary ResultData section; D0 is neutral/uninterpreted."""
         if type(seat) is not int or seat not in (0, 1, 2):
-            raise ResultStatsError("ordinary seat must be 0..2")
+            raise RankingError("ordinary seat must be 0..2")
         if self.count == 0:
-            raise ResultStatsError("ResultData D5 must not be zero")
+            raise RankingError("ResultData D5 must not be zero")
         values = (
             0,
             self.current_reward,
@@ -184,7 +181,7 @@ class PracticeStats:
     def apply_to_profile(self, profile):
         """Update mapped fields only; preserve unrelated bytes, cards and money."""
         if len(profile) != 0x3028:
-            raise ResultStatsError("expected canonical TM0DataFile size")
+            raise RankingError("expected canonical TM0DataFile size")
         output = bytearray(profile)
         for offset, value in (
             (0x30, self.rating),
