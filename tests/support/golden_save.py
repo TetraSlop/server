@@ -87,9 +87,6 @@ class MemoryStore:
     def save(self, snapshot):
         self.snapshot = deepcopy(snapshot)
 
-    def save_accounts(self, accounts):
-        self.save_changes(accounts, {})
-
     def save_changes(self, accounts, services):
         snapshot = self.snapshot or {"version": 1, "accounts": {}}
         snapshot["accounts"].update(deepcopy(accounts))

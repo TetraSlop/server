@@ -17,8 +17,7 @@ from tests.support.golden_save import (
     document,
     restore_document,
 )
-from tmserver.storage.base import SERVICE_NAMES
-from tmserver.storage.validation import validate_snapshot
+from tmserver.storage.validation import SERVICE_NAMES, validate_snapshot
 
 
 class GoldenDocument:
