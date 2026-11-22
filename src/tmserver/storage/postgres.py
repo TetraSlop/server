@@ -5,10 +5,11 @@ lock fences other application writers. We never reconnect a failed writer:
 its in-memory state must be discarded and reloaded by a fresh server.
 """
 
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from copy import deepcopy
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
 
@@ -46,7 +47,6 @@ class PostgresStateStore(AbstractContextManager):
     def __init__(self, url):
         self.engine = database_engine(url)
         self.connection = None
-        self.failed = False
         try:
             self.connection = self.engine.connect()
             with self.connection.begin():
@@ -73,9 +73,16 @@ class PostgresStateStore(AbstractContextManager):
                 "cannot open database; check connectivity and run tmserver-db upgrade"
             ) from exc
 
-    def _check_open(self):
-        if self.failed or self.connection is None:
+    @contextmanager
+    def _writer(self, failure):
+        """Fail closed: any error closes the writer, so it never reconnects with old memory."""
+        if self.connection is None:
             raise OSError("database writer is closed or failed; restart is required")
+        try:
+            yield
+        except (SQLAlchemyError, OSError, ValueError, KeyError, TypeError) as exc:
+            self.close()
+            raise OSError(failure + "; restart is required") from exc
 
     def _read(self):
         with self.connection.begin():
@@ -111,94 +118,66 @@ class PostgresStateStore(AbstractContextManager):
             return snapshot
 
     def load(self):
-        self._check_open()
-        try:
+        with self._writer("database read failed"):
             return self._read()
-        except (SQLAlchemyError, OSError) as exc:
-            self.failed = True
-            raise OSError("database read failed; restart is required") from exc
 
     def save(self, snapshot):
-        self._check_open()
-        try:
-            self._save(snapshot)
-        except (SQLAlchemyError, OSError, ValueError, KeyError, TypeError) as exc:
-            self.failed = True
-            raise OSError("database save failed; restart is required") from exc
+        """Commit every account and journal in snapshot; rows it leaves out are kept."""
+        with self._writer("database save failed"):
+            if set(snapshot) - (SERVICE_NAMES | {"version", "accounts"}) or snapshot["version"] != 1:
+                raise ValueError("unsupported snapshot fields or version")
+            services = {name: snapshot[name] for name in SERVICE_NAMES if name in snapshot}
+            # A whole snapshot creates the saved state even when it has no rows yet.
+            self._commit(snapshot["accounts"], services, create=True)
 
     def save_changes(self, updates, services):
         """Atomically replace supplied accounts and journals; retain all others."""
-        self._check_open()
-        try:
+        with self._writer("database account/journal commit failed"):
             if set(services) - SERVICE_NAMES:
                 raise ValueError("unsupported service journals")
-            baseline = self.snapshot or {}
-            previous = self.snapshot["accounts"] if self.snapshot is not None else {}
-            changed = {
-                key: deepcopy(account)
-                for key, account in updates.items()
-                if account != previous.get(key)
-            }
-            journals = {
-                name: deepcopy(payload)
-                for name, payload in services.items()
-                if name not in baseline or payload != baseline[name]
-            }
-            with self.connection.begin():
-                if changed or journals:
-                    self._advance_revision()
-                    for key, account in sorted(changed.items()):
-                        self._save_account(key, account, previous.get(key))
-                    self._save_services(journals, baseline, names=journals)
-                else:
-                    self._check_revision()
-            if changed or journals:
-                if self.snapshot is None:
-                    self.snapshot = {"version": 1, "accounts": {}}
-                self.snapshot["accounts"].update(changed)
-                self.snapshot.update(journals)
-                self.revision += 1
-        except (SQLAlchemyError, OSError, ValueError, KeyError, TypeError) as exc:
-            self.failed = True
-            raise OSError("database account/journal commit failed; restart is required") from exc
+            self._commit(updates, services)
+
+    def _commit(self, updates, services, *, create=False):
+        baseline = self.snapshot or {"accounts": {}}
+        previous = baseline["accounts"]
+        # Copy before committing: callers cannot subsequently mutate our baseline.
+        changed = {
+            key: deepcopy(account)
+            for key, account in updates.items()
+            if account != previous.get(key)
+        }
+        journals = {
+            name: deepcopy(payload)
+            for name, payload in services.items()
+            if name not in baseline or payload != baseline[name]
+        }
+        with self.connection.begin():
+            if not changed and not journals and not (create and self.snapshot is None):
+                # Even a no-op must notice a lost connection or outside writer.
+                self._check_revision()
+                return
+            self._advance_revision()
+            for key, account in sorted(changed.items()):
+                self._save_account(key, account, previous.get(key))
+            self._save_services(journals)
+        if self.snapshot is None:
+            self.snapshot = {"version": 1, "accounts": {}}
+        self.snapshot["accounts"].update(changed)
+        self.snapshot.update(journals)
+        self.revision += 1
 
     def _check_revision(self):
         if self.connection.scalar(sa.select(state_meta.c.revision)) != self.revision:
             raise OSError("database revision changed outside this writer")
 
     def _advance_revision(self):
-        values = {"revision": self.revision + 1, "snapshot_version": 1}
         updated = self.connection.execute(
             state_meta.update()
             .where(state_meta.c.id == 1, state_meta.c.revision == self.revision)
-            .values(**values)
+            .values(revision=self.revision + 1, snapshot_version=1)
         )
         if updated.rowcount != 1:
             raise OSError("database revision changed outside this writer")
-
-    def _save(self, snapshot):
-        if set(snapshot) - (SERVICE_NAMES | {"version", "accounts"}) or snapshot["version"] != 1:
-            raise ValueError("unsupported snapshot fields or version")
-        if snapshot == self.snapshot:
-            # Even a no-op must notice a lost connection or outside writer.
-            with self.connection.begin():
-                self._check_revision()
-            return
-        previous = self.snapshot or {"accounts": {}}
-        current_accounts = snapshot["accounts"]
-        # Copy before committing: callers cannot subsequently mutate our baseline.
-        baseline = deepcopy(snapshot)
-        with self.connection.begin():
-            self._advance_revision()
-            for key in sorted(previous["accounts"].keys() - current_accounts.keys()):
-                self.connection.execute(accounts.delete().where(accounts.c.key == key))
-            for key, account in sorted(current_accounts.items()):
-                old = previous["accounts"].get(key)
-                if account != old:
-                    self._save_account(key, account, old)
-            self._save_services(snapshot, previous)
-        self.snapshot = baseline
-        self.revision += 1
 
     def _save_account(self, key, account, old):
         if set(account) != ACCOUNT_FIELDS:
@@ -235,23 +214,14 @@ class PostgresStateStore(AbstractContextManager):
             if rows:
                 self.connection.execute(cards.insert(), rows)
 
-    def _save_services(self, snapshot, previous, *, names=SERVICE_NAMES):
-        for name in sorted(names):
-            if name not in snapshot:
-                if name in previous:
-                    self.connection.execute(
-                        service_state.delete().where(service_state.c.name == name)
-                    )
-            elif name not in previous:
-                self.connection.execute(
-                    service_state.insert().values(name=name, payload=snapshot[name])
+    def _save_services(self, journals):
+        for name, payload in sorted(journals.items()):
+            insert = postgresql.insert(service_state).values(name=name, payload=payload)
+            self.connection.execute(
+                insert.on_conflict_do_update(
+                    index_elements=[service_state.c.name], set_={"payload": insert.excluded.payload}
                 )
-            elif snapshot[name] != previous[name]:
-                self.connection.execute(
-                    service_state.update()
-                    .where(service_state.c.name == name)
-                    .values(payload=snapshot[name])
-                )
+            )
 
     def close(self):
         try:

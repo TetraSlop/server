@@ -37,8 +37,8 @@ class IdentityPostgresTests(database_tests.DatabaseFixture, unittest.TestCase):
 
         saved, live = self.store.load(), self.host.snapshot()
 
-        def fail(snapshot, previous, *, names):
-            self.assertEqual(set(names), {"identities"})
+        def fail(journals):
+            self.assertEqual(set(journals), {"identities"})
             # The account and cards were written inside the transaction already.
             self.assertEqual(self.store.connection.scalar(
                 database_tests.sa.select(database_tests.sa.func.count()).select_from(accounts)), 1)

@@ -74,8 +74,8 @@ class MatchDatabaseTests(DatabaseFixture, TableFixture, unittest.TestCase):
         durable = self.store.load()
         original = self.store._save_services
 
-        def fail(snapshot, previous, **kwargs):
-            original(snapshot, previous, **kwargs)
+        def fail(journals):
+            original(journals)
             row = self.store.connection.scalar(
                 sa.select(service_state.c.payload).where(service_state.c.name == "match_economy")
             )

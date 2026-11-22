@@ -109,8 +109,8 @@ class ClaimDatabaseTests(DatabaseFixture, ClaimFixture, unittest.TestCase):
         before, durable = self.server.snapshot(), self.store.load()
         original = self.store._save_services
 
-        def fail(snapshot, previous, **kwargs):
-            original(snapshot, previous, **kwargs)
+        def fail(journals):
+            original(journals)
             self.store.connection.exec_driver_sql("SELECT 1 / 0")
 
         with (
