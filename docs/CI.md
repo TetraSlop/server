@@ -41,7 +41,9 @@ Use conventional commit subjects (`feat:`, `fix:`, `chore:`, and breaking-change
 markers). Release please maintains a version/changelog pull request against main.
 Its Python strategy updates `pyproject.toml` and the release manifest together.
 Review and merge that pull request to create a version tag and draft release.
-There is no automatic merge.
+There is no automatic merge. GitHub creates no tag for a draft release until it
+is published, so `force-tag-creation` in `release-please-config.json` has
+release please create the tag itself. Release packages is dispatched on that tag.
 
 GitHub creates approval-required Checks runs for PRs opened or updated with its
 repository token. Review the release PR changes, then select **Approve workflows
