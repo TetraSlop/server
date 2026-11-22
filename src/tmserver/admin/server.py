@@ -7,7 +7,7 @@ from tmserver.network.http import serving_http
 from .web import create_app
 
 
-def serving_admin(host, *, port, username, password, actions_enabled=False):
+def serving_admin(host, *, port, username, password, actions_enabled=False, bind="127.0.0.1"):
     def application(bound_port):
         return create_app(
             host, username=username, password=password,
@@ -15,4 +15,4 @@ def serving_admin(host, *, port, username, password, actions_enabled=False):
             actions_enabled=actions_enabled,
         )
 
-    return serving_http(application, port=port)
+    return serving_http(application, port=port, bind=bind)

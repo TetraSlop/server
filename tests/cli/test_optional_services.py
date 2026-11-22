@@ -28,7 +28,8 @@ class OptionalConfigurationTests(unittest.TestCase):
             ["--rules-image", "image.dll"], ["--rules-bridge", "bridge.dll"],
             ["--admin-port", "-1"], ["--admin-port", "65536"],
             ["--admin-password-file", "password.txt"],
-            ["--admin-actions"],
+            ["--admin-actions"], ["--admin-bind", "0.0.0.0"],
+            ["--admin-port", "8080", "--admin-bind", "localhost"],
             ["--auth-port", "8081"], ["--auth-insecure-loopback"],
             ["--auth-config", "auth.json", "--auth-port", "65536"],
         ):

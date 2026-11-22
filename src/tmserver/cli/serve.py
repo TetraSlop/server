@@ -63,6 +63,11 @@ def arguments(argv=None):
     )
     parser.add_argument("--admin-user", default="admin", help="local operator username")
     parser.add_argument(
+        "--admin-bind", type=ipv4,
+        help="IPv4 address for the admin panel (default 127.0.0.1); 0.0.0.0 only inside a "
+             "container that publishes the port on the host's loopback",
+    )
+    parser.add_argument(
         "--bind", type=ipv4, default="127.0.0.1",
         help="IPv4 address for the game and profile listeners; 0.0.0.0 for a public server",
     )
@@ -167,6 +172,8 @@ def arguments(argv=None):
         parser.error(f"accounts must be between 2 and {MAX_ACCOUNTS}")
     if args.admin_password_file is not None and args.admin_port is None:
         parser.error("--admin-password-file requires --admin-port")
+    if args.admin_bind is not None and args.admin_port is None:
+        parser.error("--admin-bind requires --admin-port")
     if args.admin_actions and args.admin_port is None:
         parser.error("--admin-actions requires --admin-port")
     if not math.isfinite(args.seconds) or args.seconds < 0:
@@ -231,7 +238,8 @@ def admin_options(args):
     except ModuleNotFoundError as exc:
         raise ValueError('Install the admin dependencies with pip install "tmserver[admin]"') from exc
     return dict(
-        port=args.admin_port, username=username, password=password,
+        port=args.admin_port, bind=args.admin_bind or "127.0.0.1",
+        username=username, password=password,
         actions_enabled=args.admin_actions,
     )
 
