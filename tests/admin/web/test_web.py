@@ -356,7 +356,6 @@ class LiveProjectionTests(unittest.TestCase):
             "advance_auctions",
             "advance_rankings",
             "persist",
-            "persist_accounts",
             "persist_changes",
         ):
             self.enterContext(patch.object(self.host, method, side_effect=AssertionError(method)))

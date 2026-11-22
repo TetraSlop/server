@@ -87,7 +87,7 @@ class ProfileTransactionTests(unittest.TestCase):
         view = token.account
         before = self.server.economy.profile_bytes(self.key)
         with (
-            patch.object(self.server.commerce, "save_accounts", side_effect=OSError("options")),
+            patch.object(self.server.commerce, "persist_changes", side_effect=OSError("options")),
             self.assertRaises(OSError),
             self.server.commerce.edit_account(self.key) as staged,
         ):
@@ -105,7 +105,7 @@ class ProfileTransactionTests(unittest.TestCase):
             f"@Init=/NN={view.nn:016X}/HID=0/Dm=0/Vol=0/CN={view.name.hex()}/GID={view.player_id:016X}/L=0/GLD=2",
         )
         with (
-            patch.object(self.server.commerce, "save_accounts", side_effect=OSError("guild")),
+            patch.object(self.server.commerce, "persist_changes", side_effect=OSError("guild")),
             self.assertRaises(OSError),
             self.server.commerce.edit_account(self.key) as staged,
         ):
@@ -115,7 +115,7 @@ class ProfileTransactionTests(unittest.TestCase):
     def test_failed_saved_table_settings_preserve_the_original_profile(self):
         before = self.server.economy.profile_bytes(self.key)
         with (
-            patch.object(self.server.commerce, "save_accounts", side_effect=OSError("settings")),
+            patch.object(self.server.commerce, "persist_changes", side_effect=OSError("settings")),
             self.assertRaises(OSError),
             self.server.commerce.edit_account(self.key) as staged,
         ):

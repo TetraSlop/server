@@ -116,7 +116,7 @@ class CommerceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             store = JsonStateStore(Path(folder) / "state.json")
             store.save(snapshot)
-            self.commerce = Commerce(self.economy, store.save_accounts)
+            self.commerce = Commerce(self.economy, store.save_changes)
             self.enter()
             self.shop(0x14, "@Buy=/No=1")
             self.shop(0x15, f"@Get=/No={self.session}")
@@ -129,7 +129,7 @@ class CommerceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             store = JsonStateStore(Path(folder) / "state.json")
             store.save(self.economy.snapshot())
-            self.commerce = Commerce(self.economy, store.save_accounts)
+            self.commerce = Commerce(self.economy, store.save_changes)
             self.enter()
             self.shop(0x14, "@Buy=/No=1")
             account = deepcopy(self.economy._accounts["alice"])

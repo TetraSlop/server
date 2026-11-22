@@ -7,7 +7,7 @@ import tempfile
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
-from tmserver.storage.base import SERVICE_NAMES
+from tmserver.storage.validation import SERVICE_NAMES
 
 _UNREAD = object()
 
@@ -127,9 +127,6 @@ class JsonStateStore:
             finally:
                 if temporary is not None:
                     temporary.unlink(missing_ok=True)
-
-    def save_accounts(self, accounts):
-        self.save_changes(accounts, {})
 
     def save_changes(self, accounts, services):
         # JSON has one physical commit unit. Preserve every other account and

@@ -36,7 +36,7 @@ class JsonStateStoreTests(unittest.TestCase):
         for operation in (
             store.load,
             lambda: store.save(self.snapshot),
-            lambda: store.save_accounts({}),
+            lambda: store.save_changes({}, {}),
         ):
             with self.assertRaisesRegex(OSError, "restart is required"):
                 operation()
@@ -67,7 +67,7 @@ class JsonStateStoreTests(unittest.TestCase):
         self.seed()
         self.path.unlink()
         with self.assertRaises(OSError):
-            self.store.save_accounts({"alice": {"balance": 80}})
+            self.store.save_changes({"alice": {"balance": 80}}, {})
         self.assertFalse(self.path.exists())
         self.assert_failed()
 
@@ -78,14 +78,14 @@ class JsonStateStoreTests(unittest.TestCase):
         raw = json.dumps(updated).encode()
         self.path.write_bytes(raw)
         with self.assertRaises(OSError):
-            self.store.save_accounts({})
+            self.store.save_changes({}, {})
         self.assertEqual(self.path.read_bytes(), raw)
         self.assertEqual(JsonStateStore(self.path).load(), updated)
         self.assert_failed()
 
     def test_load_cannot_rebase_a_running_writer_after_external_changes(self):
         self.seed()
-        JsonStateStore(self.path).save_accounts({"alice": {"balance": 50}})
+        JsonStateStore(self.path).save_changes({"alice": {"balance": 50}}, {})
         with self.assertRaises(OSError):
             self.store.load()
         self.assert_failed()
@@ -104,11 +104,11 @@ class JsonStateStoreTests(unittest.TestCase):
         save = self.store.save
 
         def intervene(snapshot):
-            JsonStateStore(self.path).save_accounts({"bob": {"balance": 800}})
+            JsonStateStore(self.path).save_changes({"bob": {"balance": 800}}, {})
             save(snapshot)
 
         with patch.object(self.store, "save", side_effect=intervene), self.assertRaises(OSError):
-            self.store.save_accounts({"alice": {"balance": 80}})
+            self.store.save_changes({"alice": {"balance": 80}}, {})
         latest = JsonStateStore(self.path).load()
         self.assertEqual(latest["accounts"], {"alice": {"balance": 100}, "bob": {"balance": 800}})
         self.assert_failed()
@@ -122,7 +122,7 @@ class JsonStateStoreTests(unittest.TestCase):
             patch("tmserver.storage.json.os.fsync", side_effect=AssertionError("unexpected fsync")),
         ):
             self.store.save(self.snapshot)
-            self.store.save_accounts({"alice": {"balance": 100}})
+            self.store.save_changes({"alice": {"balance": 100}}, {})
             self.store.save_changes({}, {"auction": self.snapshot["auction"]})
         self.assertEqual(self.path.read_bytes(), original)
 
@@ -140,7 +140,7 @@ class JsonStateStoreTests(unittest.TestCase):
             patch("tmserver.storage.json.os.fsync", side_effect=OSError("disk failure")),
             self.assertRaises(OSError),
         ):
-            self.store.save_accounts({"alice": {"balance": 80}})
+            self.store.save_changes({"alice": {"balance": 80}}, {})
         self.assertEqual(self.path.read_bytes(), original)
         self.assertFalse(list(self.path.parent.glob("*.tmp")))
         self.assert_failed()
@@ -153,7 +153,7 @@ class JsonStateStoreTests(unittest.TestCase):
             patch.object(Path, "replace", side_effect=OSError("replace failed")),
             self.assertRaises(OSError),
         ):
-            self.store.save_accounts({"alice": {"balance": 80}})
+            self.store.save_changes({"alice": {"balance": 80}}, {})
         self.assertEqual(self.path.read_bytes(), original)
         self.assertEqual(unrelated.read_bytes(), b"unrelated old artifact")
         self.assertEqual(list(self.path.parent.glob("*.tmp")), [unrelated])
@@ -197,7 +197,7 @@ class JsonStateStoreTests(unittest.TestCase):
                 self.path.write_bytes(raw)
                 store = JsonStateStore(self.path)
                 with self.assertRaises(OSError):
-                    store.save_accounts({"alice": {"balance": 80}})
+                    store.save_changes({"alice": {"balance": 80}}, {})
                 self.assertEqual(self.path.read_bytes(), raw)
                 self.assert_failed(store)
 
@@ -206,10 +206,10 @@ class JsonStateStoreTests(unittest.TestCase):
         self.child("""
 import sys
 from tmserver.storage.json import JsonStateStore
-JsonStateStore(sys.argv[1]).save_accounts({'bob': {'balance': 800}})
+JsonStateStore(sys.argv[1]).save_changes({'bob': {'balance': 800}}, {})
 """)
         with self.assertRaises(OSError):
-            self.store.save_accounts({"alice": {"balance": 80}})
+            self.store.save_changes({"alice": {"balance": 80}}, {})
         self.assertEqual(JsonStateStore(self.path).load()["accounts"]["bob"]["balance"], 800)
         self.assert_failed()
 
@@ -223,7 +223,7 @@ import sys
 from tmserver.storage.json import JsonStateStore
 store = JsonStateStore(sys.argv[1])
 try:
-    store.save_accounts({'bob': {'balance': 800}})
+    store.save_changes({'bob': {'balance': 800}}, {})
 except OSError:
     assert store.failed
     print('locked')
@@ -234,7 +234,7 @@ else:
             return replace(source, target)
 
         with patch.object(Path, "replace", new=concurrent):
-            self.store.save_accounts({"alice": {"balance": 80}})
+            self.store.save_changes({"alice": {"balance": 80}}, {})
         self.assertEqual(
             self.store.load()["accounts"],
             {"alice": {"balance": 80}, "bob": {"balance": 200}},
@@ -250,7 +250,7 @@ from tmserver.storage.json import _writer_lock
 with _writer_lock(Path(sys.argv[1])):
     os._exit(0)
 """)
-        self.store.save_accounts({"alice": {"balance": 80}})
+        self.store.save_changes({"alice": {"balance": 80}}, {})
         self.assertTrue(self.path.with_name("state.json.lock").exists())
         self.assertEqual(self.store.load()["accounts"]["alice"]["balance"], 80)
 
@@ -327,7 +327,7 @@ class JsonProtocolFailureTests(unittest.IsolatedAsyncioTestCase):
         def another_writer(path):
             store = JsonStateStore(path)
             account = next(iter(store.load()["accounts"].items()))
-            store.save_accounts({account[0]: {**account[1], "balance": 12345}})
+            store.save_changes({account[0]: {**account[1], "balance": 12345}}, {})
 
         await self.check_failure(another_writer)
 

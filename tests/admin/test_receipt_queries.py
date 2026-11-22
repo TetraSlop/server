@@ -50,7 +50,7 @@ class ReceiptQueryTests(unittest.IsolatedAsyncioTestCase):
         disk = (self.directory / "state.json").read_bytes()
         for method in (
             "ensure_account", "advance_auctions", "advance_rankings", "persist",
-            "persist_accounts", "persist_changes",
+            "persist_changes",
         ):
             self.enterContext(patch.object(self.host, method, side_effect=AssertionError(method)))
         for service in (self.host.prize, self.host.event_cards):

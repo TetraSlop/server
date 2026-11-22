@@ -66,7 +66,7 @@ class PostgresQueryTests(DatabaseFixture, unittest.TestCase):
 
     def prohibit_storage(self, stack):
         for store in (self.store, self.json):
-            for method in ("load", "save", "save_accounts", "save_changes"):
+            for method in ("load", "save", "save_changes"):
                 stack.enter_context(patch.object(store, method, side_effect=AssertionError(method)))
 
         def no_sql(*args, **kwargs):
