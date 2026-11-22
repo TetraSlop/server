@@ -105,7 +105,7 @@ class TableRecordTests(unittest.TestCase):
         self.assertEqual(snapshot[0x5850 + 2 * 0x68 : 0x5850 + 3 * 0x68], custom)
         self.assertEqual(room.service_records, (bytes(custom),))
 
-    def test_existing_validation_and_raw_integer_error_contracts(self):
+    def test_existing_validation_and_raw_state_bounds(self):
         for changes in (
             dict(table_id=0),
             dict(table_id=True),
@@ -119,7 +119,7 @@ class TableRecordTests(unittest.TestCase):
         for state in (-1, 7):
             with self.subTest(state=state), self.assertRaises(ValueError):
                 room.set_table(state, 0, 0)
-        # The raw record writer itself has the original unsigned-byte contract.
+        # The raw record writer keeps the unsigned-byte state field.
         room.table_state = 255
         self.assertEqual(
             room.table_record(),
@@ -127,12 +127,8 @@ class TableRecordTests(unittest.TestCase):
         )
         for state in (-1, 256, 1.5):
             room.table_state = state
-            with self.subTest(raw_state=state):
-                with self.assertRaises(struct.error) as old:
-                    old_record(room.table_id, room.table_channel, room.table_metadata, state)
-                with self.assertRaises(struct.error) as current:
-                    room.table_record()
-                self.assertEqual(str(current.exception), str(old.exception))
+            with self.subTest(raw_state=state), self.assertRaises(ConstructError):
+                room.table_record()
 
 
 if __name__ == "__main__":

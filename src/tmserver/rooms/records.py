@@ -4,10 +4,7 @@ Names stay as bytes: event directory keys may contain non-ASCII characters.
 Padding and the fixed native flags belong to the schema, not its callers.
 """
 
-import struct
-
 from construct import Byte, Bytes, Const, Int16ul, Int32ul, Int64ul, Padding, Struct
-from construct import FormatFieldError
 
 
 ROOM_RECORD = Struct(
@@ -57,18 +54,14 @@ TABLE_RECORD = Struct(
 
 def build_table_record(*, identity, channel, metadata, state=0):
     """Build one 0x68-byte PTL record; supplied opaque records bypass this codec."""
-    try:
-        return TABLE_RECORD.build(
-            dict(
-                identity=identity,
-                state=state,
-                channel=channel.ljust(16, b"\0"),
-                metadata=metadata.ljust(49, b"\0"),
-            )
+    return TABLE_RECORD.build(
+        dict(
+            identity=identity,
+            state=state,
+            channel=channel.ljust(16, b"\0"),
+            metadata=metadata.ljust(49, b"\0"),
         )
-    except FormatFieldError as exc:
-        # Construct wraps struct.pack; preserve its original numeric error.
-        raise struct.error(str(exc.__context__)) from exc
+    )
 
 
 def alphahex(value, width):

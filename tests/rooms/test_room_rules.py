@@ -67,7 +67,7 @@ class RoomRulesValueTests(unittest.TestCase):
             for value in (-1, maximum + 1, True, 0.0, "0", None):
                 with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                     RoomRules(**{key: value})
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             RoomRules(unknown=0)
 
 

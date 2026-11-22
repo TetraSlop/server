@@ -9,7 +9,6 @@ import struct
 from tmserver.game.models import DEFAULT_GAME_RULES, DEFAULT_TABLE_RULES
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, game_id
 from tmserver.rooms.metadata import table_info as encode_table_info
-from tmserver.rooms.records import alphahex as alphahex
 from tmserver.rooms.records import build_room_record, build_zone_record
 from tmserver.rooms.rules import RoomRules
 
@@ -45,7 +44,7 @@ def directory_files():
         channel=ROOM_CHANNEL,
         table_count=1,
         computer_enabled=True,
-        rules=RoomRules(**DEFAULT_GAME_RULES).packed(),
+        rules=RoomRules().packed(),
     )
     return {"b/g/ZL": bytes(zones), "b/g/RL000": bytes(rooms)}
 

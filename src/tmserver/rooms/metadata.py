@@ -19,6 +19,9 @@ surrounding PTL/TD record and are deliberately not part of this function.
 import re
 from collections.abc import Mapping
 
+from tmserver.rooms.records import alphahex
+from tmserver.rooms.rules import pack_game_rules
+
 
 class TableMetadataError(ValueError):
     """The requested settings cannot be faithfully encoded in table metadata."""
@@ -44,10 +47,6 @@ def _mapping(name, values, keys, optional=frozenset()):
             f"{name} requires exactly {sorted(keys)}"
             + (f" and optional {sorted(optional)}" if optional else "")
         )
-
-
-def _alphahex(value, width):
-    return bytes(65 + int(c, 16) for c in f"{value:0{width}X}")
 
 
 def _password(table, enabled):
@@ -107,24 +106,14 @@ def table_info(number, count, owner, game_rules, table_rules):
     password = _password(table_rules, table["pa"])
 
     # Native 10066FD8 and 10066F5D read the low nibble before the high nibble.
-    game_flags = game["du"] | game["st"] << 1 | game["cb"] << 2 | game["ca"] << 3
-    flags = bytes(
-        (
-            65 + game_flags,
-            65 + game["tl"],
-            65 + game["gs"],
-            65 + table["in"] + (table["pa"] << 2),
-            65 + table["co"],
-        )
-    )
     return (
         b"A"
-        + _alphahex(number - 1, 3)
-        + _alphahex(count, 2)
+        + alphahex(number - 1, 3)
+        + alphahex(count, 2)
         + password
-        + _alphahex(owner, 16)
-        + _alphahex(game["bm"], 4)
-        + flags
-        + _alphahex(table["lu"], 5)
-        + _alphahex(table["ll"], 5)
+        + alphahex(owner, 16)
+        + pack_game_rules(**game)
+        + bytes((65 + table["in"] + (table["pa"] << 2), 65 + table["co"]))
+        + alphahex(table["lu"], 5)
+        + alphahex(table["ll"], 5)
     )

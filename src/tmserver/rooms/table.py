@@ -36,7 +36,6 @@ class OrdinaryTable:
         *,
         match_mode="computer",
         match_player_count=2,
-        computer_menu=False,
         match_start_fields=None,
         allow_cbc=False,
         card_prizes=False,
@@ -61,7 +60,6 @@ class OrdinaryTable:
         self.match_player_count = match_player_count
         self.flexible_seats = flexible_seats
         self.room_rules = room_rules
-        self.computer_menu = computer_menu
         self.match_start_fields = match_start_fields
         self.allow_cbc = allow_cbc
         self.card_prizes = card_prizes
@@ -80,14 +78,14 @@ class OrdinaryTable:
         self.spectators.reset(self.match)
         self.watchdog.observe(self.match, self.match)
 
-    def new_match(self, *, computer_menu=None):
+    def new_match(self, *, computer_menu=False):
         self.table_roster = TableRoster()
         self.match_instance_id = uuid.uuid4().hex
         self.match_result_inputs = {}
         match = MatchService(
             mode=self.match_mode,
             player_count=self.match_player_count,
-            computer_menu=self.computer_menu if computer_menu is None else computer_menu,
+            computer_menu=computer_menu,
             seed=1,
             catalog=self.host.economy.catalog,
             start_fields=self.match_start_fields,
@@ -147,7 +145,7 @@ class OrdinaryTable:
         self.match_reservations.clear()
         self.match_economy_round = None
 
-    def reset_match(self, *, computer_menu=None):
+    def reset_match(self, *, computer_menu=False):
         self.match.cancel_pending()
         if self.match_task is not None and self.match_task is not asyncio.current_task():
             self.match_task.cancel()
