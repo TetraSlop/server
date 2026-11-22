@@ -2,12 +2,23 @@
 
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
+from typing import Annotated
 
+from pydantic import ConfigDict, Field
+
+from tmserver.checks import STABLE_ID
 from tmserver.economy.errors import EconomyError
 
 MAX_MONEY = 99_999_999
 MAX_CARDS = 1000
 PROFILE_SIZE = 0x3028
+
+# Saved journal shapes: exact fields, no coercion, so a bool is never an int.
+SAVED = ConfigDict(strict=True, extra="forbid")
+Version1 = Annotated[int, Field(ge=1, le=1)]
+StableId = Annotated[str, Field(pattern=rf"\A{STABLE_ID}\z")]
+Digest = Annotated[str, Field(pattern=r"\A[0-9a-f]{64}\z")]
+SavedCard = Annotated[list[int], Field(min_length=7, max_length=8)]  # Card.full() order.
 
 
 @dataclass
