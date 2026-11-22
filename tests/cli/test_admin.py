@@ -90,6 +90,30 @@ class AdminTests(unittest.TestCase):
             "--value", str(value),
         )
 
+    def test_operator_sets_disables_and_enables_a_login_password(self):
+        from tests.accounts.test_provisioning import KEY, POL_ID
+        from tmserver.accounts.credentials import Credential, verify_password
+        from tmserver.protocol.identities import player_id
+
+        self.economy.provision(KEY, nn=player_id(KEY.encode()), player_id=129, name=POL_ID)
+        self.seed(self.economy.snapshot())
+        with self.assertRaisesRegex(ValueError, "no password"):
+            self.execute("account-disable", "--account-key", KEY)
+        for password in ("", "x" * 16):
+            with patch("sys.stdin", io.StringIO(password + "\n")), self.assertRaises(ValueError):
+                self.execute("account-password", "--account-key", KEY)
+        with patch("sys.stdin", io.StringIO("new pass\n")):
+            result = self.execute("account-password", "--account-key", KEY)
+        self.assertEqual(result, dict(account_key=KEY, pol_id=POL_ID.decode(), disabled=False))
+        saved = self.load()["identities"]["credentials"][KEY]
+        self.assertTrue(verify_password(Credential(**saved), b"new pass"))
+        self.assertTrue(self.execute("account-disable", "--account-key", KEY)["disabled"])
+        self.assertTrue(self.load()["identities"]["credentials"][KEY]["disabled"])
+        self.assertFalse(self.execute("account-enable", "--account-key", KEY)["disabled"])
+        self.assertEqual(self.load()["identities"]["credentials"][KEY], saved)
+        with self.assertRaisesRegex(ValueError, "registrable"):
+            self.execute("account-password", "--account-key", "alice")
+
     def test_target_is_explicit_and_unknown_accounts_are_never_created(self):
         with patch.dict(os.environ, {}, clear=True):
             for argv in (["accounts"], ["--state", "save.json", *DATABASE, "accounts"]):

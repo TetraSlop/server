@@ -1,4 +1,4 @@
-"""Optional ASGI listener ownership shared by administration and launcher auth."""
+"""Optional ASGI listener ownership for the administration panel."""
 
 import asyncio
 import socket
@@ -56,7 +56,7 @@ async def _stop(server, task):
 
 
 @asynccontextmanager
-async def serving_http(app_factory, *, port, websockets=False):
+async def serving_http(app_factory, *, port):
     """Borrow the live host; drain HTTP before its protocol listeners or store."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         # Bind ourselves so an occupied port raises OSError, not Uvicorn's
@@ -68,7 +68,7 @@ async def serving_http(app_factory, *, port, websockets=False):
         app = app_factory(port)
         server = EmbeddedServer(uvicorn.Config(
             app, host="127.0.0.1", port=port, workers=1, reload=False,
-            loop="asyncio", http="h11", ws="websockets-sansio" if websockets else "none",
+            loop="asyncio", http="h11", ws="none",
             ws_max_size=65536, ws_max_queue=4, ws_per_message_deflate=False, lifespan="off",
             proxy_headers=False, access_log=False, log_config=None,
             timeout_graceful_shutdown=3,

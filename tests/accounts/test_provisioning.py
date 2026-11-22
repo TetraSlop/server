@@ -1,152 +1,172 @@
-"""Identity and account state commit together, without taking another player's save."""
+"""Self-registration stores a scrypt hash with its account in one commit."""
 
-from copy import deepcopy
-from pathlib import Path
-import tempfile
+import json
+import re
 import unittest
 from unittest.mock import patch
 
 from tests.support.memory_store import MemoryStore
-from tmserver.accounts.identities import IdentityRegistry
-from tmserver.accounts.provisioning import HOSTED_RAW_BASE, import_bindings, provision_identity
+from tmserver.accounts.credentials import (
+    CredentialRegistry, Limiter, hash_password, valid_password, valid_pol_id, verify_password,
+)
+from tmserver.accounts.provisioning import provision_account
 from tmserver.network.server import Server
-from tmserver.protocol.wire import polid_from_string, polid_unscramble
+from tmserver.protocol.identities import player_id
+from tmserver.protocol.wire import polid_from_string, polid_scramble, polid_to_string
 from tmserver.storage.validation import validate_snapshot
 
+POL_ID = b"EEKAOYMJ"
+KEY = polid_scramble(polid_from_string(POL_ID)).decode("ascii")
+ADDRESS = "203.0.113.5"
+GRANTED = re.compile(rb"^:srv 900 (\w{8}) ([0-9a-f]{14}) :(created|signed_in)$")
 
-ISSUER = "https://fixture.supabase.co/auth/v1"
-USER = "11111111-1111-4111-8111-111111111111"
-SECOND = "22222222-2222-4222-8222-222222222222"
+
+def nth(index):
+    return polid_to_string(polid_from_string(POL_ID) + index).encode()
 
 
-class IdentityProvisioningTests(unittest.TestCase):
-    def setUp(self):
-        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+def granted(reply):
+    match = GRANTED.match(reply)
+    assert match, reply
+    return match.group(2), match.group(3)
+
+
+class RegistrationTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
         self.store = MemoryStore()
+        self.host = self.restart()
+
+    def restart(self):
         self.host = Server(store=self.store)
+        self.addAsyncCleanup(self.host.stop)
+        return self.host
 
-    def create(self, subject=USER, **options):
-        return provision_identity(self.host, ISSUER, subject, **options)
+    async def login(self, password=b"secret pass", pol_id=POL_ID, address=ADDRESS):
+        return await self.host.login(address, pol_id, password)
 
-    def test_first_account_has_native_credentials_and_exactly_one_starter_collection(self):
-        before = self.host.snapshot()
-        key = self.create(name="Discord Name")
-        account = self.host.economy.account_view(key)
-        self.assertEqual(account.name, b"Discord Name")
-        self.assertEqual((account.balance, len(account.cards), account.player_id), (10000, 10, 129))
-        login, password, character = self.host.account_specs[key]
-        self.assertEqual(polid_from_string(login.decode()), HOSTED_RAW_BASE + character)
-        self.assertEqual(polid_unscramble(key.encode()), HOSTED_RAW_BASE + 129)
-        self.assertEqual(len(password), 14)  # polcore takes at most 15.
-        after, disk = self.host.snapshot(), self.store.load()
-        for name in set(before) - {"accounts", "identities"}:
-            self.assertEqual(after[name], before[name])
-        with patch.object(self.host.store, "save_changes", side_effect=AssertionError("repeat wrote")):
-            self.assertEqual(self.create(name="Updated Name"), key)
-        self.assertEqual(self.store.load(), disk)
-        self.host = Server(store=self.store)
-        self.assertEqual(self.create(), key)
-        self.assertEqual(self.host.economy.account_view(key), account)
-        self.assertNotIn(password.decode(), self.store.load())
+    async def test_first_login_registers_and_later_logins_must_match_the_hash(self):
+        game_password, outcome = granted(await self.login())
+        self.assertEqual(outcome, b"created")
+        saved = self.store.load()
+        account = saved["accounts"][KEY]
+        self.assertEqual((len(account["cards"]), account["balance"]), (10, 10000))
+        self.assertEqual(bytes.fromhex(account["name_hex"]), POL_ID)
+        # The client sends the raw POL ID as GID and derives NN from it, like local accounts.
+        self.assertEqual(account["player_id"], polid_from_string(POL_ID))
+        self.assertEqual(account["nn"], player_id(KEY.encode()))
+        credential = saved["identities"]["credentials"][KEY]
+        self.assertEqual(saved["identities"]["version"], 2)
+        self.assertFalse(credential["disabled"])
+        self.assertNotIn("secret pass", json.dumps(saved))
+        self.assertNotIn(game_password.decode(), json.dumps(saved))
+        validate_snapshot(saved)
+        self.assertEqual(self.host.accounts[KEY.encode()], game_password)
+        self.assertEqual(self.host.account_specs[KEY][:2], (POL_ID, game_password))
 
-    def test_existing_bindings_migrate_without_reset_and_can_be_removed_from_config(self):
-        key = self.host.ensure_account(next(iter(self.host.accounts)), name=b"Existing")
-        before = deepcopy(self.host.snapshot()["accounts"])
-        import_bindings(self.host, ISSUER, {USER: key})
-        self.assertEqual(self.host.snapshot()["accounts"], before)
-        self.host = Server(store=self.store)
-        import_bindings(self.host, ISSUER, {})
-        self.assertEqual(self.create(), key)
-        self.assertEqual(self.host.snapshot()["accounts"], before)
-        self.assertTrue(self.host.identities.owns(key))
+        self.restart()
+        self.assertNotIn(KEY.encode(), self.host.accounts)  # Game passwords are never saved.
+        again, outcome = granted(await self.login())
+        self.assertEqual(outcome, b"signed_in")
+        self.assertNotEqual(again, game_password)
+        self.assertEqual(await self.login(b"wrong"), b":srv 901 invalid_credentials :login refused")
+        self.assertEqual(self.store.load()["accounts"], saved["accounts"])
 
-    def test_identity_and_native_ids_do_not_depend_on_display_name_or_local_pool_size(self):
-        self.host = Server(store=self.store, account_count=128)
-        one, two = self.create(name="Same Name"), self.create(SECOND, name="Same Name")
-        self.assertNotEqual(one, two)
-        self.assertEqual(len(self.host.accounts), 130)
-        self.assertEqual(self.host.economy.account_view(two).player_id, 130)
-        other = provision_identity(self.host, "https://other.supabase.co/auth/v1", USER)
-        self.assertNotEqual(one, other)
+    async def test_formats_follow_the_client_and_low_pol_ids_stay_reserved(self):
+        for pol_id in (b"EKAOYMJ", b"EKAOYMJVV", b"ekaoymjv", b"EKAOYMJ!", b"55555555"):
+            with self.subTest(pol_id=pol_id):
+                self.assertEqual(await self.login(pol_id=pol_id),
+                                 b":srv 901 invalid_request :login refused")
+        for password in (b"", b"x" * 16, b"tab\there", b"del\x7f", "café".encode()):
+            with self.subTest(password=password):
+                self.assertEqual(await self.login(password),
+                                 b":srv 901 invalid_request :login refused")
+        self.assertTrue(valid_password(b" " * 15) and valid_pol_id(POL_ID))
+        # The built-in EEEEEEEF account, and GIDs past the save's 32-bit player ID.
+        for raw in (1, (1 << 16) - 1, 1 << 32, 0x1B015335048):
+            with self.subTest(raw=raw):
+                self.assertEqual(await self.login(pol_id=polid_to_string(raw).encode()),
+                                 b":srv 901 pol_id_unavailable :login refused")
+        granted(await self.login(pol_id=polid_to_string(0xFFFFFFFF).encode()))
 
-    def test_changed_configuration_cannot_rebind_an_identity_or_take_an_owned_account(self):
-        key = self.create()
-        local = self.host.ensure_account(next(iter(self.host.accounts)))
-        before, disk = self.host.snapshot(), self.store.load()
-        for issuer, bindings in ((ISSUER, {USER: local}), (ISSUER, {SECOND: key}),
-                                 ("https://other.supabase.co/auth/v1", {USER: key})):
-            with self.subTest(bindings=bindings), self.assertRaises(ValueError):
-                import_bindings(self.host, issuer, bindings)
-        self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.store.load(), disk)
+    async def test_failed_logins_and_registrations_are_limited(self):
+        granted(await self.login())
+        for _ in range(5):
+            self.assertIn(b"invalid_credentials", await self.login(b"wrong", address="198.51.100.1"))
+        # The POL ID is locked out from every address, even with its password.
+        self.assertIn(b"rate_limited", await self.login(address="198.51.100.2"))
+        for _ in range(20):
+            self.host.address_failures.hit("192.0.2.9")
+        self.assertIn(b"rate_limited", await self.login(pol_id=nth(1), address="192.0.2.9"))
+        for index in range(1, 5):  # The first login above was this address's first account.
+            granted(await self.login(pol_id=nth(index)))
+        self.assertIn(b"rate_limited", await self.login(pol_id=nth(5)))
+        granted(await self.login(pol_id=nth(5), address="192.0.2.1"))
 
-    def test_allocation_skips_configured_service_identity(self):
-        from tmserver.protocol.wire import polid_scramble
+    async def test_disabled_connected_and_passwordless_accounts_are_refused(self):
+        granted(await self.login())
+        self.host.nicks[KEY.encode()] = object()
+        self.assertIn(b"account_connected", await self.login())
+        del self.host.nicks[KEY.encode()]
+        disabled = self.host.credentials.get(KEY).model_copy(update={"disabled": True})
+        self.host.credentials.publish_state(self.host.credentials.staged(KEY, disabled))
+        self.assertIn(b"account_locked", await self.login())
 
-        reserved = polid_scramble(HOSTED_RAW_BASE + 129)
-        self.host.event_routes[reserved] = ("fixture", "room")
-        key = self.create()
-        self.assertNotEqual(key.encode(), reserved)
-        self.assertEqual(self.host.economy.account_view(key).player_id, 130)
+    async def test_storage_failure_creates_neither_account_nor_credential(self):
+        with patch.object(self.store, "save_changes", side_effect=OSError("injected")):
+            self.assertEqual(await self.login(), b":srv 901 unavailable :login refused")
+        self.assertIsNone(self.host.credentials.get(KEY))
+        self.assertNotIn(KEY, self.host.account_keys)
 
-    def test_import_refuses_connected_legacy_account_without_changing_ownership(self):
-        nick = next(iter(self.host.accounts))
-        key = self.host.ensure_account(nick)
-        before, disk = self.host.snapshot(), self.store.load()
-        self.host.nicks[nick] = object()
-        with self.assertRaisesRegex(ValueError, "disconnect"):
-            import_bindings(self.host, ISSUER, {USER: key})
-        self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.store.load(), disk)
+    async def test_retired_identity_links_restore_and_their_accounts_need_a_password(self):
+        old = polid_scramble((1 << 40) + 129).decode("ascii")
+        with self.host.economy.edit_accounts(()) as accounts:
+            provision_account(accounts, old, 129, b"Discord")
+            self.host.persist_changes(accounts.snapshot()["accounts"], {"identities": {
+                "version": 1, "links": [{"issuer": "https://example.supabase.co/auth/v1",
+                                         "subject": "00000000-0000-4000-8000-000000000001",
+                                         "account_key": old}]}})
+        self.restart()
+        self.assertEqual(self.host.credentials.snapshot(), {"version": 2, "credentials": {}})
+        pol_id = polid_to_string((1 << 40) + 129).encode()
+        self.assertEqual(await self.login(pol_id=pol_id),
+                         b":srv 901 pol_id_unavailable :login refused")
+        # A saved registrable account without a password waits for an operator.
+        locked = polid_scramble(polid_from_string(nth(9))).decode("ascii")
+        with self.host.economy.edit_accounts(()) as accounts:
+            provision_account(accounts, locked, polid_from_string(nth(9)), b"Locked")
+            self.host.persist_changes(accounts.snapshot()["accounts"], {})
+        self.host.account_keys.add(locked)
+        self.assertEqual(await self.login(pol_id=nth(9)), b":srv 901 account_locked :login refused")
+        granted(await self.login())  # The next credential write replaces the old links.
+        self.assertEqual(list(self.store.load()["identities"]["credentials"]), [KEY])
 
-    def test_precommit_failure_publishes_neither_account_nor_owner(self):
-        before = self.host.snapshot()
-        specs = dict(self.host.account_specs)
-        with patch.object(self.host.store, "save_changes", side_effect=OSError("injected failure")):
-            with self.assertRaises(OSError):
-                self.create()
-        self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.host.account_specs, specs)
-        self.assertIsNone(self.store.load())
-        self.assertIsNotNone(self.host.storage_failed)
 
-    def test_lost_commit_ack_reloads_one_account_before_retry(self):
-        save = self.host.store.save_changes
-        before = self.host.snapshot()
+class CredentialTests(unittest.TestCase):
+    def test_hash_checks_in_constant_time_and_rejects_tampering(self):
+        credential = hash_password(b"secret", salt=bytes(16))
+        self.assertTrue(verify_password(credential, b"secret"))
+        self.assertFalse(verify_password(credential, b"Secret"))
+        with patch("hmac.compare_digest", return_value=False) as compare:
+            self.assertFalse(verify_password(credential, b"secret"))
+        compare.assert_called_once()
+        restored = CredentialRegistry.restore(None, {"version": 2, "credentials": {}})
+        self.assertEqual(restored.snapshot(), {"version": 2, "credentials": {}})
+        with self.assertRaises(ValueError):
+            CredentialRegistry.restore(None, {"version": 2, "credentials": {
+                KEY: {"salt": "00", "hash": "00"}}})
 
-        def lost_ack(accounts, services):
-            save(accounts, services)
-            raise OSError("commit acknowledgement lost")
+    def test_limiter_window_expires_and_key_count_is_bounded(self):
+        now = [0.0]
+        limiter = Limiter(2, 10, clock=lambda: now[0], max_keys=3)
+        limiter.hit("a")
+        limiter.hit("a")
+        self.assertTrue(limiter.blocked("a"))
+        now[0] = 10
+        self.assertFalse(limiter.blocked("a"))
+        for key in "bcde":
+            limiter.hit(key)
+        self.assertLessEqual(len(limiter.events), 3)
 
-        with patch.object(self.host.store, "save_changes", side_effect=lost_ack), self.assertRaises(OSError):
-            self.create()
-        self.assertEqual(self.host.snapshot(), before)
-        self.host = Server(store=self.store)
-        key = self.host.identities.account(ISSUER, USER)
-        with patch.object(self.host.store, "save_changes", side_effect=AssertionError("retry wrote")):
-            self.assertEqual(self.create(), key)
-        self.assertEqual(len(self.host.account_keys), 1)
-        self.assertEqual(len(self.host.economy.inventory(key)), 10)
 
-    def test_restore_rejects_orphans_duplicate_owners_and_noncanonical_identity(self):
-        key = self.create()
-        saved = self.host.snapshot()
-        for change in (
-            dict(account_key="missing"), dict(subject="not-a-uuid"), dict(issuer="http://fixture/auth/v1"),
-            dict(issuer="https://fixture.supabase.co/auth/v1?x=y"),
-        ):
-            altered = deepcopy(saved)
-            altered["identities"]["links"][0].update(change)
-            with self.subTest(change=change), self.assertRaises(ValueError):
-                validate_snapshot(altered)
-        for subject in (USER, SECOND):
-            altered = deepcopy(saved)
-            altered["identities"]["links"].append(dict(altered["identities"]["links"][0], subject=subject))
-            with self.assertRaises(ValueError):
-                validate_snapshot(altered)
-        altered = deepcopy(saved)
-        altered["accounts"][key]["nn"] += 1
-        with self.assertRaisesRegex(ValueError, "native player"):
-            validate_snapshot(altered)
-        self.assertEqual(IdentityRegistry.restore(self.host.economy, None).snapshot(),
-                         dict(version=1, links=[]))
+if __name__ == "__main__":
+    unittest.main()

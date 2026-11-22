@@ -10,4 +10,4 @@ routines, which the Python rules in `src/tmserver/game` must reproduce exactly.
   vectors.
 
 The protocol itself is documented in
-[TetraPackets](https://github.com/sruon/TetraPackets).
+[TetraPackets](https://github.com/TetraSlop/packets).

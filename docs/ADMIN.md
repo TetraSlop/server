@@ -16,14 +16,34 @@ rejected. Install the updated package to get the command, or use
 
 The examples below assume `TM_DATABASE_URL` is set.
 
+## Accounts and passwords
+
+Players register themselves on their first LOGIN (see the
+[loader login contract](LOADER_AUTH_SPEC.md)). An operator can set a new
+password, or refuse and re-allow LOGIN:
+
+```powershell
+'new password' | tmserver-admin account-password --account-key UGIRSKKH3
+tmserver-admin account-disable --account-key UGIRSKKH3
+tmserver-admin account-enable --account-key UGIRSKKH3
+```
+
+`account-password` reads one line, 1 to 15 printable ASCII characters, from
+standard input so the password stays out of the command line. It keeps the
+account's disabled flag. Disabling stops new LOGINs; a player already connected
+keeps playing until the server restarts. These commands are not audited. They
+apply only to accounts whose POL ID is in the registrable range, so not to the
+built-in test accounts or to accounts from the retired Discord sign-in, whose
+POL IDs the client cannot use.
+
 ## Select the saved account
 
 ```powershell
 tmserver-admin accounts
 ```
 
-The JSON output contains `account_key`, `player_id`, `name`, and `guild` for
-each saved account. Copy the exact `account_key` into the commands below.
+The JSON output contains `account_key`, `pol_id`, `player_id`, `name`, and
+`guild` for each saved account. `pol_id` is what the player types into tmloader. Copy the exact `account_key` into the commands below.
 Character names are display information and cannot select an owner. The saved
 key can differ from the synthetic login ID shown by `tmserver --list-accounts`.
 

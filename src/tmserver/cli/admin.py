@@ -3,8 +3,11 @@
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
+from tmserver.accounts.credentials import hash_password, valid_password
+from tmserver.accounts.provisioning import MAX_REGISTERED_RAW, MIN_REGISTERED_RAW
 from tmserver.admin.actions import apply_event_grant, apply_event_member, apply_prize_award
 from tmserver.admin.audit import (
     EventEligibilityRequest,
@@ -16,9 +19,18 @@ from tmserver.admin.audit import (
 from tmserver.admin.queries import account_summary
 from tmserver.events.config import load_event_setup
 from tmserver.storage import open_store
+from tmserver.protocol.wire import polid_to_string, polid_unscramble
 from tmserver.storage.restore import restore_state
 
 CARD_FIELDS = ("model", "attack", "kind", "physical", "magical", "arrows")
+
+
+def pol_id_of(key):
+    """The POL ID a player types for this account key, if it is one."""
+    try:
+        return polid_to_string(polid_unscramble(key.encode("ascii")))
+    except (ValueError, UnicodeError):
+        return None
 
 
 def integers(count):
@@ -82,6 +94,12 @@ def arguments(argv=None):
     account.add_argument("--account-key", required=True)
     receipt = commands.add_parser("operator-receipt", help="read an exact operator request receipt")
     receipt.add_argument("--request-id", required=True)
+    for command, help_text in (
+        ("account-password", "set a login password, read as one line from standard input"),
+        ("account-disable", "refuse LOGIN for an account"),
+        ("account-enable", "allow LOGIN again"),
+    ):
+        commands.add_parser(command, help=help_text).add_argument("--account-key", required=True)
     for command, (help_text, _, _) in ACTIONS.items():
         action = commands.add_parser(command, help=help_text)
         action.add_argument("--account-key", required=True)
@@ -139,6 +157,7 @@ class AdminState:
         self.auction_ledger = state.auction_ledger
         self.match_economy = state.match_economy
         self.result_rewards = state.result_rewards
+        self.credentials = state.credentials
         self.saved_journals = {
             name: getattr(self, name).snapshot()
             for name in ("prize", "events", "event_cards", "admin_audit")
@@ -158,6 +177,7 @@ class AdminState:
             return [
                 dict(
                     account_key=key,
+                    pol_id=pol_id_of(key),
                     player_id=row["player_id"],
                     name=bytes.fromhex(row["name_hex"]).decode("latin1"),
                     guild=row["guild"],
@@ -173,12 +193,36 @@ class AdminState:
         self.economy.account_view(key)  # Exact saved key; never provision an account.
         if args.command == "account":
             return account_summary(self, key)
+        if args.command.startswith("account-"):
+            return self.set_login(key, args.command)
         _, build, action = ACTIONS[args.command]
         request = build(
             args, request_id=args.request_id, account_key=key, operator=args.operator,
             source="cli", reason=args.reason,
         )
         return action(self, request).model_dump(mode="json")
+
+
+    def set_login(self, key, command):
+        if pol_id_of(key) is None or not (
+            MIN_REGISTERED_RAW <= polid_unscramble(key.encode("ascii")) <= MAX_REGISTERED_RAW
+        ):
+            raise ValueError("only accounts with a registrable POL ID can have a password")
+        current = self.credentials.get(key)
+        if command == "account-password":
+            password = sys.stdin.readline().rstrip("\r\n").encode("ascii", "replace")
+            if not valid_password(password):
+                raise ValueError("password must be 1-15 printable ASCII characters")
+            disabled = current is not None and current.disabled
+            credential = hash_password(password).model_copy(update={"disabled": disabled})
+        elif current is None:
+            raise ValueError("account has no password; set one with account-password first")
+        else:
+            credential = current.model_copy(update={"disabled": command == "account-disable"})
+        staged = self.credentials.staged(key, credential)
+        self.store.save_changes({}, {"identities": staged.snapshot()})
+        self.credentials.publish_state(staged)
+        return dict(account_key=key, pol_id=pol_id_of(key), disabled=credential.disabled)
 
 
 def execute(args):

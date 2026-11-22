@@ -1,38 +1,38 @@
-"""Durable identity allocation uses the same transaction and writer as player saves."""
+"""Registration commits the account and its password hash in the player-save transaction."""
 
+import asyncio
 import unittest
 from unittest.mock import patch
 
-from tests.accounts.test_provisioning import ISSUER, USER
+from tests.accounts.test_provisioning import KEY, POL_ID, granted
 from tests.storage import test_postgres_store as database_tests
-from tmserver.accounts.provisioning import import_bindings, provision_identity
 from tmserver.network.server import Server
 
 
 @unittest.skipUnless(database_tests.TEST_URL, "set TM_TEST_DATABASE_URL for real PostgreSQL tests")
-class IdentityPostgresTests(database_tests.DatabaseFixture, unittest.TestCase):
+class RegistrationPostgresTests(database_tests.DatabaseFixture, unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.host = Server(store=self.store)
 
-    def create(self):
-        return provision_identity(self.host, ISSUER, USER, name="Discord Player")
+    def login(self):
+        return asyncio.run(self.host.login("192.0.2.1", POL_ID, b"password"))
 
     def restart(self):
         self.host = Server(store=self.reopen())
 
-    def test_restart_returns_same_account_without_reissuing_starter_cards(self):
-        key = self.create()
+    def test_restart_signs_in_without_reissuing_starter_cards(self):
+        self.assertEqual(granted(self.login())[1], b"created")
         saved, revision = self.store.load(), self.store.revision
         self.restart()
-        with patch.object(self.store, "save_changes", side_effect=AssertionError("retry wrote")):
-            self.assertEqual(self.create(), key)
+        with patch.object(self.store, "save_changes", side_effect=AssertionError("sign-in wrote")):
+            self.assertEqual(granted(self.login())[1], b"signed_in")
         self.assertEqual(self.store.load(), saved)
         self.assertEqual(self.store.revision, revision)
-        self.assertEqual(len(saved["accounts"][key]["cards"]), 10)
-        self.assertEqual(saved["accounts"][key]["balance"], 10000)
+        self.assertEqual(len(saved["accounts"][KEY]["cards"]), 10)
+        self.assertEqual(saved["accounts"][KEY]["balance"], 10000)
 
-    def test_identity_journal_failure_rolls_back_account_and_starter_cards(self):
+    def test_credential_journal_failure_rolls_back_account_and_starter_cards(self):
         from tmserver.storage.schema import accounts, cards
 
         saved, live = self.store.load(), self.host.snapshot()
@@ -44,17 +44,17 @@ class IdentityPostgresTests(database_tests.DatabaseFixture, unittest.TestCase):
                 database_tests.sa.select(database_tests.sa.func.count()).select_from(accounts)), 1)
             self.assertEqual(self.store.connection.scalar(
                 database_tests.sa.select(database_tests.sa.func.count()).select_from(cards)), 10)
-            raise OSError("injected identity journal failure")
+            raise OSError("injected credential journal failure")
 
-        with patch.object(self.store, "_save_services", fail), self.assertRaises(OSError):
-            self.create()
+        with patch.object(self.store, "_save_services", fail):
+            self.assertEqual(self.login(), b":srv 901 unavailable :login refused")
         self.assertEqual(self.host.snapshot(), live)
         self.restart()
         self.assertEqual(self.store.load(), saved)
-        self.assertIsNone(self.host.identities.account(ISSUER, USER))
-        self.assertIsNotNone(self.create())
+        self.assertIsNone(self.host.credentials.get(KEY))
+        self.assertEqual(granted(self.login())[1], b"created")
 
-    def test_lost_commit_ack_reloads_saved_owner_before_retry(self):
+    def test_lost_commit_ack_keeps_the_account_for_the_next_sign_in(self):
         import psycopg
 
         commit = psycopg.Connection.commit
@@ -64,22 +64,12 @@ class IdentityPostgresTests(database_tests.DatabaseFixture, unittest.TestCase):
             commit(connection)
             raise psycopg.OperationalError("injected lost acknowledgement")
 
-        with patch.object(psycopg.Connection, "commit", lost_ack), self.assertRaises(OSError):
-            self.create()
+        with patch.object(psycopg.Connection, "commit", lost_ack):
+            self.assertEqual(self.login(), b":srv 901 unavailable :login refused")
         self.assertEqual(self.host.snapshot(), live)
         self.restart()
         saved = self.store.load()
         with patch.object(self.store, "save_changes", side_effect=AssertionError("retry wrote")):
-            self.assertEqual(self.create(), self.host.identities.account(ISSUER, USER))
+            self.assertEqual(granted(self.login())[1], b"signed_in")
         self.assertEqual(self.store.load(), saved)
         self.assertEqual(self.store.revision, revision + 1)
-
-    def test_import_retains_existing_save_and_protects_account_from_reassignment(self):
-        key = self.host.ensure_account(next(iter(self.host.accounts)), name=b"Existing")
-        saved = self.store.load()["accounts"]
-        import_bindings(self.host, ISSUER, {USER: key})
-        self.restart()
-        self.assertEqual(self.create(), key)
-        self.assertEqual(self.store.load()["accounts"], saved)
-        with self.assertRaises(ValueError):
-            import_bindings(self.host, ISSUER, {"22222222-2222-4222-8222-222222222222": key})

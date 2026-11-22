@@ -8,6 +8,11 @@ MAX_ACCOUNTS = 128  # Bounded local fixture pool, below reserved service raw IDs
 MAX_LEGACY_PASSWORD = 15
 
 
+def loopback(writer):
+    """The built-in accounts' shared password is only accepted from this host."""
+    return writer.get_extra_info("peername")[0].startswith("127.")
+
+
 def account_name(character_id):
     if type(character_id) is not int or not 1 <= character_id <= MAX_ACCOUNTS:
         raise ValueError("local character ID outside fixture pool")

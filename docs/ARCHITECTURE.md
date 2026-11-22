@@ -7,8 +7,7 @@ owning package rather than a generic service layer.
 | --- | --- |
 | `cli` | Server, local-play and offline-admin entry points. |
 | `admin` | Shared read projections and the optional authenticated operator panel. |
-| `auth` | Optional Supabase verification, play capabilities and account-bound WebSocket transport. |
-| `accounts` | Login identities and automatic account creation. |
+| `accounts` | Self-registered POL ID accounts, password hashes and login limits. |
 | `network` | Server ownership, connections, dispatch, chat and diagnostics. |
 | `protocol` | Encryption, command envelopes, identities and table controls. |
 | `cards` | Card values, catalogue and inventory edits. |
@@ -43,14 +42,14 @@ load-test commands. `results/` and `var/` are ignored output and local state.
 | Ordinary room rules and table lifecycle | [rooms/config.py](../src/tmserver/rooms/config.py), [rooms/table.py](../src/tmserver/rooms/table.py), [rooms/service.py](../src/tmserver/rooms/service.py) |
 | Event configuration and matchmaking | [events/config.py](../src/tmserver/events/config.py), [events/adapter.py](../src/tmserver/events/adapter.py), [events/matchmaking.py](../src/tmserver/events/matchmaking.py) |
 | Accounts, purchases, trade and rewards | [economy/service.py](../src/tmserver/economy/service.py), [economy/](../src/tmserver/economy/) |
-| Durable login ownership and automatic accounts | [accounts/identities.py](../src/tmserver/accounts/identities.py), [accounts/provisioning.py](../src/tmserver/accounts/provisioning.py) |
+| LOGIN, registration and password hashes | [accounts/credentials.py](../src/tmserver/accounts/credentials.py), [accounts/provisioning.py](../src/tmserver/accounts/provisioning.py), `Server.login` in [network/server.py](../src/tmserver/network/server.py) |
 | Auction records, protocol and escrow | [economy/auctions/](../src/tmserver/economy/auctions/), [economy/claim_transactions.py](../src/tmserver/economy/claim_transactions.py) |
 | Profile files and saved player settings | [profiles/service.py](../src/tmserver/profiles/service.py), [profiles/characters.py](../src/tmserver/profiles/characters.py), [profiles/preferences.py](../src/tmserver/profiles/preferences.py) |
 | Ratings, statistics and ranking files | [rankings/policy.py](../src/tmserver/rankings/policy.py), [rankings/stats.py](../src/tmserver/rankings/stats.py), [rankings/service.py](../src/tmserver/rankings/service.py) |
 | Save, validate or recover durable state | [storage/postgres.py](../src/tmserver/storage/postgres.py), [storage/restore.py](../src/tmserver/storage/restore.py), [storage/validation.py](../src/tmserver/storage/validation.py) |
 | Packaged immutable tables | [data/](../src/tmserver/data/), read through [data/resources.py](../src/tmserver/data/resources.py) |
 
-`cli.serve` constructs the two loopback listeners. `network.server.Server` owns
+`cli.serve` constructs the two listeners, on loopback unless `--bind` says otherwise. `network.server.Server` owns
 shared services; `network.session.Session` owns each connection. The profile
 listener is separate in `profiles.service`. Recovered combat, AI, board and
 opponent algorithms live in `game`; this server's reward and rating choices live
@@ -61,13 +60,16 @@ that host. Request-local detached projections are captured before rendering;
 the panel never opens storage or enrolls accounts. `cli.serve` stops HTTP first,
 then profiles and game, before releasing storage. The base installation never imports the web framework.
 
-The optional auth gateway verifies a provider identity before asking
-`accounts.provisioning` to allocate a native account. Account data and the
-Pydantic ownership journal commit together through the existing store. The
-registry restores without web dependencies; both raw listeners reject its owned
-accounts unless a trusted play-session access object authorizes the stream.
-Legacy manual bindings import at startup. No loader-supplied name or identifier
-controls ownership, and tickets remain process-local capabilities.
+A loader's LOGIN line arrives on the game listener after the key exchange.
+`Server.login` registers an unknown POL ID through `accounts.provisioning`, so the
+account (player ID = the raw POL ID, which polcore sends as GID) and its scrypt
+hash commit together through the existing store, or checks
+the saved hash off the event loop. It then mints a game password that lives only
+in `account_specs`. The game NICK and the profile digests check that password
+exactly as they check a built-in test account's, so profiles need no separate
+login. Hashes are saved in the `identities` journal (version 2); a version 1
+journal of retired Supabase links restores as empty. The built-in test accounts
+are accepted from loopback peers only. [Loader login contract](LOADER_AUTH_SPEC.md).
 
 When explicitly enabled, `admin.actions` shares one synchronous, idempotent
 apply per action between web forms and the offline CLI, keyed by request ID.
@@ -311,5 +313,6 @@ All writes are synchronous. PostgreSQL limits account writes but stores each
 service journal as a complete JSONB document.
 Large journals and slow storage can therefore pause all clients on the event loop.
 
-The local test account pool is capped at 128 accounts; hosted accounts come from
-Discord sign-in. The server is one process, not a distributed service.
+The local test account pool is capped at 128 accounts; other accounts register
+themselves with LOGIN. Login rate limits are in memory, per process. The server
+is one process, not a distributed service.

@@ -4,7 +4,7 @@ The PC client contains the battle arithmetic, growth rules, board effects and co
 
 The client also has **network-independent simulation code**, but that does not mean the released menus offer an offline mode. The evidence below comes from running isolated client routines, without launching the game.
 
-All addresses are client virtual addresses, image base `10000000`. `P=102B63E0`, `G=DWORD[102B63C4]`. The full layouts and arithmetic are in [TetraPackets](https://github.com/sruon/TetraPackets) (`client/rules.md`, `client/board.md`, `client/computer-player.md`).
+All addresses are client virtual addresses, image base `10000000`. `P=102B63E0`, `G=DWORD[102B63C4]`. The full layouts and arithmetic are in [TetraPackets](https://github.com/TetraSlop/packets) (`client/rules.md`, `client/board.md`, `client/computer-player.md`).
 
 ## Recovered rules and current implementation
 

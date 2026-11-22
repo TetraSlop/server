@@ -149,83 +149,10 @@ asyncio.run(main())
 """
 
 
-AUTH_SMOKE = STORE + """
-import asyncio
-import json
-from pathlib import Path
-
-import httpx
-from websockets.asyncio.client import connect
-from websockets.exceptions import ConnectionClosed, InvalidStatus
-from tmserver.auth.provider import Subject
-from tmserver.cli.serve import arguments, running_services
-
-USER = "11111111-1111-4111-8111-111111111111"
-Path("auth.json").write_text(json.dumps(dict(
-    supabase_url="https://example.supabase.co", publishable_key="sb_publishable_test_only",
-    public_origin="https://tm.example",
-)))
-
-async def verified(self, token):
-    assert token == "installed-test-identity"
-    return Subject(issuer=self.issuer, subject=USER, discord=True, display_name="Wheel Discord")
-
-async def main():
-    args = arguments([
-        "--auth-config", "auth.json", "--auth-port", "0", "--auth-insecure-loopback",
-        "--database-url", "postgresql+psycopg://wheel", "--log-dir", "auth-logs",
-        "--game-port", "0", "--profile-port", "0",
-    ])
-    store, opened = stored()
-    with opened, patch("tmserver.auth.provider.SupabaseVerifier.verify", verified):
-        async with running_services(args) as services:
-            origin = f"http://127.0.0.1:{services.auth.port}"
-            before = deepcopy(services.game.snapshot())
-            async with httpx.AsyncClient(base_url=origin, trust_env=False) as client:
-                config = await client.get("/v1/auth/config")
-                assert config.status_code == 200 and config.json()["protocol"] == 1
-                assert config.json()["provider"] == "discord"
-                assert (await client.post("/v1/play/tickets", json={"protocol": 1})).status_code == 401
-                issued = await client.post("/v1/play/tickets", json={"protocol": 1},
-                    headers={"Authorization": "Bearer installed-test-identity"})
-                assert issued.status_code == 201
-                redeemed = await client.post("/v1/play/sessions", json={"ticket": issued.json()["ticket"]})
-                assert redeemed.status_code == 201
-                play = redeemed.json()
-                headers = {"Authorization": "Bearer " + play["session_token"]}
-                options = dict(additional_headers=headers, subprotocols=["tm-stream-v1"], proxy=None)
-                async with connect(play["streams"]["game"], **options) as ws:
-                    assert b"NOTICE AUTH" in await ws.recv()
-                    assert (await client.delete("/v1/play/session", headers=headers)).status_code == 204
-                    try:
-                        await ws.recv()
-                        raise AssertionError("revoked stream remained usable")
-                    except ConnectionClosed as closed:
-                        assert closed.rcvd.code == 4401
-                try:
-                    async with connect(play["streams"]["profile"], **options):
-                        raise AssertionError("revoked profile capability accepted")
-                except InvalidStatus as denied:
-                    assert denied.response.status_code == 403
-            saved = store.load()
-            key = play["account_key"]
-            assert services.game.identities.account("https://example.supabase.co/auth/v1", USER) == key
-            assert saved["accounts"][key]["name_hex"] == b"Wheel Discord".hex()
-            assert len(saved["accounts"][key]["cards"]) == 10
-            assert all(services.game.snapshot()[name] == value for name, value in before.items()
-                       if name not in {"accounts", "identities"})
-    print(json.dumps(dict(auth_gateway=True, auth_websocket=True, auth_revocation=True,
-                          auth_provider_mock=True, auth_auto_registration=True)))
-
-asyncio.run(main())
-"""
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--admin", action="store_true", help="also install and smoke the admin extra")
-    parser.add_argument("--auth", action="store_true", help="also install and smoke the auth extra")
     args = parser.parse_args()
     wheel = args.wheel.resolve(strict=True)
     manifest = verify_wheel(wheel)
@@ -262,7 +189,7 @@ def main():
             "import importlib.metadata as metadata, importlib.util, json\n"
             "assert all(importlib.util.find_spec(name) is None "
             "for name in ('sqlalchemy', 'alembic', 'psycopg', "
-            "'starlette_admin', 'starlette', 'uvicorn', 'httpx', 'websockets'))\n"
+            "'starlette_admin', 'starlette', 'uvicorn', 'httpx'))\n"
             "print(json.dumps([requirement for requirement in metadata.requires('tmserver') "
             "if 'extra ==' not in requirement]))\n",
         ))
@@ -282,11 +209,6 @@ def main():
             run(str(python), "-m", "pip", "install", f"{wheel}[admin]")
             run(str(python), "-m", "pip", "check")
             admin_report = json.loads(run(str(python), "-I", "-c", ADMIN_SMOKE))
-        auth_report = {}
-        if args.auth:
-            run(str(python), "-m", "pip", "install", f"{wheel}[auth]")
-            run(str(python), "-m", "pip", "check")
-            auth_report = json.loads(run(str(python), "-I", "-c", AUTH_SMOKE))
         print(json.dumps({
             "wheel": wheel.name,
             **manifest,
@@ -295,7 +217,6 @@ def main():
             "console_entrypoints": True,
             "services_started_on_ephemeral_ports": True,
             **admin_report,
-            **auth_report,
         }))
 
 

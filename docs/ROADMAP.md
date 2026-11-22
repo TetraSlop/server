@@ -6,9 +6,9 @@
   three-player boards are ported from the client to Python and checked against
   8,067 results frozen from its own code. Board effects and generation, match
   order, departures, policy, storage and transport are Python too.
-- Discord sign-in through Supabase works with tmloader. A verified user gets a
-  saved account on first Play. See [authentication](AUTHENTICATION.md) and the
-  [loader contract](LOADER_AUTH_SPEC.md).
+- Players register a POL ID and password with tmloader's LOGIN on the game port;
+  see the [loader login contract](LOADER_AUTH_SPEC.md). The browser client that
+  used the removed WebSocket gateway needs a plain WebSocket-to-TCP bridge.
 - The optional [admin panel](ADMIN_PANEL.md) is read-only by default. With
   `--admin-actions` it can award Prize Center items and grant event cards, money,
   eligibility and progress, each with an audit receipt.
@@ -26,8 +26,10 @@ Prize Center and spectator checks separately. Headless tests do not count.
 
 ### Public hosting
 
-Listeners bind to loopback. Hosting needs a TLS reverse proxy, a deployment and
-admission controls.
+`--bind` exposes the game and profile ports (see the README's "Running a public
+server"). Still open: a deployment, server authentication for LOGIN (TLS or a
+pinned key), an audit trail for password and disable changes, shared rate
+limits across restarts, and a pre-login connection limit sized for the public.
 
 ### Guild choice and guild-aware computer decks
 

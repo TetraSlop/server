@@ -8,7 +8,7 @@ Restoring never runs startup recovery.
 import time
 from dataclasses import dataclass
 
-from tmserver.accounts.identities import IdentityRegistry
+from tmserver.accounts.credentials import CredentialRegistry
 from tmserver.admin.audit import AdminAudit
 from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.match_ledger import MatchEconomy
@@ -24,7 +24,7 @@ from tmserver.storage.validation import validate_snapshot_fields
 
 # Saved journal name -> RestoredState (and Server) attribute, in save order.
 JOURNALS = (
-    ("identities", "identities"),
+    ("identities", "credentials"),  # Login credentials; the name predates them.
     ("auction", "auction_ledger"),
     ("prize", "prize"),
     ("admin_audit", "admin_audit"),
@@ -41,7 +41,7 @@ JOURNALS = (
 @dataclass
 class RestoredState:
     economy: EconomyService
-    identities: IdentityRegistry
+    credentials: CredentialRegistry
     auction_ledger: AuctionEconomy
     prize: PrizeService
     result_rewards: ResultRewardService
@@ -81,7 +81,7 @@ def restore_state(
         saved = snapshot
     # Same order as the game server has always restored, so the first invalid
     # journal reported does not change.
-    identities = IdentityRegistry.restore(economy, saved.get("identities"))
+    credentials = CredentialRegistry.restore(economy, saved.get("identities"))
     auction_ledger = AuctionEconomy.restore(economy, saved.get("auction"))
     prize = PrizeService.restore(economy, saved.get("prize"), seed=seed)
     result_rewards = ResultRewardService.restore(
@@ -103,6 +103,6 @@ def restore_state(
     )
     event_results = EventResults.restore(saved.get("event_results"))
     return RestoredState(
-        economy, identities, auction_ledger, prize, result_rewards, match_economy, ratings,
+        economy, credentials, auction_ledger, prize, result_rewards, match_economy, ratings,
         character_profiles, events, event_cards, admin_audit, event_results,
     )

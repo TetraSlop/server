@@ -24,8 +24,8 @@ from tests.economy.test_match_transactions import Peer, TableFixture
 from tests.events.test_event_rooms import config
 from tests.profiles.test_character_profiles import request as profile_request
 from tests.support.memory_store import MemoryStore
-from tmserver.accounts.identities import IdentityRegistry
-from tmserver.accounts.provisioning import provision_identity
+from tmserver.accounts.credentials import hash_password
+from tmserver.accounts.provisioning import register_account
 from tmserver.admin.actions import apply_event_grant, apply_event_member, apply_prize_award
 from tmserver.admin.audit import (
     AdminAudit,
@@ -49,14 +49,15 @@ from tmserver.profiles.characters import CharacterProfiles
 from tmserver.profiles.transactions import character_profile_request
 from tmserver.protocol.commands import Command
 from tmserver.rankings.policy import RatingPolicy
+from tmserver.protocol.wire import polid_from_string, polid_scramble
 from tmserver.storage.restore import restore_state
 from tmserver.storage.validation import validate_snapshot
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "storage"
 SNAPSHOT = FIXTURES / "golden_snapshot.json"
 EXPORT = FIXTURES / "golden_postgres_export.json"
-ISSUER = "https://example.supabase.co/auth/v1"
-SUBJECT = "00000000-0000-4000-8000-000000000001"
+# A self-registered account; its POL ID is EEGOLDEN.
+REGISTERED = polid_scramble(polid_from_string("EEGOLDEN")).decode("ascii")
 EPOCH = 200  # Inside the fixture event's 100..500 window.
 WEEK = 7 * 86400
 COMMITTED_AT = datetime(2023, 11, 14, 22, 13, 20, tzinfo=UTC)
@@ -107,7 +108,8 @@ class GoldenRun(ClaimFixture, TableFixture):
         for clock in clocks:
             clock.start()
         try:
-            provision_identity(self.server, ISSUER, SUBJECT, name="Hosted")
+            register_account(self.server, REGISTERED, hash_password(b"golden", salt=bytes(16)))
+            self.server.ensure_account(REGISTERED.encode("ascii"), name=b"Hosted")
             self.events()
             self.prizes()
             self.auctions()

@@ -4,8 +4,8 @@ Running the server:
 
 - [Rooms](ROOMS.md) and [weekly rankings](WEEKLY_RANKINGS.md).
 - [Offline administration](ADMIN.md) and the optional [admin panel](ADMIN_PANEL.md).
-- [Authentication](AUTHENTICATION.md) and the [loader contract](LOADER_AUTH_SPEC.md):
-  Discord sign-in and the WebSocket game and profile streams.
+- The [loader login contract](LOADER_AUTH_SPEC.md): self-registered POL ID
+  accounts and the LOGIN exchange on the game port.
 - [Database setup](DATABASE.md): the PostgreSQL save the server requires, and the
   [persistence design](PERSISTENCE_DESIGN.md).
 
@@ -19,4 +19,4 @@ Working on it:
   which behavior comes from the client and which is this server's choice.
 - [Roadmap](ROADMAP.md): open work.
 
-The protocol is documented in [TetraPackets](https://github.com/sruon/TetraPackets).
+The protocol is documented in [TetraPackets](https://github.com/TetraSlop/packets).

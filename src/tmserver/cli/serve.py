@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import ipaddress
 import math
 import os
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
@@ -38,6 +39,13 @@ def board(value):
     return values
 
 
+def ipv4(value):
+    try:
+        return str(ipaddress.IPv4Address(value))
+    except ValueError:
+        raise argparse.ArgumentTypeError("--bind must be a numeric IPv4 address") from None
+
+
 def port(value):
     number = int(value)
     if not 0 <= number <= 65535:
@@ -54,13 +62,10 @@ def arguments(argv=None):
         help="enable the read-only admin panel on 127.0.0.1 (requires the admin extra)",
     )
     parser.add_argument("--admin-user", default="admin", help="local operator username")
-    parser.add_argument("--auth-config", type=Path, help="enable the Supabase launcher gateway")
-    parser.add_argument("--auth-port", type=port, help="loopback auth listener (default:8081)")
-    parser.add_argument("--auth-insecure-loopback", action="store_true",
-                        help="local loader testing only: advertise HTTP/WS on the bound loopback port")
-    parser.add_argument("--auth-dev-identity", action="store_true",
-                        help="local development only: accept any bearer name as a user, without "
-                             "Supabase (requires --auth-insecure-loopback)")
+    parser.add_argument(
+        "--bind", type=ipv4, default="127.0.0.1",
+        help="IPv4 address for the game and profile listeners; 0.0.0.0 for a public server",
+    )
     parser.add_argument(
         "--admin-actions", action="store_true",
         help="enable audited awards, event grants and event corrections in the admin panel",
@@ -160,12 +165,6 @@ def arguments(argv=None):
     args.players = 3 if args.flexible_seats else int(args.players)
     if not 2 <= args.accounts <= MAX_ACCOUNTS:
         parser.error(f"accounts must be between 2 and {MAX_ACCOUNTS}")
-    if (args.auth_port is not None or args.auth_insecure_loopback) and args.auth_config is None:
-        parser.error("auth listener options require --auth-config")
-    if args.auth_config is not None and args.auth_port is None:
-        args.auth_port = 8081
-    if args.auth_dev_identity and not args.auth_insecure_loopback:
-        parser.error("--auth-dev-identity requires --auth-insecure-loopback")
     if args.admin_password_file is not None and args.admin_port is None:
         parser.error("--admin-password-file requires --admin-port")
     if args.admin_actions and args.admin_port is None:
@@ -194,28 +193,13 @@ async def run(args):
         return
     async with running_services(args) as services:
         print(
-            f"Tetra Master services ready: game 127.0.0.1:{services.game_port}, "
-            f"profile 127.0.0.1:{services.profile_port}",
+            f"Tetra Master services ready: game {args.bind}:{services.game_port}, "
+            f"profile {args.bind}:{services.profile_port}",
             flush=True,
         )
         if services.admin is not None:
             print(f"Admin panel ready: http://127.0.0.1:{services.admin.port}/admin/", flush=True)
-        if services.auth is not None:
-            print(f"Launcher gateway ready on 127.0.0.1:{services.auth.port}", flush=True)
-            if args.auth_dev_identity:
-                print("WARNING: dev identity enabled; any bearer name signs in without Supabase",
-                      flush=True)
-        listeners = [item for item in (services.admin, services.auth) if item is not None]
-        if listeners:
-            waits = [asyncio.create_task(item.wait(args.seconds)) for item in listeners]
-            try:
-                done, _ = await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
-                for task in done:
-                    task.result()
-            finally:
-                for task in waits:
-                    task.cancel()
-                await asyncio.gather(*waits, return_exceptions=True)
+            await services.admin.wait(args.seconds)
         elif args.seconds:
             await asyncio.sleep(args.seconds)
         else:
@@ -229,7 +213,6 @@ class RunningServices:
     game_port: int
     profile_port: int
     admin: "HttpListener | None" = None
-    auth: "HttpListener | None" = None
 
 
 def admin_options(args):
@@ -257,16 +240,6 @@ def admin_options(args):
 async def running_services(args):
     """Own both listeners and their store until the caller has finished."""
     admin = admin_options(args)
-    auth = None
-    if args.auth_config is not None:
-        try:
-            from tmserver.auth.config import load_auth_config
-            from tmserver.auth.server import serving_auth  # noqa: F401
-            import websockets  # noqa: F401
-        except ModuleNotFoundError as exc:
-            raise ValueError('Install the auth dependencies with pip install "tmserver[auth]"') from exc
-        auth = load_auth_config(args.auth_config)
-        auth.account_bindings(account_specs(args.accounts))
     events, tables, progress = load_event_setup(args.events) if args.events else ((), (), "none")
     with ExitStack() as resources:
         args.log_dir.mkdir(parents=True, exist_ok=True)
@@ -295,24 +268,15 @@ async def running_services(args):
         try:
             profile = ProfileServer(args.log_dir / "local_profile_traffic.jsonl", game)
             try:
-                game_port = await game.start(args.game_port)
-                profile_port = await profile.start(args.profile_port)
+                game_port = await game.start(args.game_port, host=args.bind)
+                profile_port = await profile.start(args.profile_port, host=args.bind)
                 async with AsyncExitStack() as listeners:
                     panel = None
-                    gateway = None
                     if admin is not None:
                         from tmserver.admin.server import serving_admin
 
                         panel = await listeners.enter_async_context(serving_admin(game, **admin))
-                    if auth is not None:
-                        from tmserver.auth.server import serving_auth
-
-                        gateway = await listeners.enter_async_context(serving_auth(
-                            game, profile, auth, port=args.auth_port,
-                            insecure_loopback=args.auth_insecure_loopback,
-                            dev_identity=args.auth_dev_identity,
-                        ))
-                    yield RunningServices(game, profile, game_port, profile_port, panel, gateway)
+                    yield RunningServices(game, profile, game_port, profile_port, panel)
             finally:
                 await profile.stop()
         finally:

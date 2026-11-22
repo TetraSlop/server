@@ -1,6 +1,6 @@
 # tmserver
 
-[![Checks](https://github.com/sruon/tmserver/actions/workflows/checks.yml/badge.svg)](https://github.com/sruon/tmserver/actions/workflows/checks.yml)
+[![Checks](https://github.com/TetraSlop/server/actions/workflows/checks.yml/badge.svg)](https://github.com/TetraSlop/server/actions/workflows/checks.yml)
 
 Tetra Master is the card game from Final Fantasy IX, which Square Enix also ran
 as an online game on PlayOnline. Its online service has closed. tmserver is a
@@ -18,7 +18,7 @@ Square Enix.
   none of them: the client's battle, growth and computer-player rules are ported
   to Python, and the card catalogue it uses is in
   `src/tmserver/data/economy_catalog.json`.
-- [tmloader](https://github.com/sruon/tmloader), which starts the client and
+- [tmloader](https://github.com/TetraSlop/loader), which starts the client and
   points it at this server.
 - Python 3.13 or newer, on Windows or Linux.
 - PostgreSQL 16 or newer, which holds the save (see
@@ -30,7 +30,7 @@ Square Enix.
 
    ```powershell
    python -m venv .venv
-   .venv/Scripts/python -m pip install -e ".[postgres,admin,auth]"
+   .venv/Scripts/python -m pip install -e ".[postgres,admin]"
    ```
 
    On Linux the scripts are in `.venv/bin`.
@@ -43,7 +43,7 @@ Square Enix.
    .venv/Scripts/tmserver-db upgrade
    ```
 
-3. Start the server, then point [tmloader](https://github.com/sruon/tmloader) at
+3. Start the server, then point [tmloader](https://github.com/TetraSlop/loader) at
    its game and profile ports. One to three game windows can connect to the same
    server.
 
@@ -54,6 +54,38 @@ Square Enix.
 Logs go to `var/` in the working directory. Run `tmserver --help` for rooms,
 events, human tables, prizes and ratings.
 
+## Accounts
+
+Players create their own accounts. tmloader sends a POL ID (in practice one
+starting with `EE`) and password to the game port once before the game starts. An unknown POL ID becomes a new account
+with that password, and later logins must match it. The server stores only a
+salted scrypt hash. The [loader login contract](docs/LOADER_AUTH_SPEC.md)
+describes the exchange, the limits and the error codes. Operators can set a
+password, or disable and re-enable an account, with
+[`tmserver-admin`](docs/ADMIN.md#accounts-and-passwords).
+
+The built-in test accounts that `tmserver --list-accounts` prints share the
+password `tm-local-test`. They are accepted from this machine only.
+
+## Running a public server
+
+The game and profile listeners bind to 127.0.0.1 unless you say otherwise. To
+let other people connect, bind them to a public IPv4 address and open both TCP
+ports (51241 and 51220 by default) in the firewall:
+
+```powershell
+.venv/Scripts/tmserver --bind 0.0.0.0 --log-dir var
+```
+
+Players then point tmloader at the server's address. Before you do this:
+
+- Login is encrypted against eavesdroppers but the server is not authenticated,
+  so someone who can intercept traffic can read passwords. Tell players not to
+  reuse a password.
+- Failed-login and registration limits are per process and reset on restart.
+- Keep the admin panel on loopback; it never binds anywhere else.
+- Back up the PostgreSQL database; it holds every account and password hash.
+
 ## Features and options
 
 - [Rooms](docs/ROOMS.md): Local Room, Open Tables, Classic, Special and Quick Play.
@@ -63,14 +95,9 @@ events, human tables, prizes and ratings.
   queue prizes and correct event progress.
 - The optional [admin panel](docs/ADMIN_PANEL.md), a browser view of the running
   server. It is read-only unless started with `--admin-actions`.
-- [Discord sign-in](docs/AUTHENTICATION.md) through Supabase, with automatic
-  accounts and WebSocket game streams for tmloader. The
-  [loader contract](docs/LOADER_AUTH_SPEC.md) describes the interface.
+- Self-registered accounts over the game port; see [Accounts](#accounts).
 
-Listeners bind to loopback. Hosting the server for others needs a TLS reverse
-proxy, and public hosting has not been done yet.
-
-The protocol is documented in [TetraPackets](https://github.com/sruon/TetraPackets).
+The protocol is documented in [TetraPackets](https://github.com/TetraSlop/packets).
 Where the client does not reveal what the original server did, such as reward and
 rating formulas, this server makes its own choice; [rules provenance](docs/RULES_PROVENANCE.md)
 lists which is which. What is still open is in the [roadmap](docs/ROADMAP.md).

@@ -176,5 +176,5 @@ client are separate; see the [native test checklist](NATIVE_TEST_CHECKLIST.md).
 
 ## Not included
 
-Public administration, multiple operator roles, linking an existing save to a
-Discord account from the panel, and rating-history repair.
+Public administration, multiple operator roles, password changes from the
+panel (use `tmserver-admin`), and rating-history repair.
