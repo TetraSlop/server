@@ -509,9 +509,7 @@ class MatchTests(unittest.TestCase):
             streak=4,
             best_streak=8,
             rn=b"History",
-            rt_points=12345,
-            event_count=61,
-            prize_points=99,
+            vs_player_games=61,
         )
         s = MatchService(ai_cards=CARDS)
         s.register("alice", result_stats=stats, balance=7654)
@@ -1484,7 +1482,7 @@ class ThreePlayerTests(unittest.TestCase):
                 sequence=65535,
                 reward_sum=0xFFFFFFFF,
                 rn=b"R" * 31,
-                event_count=65535,
+                vs_player_games=65535,
             )
             s.register(
                 peer,

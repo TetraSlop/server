@@ -32,9 +32,7 @@ SEEDED = PracticeStats(
     streak=3,
     best_streak=7,
     rn=b"Existing Rank",
-    rt_points=9876,
-    event_count=8,
-    prize_points=5432,
+    vs_player_games=8,
 )
 
 
@@ -68,9 +66,7 @@ class ResultStatsTests(unittest.TestCase):
             (0x48, 12),
             (0x78, 4),
             (0x7D, 32),
-            (0x128, 4),
             (0x130, 2),
-            (0x134, 4),
         ):
             offsets.update(range(offset, offset + length))
         self.assertTrue(
@@ -89,9 +85,7 @@ class ResultStatsTests(unittest.TestCase):
                 "reward_sum",
                 "max_reward",
                 "rn",
-                "rt_points",
-                "event_count",
-                "prize_points",
+                "vs_player_games",
             ):
                 self.assertEqual(getattr(after, field), getattr(SEEDED, field))
         self.assertEqual(SEEDED.count, 9)
@@ -193,8 +187,6 @@ class ResultStatsPersistenceTests(unittest.TestCase):
             {},
             {key: SEEDED},
             {key: final, "extra": final},
-            {key: replace(final, rt_points=final.rt_points + 1)},
-            {key: replace(final, prize_points=final.prize_points + 1)},
             {key: replace(final, reward_sum=final.reward_sum + 1)},
         ):
             with self.subTest(stats=stats), self.assertRaises(EconomyError):
