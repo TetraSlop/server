@@ -1,5 +1,6 @@
 """Validation failures must remain failures, including skips and stale imports."""
 
+import asyncio
 import io
 import os
 from pathlib import Path
@@ -190,3 +191,8 @@ class CheckTests(unittest.TestCase):
             check_tests.main()
         self.assertEqual(raised.exception.code, 1)
         self.assertIn("daemon unavailable", output.getvalue())
+
+
+class AsyncioLoopTests(unittest.IsolatedAsyncioTestCase):
+    async def test_async_tests_run_without_asyncio_debug_mode(self):
+        self.assertFalse(asyncio.get_running_loop().get_debug())
