@@ -78,6 +78,18 @@ class CheckTests(unittest.TestCase):
         for module in lanes[2]:
             self.assertTrue(module.startswith("tests.admin.web."))
 
+    def test_shards_cover_every_module_once_and_balance_by_duration(self):
+        durations = {"a": 9.0, "b": 5.0, "c": 4.0, "d": 1.0}
+        shards = [check_tests.shard_modules([*durations, "new"], k, 2, durations) for k in (1, 2)]
+        self.assertEqual(shards, [["a", "c"], ["b", "d", "new"]])
+        portable = check_tests.test_modules("portable")
+        real = [check_tests.shard_modules(portable, k, 4, {}) for k in range(1, 5)]
+        self.assertEqual(sorted(sum(real, [])), portable)
+        for value in ("0/4", "5/4", "x"):
+            with self.subTest(value=value), self.assertRaises(check_tests.argparse.ArgumentTypeError):
+                check_tests.shard_argument(value)
+        self.assertEqual(check_tests.shard_argument("2/4"), (2, 4))
+
     def test_test_workers_do_not_inherit_database_urls_or_import_overrides(self):
         with patch.dict(os.environ, {"TM_DATABASE_URL": "live", "TM_TEST_DATABASE_URL": "live",
                                      "PYTHONPATH": "elsewhere", "KEEP": "yes"}, clear=True):
@@ -126,7 +138,7 @@ class CheckTests(unittest.TestCase):
             patch.object(check_tests, "postgres_container") as database,
         ):
             self.assertEqual(check_tests.main(), 0)
-        run.assert_called_once_with("admin")
+        run.assert_called_once_with("admin", shard=None)
         database.assert_not_called()
 
     def test_owned_container_uses_loopback_and_is_removed_after_test_error(self):

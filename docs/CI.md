@@ -2,10 +2,11 @@
 
 The [Checks workflow](https://github.com/TetraSlop/server/actions/workflows/checks.yml)
 runs on main, pull requests and manual dispatch. It checks lint and complete test
-discovery, image-free tests on Windows and Linux, isolated admin tests, and
-transactions/migrations against a disposable PostgreSQL 16 container. Unexpected
-skips fail the run. The aggregate **All checks** job fails if any required job
-fails or is cancelled, and can be selected as a branch-protection requirement.
+discovery, image-free tests, isolated admin tests, and transactions/migrations
+against a disposable PostgreSQL 16 container. CI runs on Linux only; Windows is
+still supported but is not tested in CI. Unexpected skips fail the run. The
+aggregate **All checks** job fails if any required job fails or is cancelled,
+and can be selected as a branch-protection requirement.
 
 Packaging checks exact wheel contents before installing in a new environment,
 then starts the installed services and smokes the entry points and admin
@@ -15,6 +16,18 @@ templates. Successful builds retain the `tmserver-wheel` artifact for
 The portable lane includes `tests/game/test_rules_vectors.py`, which checks the
 Python rules against the 8,067 results frozen from the client's own code in
 `research/`. No lane needs game files.
+
+The portable lane runs as six parallel shards (`--shard K/6`). Modules are dealt,
+slowest first, to the least loaded shard using the per-module seconds in
+`tools/test_durations.json`; a module missing from that file counts as the
+median. Every shard's report line ends with `module_seconds`. When shards drift
+apart, replace the file with the merged `module_seconds` of one CI run's shards:
+
+```sh
+gh run view RUN_ID --log | grep -o '{"lane": "portable".*' | python -c "import json, sys
+d = {k: v for line in sys.stdin for k, v in json.loads(line)['module_seconds'].items()}
+print(json.dumps(dict(sorted(d.items())), indent=1))" > tools/test_durations.json
+```
 
 ## Versioning
 
@@ -52,7 +65,7 @@ and Python dependency updates; web and PostgreSQL dependencies are grouped.
 
 ## Local checks
 
-Every lane runs on Windows and Linux.
+Every lane runs on Windows and Linux. Add `--shard K/N` to run one portable shard.
 
 ```powershell
 .venv/Scripts/python -m pip install -e ".[dev,admin]"

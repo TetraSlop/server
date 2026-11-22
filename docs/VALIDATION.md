@@ -7,7 +7,7 @@ What the test lanes cover, and what they do not. How to run them is in
 
 | Lane | Needs | Covers |
 | --- | --- | --- |
-| `portable` | Python 3.13, `.[dev]` | Protocol codecs, services, gameplay rules, computer and human matches, LOGIN registration and limits, encrypted loopback sessions on an in-memory store, tooling. Runs on Windows and Linux. |
+| `portable` | Python 3.13, `.[dev]` | Protocol codecs, services, gameplay rules, computer and human matches, LOGIN registration and limits, encrypted loopback sessions on an in-memory store, tooling. Runs on Windows and Linux; CI runs it on Linux in six shards. |
 | `admin` | `.[dev,admin]` | The admin panel, its sign-in, audited actions and receipts. |
 | `postgres` | `.[dev,postgres]`, Docker | Joint account and journal commits, rollback, lost commit acknowledgements, writer exclusion and migrations, on a disposable PostgreSQL 16. |
 
