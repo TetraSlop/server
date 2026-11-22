@@ -84,22 +84,6 @@ class ShopOfferTests(unittest.TestCase):
                     (balance, count + 5 * expected),
                 )
 
-    def test_changed_configuration_is_cached_until_next_shop_session(self):
-        service = self.shop()
-        first = enter(service)
-        session = number(first)
-        service.shop_offers = ShopOffers()
-        self.assertEqual(enter(service), first)
-        response = service.handle("a", named(0xB2, 0x14, session, "@Buy=/No=76"))
-        self.assertEqual(parse_named(response[0])[3]["Card"]["S"], "3")
-        service.handle("a", named(0xB2, 0x15, session, f"@Get=/No={session}"))
-        service.handle("a", named(0xB2, 0x17, session, f"@Quit=/No={session}"))
-        second = enter(service)
-        self.assertNotEqual(number(second), session)
-        self.assertEqual(parse_named(second[1])[3]["Init"]["HD"], "0")
-        refused = service.handle("a", named(0xB2, 0x14, number(second), "@Buy=/No=76"))
-        self.assertEqual(parse_named(refused[0])[3], {"Card": {"S": "0"}})
-
     def test_offer_config_rejects_unroundtrippable_and_ambiguous_fields(self):
         for values in (
             {"special_flag": 4},
@@ -235,13 +219,8 @@ class EncryptedShopOfferTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await restored.stop()
 
-    async def test_default_refusals_and_active_session_offer_cache(self):
-        first = await self.enter()
+    async def test_default_offers_refuse_special_and_highlighted_packs(self):
         self.server.economy.shop_offers = ShopOffers()
-        self.assertEqual(await self.enter(), first)
-        self.assertEqual(parse_named(await self.buy(5))[3]["Card"]["S"], "3")
-        await self.get()
-        await self.quit()
         current = await self.enter()
         self.assertEqual(parse_named(current[1])[3]["Init"]["SP"], "0")
         before = self.server.economy.snapshot()

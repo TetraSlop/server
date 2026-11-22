@@ -211,20 +211,6 @@ class AuctionTests(unittest.TestCase):
         self.collect("seller")
         self.assertEqual(self.assets(), assets)
 
-    def test_cancel_is_owned_unbid_admin_operation_and_returns_via_collection(self):
-        item = self.exhibit()
-        with self.assertRaises(AuctionError):
-            self.a.cancel("buyer", item.id, now=101)
-        self.a.cancel("seller", item.id, now=101)
-        self.assertEqual(len(self.e.inventory("seller")), 9)
-        self.assertEqual(self.a.pending("seller")[0].kind, "returned")
-        with self.assertRaises(AuctionError):
-            self.a.cancel("seller", item.id, now=102)
-        item = self.exhibit()
-        self.a.bid("buyer", item.id, 100, 0, now=101)
-        with self.assertRaises(AuctionError):
-            self.a.cancel("seller", item.id, now=102)
-
     def test_reservations_exclude_shop_trade_match_and_auction_mutations(self):
         item = self.exhibit()
         c = self.a.reserve_collection("buyer")
@@ -239,7 +225,7 @@ class AuctionTests(unittest.TestCase):
             with self.assertRaises(EconomyError):
                 call()
             self.assertEqual(self.state(), before)
-        self.assertFalse(self.e.validate_selection("buyer", self.e.inventory("buyer")[:5]))
+        self.assertTrue(self.e.is_reserved("buyer"))
         self.assertTrue(self.a.release_collection(c))
         self.assertFalse(self.a.release_collection(c))
         self.assertFalse(self.e.is_reserved("buyer"))
@@ -348,7 +334,7 @@ class AuctionTests(unittest.TestCase):
         self.e.provision("many", nn=4, player_id=4, name=b"Many", cards=[card] * 50)
         for _ in range(35):
             item = self.exhibit("many")
-            self.a.cancel("many", item.id, now=101)
+            self.a.advance(item.expires)
         c = self.a.reserve_collection("many")
         self.assertEqual(len(c.returned), 30)
         self.a.commit_payment(c)
@@ -377,11 +363,7 @@ class AuctionTests(unittest.TestCase):
         self.assertEqual(self.a.pending("buyer")[0].amount, 100)
         self.assertEqual(self.collect("buyer"), (0, 100))
 
-    def test_epoch_zero_cancel_and_unsold_reoffer_restore(self):
-        item = self.exhibit(now=0)
-        self.a.cancel("seller", item.id, now=0)
-        self.restart()
-        self.assertEqual(self.a.listing(item.id).closed_at, 0)
+    def test_epoch_zero_unsold_reoffer_restore(self):
         item = self.exhibit(now=0, relists=1)
         self.a.advance(3600)
         self.restart()

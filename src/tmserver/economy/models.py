@@ -4,12 +4,10 @@ from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 
 from tmserver.economy.errors import EconomyError
-from tmserver.economy.shop_offers import ShopOffers
 
 MAX_MONEY = 99_999_999
 MAX_CARDS = 1000
 PROFILE_SIZE = 0x3028
-SHOP_RAW = 0x300
 
 
 @dataclass
@@ -37,7 +35,6 @@ class _Account:
     session: int | None = None
     last_session: int = 0
     pending: _Pending | None = None
-    offers: ShopOffers | None = None
 
 
 @dataclass(frozen=True)

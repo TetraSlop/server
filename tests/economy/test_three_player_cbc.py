@@ -30,11 +30,9 @@ class ThreePlayerCBC(unittest.IsolatedAsyncioTestCase):
         self.server.default_table.reset_match()
         if full:
             for key in self.keys:
-                token = self.server.economy.reserve_delivery(key)
-                self.server.economy.commit_delivery(
-                    token,
-                    add=(replace(token.account.cards[-1], deck=255),) * 990,
-                    keep_reserved=False,
+                token = self.server.economy.reserve_auction(key)
+                self.server.economy.commit_auction(
+                    token, add=(replace(token.account.cards[-1], deck=255),) * 990
                 )
         self.server.persist()
         await self.admit()

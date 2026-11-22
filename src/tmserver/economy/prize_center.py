@@ -74,10 +74,9 @@ class _Session:
 
 
 class PrizeService:
-    def __init__(self, economy, *, seed=None, raw_rng=None):
+    def __init__(self, economy, *, seed=None):
         self.economy = economy
         self._rng = random.Random(seed)
-        self._raw_rng = raw_rng
         self._pending_awards = {}
         self._known_awards = {}
         self._last = {}
@@ -114,7 +113,7 @@ class PrizeService:
 
     def _draw(self):
         # Bind to this service's generator, including a staged service copy.
-        return self._raw_rng() if self._raw_rng is not None else self._rng.randrange(32768)
+        return self._rng.randrange(32768)
 
     def is_active(self, key):
         return key in self._active
@@ -136,18 +135,6 @@ class PrizeService:
             subtype == 0x17
             and number == self._closed[key]
             and sections == {"Quit": {"No": str(number)}}
-        )
-
-    def status(self, key):
-        session = self._active.get(key)
-        return (
-            None
-            if session is None
-            else dict(
-                session=session.number,
-                points=session.token.points,
-                pending_pack=None if session.pending is None else session.pending.pack,
-            )
         )
 
     @staticmethod
@@ -371,8 +358,8 @@ class PrizeService:
         }
 
     @classmethod
-    def restore(cls, economy, snapshot=None, *, seed=None, raw_rng=None):
-        result = cls(economy, seed=seed, raw_rng=raw_rng)
+    def restore(cls, economy, snapshot=None, *, seed=None):
+        result = cls(economy, seed=seed)
         if snapshot is None:
             return result
         try:

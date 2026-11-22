@@ -67,12 +67,6 @@ def offline_payout(scores, ratings, stake, seat=0):
     return _trunc(factor * (stake + 100) * perfect * lower, 100)
 
 
-def next_stake(stake, double):
-    _int(stake, 0, 2000)
-    _int(double, 0, 1)
-    return min(2000, stake * (1 + double))
-
-
 @dataclass
 class _Round:
     id: str

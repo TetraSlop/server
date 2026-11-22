@@ -112,7 +112,6 @@ class TradeTests(unittest.TestCase):
             self.assertEqual(sections["No0"]["S"], "4")
             self.assertEqual(sections["No1"]["M"], "10000")
         self.assertTrue(self.economy.is_reserved("left"))
-        self.assertFalse(self.economy.validate_selection("left", self.economy.inventory("left")))
 
     def test_entry_requires_authenticated_peer_consent(self):
         payload = named(

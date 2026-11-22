@@ -14,7 +14,7 @@ from copy import copy, deepcopy
 from dataclasses import replace
 
 from tmserver.cards.catalog import Catalog, collection_points
-from tmserver.cards.edits import apply_card_edits, parse_edit_records
+from tmserver.cards.edits import apply_card_edits
 from tmserver.cards.model import Card
 from tmserver.economy import shop
 from tmserver.economy.errors import EconomyError
@@ -172,6 +172,25 @@ class EconomyService:
             raise EconomyError(f"stale {name} reservation")
         return view
 
+    def _hold(self, reservation):
+        """Record a new or refreshed capability for its account and return it."""
+        self._reservations[reservation.account.key] = reservation
+        return reservation
+
+    def _replacement(self, view, expected, cards, deck_names, *, allow_discard, label):
+        """Check a full replacement inventory against the expected multiset.
+
+        Cards may change deck slots; allow_discard also permits removals. No
+        card may be created or have its stats changed.
+        """
+        final = [self.catalog.validate(c) for c in (expected if cards is None else cards)]
+        before, after = Counter(c.reduced() for c in expected), Counter(c.reduced() for c in final)
+        if after - before or not allow_discard and before != after:
+            raise EconomyError(f"{label} output creates, changes or unexpectedly discards cards")
+        check_inventory(final)
+        names = self._deck_names(dict(view.deck_names) if deck_names is None else deck_names)
+        return final, names
+
     def _release_reservation(self, reservation, expected_type, name):
         if not isinstance(reservation, expected_type):
             raise EconomyError(f"invalid {name} reservation")
@@ -182,51 +201,21 @@ class EconomyService:
         return True
 
     def reserve_auction(self, key):
-        account = self._account(key)
-        if self.is_reserved(key) or account.session is not None or account.pending is not None:
+        """Exclusive escrow capability, also used for trusted event deliveries."""
+        if self.is_busy(key):
             raise EconomyError("auction account is busy")
-        reservation = AuctionReservation(self.account_view(key))
-        self._reservations[key] = reservation
-        return reservation
-
-    def reserve_delivery(self, key):
-        """Exclusive capability for a trusted non-auction card/money delivery."""
-        return self.reserve_auction(key)
-
-    def commit_delivery(
-        self, reservation, *, add=(), credit=0, cards=None, deck_names=None, keep_reserved=True
-    ):
-        """Validate owned output and bounded credit from a trusted grant ledger.
-
-        Uses the shared escrow boundary but creates no auction ledger entries.
-        The caller must consume its durable grant in the same persisted update.
-        """
-        return self.commit_auction(
-            reservation,
-            add=add,
-            credit=credit,
-            cards=cards,
-            deck_names=deck_names,
-            allow_discard=True,
-            keep_reserved=keep_reserved,
-        )
-
-    def release_delivery(self, reservation):
-        return self.release_auction(reservation)
+        return self._hold(AuctionReservation(self.account_view(key)))
 
     def prize_points(self, key):
         return struct.unpack_from("<I", self._account(key).template, 0x134)[0]
 
     def reserve_prize(self, key):
-        account = self._account(key)
-        if self.is_reserved(key) or account.session is not None or account.pending is not None:
+        if self.is_busy(key):
             raise EconomyError("Prize Center account is busy")
         points = self.prize_points(key)
         if points > 99999:
             raise EconomyError("prize points exceed native capacity")
-        token = PrizeReservation(self.account_view(key), points)
-        self._reservations[key] = token
-        return token
+        return self._hold(PrizeReservation(self.account_view(key), points))
 
     def release_prize(self, reservation):
         return self._release_reservation(reservation, PrizeReservation, "Prize Center")
@@ -263,20 +252,15 @@ class EconomyService:
             raise EconomyError("invalid prize-point transfer")
         points = min(99999, reservation.points + credit) - debit
         expected = list(view.cards) + [self.catalog.validate(c) for c in add]
-        final = [self.catalog.validate(c) for c in (expected if cards is None else cards)]
-        before, after = Counter(c.reduced() for c in expected), Counter(c.reduced() for c in final)
-        if after - before or not allow_discard and before != after:
-            raise EconomyError("prize output creates, changes or unexpectedly discards cards")
-        check_inventory(final)
-        names = self._deck_names(dict(view.deck_names) if deck_names is None else deck_names)
+        final, names = self._replacement(
+            view, expected, cards, deck_names, allow_discard=allow_discard, label="prize"
+        )
         template = bytearray(self._accounts[view.key].template)
         struct.pack_into("<I", template, 0x134, points)
         self._accounts[view.key].committed = _State(view.balance, final, names)
         self._accounts[view.key].template = bytes(template)
         if keep_reserved:
-            refreshed = PrizeReservation(self.account_view(view.key), points)
-            self._reservations[view.key] = refreshed
-            return refreshed
+            return self._hold(PrizeReservation(self.account_view(view.key), points))
         self.release_prize(reservation)
         return None
 
@@ -319,27 +303,19 @@ class EconomyService:
             except ValueError as exc:
                 raise EconomyError("auction removal is not owned") from exc
         expected.extend(self.catalog.validate(c) for c in add)
-        final = [self.catalog.validate(c) for c in (expected if cards is None else cards)]
-        before, after = Counter(c.reduced() for c in expected), Counter(c.reduced() for c in final)
-        if after - before or not allow_discard and before != after:
-            raise EconomyError("auction output creates, changes or unexpectedly discards cards")
-        check_inventory(final)
-        names = self._deck_names(dict(view.deck_names) if deck_names is None else deck_names)
+        final, names = self._replacement(
+            view, expected, cards, deck_names, allow_discard=allow_discard, label="auction"
+        )
         self._accounts[view.key].committed = _State(balance, final, names)
         if keep_reserved:
-            refreshed = AuctionReservation(self.account_view(view.key))
-            self._reservations[view.key] = refreshed
-            return refreshed
+            return self._hold(AuctionReservation(self.account_view(view.key)))
         self.release_auction(reservation)
         return None
 
     def reserve_match(self, key):
-        account = self._account(key)
-        if self.is_reserved(key) or account.session is not None or account.pending is not None:
+        if self.is_busy(key):
             raise EconomyError("match account is busy")
-        reservation = MatchReservation(self.account_view(key))
-        self._reservations[key] = reservation
-        return reservation
+        return self._hold(MatchReservation(self.account_view(key)))
 
     def release_match(self, reservation):
         return self._release_reservation(reservation, MatchReservation, "match")
@@ -467,15 +443,11 @@ class EconomyService:
         if len(earned) > 30 or any(c.deck != 255 for c in earned):
             raise EconomyError("invalid generated result reward batch")
         expected = list(view.cards) + list(earned)
-        final = [self.catalog.validate(c) for c in (expected if cards is None else cards)]
-        if Counter(c.reduced() for c in final) - Counter(c.reduced() for c in expected):
-            raise EconomyError("result output creates or alters card stats")
-        check_inventory(final)
-        names = self._deck_names(dict(view.deck_names) if deck_names is None else deck_names)
+        final, names = self._replacement(
+            view, expected, cards, deck_names, allow_discard=True, label="result"
+        )
         self._accounts[view.key].committed = _State(view.balance, final, names)
-        refreshed = MatchReservation(self.account_view(view.key))
-        self._reservations[view.key] = refreshed
-        return refreshed
+        return self._hold(MatchReservation(self.account_view(view.key)))
 
     def _selected_indices(self, view, cards):
         if len(cards) != 5:
@@ -737,26 +709,21 @@ class EconomyService:
         """
         view = self._match_view(reservation)
         self._apply_deck_changes(self._account(view.key), cards, names)
-        refreshed = MatchReservation(self.account_view(view.key))
-        self._reservations[view.key] = refreshed
-        return refreshed
+        return self._hold(MatchReservation(self.account_view(view.key)))
 
     def _apply_deck_changes(self, a, cards, names):
+        """Apply one Decks batch: at most 13 owned cards and one rename."""
         cards = [self.catalog.validate(c) for c in cards]
         names = {} if names is None else dict(names)
+        if len(cards) > 13 or any(c.deck not in range(50) and c.deck != 255 for c in cards):
+            raise EconomyError("invalid delayed deck edit")
         if set(names) - {1, 2} or len(names) > 1:
             raise EconomyError("invalid delayed rename")
-        fields = {"Decks": {"C": str(len(cards))}}
-        for i, c in enumerate(cards):
-            fields[str(i)] = {"D": "|".join(map(str, c.reduced() + (c.deck,)))}
-        for i, name in names.items():
-            if not isinstance(name, bytes):
-                raise EconomyError("invalid delayed name")
-            fields[f"DN{i}"] = {"S": name.hex()}
-        values, renamed = parse_edit_records(fields, "Decks", number=_int, error=EconomyError)
         current = a.committed
+        renamed = self._deck_names(current.names | names)
+        values = [c.reduced() + (c.deck,) for c in cards]
         updated, _ = apply_card_edits(current.cards, values, discard=False, error=EconomyError)
-        a.committed = _State(current.balance, updated, current.names | renamed)
+        a.committed = _State(current.balance, updated, renamed)
 
     def _draw(self):
         return self.rng.randrange(32768)
@@ -866,20 +833,6 @@ class EconomyService:
 
     def balance(self, key):
         return self._account(key).committed.balance
-
-    def validate_selection(self, key, cards):
-        """Read-only full-card multiset check for the practice match service."""
-        try:
-            if self.is_reserved(key):
-                return False
-            supplied = [Card.from_card(c) for c in cards]
-            for c in supplied:
-                self.catalog.validate(c)
-            wanted = Counter(c.full() for c in supplied)
-            owned = Counter(c.full() for c in self.inventory(key))
-            return all(count <= owned[values] for values, count in wanted.items())
-        except (AttributeError, EconomyError, TypeError):
-            return False
 
     def disconnect(self, key):
         account = self._account(key)

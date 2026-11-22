@@ -286,7 +286,7 @@ class PrizeTests(unittest.TestCase):
         ):
             with self.assertRaises(EconomyError):
                 call()
-        self.assertFalse(self.e.validate_selection("one", self.e.inventory("one")[:5]))
+        self.assertTrue(self.e.is_reserved("one"))
         self.quit()
         self.assertFalse(self.e.is_reserved("one"))
         token = self.e.reserve_match("one")

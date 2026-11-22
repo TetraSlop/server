@@ -296,9 +296,8 @@ class EventGrantActionTests(unittest.TestCase):
         self.host.economy.save_table_preferences(
             "one", game=dict(bm=100, du=0, st=0, cb=0, ca=0, gs=0, tl=0)
         )
-        token = self.host.economy.reserve_delivery("one")
-        token = self.host.economy.commit_delivery(token, credit=3)
-        self.host.economy.release_delivery(token)
+        token = self.host.economy.reserve_auction("one")
+        self.host.economy.commit_auction(token, credit=3)
         self.host.persist()
         self.assertEqual(preview_event_grant(self.host, value).digest, preview.digest)
         apply_event_grant(self.host, value, preview.digest)
