@@ -1,38 +1,20 @@
 """Opt-in spectator transport is ordered and cannot hold participant I/O."""
 
 import asyncio
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
-from tests import ROOT
 from tests.protocol.test_admission_identity import native_identity
 from tests.game.test_match_service import NATIVE_SETTINGS
-from tests.support.irc import Client
 from tmserver.protocol.identities import TABLE_RAW, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.rooms.packets import TABLE_CHANNEL
-from tests.support.irc import ACCOUNTS
-from tmserver.network.server import Server
-from tmserver.rooms.spectators import SpectatorService
+from tests.rooms.harness import instant_spectators, read_notice, serve
 
 
 class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.server = Server(
-            state_path=Path(self.temp.name) / "state.json",
-            spectator=SpectatorService(
-                enabled=True, bootstrap_delay=0, turn_delay=0, action_delay=0, packet_delay=0
-            ),
-        )
-        self.port = await self.server.start(0)
-        self.clients = [Client(), Client()]
-        for client, nick in zip(self.clients, ACCOUNTS):
-            await client.open(self.port, account=nick)
-            self.assertIn(b" 422 ", await client.read())
+        await serve(self, spectator=instant_spectators())
         self.target = service_nick(TABLE_RAW)
         view = self.server.economy.account_view(self.clients[0].nick.decode())
         observation = getattr(self, "observation_rule", 0)
@@ -50,12 +32,6 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
             f"@N{i}=/D=" + "|".join(map(str, c.full())) for i, c in enumerate(cards)
         )
         await self.player(packet(0x43, 7, 0, body))
-
-    async def asyncTearDown(self):
-        for client in self.clients:
-            await client.close()
-        await self.server.stop()
-        self.temp.cleanup()
 
     async def player(self, payload):
         c = self.clients[0]
@@ -79,10 +55,7 @@ class SpectatorIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.fail("player output limit exceeded")
 
     async def read_watch(self):
-        line = await self.clients[1].read()
-        self.assertTrue(line)
-        self.assertTrue(line.startswith(b":" + self.target + b"!p@local NOTICE "))
-        return line.split(b" :", 1)[1]
+        return await read_notice(self, self.clients[1], self.target)
 
     async def admit_watch(self):
         c = self.clients[1]

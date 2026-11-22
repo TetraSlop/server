@@ -12,7 +12,6 @@ from tmserver.rooms.packets import TABLE_CHANNEL
 
 class SpectatorReentryTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = base.SpectatorIntegrationTests.asyncSetUp
-    asyncTearDown = base.SpectatorIntegrationTests.asyncTearDown
     player = base.SpectatorIntegrationTests.player
     read_watch = base.SpectatorIntegrationTests.read_watch
     admit_watch = base.SpectatorIntegrationTests.admit_watch

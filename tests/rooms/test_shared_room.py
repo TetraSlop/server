@@ -1,20 +1,17 @@
 """Concurrent tables share only a room roster and ordered table announcements."""
 
-import asyncio
 import struct
-import sys
 import unittest
 from dataclasses import replace
-from pathlib import Path
 from types import SimpleNamespace
 
 from tests.rooms import test_ordinary_rooms as base
 from tests.events.test_event_rooms import presence as room_presence
 from tests.rooms.test_room_service import presence
-from tests.support.irc import Client
-from tmserver.protocol.identities import GAME_KEY, game_id, player_id, service_nick
+from tmserver.protocol.identities import GAME_KEY, game_id, service_nick
+from tests.rooms.harness import serve
 from tmserver.game.packets import decode, packet
-from tmserver.rooms.config import OrdinaryRoomConfig, OrdinaryTableConfig, directory_files
+from tmserver.rooms.config import OrdinaryTableConfig, directory_files
 from tmserver.rooms.service import RoomService
 from tmserver.network.server import Server
 from tmserver.rooms.spectators import SpectatorService
@@ -56,8 +53,6 @@ class SharedRoomUnits(unittest.TestCase):
 
 
 class SharedRoomIntegration(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = base.OrdinaryRoomsIntegration.asyncSetUp
-    asyncTearDown = base.OrdinaryRoomsIntegration.asyncTearDown
     group = base.OrdinaryRoomsIntegration.group
     flush = base.OrdinaryRoomsIntegration.flush
     send = base.OrdinaryRoomsIntegration.send
@@ -88,17 +83,9 @@ class SharedRoomIntegration(unittest.IsolatedAsyncioTestCase):
         self.cfg = replace(base.EXTRA, mode=mode, tables=(extra,))
         self.groups = ((0,), (1,)) if cpu else ((0, 1), (2, 3))
         count = kwargs.pop("accounts", 2 if cpu else 4)
-        self.server = Server(
-            state_path=self.path, account_count=count, ordinary_rooms=(self.cfg,), **kwargs
-        )
+        await serve(self, account_count=count, ordinary_rooms=(self.cfg,), **kwargs)
         self.tables = self.server.ordinary_tables[1:]
-        self.port = await self.server.start(0)
         self.received = [[] for _ in range(count)]
-        for nick in self.server.accounts:
-            c = Client()
-            self.clients.append(c)
-            await c.open(self.port, account=nick)
-            self.assertIn(b" 422 ", await c.read())
         self.keys = [c.nick.decode() for c in self.clients]
 
     async def test_cpu_tables_keep_distinct_rosters_and_live_directory_counts(self):

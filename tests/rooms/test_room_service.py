@@ -10,7 +10,6 @@ from tmserver.rooms.packets import (
     TABLE_CHANNEL,
     TABLE_ID,
     directory_files,
-    player_record,
 )
 from tmserver.rooms.service import RoomService
 from tmserver.protocol.commands import Command, encode, parse

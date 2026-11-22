@@ -2,23 +2,19 @@
 
 import asyncio
 import struct
-import sys
-import tempfile
 import unittest
 from dataclasses import replace
-from pathlib import Path
 from unittest.mock import patch
 
 from tests import ROOT
 from tests.events.test_event_rooms import config as event_config
 from tests.events.test_event_rooms import presence
 from tests.profiles.test_profile_accounts import file_request, transact
-from tests.support.irc import Client
+from tests.rooms.harness import serve
 from tmserver.protocol.identities import (
     GAME_KEY,
     ROOM_RAW,
     TABLE_RAW,
-    game_id,
     player_id,
     service_nick,
 )
@@ -65,39 +61,19 @@ class OrdinaryRoomConfiguration(unittest.IsolatedAsyncioTestCase):
 
 
 class OrdinaryRoomsIntegration(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
-        self.clients = []
-        self.server = None
-
-    async def asyncTearDown(self):
-        for client in self.clients:
-            await client.close()
-        if self.server is not None:
-            await self.server.stop()
-        self.temp.cleanup()
-
     async def start(self, cpu=False, **kwargs):
         mode = "computer" if cpu else "versus"
         self.cfg = replace(EXTRA, mode=mode)
         self.groups = ((0,), (1,)) if cpu else ((0, 1), (2, 3))
-        self.server = Server(
-            state_path=self.path,
+        await serve(
+            self,
             account_count=2 if cpu else 4,
             match_mode=mode,
             ordinary_rooms=(self.cfg,),
             **kwargs,
         )
         self.tables = self.server.ordinary_tables
-        self.port = await self.server.start(0)
         self.received = [[] for _ in range(2 if cpu else 4)]
-        for nick in self.server.accounts:
-            c = Client()
-            self.clients.append(c)
-            await c.open(self.port, account=nick)
-            self.assertIn(b" 422 ", await c.read())
         self.keys = [c.nick.decode() for c in self.clients]
 
     def group(self, side):
@@ -236,7 +212,7 @@ class OrdinaryRoomsIntegration(unittest.IsolatedAsyncioTestCase):
         await self.leave_result(0)
         self.assertTrue(self.tables[1].match_reservations)
         await self.leave_result(1)
-        restored = Server(state_path=self.path, account_count=4, ordinary_rooms=(self.cfg,))
+        restored = Server(state_path=self.state_path, account_count=4, ordinary_rooms=(self.cfg,))
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
         finally:
@@ -301,7 +277,7 @@ class OrdinaryRoomsIntegration(unittest.IsolatedAsyncioTestCase):
         await self.start()
         await self.admit(0)
         await self.admit(1)
-        p = ProfileServer(Path(self.temp.name) / "profile.jsonl", self.server)
+        p = ProfileServer(self.state_path.parent / "profile.jsonl", self.server)
         port = await p.start(0)
         try:
             for index, table in enumerate(self.tables):

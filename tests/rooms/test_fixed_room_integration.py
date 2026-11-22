@@ -1,22 +1,18 @@
 """Encrypted fixed-room startup; no native scene or live save is used."""
 
-import asyncio
-import tempfile
 import unittest
-from pathlib import Path
 
 from tests.rooms import test_ordinary_rooms as ordinary
 from tests.protocol.test_admission_identity import native_identity
 from tests.events.test_event_rooms import presence
 from tests.rooms.test_room_rules import settings
-from tests.support.irc import Client
+from tests.rooms.harness import serve
 from tmserver.protocol.identities import service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.game.boards import generate_board
 from tmserver.game.rules import CRTLCG
 from tmserver.rooms.config import OrdinaryRoomConfig, directory_files
 from tmserver.rooms.rules import RoomRules
-from tmserver.network.server import Server
 from tests.support.profiles import read_preferences
 from tmserver.protocol.commands import Command, encode, parse
 
@@ -27,37 +23,21 @@ class FixedRoomIntegration(unittest.IsolatedAsyncioTestCase):
     send = ordinary.OrdinaryRoomsIntegration.send
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory()
         self.rules = RoomRules(st=1, cb=1, ca=1, tl=4)
         self.saved = RoomRules(gs=2, tl=5)
         config = OrdinaryRoomConfig(
             b"Fixed Special", 0x101, 0x201, b"#FIXEDROOM", b"#FIXEDTABLE", rules=self.rules
         )
-        self.server = Server(
-            state_path=Path(self.temp.name) / "state.json", ordinary_rooms=(config,)
-        )
+        await serve(self, ordinary_rooms=(config,))
         self.table = self.server.ordinary_tables[1]
         self.tables, self.groups = (self.table,), ((0, 1),)
-        self.clients, self.received = [], [[], []]
-        port = await self.server.start(0)
-        for nick in self.server.accounts:
-            client = Client()
-            self.clients.append(client)
-            await client.open(port, account=nick)
-            self.assertIn(b" 422 ", await client.read())
+        self.received = [[], []]
         self.keys = [client.nick.decode() for client in self.clients]
         for side, client in enumerate(self.clients):
             await client.join(self.table.room.room_channel)
             await self.send(side, self.room_presence(side), room=True)
             await client.join(self.table.table_channel)
             await self.flush(side)
-
-    async def asyncTearDown(self):
-        for client in self.clients:
-            await client.close()
-        await self.server.stop()
-        self.temp.cleanup()
 
     def view(self, side):
         return self.server.economy.account_view(self.keys[side])

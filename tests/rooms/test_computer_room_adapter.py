@@ -8,13 +8,12 @@ from unittest.mock import patch
 
 from tests.protocol.test_admission_identity import native_identity
 from tests.rooms.test_room_service import presence
-from tests.network.test_session_recovery import Writer
+from tests.rooms.harness import local_peer
 from tmserver.protocol.identities import GAME_KEY, game_id
 from tmserver.game.models import Player
 from tmserver.game.packets import packet
 from tmserver.rooms.service import RoomService
 from tmserver.network.server import Server
-from tmserver.network.session import Session
 from tmserver.protocol.commands import parse
 
 
@@ -96,15 +95,7 @@ class ComputerRoomTests(unittest.TestCase):
 class ComputerAdapterTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.server = Server(card_prizes=True, allow_wagers=True)
-        self.peers = []
-        for index, nick in enumerate(self.server.accounts):
-            peer = Session(self.server, None, Writer(), index + 1)
-            peer.nick = nick
-            self.server.ensure_account(nick)
-            self.server.trade.bind(peer, nick.decode())
-            self.server.nicks[nick] = peer
-            self.server.sessions.add(peer)
-            self.peers.append(peer)
+        self.peers = [local_peer(self.server, nick) for nick in self.server.accounts]
         self.peer = self.peers[0]
         self.key = self.peer.nick.decode()
         self.view = self.server.economy.account_view(self.key)

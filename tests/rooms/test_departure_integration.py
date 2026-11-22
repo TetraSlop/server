@@ -1,14 +1,12 @@
 """Opt-in departures through encrypted TCP and reentrant failed-send cleanup."""
 
 import asyncio
-import tempfile
 import unittest
 from contextlib import asynccontextmanager
-from pathlib import Path
 
-from tests import ROOT
 from tests.events.test_event_rooms import config, presence
 from tests.support.irc import Client
+from tests.rooms.harness import serve
 from tmserver.events.models import EventTableConfig
 from tmserver.protocol.identities import (
     GAME_KEY,
@@ -27,26 +25,15 @@ from tmserver.network.server import Server
 
 class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
-        self.server = None
-        self.clients = []
         self.live = set()
         self.received = {}
-
-    async def asyncTearDown(self):
-        for client in self.clients:
-            await client.close()
-        if self.server is not None:
-            await self.server.stop()
-        self.temp.cleanup()
 
     async def start(
         self, *, count=2, accounts=None, rule=0, enabled=True, watchdog=None, stake=0, **kwargs
     ):
-        self.server = Server(
-            state_path=self.path,
+        await serve(
+            self,
+            clients=count,
             match_mode="versus",
             account_count=accounts or count,
             match_player_count=count,
@@ -54,14 +41,8 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
             watchdog=watchdog,
             **kwargs,
         )
-        self.port = await self.server.start(0)
-        for side, nick in enumerate(list(self.server.accounts)[:count]):
-            client = Client()
-            self.clients.append(client)
-            await client.open(self.port, account=nick)
-            self.assertIn(b" 422 ", await client.read())
-            self.live.add(side)
-            self.received[side] = []
+        self.live.update(range(count))
+        self.received.update((side, []) for side in range(count))
         self.keys = [c.nick.decode() for c in self.clients]
         self.peers = [self.server.nicks[c.nick] for c in self.clients]
         self.initial_accounts = self.server.economy.snapshot()
@@ -202,7 +183,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.clients.append(reconnect)
         await reconnect.open(self.port, account=self.peers[0].nick)
         self.assertIn(b" 422 ", await reconnect.read())
-        restored = Server(state_path=self.path)
+        restored = Server(state_path=self.state_path)
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
         finally:
@@ -421,7 +402,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ledger["rounds"][0]["money"], "refunded")
         self.assertTrue(ledger["rounds"][0]["closed"])
         for _ in range(2):
-            restored = Server(state_path=self.path)
+            restored = Server(state_path=self.state_path)
             try:
                 self.assertEqual(restored.economy.snapshot(), self.initial_accounts)
                 self.assertEqual(restored.match_economy.snapshot(), ledger)

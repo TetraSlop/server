@@ -1,18 +1,14 @@
 """Current rules stay fixed once players enter the ordinary start handshake."""
 
-import asyncio
-import tempfile
 import unittest
-from pathlib import Path
 
 from tests.game import test_versus_integration as versus
 from tests.game.test_match_service import NATIVE_SETTINGS
-from tests.support.irc import Client
+from tests.rooms.harness import serve
 from tmserver.protocol.identities import TABLE_RAW, service_nick
 from tmserver.game.errors import MatchError
 from tmserver.game.match import MatchService
 from tmserver.game.packets import decode, packet
-from tmserver.network.server import Server
 from tmserver.rooms.roster import TableRoster
 
 
@@ -103,25 +99,10 @@ class SettingsStartIntegrationTests(unittest.IsolatedAsyncioTestCase):
     flush = versus.VersusIntegrationTests.flush
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory()
-        self.server = Server(state_path=Path(self.temp.name) / "state.json", match_mode="versus")
-        port = await self.server.start(0)
-        self.clients = []
-        for nick in self.server.accounts:
-            client = Client()
-            self.clients.append(client)
-            await client.open(port, account=nick)
-            self.assertIn(b" 422 ", await client.read())
+        await serve(self, match_mode="versus")
         for side in (0, 1):
             await self.send(side, packet(0x41, 1, body="@GameEN="))
         await self.send(0, packet(0x14, body=NATIVE_SETTINGS))
-
-    async def asyncTearDown(self):
-        for client in self.clients:
-            await client.close()
-        await self.server.stop()
-        self.temp.cleanup()
 
     async def reject_changed_settings(self, stage):
         if stage in ("offer", "accepted"):

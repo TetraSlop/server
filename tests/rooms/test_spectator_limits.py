@@ -1,16 +1,12 @@
 """Oversized supported CBC snapshots must never interrupt participant play."""
 
-import asyncio
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
-from tests import ROOT
 from tests.game import test_three_player_integration as versus
 from tests.game.test_match_service import ack, put, select
-from tests.support.irc import Client
 from tests.protocol.test_admission_identity import native_identity
+from tests.rooms.harness import serve, state_path
 from tmserver.cards.catalog import Catalog
 from tmserver.cards.model import Card as InventoryCard
 from tmserver.economy.service import EconomyService
@@ -18,7 +14,6 @@ from tmserver.game.match import MatchService
 from tmserver.game.models import Card
 from tmserver.game.packets import decode, packet
 from tmserver.network.local_accounts import account_specs
-from tmserver.network.server import Server
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.rooms.packets import TABLE_CHANNEL
 from tmserver.rooms.spectators import SpectatorError, SpectatorService, bootstrap
@@ -121,9 +116,7 @@ class SpectatorLimitsIntegration(unittest.IsolatedAsyncioTestCase):
     admit = versus.ThreePlayerIntegrationTests.admit
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory(dir=ROOT / "tests")
-        self.path = Path(self.temp.name) / "state.json"
+        state_path(self)
         economy = EconomyService(seed=1)
         for key, (_, _, character) in account_specs(4).items():
             economy.provision(
@@ -133,9 +126,9 @@ class SpectatorLimitsIntegration(unittest.IsolatedAsyncioTestCase):
                 name=f"P{character}".encode(),
                 cards=[InventoryCard.from_card(generated_card())] * 5,
             )
-        JsonStateStore(self.path).save(economy.snapshot())
-        self.server = Server(
-            state_path=self.path,
+        JsonStateStore(self.state_path).save(economy.snapshot())
+        await serve(
+            self,
             account_count=4,
             match_mode="versus",
             match_player_count=3,
@@ -143,24 +136,11 @@ class SpectatorLimitsIntegration(unittest.IsolatedAsyncioTestCase):
             allow_cbc=True,
             spectator=SpectatorService(enabled=True),
         )
-        port = await self.server.start(0)
-        self.clients = []
-        for nick in self.server.accounts:
-            client = Client()
-            self.clients.append(client)
-            await client.open(port, account=nick)
-            self.assertIn(b" 422 ", await client.read())
         self.target = service_nick(TABLE_RAW)
         self.keys = [client.nick.decode() for client in self.clients[:3]]
         await self.admit()
         for side in range(3):
             await self.send(side, select((generated_card(),) * 5, side))
-
-    async def asyncTearDown(self):
-        for client in self.clients:
-            await client.close()
-        await self.server.stop()
-        self.temp.cleanup()
 
     async def move(self):
         match = self.server.default_table.match

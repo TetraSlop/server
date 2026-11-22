@@ -1,19 +1,13 @@
 """A table newcomer must finish GameEA cleanup before its start invite."""
 
-import asyncio
-import sys
-import tempfile
 import unittest
-from pathlib import Path
 
-from tests import ROOT
 from tests.rooms import test_table_roster as roster_tests
 from tests.game.test_flexible_seats import seated
 from tests.game.test_match_service import NATIVE_SETTINGS
-from tests.support.irc import Client
+from tests.rooms.harness import serve
 from tmserver.game.match import MatchService
 from tmserver.game.packets import decode, packet
-from tmserver.network.server import Server
 from tmserver.rooms.roster import TableRoster
 
 
@@ -57,25 +51,15 @@ class StartInvitationBarrierNetwork(unittest.IsolatedAsyncioTestCase):
     table = roster_tests.RosterIntegration.table
     enter = roster_tests.RosterIntegration.enter
     admit = roster_tests.RosterIntegration.admit
-    asyncTearDown = roster_tests.RosterIntegration.asyncTearDown
 
     async def asyncSetUp(self):
-        asyncio.get_running_loop().slow_callback_duration = 1
-        self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.server = Server(
-            state_path=Path(self.temp.name) / "state.json",
+        await serve(
+            self,
             match_mode="versus",
             match_player_count=3,
             account_count=4,
             flexible_seats=self.flexible_seats,
         )
-        self.clients = []
-        port = await self.server.start(0)
-        for nick in self.server.accounts:
-            c = Client()
-            self.clients.append(c)
-            await c.open(port, account=nick)
-            self.assertIn(b" 422 ", await c.read())
 
     async def test_third_admission_race_defers_only_newcomer_invite_then_starts(self):
         await self.enter(0)

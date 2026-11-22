@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from tests.network import test_chat_service as chats
 from tests.events import test_event_spectators as events
 from tests.rooms import test_spectator_integration as ordinary
+from tests.rooms.harness import teardown
 from tests.protocol.test_admission_identity import native_identity
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, service_nick
 from tmserver.game.packets import decode, packet
@@ -35,7 +36,7 @@ class RoomServiceBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 await fixture.read_watch()
             yield fixture
         finally:
-            await fixture.asyncTearDown()
+            await teardown(fixture)
 
     async def barrier(self, client):
         await client.send(b"PING :room-boundary")

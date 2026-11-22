@@ -42,7 +42,6 @@ class TableNoticeUnits(unittest.TestCase):
 
 class TableNoticeIntegration(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = lobby.KickIntegration.asyncSetUp
-    asyncTearDown = lobby.KickIntegration.asyncTearDown
     flush = lobby.KickIntegration.flush
     send = lobby.KickIntegration.send
     admit = lobby.KickIntegration.admit
