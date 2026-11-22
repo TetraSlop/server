@@ -15,13 +15,14 @@ its ABI without an original game image. Successful builds retain the
 `tmserver-wheel` and `tmserver-native-win32` artifacts for 14 days.
 
 The **Native gameplay** workflow runs the image-dependent `native` test lane,
-8,067 frozen original-routine cases, and installed-package startup/auth checks
-on 32-bit Windows. Configure the repository secret `TM_ORIGINAL_IMAGE_URL` with
-an operator-controlled HTTPS download of the unpacked image; its exact size and
-SHA-256 are verified before execution. The image is not a repository or release
-artifact. This workflow can be dispatched manually and is a mandatory release
-gate. Without that secret, native cloud acceptance and release publication fail
-explicitly; ordinary image-free CI is not a claim of full gameplay acceptance.
+8,067 frozen original-routine cases, and installed-package startup and auth checks
+on 32-bit Windows. It runs only when started by hand from the Actions tab. It
+downloads the game image from the `TM_ORIGINAL_IMAGE_URL` repository secret, an
+HTTPS URL the maintainer controls, and checks its size and SHA-256 before use.
+Secrets are not available to forks or outside contributors, so they cannot run
+this workflow; run the native lane locally with your own copy instead. The image
+is never a repository or release artifact. Passing Checks does not mean the
+native lane passes.
 
 `tests/native_modules.json` assigns image-dependent modules to the native lane.
 The remaining portable/admin/auth/PostgreSQL lanes cannot silently skip native
@@ -56,12 +57,11 @@ dispatches Release packages for its created tag. These are GitHub's documented
 
 Only the release-please workflow can write PRs; ordinary test jobs have read-only
 repository permissions. GitHub Actions must be allowed to create pull requests
-in the repository workflow settings. No personal token is required. Native
-acceptance uses the separately configured image URL secret described above.
+in the repository workflow settings. No personal token is required.
 
 Release packages validates that the tag is exactly `v<pyproject version>`, reruns
-the Checks and Native gameplay workflows on that tag, and publishes only after every check
-passes. It attaches the Python wheel, `tmserver-native-win32.zip` containing our
+the Checks workflow on that tag, and publishes only after every check passes. It
+does not run Native gameplay; start that by hand before tagging a release. It attaches the Python wheel, `tmserver-native-win32.zip` containing our
 required bridge, and `SHA256SUMS`. Original game DLLs, private configuration,
 account saves and local logs are not packaged. Nothing is deployed to a server
 or uploaded to PyPI by these workflows.

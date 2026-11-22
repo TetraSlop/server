@@ -1,10 +1,6 @@
 name: Native gameplay
 on:
   workflow_dispatch:
-  workflow_call:
-    secrets:
-      TM_ORIGINAL_IMAGE_URL:
-        required: true
 permissions:
   contents: read
 defaults:
