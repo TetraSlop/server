@@ -17,21 +17,3 @@ def upgrade():
         ))
     """)
 
-
-def downgrade():
-    retained = op.get_bind().exec_driver_sql("""
-        SELECT EXISTS (
-            SELECT 1 FROM service_state WHERE name = 'identities'
-            AND payload NOT IN ('null'::jsonb, '{"version":1,"links":[]}'::jsonb)
-        )
-    """).scalar_one()
-    if retained:
-        raise RuntimeError("cannot downgrade while identity ownership links are retained")
-    op.execute("DELETE FROM service_state WHERE name = 'identities'")
-    op.execute("ALTER TABLE service_state DROP CONSTRAINT service_state_name_check")
-    op.execute("""
-        ALTER TABLE service_state ADD CONSTRAINT service_state_name_check CHECK (name IN (
-            'auction', 'prize', 'result_rewards', 'match_economy', 'ratings',
-            'character_profiles', 'events', 'event_cards', 'event_results', 'admin_audit'
-        ))
-    """)

@@ -1,12 +1,10 @@
-"""Audited awards and migration history survive real PostgreSQL failure boundaries."""
+"""Audited awards survive real PostgreSQL failure boundaries."""
 
 from copy import deepcopy
-from pathlib import Path
 import unittest
 from unittest.mock import patch
 
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture, sa
-from tmserver.storage.schema import SCHEMA_REVISION
 
 
 @unittest.skipUnless(TEST_URL, "set TM_TEST_DATABASE_URL for real PostgreSQL tests")
@@ -171,87 +169,3 @@ class AwardPostgresTests(DatabaseFixture, unittest.TestCase):
             self.assertEqual(self.apply(self.host, request, preview.digest), receipt)
         self.assertEqual(self.store.load(), saved)
         self.assertEqual(self.store.revision, revision + 1)
-
-    def downgrade(self):
-        from alembic import command
-        from alembic.config import Config
-        from tmserver.storage import database
-        from tmserver.storage.schema import WRITER_LOCK
-
-        engine = database.database_engine(self.url)
-        try:
-            with engine.begin() as connection:
-                self.assertTrue(connection.scalar(
-                    sa.text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": WRITER_LOCK}
-                ))
-                config = Config()
-                config.set_main_option(
-                    "script_location", str(Path(database.__file__).with_name("migrations"))
-                )
-                config.attributes["connection"] = connection
-                command.downgrade(config, "0001_state")
-        finally:
-            engine.dispose()
-
-    def schema_version(self):
-        from tmserver.storage.postgres import database_engine
-
-        engine = database_engine(self.url)
-        try:
-            with engine.connect() as connection:
-                return connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-        finally:
-            engine.dispose()
-
-    def test_empty_audit_downgrade_and_upgrade_preserve_legacy_accounts_and_prizes(self):
-        from tmserver.economy.claim_transactions import prize_transaction
-        from tmserver.storage.database import upgrade
-        from tmserver.storage.postgres import PostgresStateStore, database_engine
-
-        with prize_transaction(self.host, self.keys[0]) as prize:
-            prize.grant_award(self.keys[0], "legacy-award", top30=75)
-        before, revision = self.store.load(), self.store.revision
-        self.assertEqual(before["admin_audit"], dict(version=1, receipts=[]))
-        self.store.close()
-        self.downgrade()
-        self.assertEqual(self.schema_version(), "0001_state")
-        with self.assertRaisesRegex(OSError, "schema is not current"):
-            PostgresStateStore(self.url)
-        engine = database_engine(self.url)
-        try:
-            with self.assertRaises(sa.exc.IntegrityError), engine.begin() as connection:
-                connection.execute(sa.text(
-                    "INSERT INTO service_state(name, payload) VALUES ('admin_audit', '{}'::jsonb)"
-                ))
-        finally:
-            engine.dispose()
-        upgrade(self.url)
-        self.assertEqual(self.schema_version(), SCHEMA_REVISION)
-        self.restart()
-        self.assertEqual(self.store.load(), {key: value for key, value in before.items()
-                                            if key not in {"admin_audit", "identities"}})
-        self.assertEqual(self.store.revision, revision)
-        self.assertEqual(self.host.admin_audit.snapshot(), dict(version=1, receipts=[]))
-        request = self.request(account_key=self.keys[1])
-        preview = self.preview(self.host, request)
-        receipt = self.apply(self.host, request, preview.digest)
-        saved = self.store.load()
-        self.assertEqual(saved["accounts"], before["accounts"])
-        self.assertEqual(saved["prize"]["accounts"][self.keys[0]],
-                         before["prize"]["accounts"][self.keys[0]])
-        self.assertEqual(saved["admin_audit"]["receipts"], [receipt.model_dump(mode="json")])
-
-    def test_downgrade_refuses_to_erase_redeemed_audit_history(self):
-        request = self.request()
-        receipt = self.apply(self.host, request, self.preview(self.host, request).digest)
-        self.redeem(request.account_key)
-        before, revision = self.store.load(), self.store.revision
-        self.store.close()
-        with self.assertRaisesRegex(RuntimeError, "audit receipts are retained"):
-            self.downgrade()
-        self.assertEqual(self.schema_version(), SCHEMA_REVISION)
-        self.restart()
-        self.assertEqual(self.store.load(), before)
-        self.assertEqual(self.store.revision, revision)
-        self.assertEqual(self.host.admin_audit.get(request.request_id), receipt)
-        self.assertEqual(self.host.economy.prize_points(request.account_key), 69)

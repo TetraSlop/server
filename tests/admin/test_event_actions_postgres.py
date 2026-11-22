@@ -6,7 +6,6 @@ import unittest
 from unittest.mock import patch
 
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture, sa
-from tmserver.storage.schema import SCHEMA_REVISION
 
 
 @unittest.skipUnless(TEST_URL, "set TM_TEST_DATABASE_URL for real PostgreSQL tests")
@@ -259,8 +258,7 @@ class EventGrantPostgresTests(DatabaseFixture, unittest.TestCase):
         self.assertEqual(self.store.load(), saved)
         self.assertEqual(self.store.revision, revision + 1)
 
-    def test_legacy_v1_prize_receipt_survives_mixed_v2_upgrade_and_refused_downgrade(self):
-        from tests.admin.test_actions_postgres import AwardPostgresTests
+    def test_legacy_v1_prize_receipt_survives_mixed_v2_upgrade(self):
         from tmserver.admin.actions import apply_prize_award, preview_prize_award
         from tmserver.admin.audit import PrizeAwardRequest
 
@@ -300,15 +298,3 @@ class EventGrantPostgresTests(DatabaseFixture, unittest.TestCase):
         self.assertEqual(self.host.admin_audit.get(request.request_id), receipt)
         self.assertEqual(self.collect_visit(), (9, 250))
         self.assertEqual(self.collect_visit(), (3, 0))
-        before, revision = self.store.load(), self.store.revision
-        self.store.close()
-        # Reuse the established migration harness; importing it here avoids
-        # collecting another copy of its unrelated TestCase methods.
-        with self.assertRaisesRegex(RuntimeError, "audit receipts are retained"):
-            AwardPostgresTests.downgrade(self)
-        self.assertEqual(AwardPostgresTests.schema_version(self), SCHEMA_REVISION)
-        self.restart()
-        self.assertEqual(self.store.load(), before)
-        self.assertEqual(self.store.revision, revision)
-        self.assertEqual(self.host.admin_audit.get(prize_request.request_id), prize)
-        self.assertEqual(self.host.admin_audit.get(request.request_id), receipt)
