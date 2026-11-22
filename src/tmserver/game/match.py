@@ -30,11 +30,10 @@ from tmserver.game.models import (
     ObserverSnapshot,
     Player,
 )
-from tmserver.game.opponents import OPPONENTS, OpponentError, opponent, prepare_opponents
+from tmserver.game.opponents import OPPONENTS, opponent, prepare_opponents
 from tmserver.game.packets import decode, numbers, packet
 from tmserver.game.prizes import (
     PrizeCard,
-    PrizeError,
     PrizeLedger,
     choose_computer_prize,
 )
@@ -44,6 +43,14 @@ from tmserver.protocol.admission import validate_admission
 from tmserver.rankings.stats import PracticeStats
 from tmserver.rooms.metadata import TableMetadataError, table_info
 from tmserver.rooms.rules import RoomRules
+
+
+def _game_rules(values, message):
+    """Check Tet rule values against the RoomRules domain; the wire is client input."""
+    try:
+        RoomRules(**values)
+    except ValueError as exc:
+        raise MatchError(message) from exc
 
 
 class MatchService:
@@ -77,55 +84,35 @@ class MatchService:
         self.mode = mode
         self.rules_backend = rules_backend if rules_backend is not None else NativeRuntime()
         self._rules_failure = None
-        if type(npc_nickname_id) is not int or not 0 < npc_nickname_id < 1 << 64:
+        if not 0 < npc_nickname_id < 1 << 64:
             raise ValueError("NPC nickname identity must be a nonzero uint64")
         self.npc_nickname_id = npc_nickname_id
         if second_npc_nickname_id is None:
             second_npc_nickname_id = npc_nickname_id % 0xFFFFFFFFFFFFFFFF + 1
         if (
-            type(second_npc_nickname_id) is not int
-            or not 0 < second_npc_nickname_id < 1 << 64
+            not 0 < second_npc_nickname_id < 1 << 64
             or second_npc_nickname_id == npc_nickname_id
         ):
             raise ValueError("second NPC nickname identity must be a distinct nonzero uint64")
         self.second_npc_nickname_id = second_npc_nickname_id
-        if type(card_prizes) is not bool:
-            raise ValueError("card_prizes must be boolean")
         self.card_prizes = card_prizes
-        if type(allow_wagers) is not bool:
-            raise ValueError("allow_wagers must be boolean")
-        if any(
-            f is not None and not callable(f)
-            for f in (round_authorizer, payout_provider, rating_provider)
-        ):
-            raise ValueError("economic hooks must be callable")
         if allow_wagers and (round_authorizer is None or payout_provider is None):
             raise ValueError("wagers require durable round authorization and a payout provider")
         self.allow_wagers = allow_wagers
-        if room_rules is not None and not isinstance(room_rules, RoomRules):
-            raise ValueError("room_rules must be RoomRules or None")
         if room_rules is not None and not allow_wagers and (room_rules.bm or room_rules.du):
             raise ValueError("room wagers/double-up require economic hooks")
         self.room_rules = room_rules
         self.round_authorizer = round_authorizer
         self.payout_provider = payout_provider
         self.rating_provider = rating_provider
-        if type(allow_departures) is not bool:
-            raise ValueError("allow_departures must be boolean")
         self.allow_departures = allow_departures
         self.authorized_round_id = None
         self.round_stake = 0
-        if (
-            type(player_count) is not int
-            or player_count not in (2, 3)
-            or (player_count == 3 and mode != "versus" and not computer_menu)
+        if player_count not in (2, 3) or (
+            player_count == 3 and mode != "versus" and not computer_menu
         ):
             raise ValueError("three-player mode requires humans or the original computer menu")
-        if (
-            type(flexible_seats) is not bool
-            or flexible_seats
-            and (mode != "versus" or player_count != 3 or start_fields is not None)
-        ):
+        if flexible_seats and (mode != "versus" or player_count != 3 or start_fields is not None):
             raise ValueError(
                 "automatic seats require a three-seat versus table with a generated board"
             )
@@ -136,7 +123,7 @@ class MatchService:
         self.board_width = player_count + 2
         self.board_size = self.board_width**2
         self.last_sequence = 5 * player_count - 1
-        if type(computer_menu) is not bool or (computer_menu and mode != "computer"):
+        if computer_menu and mode != "computer":
             raise ValueError("original computer menu requires computer mode")
         self.computer_menu = computer_menu
         self.npc_id = None
@@ -149,8 +136,6 @@ class MatchService:
         self.baselines = tuple(
             GrowthBaseline.from_catalog(row, catalog.prices) for row in catalog.cards
         )
-        if not isinstance(ai_personality, Personality):
-            raise ValueError("ai_personality must be a native_ai.Personality")
         self.ai_personality = ai_personality
         self.explicit_start_fields = start_fields is not None
         self.start_board = special.start_board(
@@ -158,8 +143,6 @@ class MatchService:
         )
         if len(self.start_board.cells) != self.board_size:
             raise ValueError("board shape must match the player count")
-        if type(allow_cbc) is not bool:
-            raise ValueError("allow_cbc must be boolean")
         self.allow_cbc = allow_cbc
         if 18 in self.start_board.fields and not allow_cbc:
             raise ValueError("CBC materialization requires generated-card reward persistence")
@@ -405,10 +388,7 @@ class MatchService:
         if peer not in self.ready or msg.argument != seat:
             raise MatchError("prize selection requires this participant's TCList and seat")
         hand = numbers(msg.sections["GetSelect"].get("H"), 1)[0]
-        try:
-            self._prizes.select(seat, hand, choice_id=choice.choice_id)
-        except PrizeError as exc:
-            raise MatchError(str(exc)) from exc
+        self._prizes.select(seat, hand, choice_id=choice.choice_id)
         out = self._emit(packet(0x43, 0x0F, seat, f"@GetSelect=/E=0/H={hand}"))
         for payload in self._advance_computer_prizes():
             out += self._emit(payload)
@@ -649,25 +629,24 @@ class MatchService:
         if set(msg.sections) != expected:
             raise MatchError("settings require complete Tet and Tab sections")
         result = []
-        domains = [
-            dict(bm=(0, 2000), du=(0, 1), st=(0, 1), cb=(0, 1), ca=(0, 1), gs=(0, 2), tl=(0, 5)),
-            {
-                "in": (0, 2),
-                "lu": (0, 99999),
-                "ll": (0, 99999),
-                "au": (0, 99999),
-                "al": (0, 99999),
-                "co": (0, 8),
-                "pa": (0, 1),
-            },
-        ]
-        for name, domain in zip(("Tet", "Tab"), domains):
+        table_domain = {
+            "in": (0, 2),
+            "lu": (0, 99999),
+            "ll": (0, 99999),
+            "au": (0, 99999),
+            "al": (0, 99999),
+            "co": (0, 8),
+            "pa": (0, 1),
+        }
+        for name, keys in (("Tet", DEFAULT_GAME_RULES), ("Tab", table_domain)):
             fields = msg.sections[name]
             password = name == "Tab" and numbers(fields.get("pa"), 1) == [1]
-            if set(fields) != set(domain) | ({"pw"} if password else set()):
+            if set(fields) != set(keys) | ({"pw"} if password else set()):
                 raise MatchError("missing/unsupported table setting field")
-            values = {key: numbers(fields[key], 1)[0] for key in domain}
-            if any(not lo <= values[key] <= hi for key, (lo, hi) in domain.items()):
+            values = {key: numbers(fields[key], 1)[0] for key in keys}
+            if name == "Tet":
+                _game_rules(values, "table setting outside recovered UI domain")
+            elif any(not lo <= values[key] <= hi for key, (lo, hi) in table_domain.items()):
                 raise MatchError("table setting outside recovered UI domain")
             if password:
                 pw = fields["pw"]
@@ -874,8 +853,6 @@ class MatchService:
         p = self.players[seat]
         if p.departed:
             return []
-        if type(await_result) is not bool:
-            raise MatchError("await_result must be boolean")
         if not self.departure_supported(peer):
             raise MatchError("departure requires active non-economic unrated practice")
         rule = self.game_rules["gs"]
@@ -1117,35 +1094,25 @@ class MatchService:
         if set(fields) != ({"Rule"} if msg.argument == 0 else {"Rule", "Com"}):
             raise MatchError("invalid computer configuration fields")
         rules = numbers(fields["Rule"], 7 if msg.argument == 0 else 8)
-        if (
-            not 0 <= rules[0] <= 2000
-            or rules[5] not in (0, 1)
-            or (not self.allow_wagers and (rules[0] or rules[5]))
-            or not 0 <= rules[4] <= 5
-            or rules[6] not in (0, 1, 2)
-        ):
-            raise MatchError("computer wager/double-up is disabled or menu rules are invalid")
-        if any(value not in (0, 1) for value in rules[1:4]):
-            raise MatchError("computer special rules require0/1 flags")
-        if self.explicit_start_fields and tuple(rules[1:4]) != tuple(
-            self.special_flags[k] for k in ("st", "cb", "ca")
-        ):
-            raise MatchError("computer rule flags must match the explicitly configured board")
-        if msg.argument and rules[7] not in (0, 1, 2):
-            raise MatchError("invalid computer departure rule")
         game = dict(self.game_rules)
         game.update(zip(("bm", "st", "cb", "ca", "tl", "du"), rules[:6]))
         if msg.argument:
             game["gs"] = rules[7]
+        _game_rules(game, "computer menu rules are invalid")
+        if rules[6] not in (0, 1, 2):
+            raise MatchError("computer menu rules are invalid")
+        if not self.allow_wagers and (game["bm"] or game["du"]):
+            raise MatchError("computer wager/double-up is disabled")
+        if self.explicit_start_fields and tuple(rules[1:4]) != tuple(
+            self.special_flags[k] for k in ("st", "cb", "ca")
+        ):
+            raise MatchError("computer rule flags must match the explicitly configured board")
         self._check_room_rules(game)
         npc_ids = ()
         if msg.argument:
             npc_ids = tuple(numbers(fields["Com"], msg.argument - 1))
-            try:
-                for npc_id in npc_ids:
-                    opponent(npc_id)
-            except OpponentError as e:
-                raise MatchError(str(e)) from e
+            for npc_id in npc_ids:
+                opponent(npc_id)
             if len(set(npc_ids)) != len(npc_ids):
                 raise MatchError("computer opponents must be distinct")
             if self.explicit_start_fields and msg.argument != self.player_count:

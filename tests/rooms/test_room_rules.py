@@ -94,9 +94,6 @@ class FixedRoomMatchTests(unittest.TestCase):
             self.assertEqual(generated.call_args.kwargs, dict(st=1, cb=1, ca=1))
 
     def test_incompatible_economic_or_explicit_board_configuration_is_rejected(self):
-        for value in ({}, DEFAULT_GAME_RULES, "fixed"):
-            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "RoomRules"):
-                MatchService(room_rules=value)
         for rules in (RoomRules(bm=1), RoomRules(du=1)):
             with self.assertRaisesRegex(ValueError, "economic"):
                 MatchService(room_rules=rules)

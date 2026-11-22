@@ -1,15 +1,14 @@
 """Board effects from the client, for 16- and 25-cell boards.
 
 Valid fields F0..18 and nonnegative spinner strengths only. Cards are opaque
-immutable objects; this module owns no inventory or RNG. Layout: TetraPackets
-client/board.md and client/rules.md.
+immutable objects; this module owns no inventory or RNG. The match passes
+in-range seats, cells and shared R bytes; start_board checks operator fields.
+Layout: TetraPackets client/board.md and client/rules.md.
 """
 
 from dataclasses import dataclass, replace
 
-
-class SpecialRulesError(ValueError):
-    pass
+from tmserver.game.errors import MatchError
 
 
 DIRECTIONS = ((0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1))
@@ -28,26 +27,8 @@ class Cell:
     marker: int = 0
     identity: object = None
 
-    def __post_init__(self):
-        for name, hi in (
-            ("model", 65535),
-            ("base_owner", 8),
-            ("owner", 8),
-            ("arrows", 255),
-            ("property", 255),
-            ("direction", 7),
-            ("marker", 255),
-        ):
-            value = getattr(self, name)
-            if type(value) is not int or not 0 <= value <= hi:
-                raise SpecialRulesError(name + " outside supported native domain")
-        if type(self.modifier) is not int or not -128 <= self.modifier <= 127:
-            raise SpecialRulesError("modifier must be signed byte")
-
     @classmethod
     def ordinary(cls, card, owner, identity=None, **effects):
-        if not 0 <= card.model < 0x8000:
-            raise SpecialRulesError("ordinary card model required")
         return cls(
             model=card.model,
             card=card,
@@ -73,35 +54,13 @@ class EffectResult:
     continue_combat: bool
 
 
-def _shape(board):
-    size = {16: 4, 25: 5}.get(len(board))
-    if size is None or any(not isinstance(c, Cell) for c in board):
-        raise SpecialRulesError("expected16 or 25 native board cells")
-    return size, size - 2
-
-
-def _index(board, index):
-    if type(index) is not int or not 0 <= index < len(board):
-        raise SpecialRulesError("board index outside board")
-
-
-def _active(board, active):
-    _, players = _shape(board)
-    if type(active) is not int or not 0 <= active < players:
-        raise SpecialRulesError("active player outside board mode")
-    return players
-
-
-def _random(values):
-    values = tuple(values)
-    if len(values) != 8 or any(type(v) is not int or not 0 <= v <= 255 for v in values):
-        raise SpecialRulesError("shared R must contain eight bytes")
-    return values
+def _size(board):
+    """Board width; a 25-cell board seats three players, a 16-cell board two."""
+    return 5 if len(board) == 25 else 4
 
 
 def neighbors(board, index, wrapping=False):
-    size, _ = _shape(board)
-    _index(board, index)
+    size = _size(board)
     x, y = index % size, index // size
     for direction, (dx, dy) in enumerate(DIRECTIONS):
         xx, yy = x + dx, y + dy
@@ -114,7 +73,7 @@ def neighbors(board, index, wrapping=False):
 def start_board(fields):
     fields = tuple(fields)
     if len(fields) not in (16, 25) or any(type(f) is not int or not 0 <= f <= 18 for f in fields):
-        raise SpecialRulesError("StartData requires 16/25 F values in 0..18")
+        raise MatchError("StartData requires 16/25 F values in 0..18")
     cells = []
     for f in fields:
         if not f:
@@ -139,10 +98,7 @@ def start_board(fields):
 
 
 def place(board, index, card, owner, identity=None):
-    _active(board, owner)
-    _index(board, index)
-    if board[index].owner != 8:
-        raise SpecialRulesError("placement requires vacant/current-owner8 cell")
+    """The caller has checked that the cell is vacant or an unoccupied low tile."""
     output = list(board)
     output[index] = Cell.ordinary(card, owner, identity, property=board[index].property)
     return tuple(output)
@@ -153,8 +109,7 @@ def effective_arrows(cell):
 
 
 def classify(board, source, active):
-    players = _active(board, active)
-    _index(board, source)
+    players = _size(board) - 2
     output = list(board)
     arrows = effective_arrows(board[source])
     for direction, index in neighbors(board, source):
@@ -174,9 +129,6 @@ def classify(board, source, active):
 
 
 def combo(board, source, winner, loser):
-    _active(board, winner)
-    _active(board, loser)
-    _index(board, source)
     output = list(board)
     output[source] = replace(output[source], marker=0)
     for direction, index in neighbors(board, source):
@@ -186,7 +138,6 @@ def combo(board, source, winner, loser):
 
 
 def direct_captures(board, active):
-    _active(board, active)
     return tuple(
         replace(c, owner=active, marker=0) if c.marker == 2 and c.model < 0x8009 else c
         for c in board
@@ -194,15 +145,10 @@ def direct_captures(board, active):
 
 
 def ownership_beneficiary(active, players, r1):
-    if players not in (2, 3) or not 0 <= active < players or not 0 <= r1 <= 255:
-        raise SpecialRulesError("invalid shared ownership parameters")
     return active if r1 < 179 else (active + (2 if players == 3 and r1 >= 217 else 1)) % players
 
 
 def modify_strength(board, active, delta):
-    _active(board, active)
-    if delta not in (-10, 10):
-        raise SpecialRulesError("native modifier step must be +/-10")
     return tuple(
         replace(c, modifier=((c.modifier + delta + 128) & 255) - 128) if c.owner == active else c
         for c in board
@@ -210,8 +156,7 @@ def modify_strength(board, active, delta):
 
 
 def adjacent_ownership(board, target, beneficiary):
-    players = _active(board, beneficiary)
-    _index(board, target)
+    players = _size(board) - 2
     output = list(board)
     for _, index in neighbors(board, target):
         if output[index].owner < players:
@@ -220,16 +165,13 @@ def adjacent_ownership(board, target, beneficiary):
 
 
 def shuffle(board, shared):
-    _shape(board)
-    shared = _random(shared)
+    """Every saved card first frees its own cell, so a candidate always exists."""
     saved = [(i, c) for i, c in enumerate(board) if c.model < 0x8000]
     output = list(board)
     for i, _ in saved:
         output[i] = Cell()
     for old_index, cell in saved:
         candidates = [i for i, c in enumerate(output) if c.base_owner == 8]
-        if not candidates:
-            raise SpecialRulesError("no native shuffle candidate")
         target = candidates[shared[old_index & 7] % len(candidates)]
         output[target] = replace(cell, marker=0)
     return tuple(output)
@@ -237,15 +179,11 @@ def shuffle(board, shared):
 
 def spinner_chain(board, target, active, displayed_start):
     """Full1E..22 cascade; range uses displayed A start, not final power."""
-    players = _active(board, active)
-    _index(board, target)
-    if (
-        board[target].model != 0x8009
-        or type(displayed_start) is not int
-        or not 0 <= displayed_start <= 32767
-    ):
-        raise SpecialRulesError("spinner needs ID8009 and nonnegative signed-WORD display start")
-    size, _ = _shape(board)
+    if not 0 <= displayed_start <= 32767:
+        # The client reads the start as a signed WORD; a negative range is unmapped.
+        raise MatchError("spinner needs a nonnegative signed-WORD display start")
+    size = _size(board)
+    players = size - 2
     output = list(board)
     output[target] = replace(output[target], marker=3)
     distance = min(displayed_start // 30 + 1, players)
@@ -278,14 +216,12 @@ def spinner_chain(board, target, active, displayed_start):
 
 
 def apply_special(board, source, target, active, shared, *, displayed_start=0, replacement=None):
-    """Apply a selected tile AFTER its BattleData. CBC supply is explicit."""
-    players = _active(board, active)
-    _index(board, source)
-    _index(board, target)
-    shared = _random(shared)
+    """Apply a selected owner-4 tile AFTER its BattleData. CBC supply is explicit.
+
+    Only marked tiles reach here; walls have no arrows, so classify never marks them.
+    """
+    players = _size(board) - 2
     tile = board[target]
-    if tile.owner != 4:
-        raise SpecialRulesError("special dispatch requires owner4")
     if tile.model == 0x8009:
         return EffectResult(spinner_chain(board, target, active, displayed_start), True)
     high = tile.property >> 4
@@ -302,14 +238,10 @@ def apply_special(board, source, target, active, shared, *, displayed_start=0, r
         output = list(output)
         output[target] = Cell()
         return EffectResult(tuple(replace(c, marker=0) for c in output), False)
-    elif high == 5:
-        if replacement is None:
-            raise SpecialRulesError("materializing tile requires explicit CBC card")
+    else:  # 5: the match has drawn the CBC card or refused the round.
         output = list(board)
         output[target] = replace(Cell.ordinary(replacement, active), base_owner=5)
         return EffectResult(tuple(output), True)
-    else:
-        raise SpecialRulesError("target has no mapped high-nibble effect")
     output = list(output)
     output[target] = Cell()
     return EffectResult(tuple(output), True)
@@ -317,9 +249,6 @@ def apply_special(board, source, target, active, shared, *, displayed_start=0, r
 
 def finish_turn(board, source):
     """Clear markers, consume placed property01, rotate spinners even on a pass."""
-    _shape(board)
-    if source is not None:
-        _index(board, source)
     output = []
     for i, c in enumerate(board):
         c = replace(c, marker=0, property=0 if i == source and c.property == 1 else c.property)

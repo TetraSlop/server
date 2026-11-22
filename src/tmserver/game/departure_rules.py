@@ -6,22 +6,7 @@ Details: TetraPackets flows/departures.md.
 
 from dataclasses import dataclass
 
-
-class DepartureError(ValueError):
-    pass
-
-
-def _inputs(player_count, rule, departed):
-    if type(player_count) is not int or player_count not in (2, 3):
-        raise DepartureError("two or three players required")
-    if type(rule) is not int or rule not in (0, 1, 2):
-        raise DepartureError("departure rule must be 0..2")
-    departed = tuple(departed)
-    if len(set(departed)) != len(departed) or any(
-        type(s) is not int or not 0 <= s < player_count for s in departed
-    ):
-        raise DepartureError("departures must be distinct chronological seats")
-    return departed
+from tmserver.game.errors import MatchError
 
 
 @dataclass(frozen=True)
@@ -33,20 +18,9 @@ class TurnBoundary:
 
 def next_turn(player_count, rule, departed, sequence, active, substitutes=()):
     """100C76A2..7762: each skipped inactive seat also consumes a sequence."""
-    departed = _inputs(player_count, rule, departed)
-    substitutes = tuple(substitutes)
-    if any(s not in departed for s in substitutes):
-        raise DepartureError("replacement must be departed")
-    if (
-        type(sequence) is not int
-        or not 0 <= sequence <= 255
-        or type(active) is not int
-        or not 0 <= active < player_count
-    ):
-        raise DepartureError("invalid turn state")
     skipped = set(departed) - set(substitutes)
     if len(skipped) == player_count:
-        raise DepartureError("original loop has no remaining active player")
+        raise MatchError("original loop has no remaining active player")
     while True:
         sequence = (sequence + 1) & 255
         active = (active + 1) % player_count
@@ -68,9 +42,7 @@ def result_classes(scores, rule=0, departed=()):
     """
     scores = tuple(scores)
     n = len(scores)
-    departed = _inputs(n, rule, departed)
-    if any(type(s) is not int or not 0 <= s <= 255 for s in scores):
-        raise DepartureError("byte scores required")
+    departed = tuple(departed)
     if not rule or not departed:
         return tuple(2 + sum(o > s for o in scores) - sum(o < s for o in scores) for s in scores)
     live = [i for i in range(n) if i not in departed]
@@ -93,12 +65,6 @@ def result_slots(remaining, board_slots, *, departed=False, rule=0):
     """
     remaining = tuple(remaining)
     board_slots = tuple(board_slots)
-    if rule not in (0, 1, 2) or any(
-        type(i) is not int or not 0 <= i < 5 for i in remaining + board_slots
-    ):
-        raise DepartureError("invalid selected-card slot")
-    if len(set(remaining + board_slots)) != len(remaining + board_slots):
-        raise DepartureError("duplicate card slot")
     if departed and rule == 1:
         return ()
     return (() if departed and rule == 2 else remaining) + board_slots

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from tests import FIXTURES
 from tmserver.cards.catalog import Catalog
-from tmserver.game.opponents import OpponentError, prepare_opponents
+from tmserver.game.opponents import prepare_opponents
 from tmserver.game.rules import CRTLCG
 
 
@@ -76,22 +76,6 @@ class OpponentBatchTests(unittest.TestCase):
                     case["rng_draws_sha256"],
                 )
 
-    def test_invalid_batch_and_guild_do_not_generate_cards_or_consume_randomness(self):
-        def unexpected_draw():
-            self.fail("invalid input consumed randomness")
-
-        for ids in (None, 1, (), (1, 3, 30), (1, 1), (0,), (1, 31), (1, True), (1, "3")):
-            with self.subTest(ids=ids), self.assertRaises(OpponentError):
-                prepare_opponents(ids, self.catalog, unexpected_draw)
-        for guild in (-1, 4, True, "0"):
-            with self.subTest(guild=guild), self.assertRaises(OpponentError):
-                prepare_opponents((1, 3), self.catalog, unexpected_draw, guild)
-
-    def test_draw_contract_is_preserved(self):
-        for bad in (-1, 32768, True, 0.0, None):
-            with self.subTest(draw=bad):
-                with self.assertRaisesRegex(OpponentError, "CRT draw"):
-                    prepare_opponents((1, 3), self.catalog, lambda: bad)
 
 
 if __name__ == "__main__":

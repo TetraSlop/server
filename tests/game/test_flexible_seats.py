@@ -142,7 +142,6 @@ class FlexibleSeatUnits(unittest.TestCase):
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 arguments([*DATABASE, *opts])
         for kw in (
-            {"flexible_seats": 1},
             {"mode": "computer"},
             {"player_count": 2},
             {"start_fields": (0,) * 25},

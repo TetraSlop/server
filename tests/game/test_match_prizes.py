@@ -7,11 +7,11 @@ from pathlib import Path
 from tmserver.game.prizes import (
     PrizeCard,
     PrizeChoice,
-    PrizeError,
     PrizeLedger,
     PrizeOption,
     choose_computer_prize,
 )
+from tmserver.game.errors import MatchError
 from tmserver.game.models import Card
 
 
@@ -36,23 +36,22 @@ class PrizeTests(unittest.TestCase):
             (1, 0, p.choice_id),
             (p.winner, 4, p.choice_id),
             (p.winner, 0, p.choice_id + 1),
-            (p.winner, True, p.choice_id),
         ):
-            with self.assertRaises(PrizeError):
+            with self.assertRaises(MatchError):
                 ledger.select(winner, index, choice_id=generation)
             self.assertEqual((ledger.pending, ledger.transfers), before)
         a = ledger.select(p.winner, 1, choice_id=p.choice_id)
         self.assertEqual((a.loser, a.original_slot), (1, 1))
         self.assertIsNotNone(ledger.pending)  # tied top seat2 can also win from 1
         next_before = (ledger.pending, ledger.transfers)
-        with self.assertRaises(PrizeError):
+        with self.assertRaises(MatchError):
             ledger.select(ledger.pending.winner, 2, choice_id=p.choice_id)
         self.assertEqual((ledger.pending, ledger.transfers), next_before)
         p = ledger.pending
         ledger.select(p.winner, p.options[0].hand_index, choice_id=p.choice_id)
         result = ledger.settlement()
         self.assertEqual(len(result.transfers), 2)
-        with self.assertRaises(PrizeError):
+        with self.assertRaises(MatchError):
             ledger.select(0, 0, choice_id=1)
         self.assertIs(ledger.settlement(), result)
 
@@ -79,22 +78,9 @@ class PrizeTests(unittest.TestCase):
             self.assertTrue(ledger.complete)
             self.assertFalse(ledger.settlement().transfers)
 
-    def test_invalid_input_and_no_partial_settlement(self):
-        valid = hands([[0] * 5, [1] * 5])
-        cases = [
-            ((5,), valid),
-            ((0, 0), valid),
-            ((True, 9), valid),
-            ((5, 5), [valid[0]]),
-            ((5, 5), [valid[0][:-1], valid[1]]),
-            ((5, 5), [[valid[0][0]] * 5, valid[1]]),
-            ((5, 5), [[PrizeCard(c.original_slot, c.card, 2) for c in valid[0]], valid[1]]),
-        ]
-        for scores, hand in cases:
-            with self.assertRaises(PrizeError):
-                PrizeLedger(scores, hand)
+    def test_no_partial_settlement(self):
         ledger = PrizeLedger((7, 3), hands([[0] * 5, [0, 0, 1, 1, 1]]))
-        with self.assertRaises(PrizeError):
+        with self.assertRaises(MatchError):
             ledger.settlement()
 
 
