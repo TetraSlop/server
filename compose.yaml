@@ -1,0 +1,33 @@
+# docker compose up: PostgreSQL 17 and the server, which upgrades the schema as it starts.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: tetramaster
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tetramaster}
+      POSTGRES_DB: tetramaster
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "tetramaster", "-d", "tetramaster"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  server:
+    image: ${TM_IMAGE:-ghcr.io/tetraslop/server:latest}
+    build: .
+    environment:
+      TM_DATABASE_URL: postgresql+psycopg://tetramaster:${POSTGRES_PASSWORD:-tetramaster}@db:5432/tetramaster
+    ports:
+      # Loopback only unless TM_PUBLISH_ADDRESS=0.0.0.0; see the README's public server section.
+      - "${TM_PUBLISH_ADDRESS:-127.0.0.1}:${TM_GAME_PORT:-51241}:51241"
+      - "${TM_PUBLISH_ADDRESS:-127.0.0.1}:${TM_PROFILE_PORT:-51220}:51220"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db:
