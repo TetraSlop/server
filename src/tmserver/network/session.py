@@ -171,8 +171,8 @@ class Session:
                     raise ValueError("account already connected")
                 if any(t.departures.retains_account(nick) for t in self.server.ordinary_tables):
                     raise ValueError("account remains reserved by its departing match")
-                self.nick = nick
                 self.server.ensure_account(nick)
+                self.nick = nick
                 self.server.trade.bind(self, nick.decode("ascii"))
                 self.server.nicks[nick] = self
                 await self.send(b":srv 422 " + nick + b" :no motd")
@@ -382,12 +382,9 @@ class Session:
         for table in self.server.ordinary_tables:
             table.detach_spectator(self)
             table.match.forget_control_peer(self)
-        # Release event state now; pending notifications must not delay the
-        # remaining account/trade cleanup and race a reconnect's fresh state.
-        try:
-            await self.server.event_matches.disconnect(self, wait_delivery=False)
-        except (OSError, ValueError, asyncio.TimeoutError) as exc:
-            self.server.log("disconnect_cleanup_error", session=self.id, reason=str(exc))
+        key = None if self.nick is None else self.nick.decode("ascii")
+        if key not in self.server.account_keys:
+            key = None
 
         def cleanup(action):
             try:
@@ -396,14 +393,20 @@ class Session:
                 self.server.log("disconnect_cleanup_error", session=self.id, reason=str(exc))
                 return []
 
+        async def attempt(notification):
+            try:
+                await notification
+            except (OSError, ValueError, asyncio.TimeoutError) as exc:
+                self.server.log("disconnect_cleanup_error", session=self.id, reason=str(exc))
+
+        # Release event state now; pending notifications must not delay the
+        # remaining account/trade cleanup and race a reconnect's fresh state.
+        await attempt(self.server.event_matches.disconnect(self, wait_delivery=False))
         cleanup(lambda: self.server.trade_router.forget(self))
         trade_updates = cleanup(lambda: self.server.trade.disconnect(self))
-        if self.nick is not None and self.nick.decode("ascii") in self.server.account_keys:
-            cleanup(lambda: self.server.auction.disconnect(self.nick.decode("ascii")))
-            cleanup(lambda: self.server.prize.disconnect(self.nick.decode("ascii")))
-            cleanup(lambda: self.server.event_cards.disconnect(self.nick.decode("ascii")))
-            cleanup(lambda: self.server.events.disconnect(self.nick.decode("ascii")))
-            cleanup(lambda: self.server.economy.disconnect(self.nick.decode("ascii")))
+        if key is not None:
+            for name in ("auction", "prize", "event_cards", "events", "economy"):
+                cleanup(lambda: getattr(self.server, name).disconnect(key))
         ordinary_match = ordinary.match if ordinary is not None else None
         affected = [] if retained or ordinary is None else ordinary.table_dependents(self)
         room_groups = [
@@ -411,38 +414,22 @@ class Session:
             for table in self.server.ordinary_room_routes.values()
         ]
         event_updates = (
-            cleanup(lambda: self.server.event_rooms.disconnect(self, self.nick.decode("ascii")))
-            if self.nick is not None and self.nick.decode("ascii") in self.server.account_keys
-            else []
+            cleanup(lambda: self.server.event_rooms.disconnect(self, key)) if key else []
         )
         if not retained and ordinary is not None:
             room_groups.append((ordinary, cleanup(lambda: ordinary.table_release_updates(self))))
-        if (
-            not retained
-            and self.nick is not None
-            and self.nick.decode("ascii") in self.server.account_keys
-        ):
-            cleanup(lambda: self.server.result_rewards.forget(self.nick.decode("ascii")))
+        if not retained and key is not None:
+            cleanup(lambda: self.server.result_rewards.forget(key))
         chat_updates = cleanup(lambda: self.server.chat.leave(self))
         if self.server.storage_failed is None:
             for table, updates in room_groups:
-                try:
-                    await table.publish_room(updates)
-                except (OSError, ValueError, asyncio.TimeoutError) as exc:
-                    self.server.log("disconnect_cleanup_error", session=self.id, reason=str(exc))
+                await attempt(table.publish_room(updates))
             for binding, updates in event_updates:
-                try:
-                    await self.server.room_updates(updates, source=service_nick(binding.raw_owner))
-                except (OSError, ValueError, asyncio.TimeoutError) as exc:
-                    self.server.log("disconnect_cleanup_error", session=self.id, reason=str(exc))
-            for send, updates in (
-                (self.server.trade_updates, trade_updates),
-                (self.server.chat_updates, chat_updates),
-            ):
-                try:
-                    await send(updates)
-                except (OSError, ValueError, asyncio.TimeoutError) as exc:
-                    self.server.log("disconnect_cleanup_error", session=self.id, reason=str(exc))
+                await attempt(
+                    self.server.room_updates(updates, source=service_nick(binding.raw_owner))
+                )
+            await attempt(self.server.trade_updates(trade_updates))
+            await attempt(self.server.chat_updates(chat_updates))
         if affected:
             await ordinary.close_released_peers(ordinary_match, affected)
         try:
