@@ -11,7 +11,7 @@ from tests.events.test_event_rooms import presence
 from tests.support.irc import Client
 from tests.profiles.test_options_service import OFFSETS, VALUES, request as options_request
 from tmserver.economy.packets import named
-from tmserver.events.config import parse_event_configs
+from tmserver.events.config import parse_event_setup
 from tmserver.events.packets import time_reply
 from tmserver.events.routing import dispatch_event
 from tmserver.network.server import Server
@@ -36,7 +36,7 @@ class EventTimeReadTests(unittest.IsolatedAsyncioTestCase):
         self.store.load.return_value = None
         self.host = Server(
             store=self.store,
-            event_configs=parse_event_configs(DOCUMENT),
+            event_configs=parse_event_setup(DOCUMENT)[0],
             event_clock=lambda: 200,
         )
         self.nick = next(iter(self.host.accounts))
@@ -223,7 +223,7 @@ class EventTimeReadTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assert_saved_event_state()
 
-        number = self.host.event_cards.status(self.key)["session"]
+        number = self.host.event_cards._active[self.key].number
         order.clear()
         self.store.reset_mock()
         self.assertTrue(
@@ -257,7 +257,7 @@ class EncryptedEventTimeReadTests(unittest.IsolatedAsyncioTestCase):
         self.path = self.folder / "state.json"
         self.host = Server(
             state_path=self.path,
-            event_configs=parse_event_configs(DOCUMENT),
+            event_configs=parse_event_setup(DOCUMENT)[0],
             event_clock=lambda: 200,
         )
         self.addAsyncCleanup(self.host.stop)
