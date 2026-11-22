@@ -153,7 +153,7 @@ native packets and SQL rows have different validation and representation needs;
 their conversions stay explicit. No generic CRUD service or inferred packet
 serializer is required.
 
-Ranking periods import `RankingHistory` from `rankings.models`. Event
+Ranking periods and packets load without the ranking service. Event
 configuration imports `EventTableConfig` from `events.models`, without loading
 matchmaking or the match service. Profile startup imports room directory bytes
 from `rooms.packets`; it does not construct a room service. Its initial directory
