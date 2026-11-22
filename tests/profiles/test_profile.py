@@ -1,7 +1,6 @@
 """PC profile framing, authenticated TCP, and service bootstrap regression tests."""
 
 import asyncio
-import hashlib
 import struct
 import tempfile
 import unittest
@@ -9,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tests import ROOT
+from tests.profiles.test_profile_accounts import KEYS, transact
 from tmserver.protocol import wire
 from tmserver.protocol.identities import SHOP_RAW, game_id
 from tmserver.profiles.service import ProfileServer
@@ -31,34 +31,16 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.temp.cleanup()
 
     async def transact(self, cmd, sub, body=b"", password=b"tm-local-test", fragmented=False):
-        reader, writer = await asyncio.open_connection("127.0.0.1", self.port)
-        try:
-            opening = bytearray(40)
-            opening[4] = 1
-            writer.write(opening)
-            await writer.drain()
-            opened = await reader.readexactly(24)
-            request = bytearray(40)
-            request[:3] = bytes((2, cmd, sub))
-            struct.pack_into("<I", request, 4, len(body))
-            request[24:] = hashlib.md5(b"EEEEEEEF" + password + opened[20:24]).digest()
-            packet = wire.crypt64(self.cipher, self.iv, request + body)
-            if fragmented:
-                for offset in range(0, len(packet), 7):
-                    writer.write(packet[offset : offset + 7])
-                    await writer.drain()
-                    await asyncio.sleep(0)
-            else:
-                writer.write(packet)
-                await writer.drain()
-            head = wire.crypt64(self.cipher, self.iv, await reader.readexactly(24))
-            size = struct.unpack_from("<I", head, 4)[0]
-            tail = await reader.readexactly(size)
-            payload = wire.crypt64(self.cipher, self.iv, bytes(24) + tail)[24:]
-            return head[1], payload
-        finally:
-            writer.close()
-            await writer.wait_closed()
+        return await transact(
+            self.port,
+            KEYS[0],
+            cmd,
+            sub,
+            body,
+            context=(self.cipher, self.iv),
+            password=password,
+            fragmented=fragmented,
+        )
 
     async def test_handle_and_character_records(self):
         error, handles = await self.transact(0, 9)
