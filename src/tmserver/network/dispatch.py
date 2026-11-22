@@ -24,51 +24,54 @@ TEACH_DV_ANSWER = b"GTM0GE2000000@TeachDVAns=/D=1/V=1/AC=1|1/RK=1|1/Shm=%016X|1|
 )
 
 
+async def reply(session, source, answers):
+    for answer in answers:
+        await session.send(service_notice(source, session.nick, answer))
+
+
 async def dispatch(session, target, payload):
     # Reject unframeable service routes before any handler can commit state.
     service_notice(target, session.nick, b"")
-    ordinary_table = session.server.ordinary_table_routes.get(target)
-    ordinary_room = session.server.ordinary_room_routes.get(target)
+    server = session.server
+    key = server.ensure_account(session.nick)
+    ordinary_table = server.ordinary_table_routes.get(target)
+    ordinary_room = server.ordinary_room_routes.get(target)
+    event_table = server.event_matches.routes.get(target)
     if payload[:7].upper() == b"GTM0G80":
-        key = session.server.ensure_account(session.nick)
-        answer = session.server.commerce.initialize_profile(key, payload)
-        await session.send(service_notice(target, session.nick, answer))
-        session.server.log("player_initialized", session=session.id, target=target.decode("ascii"))
+        await reply(session, target, [server.commerce.initialize_profile(key, payload)])
         return True
-    event_table = session.server.event_matches.routes.get(target)
+    # Chat entry and option saves mean the same at every table and room service.
+    chat_target = event_table is not None or ordinary_table is not None or ordinary_room is not None
+    if chat_target and payload.startswith(b"GTM0G420001"):
+        view = server.economy.account_view(key)
+        await server.chat_updates(
+            server.chat.enter(session, target, payload, identity=view.nn, name=view.name)
+        )
+        return True
+    if (
+        chat_target or target in (service_nick(SHOP_RAW), service_nick(TRADE_RAW))
+    ) and payload.startswith(b"GTM0G84"):
+        with server.commerce.edit_account(key) as economy:
+            answer = save_options(economy, key, payload)
+        await server.deliver(session, service_notice(target, session.nick, answer))
+        return True
     if event_table is not None:
-        key = session.server.ensure_account(session.nick)
-        if payload.startswith(b"GTM0G420001"):
-            view = session.server.economy.account_view(key)
-            await session.server.chat_updates(
-                session.server.chat.enter(
-                    session, target, payload, identity=view.nn, name=view.name
-                )
-            )
-            return True
-        if payload.startswith(b"GTM0G84"):
-            with session.server.commerce.edit_account(key) as economy:
-                answer = save_options(economy, key, payload)
-            await session.server.deliver(session, service_notice(target, session.nick, answer))
-            return True
-        return await session.server.event_matches.dispatch(session, event_table[1], payload)
-    if target in session.server.event_routes and await dispatch_event(session, target, payload):
+        return await server.event_matches.dispatch(session, event_table[1], payload)
+    if target in server.event_routes and await dispatch_event(session, target, payload):
         return True
     if payload.startswith(b"GTM0A"):
         commands = parse(payload[5:])
         operation = commands[0].token if commands else None
         if operation in (b"ER", b"BR", b"SI", b"BH"):
-            key = session.server.ensure_account(session.nick)
-            session.server.advance_auctions()
+            server.advance_auctions()
             if operation in (b"SI", b"BH"):
                 # Search files are private connection snapshots; only expiry
                 # advancement above can change the durable auction ledger.
-                replies = session.server.auction.handle(key, payload)
+                replies = server.auction.handle(key, payload)
             else:
-                with auction_transaction(session.server, (key,)) as auction:
+                with auction_transaction(server, (key,)) as auction:
                     replies = auction.handle(key, payload)
-            for answer in replies:
-                await session.send(service_notice(target, session.nick, answer))
+            await reply(session, target, replies)
             return True
     if (
         ordinary_table is not None or ordinary_room is not None or target == service_nick(SHOP_RAW)
@@ -77,101 +80,57 @@ async def dispatch(session, target, payload):
         # B0 is shared with the shop. Parse the full envelope even when its
         # subtype belongs elsewhere, so malformed requests still fail closed.
         collection_entry = prefix == b"GTM0GB0" and parse_named(payload)[1] == 1
-        key = session.server.ensure_account(session.nick)
         replies = None
-        collecting = session.server.auction.collection_active(key)
+        collecting = server.auction.collection_active(key)
         if collection_entry or (prefix == b"GTM0GB2" and collecting):
-            session.server.advance_auctions()
-            with auction_transaction(session.server, (key,)) as auction:
+            server.advance_auctions()
+            with auction_transaction(server, (key,)) as auction:
                 replies = auction.handle(key, payload)
         elif (
             prefix != b"GTM0GB0"
             and not collecting
             and (
                 prefix == b"GTM0G70"
-                or session.server.prize.is_active(key)
-                or session.server.prize.can_replay_quit(key, payload)
+                or server.prize.is_active(key)
+                or server.prize.can_replay_quit(key, payload)
             )
         ):
-            with prize_transaction(session.server, key) as prize:
+            with prize_transaction(server, key) as prize:
                 replies = prize.handle(key, payload)
         if replies is not None:
-            source = service_nick(SHOP_RAW)
-            for answer in replies:
-                await session.send(service_notice(source, session.nick, answer))
+            await reply(session, service_nick(SHOP_RAW), replies)
             return True
     if payload.startswith(b"GTM0P"):
-        key = session.server.ensure_account(session.nick)
-        replies = character_profile_request(session.server, key, payload)
+        replies = character_profile_request(server, key, payload)
         if replies is not None:
-            for answer in replies:
-                await session.send(service_notice(target, session.nick, answer))
+            await reply(session, target, replies)
             return True
     if payload.startswith(b"GTM0R"):
-        key = session.server.ensure_account(session.nick)
-        session.server.advance_rankings()
-        replies = session.server.ranking.handle(key, payload)
+        server.advance_rankings()
+        replies = server.ranking.handle(key, payload)
         if replies is not None:
-            for answer in replies:
-                await session.send(service_notice(target, session.nick, answer))
+            await reply(session, target, replies)
             return True
-    if (ordinary_table is not None or ordinary_room is not None) and payload.startswith(
-        b"GTM0G420001"
-    ):
-        key = session.server.ensure_account(session.nick)
-        account = session.server.economy.account_view(key)
-        replies = session.server.chat.enter(
-            session, target, payload, identity=account.nn, name=account.name
-        )
-        await session.server.chat_updates(replies)
-        return True
-    if (
-        ordinary_table is not None
-        or ordinary_room is not None
-        or target in {service_nick(raw) for raw in (SHOP_RAW, TRADE_RAW)}
-    ) and payload.startswith(b"GTM0G84"):
-        key = session.server.ensure_account(session.nick)
-        with session.server.commerce.edit_account(key) as economy:
-            answer = save_options(economy, key, payload)
-        await session.send(service_notice(target, session.nick, answer))
-        session.server.log("options_saved", session=session.id)
-        return True
     if target == service_nick(TRADE_RAW):
-        responses = session.server.trade_router.entry(session, payload)
+        responses = server.trade_router.entry(session, payload)
         if responses is not None:
-            await session.server.trade_updates(responses)
-            session.server.log(
-                "trade_service",
-                session=session.id,
-                replies=len(responses),
-                state=session.server.trade.status(session),
-            )
+            await server.trade_updates(responses)
             return True
     if target == service_nick(SHOP_RAW):
-        key = session.server.ensure_account(session.nick)
-        responses = session.server.commerce.shop(key, payload)
+        responses = server.commerce.shop(key, payload)
         if responses is not None:
-            for answer in responses:
-                await session.send(service_notice(target, session.nick, answer))
-            session.server.log(
-                "shop_service",
-                session=session.id,
-                replies=len(responses),
-                balance=session.server.economy.balance(key),
-                cards=len(session.server.economy.inventory(key)),
-            )
+            await reply(session, target, responses)
             return True
     if ordinary_table is not None:
         return await ordinary_table.dispatch_table(session, payload)
     if ordinary_room is not None:
-        key = session.server.ensure_account(session.nick)
-        account = session.server.economy.account_view(key)
+        account = server.economy.account_view(key)
         commands = parse(payload[5:]) if payload.startswith(b"GTM0L") else ()
         entering = len(commands) == 1 and commands[0].token == b"DE"
         async with AsyncExitStack() as entry:
             previous = None
             if entering:
-                owner = session.server.table_for_peer(session)
+                owner = server.table_for_peer(session)
                 if owner is not None and owner.room.room_root is not ordinary_room.room.room_root:
                     # Recheck after acquiring the lock: another player may have
                     # started while this room-entry request was waiting.
@@ -179,7 +138,7 @@ async def dispatch(session, target, payload):
                     if session.closed:
                         return True
                 previous = validate_room_entry(
-                    session.server, session, ordinary_room.room, allow_lobby_exit=True
+                    server, session, ordinary_room.room, allow_lobby_exit=True
                 )
             was_member = session in ordinary_room.room.members
             responses = ordinary_room.room.handle(
@@ -189,9 +148,8 @@ async def dispatch(session, target, payload):
                 authenticated_name=account.name,
             )
             if responses is not None:
-                reply_count = len(responses)
                 chat_updates = (
-                    session.server.chat.leave(session, target)
+                    server.chat.leave(session, target)
                     if was_member and session not in ordinary_room.room.members
                     else []
                 )
@@ -206,32 +164,19 @@ async def dispatch(session, target, payload):
                         responses = []
                         if session.closed:
                             return True
-                        if session.server.table_for_peer(session) is previous:
+                        if server.table_for_peer(session) is previous:
                             await previous.release_lobby(session)
                             if session.closed:
                                 return True
-                    await leave_other_rooms(session.server, session, key, ordinary_room.room)
+                    await leave_other_rooms(server, session, key, ordinary_room.room)
                 await ordinary_room.publish_room(responses)
-                await session.server.chat_updates(chat_updates)
+                await server.chat_updates(chat_updates)
                 if len(commands) == 1 and commands[0].token == b"PD":
-                    table = session.server.table_for_peer(session)
+                    table = server.table_for_peer(session)
                     if table is not None:
                         await table.roster_presence(session, ordinary_room.room.room_id)
-                session.server.log(
-                    "room_service",
-                    session=session.id,
-                    sequence=ordinary_room.room.sequence,
-                    replies=reply_count,
-                )
                 return True
     if payload == b"GTM0GE1000000@TeachDV=":
-        await session.send(service_notice(target, session.nick, TEACH_DV_ANSWER))
-        session.server.log(
-            "teach_dv_answer",
-            session=session.id,
-            target=target.decode("ascii"),
-            directory=1,
-            version=1,
-        )
+        await reply(session, target, [TEACH_DV_ANSWER])
         return True
     return False
