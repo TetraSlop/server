@@ -22,7 +22,6 @@ from tmserver.rooms.packets import ROOM_CHANNEL, TABLE_CHANNEL, TRADE_CHANNEL
 from tmserver.rooms.records import build_room_record
 from tmserver.rooms.service import RoomService
 from tmserver.rooms.rules import RoomRules
-from tmserver.rooms.spectators import SpectatorService
 
 
 CONFIG = ConfigDict(strict=True, extra="forbid", validate_default=True)
@@ -162,8 +161,8 @@ def configure_rooms(host, configs):
             if channel.upper() in channels:
                 raise ValueError("ordinary room/table channel collides")
             channels.add(channel.upper())
-    initial = host.event_rooms.directory_files()["b/g/RL000"]
-    if struct.unpack_from("<I", initial, 0x40)[0] + len(configs) > 256:
+    listed = 1 + sum(binding.zone_index == 0 for binding in host.event_rooms.rooms)
+    if listed + len(configs) > 256:
         raise ValueError("ordinary rooms exceed native directory capacity")
     host.ordinary_room_configs = configs
     default = host.default_table
@@ -189,17 +188,6 @@ def configure_rooms(host, configs):
                     computer_enabled=table_config.mode == "computer",
                 )
             )
-            template = default.spectators
-            observer = SpectatorService(
-                enabled=template.enabled,
-                clock=template.clock,
-                bootstrap_delay=template.bootstrap_delay,
-                turn_delay=template.turn_delay,
-                action_delay=template.action_delay,
-                packet_delay=template.packet_delay,
-                max_backlog=template.max_backlog,
-                max_observers=template.max_observers,
-            )
             table = OrdinaryTable(
                 host,
                 slot,
@@ -211,7 +199,7 @@ def configure_rooms(host, configs):
                 card_prizes=default.card_prizes,
                 allow_wagers=default.allow_wagers,
                 allow_departures=default.departures.enabled,
-                spectator=observer,
+                spectator=default.spectators.fresh(),
             )
             tables.append(table)
             if index == 0:

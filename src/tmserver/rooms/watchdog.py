@@ -8,7 +8,7 @@ match, sends a packet or changes ownership.
 
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Hashable
 
 TURN_SECONDS = (15, 30, 60, 180, 300, 600)
@@ -75,11 +75,13 @@ class MatchWatchdog:
         self._clear()
 
     def _clear(self):
-        self._turn = None
-        self._decision_started = None
-        self._decision_deadline = None
+        self._clear_turn()
         self._wait_key = None
         self._wait = None
+
+    def _clear_turn(self):
+        self._turn = None
+        self._decision_started = self._decision_deadline = None
 
     def _now(self):
         value = float(self.clock())
@@ -96,31 +98,24 @@ class MatchWatchdog:
         return TURN_SECONDS[tl]
 
     def _arm(self, key, reason, match, peers, now, duration, *, started=None, deadline=None):
+        current = dict(
+            reason=reason,
+            phase=match.phase,
+            sequence=match.sequence,
+            round_id=match.completed_matches,
+            missing_peers=tuple(peers),
+        )
         if self._wait_key != key:
             self._wait_key = key
             self._wait = Timeout(
-                reason,
-                self._epoch,
-                match.phase,
-                match.sequence,
-                match.completed_matches,
-                tuple(peers),
-                now if started is None else started,
-                now + duration if deadline is None else deadline,
+                epoch=self._epoch,
+                started=now if started is None else started,
+                deadline=now + duration if deadline is None else deadline,
+                **current,
             )
         else:
             # Missing participants and phase may change without granting more time.
-            old = self._wait
-            self._wait = Timeout(
-                reason,
-                old.epoch,
-                match.phase,
-                match.sequence,
-                match.completed_matches,
-                tuple(peers),
-                old.started,
-                old.deadline,
-            )
+            self._wait = replace(self._wait, **current)
         return self._wait
 
     def observe(self, match, epoch=None):
@@ -145,8 +140,7 @@ class MatchWatchdog:
             self._clear()
             return None
         if phase == "computer_menu":
-            self._turn = None
-            self._decision_started = self._decision_deadline = None
+            self._clear_turn()
             return self._arm(
                 ("computer_menu", round_id),
                 "computer_configuration",
@@ -157,8 +151,7 @@ class MatchWatchdog:
             )
         if phase == "selection":
             missing = tuple(p.peer for p in match.players if p.peer is not None and not p.selected)
-            self._turn = None
-            self._decision_started = self._decision_deadline = None
+            self._clear_turn()
             if not missing:
                 self._wait_key = self._wait = None
                 return None
@@ -173,9 +166,8 @@ class MatchWatchdog:
         if phase in ("turn", "battle"):
             turn = (round_id, sequence)
             if self._turn != turn:
+                self._clear()
                 self._turn = turn
-                self._decision_started = self._decision_deadline = None
-                self._wait_key = self._wait = None
             missing = tuple(peer for peer in humans if peer not in match.acks)
             if missing:
                 return self._arm(("ack", turn), "turn_ack", match, missing, now, self.ack_timeout)
@@ -215,8 +207,7 @@ class MatchWatchdog:
                 deadline=self._decision_deadline,
             )
         if phase == "result":
-            self._turn = None
-            self._decision_started = self._decision_deadline = None
+            self._clear_turn()
             missing = tuple(peer for peer in humans if peer not in match.ready)
             if missing:
                 return self._arm(

@@ -209,16 +209,6 @@ class RoomService:
         slot.table_metadata = metadata
         return [(peer, update) for peer in self.members]
 
-    def set_npc(self, payload, *, table_id=None):
-        if table_id is None:
-            table_id = self.table_id
-        identity, record = player_record(payload)
-        if identity in self.npcs and self.npc_tables[identity] != table_id:
-            raise ValueError("practice opponent identity overlaps another table")
-        if identity not in self.npcs and table_id in self.npc_tables.values():
-            raise ValueError("only one practice opponent is supported")
-        return self._publish_npc(payload, identity, record, table_id)
-
     def _publish_npc(self, payload, identity, record, table_id):
         if self.npcs.get(identity) == (identity, record):
             return []
@@ -227,13 +217,8 @@ class RoomService:
         self.npc_tables[identity] = table_id
         return [(peer, update) for peer in self.members]
 
-    def practice_opponent(self, peer, opponent, *, table_id=None):
-        if peer not in self.members:
-            return []
-        return self.set_npc(self._opponent_payload(peer, opponent), table_id=table_id)
-
     def practice_opponents(self, peer, opponents, *, table_id=None):
-        """Synchronize a Computer menu's one or two NPCs in the shared roster."""
+        """Synchronize a table's one or two CPU opponents in the shared roster."""
         if peer not in self.members:
             return []
         if table_id is None:
@@ -454,9 +439,6 @@ class RoomTableView:
             table_rules,
             computer_menu=computer_menu,
         )
-
-    def practice_opponent(self, peer, opponent):
-        return self.room_root.practice_opponent(peer, opponent, table_id=self.table_id)
 
     def practice_opponents(self, peer, opponents):
         return self.room_root.practice_opponents(peer, opponents, table_id=self.table_id)

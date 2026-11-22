@@ -43,10 +43,9 @@ class RoomReplyBudgetTests(unittest.TestCase):
         room.handle("one", presence())
         padded = parse(padded_presence(presence(identity=789), room.sequence + 1, 470)[5:])[0]
         before = room.snapshot(), dict(room.history), dict(room.npc_tables)
-        for apply in (lambda: room.delta(Command(b"PD", padded.payload)), lambda: room.set_npc(padded.payload)):
-            with self.assertRaises(ValueError):
-                apply()
-            self.assertEqual((room.snapshot(), room.history, room.npc_tables), before)
+        with self.assertRaises(ValueError):
+            room.delta(Command(b"PD", padded.payload))
+        self.assertEqual((room.snapshot(), room.history, room.npc_tables), before)
 
 
 class RoomReplyBudgetIntegrationTests(unittest.IsolatedAsyncioTestCase):

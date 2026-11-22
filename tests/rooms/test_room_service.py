@@ -63,10 +63,7 @@ class RoomTests(unittest.TestCase):
                     SimpleNamespace(name=b"Local Computer", nickname_id=512 + i, character_id=2 + i)
                     for i in range(count)
                 ]
-                if count == 1:
-                    output = room.practice_opponent("one", opponents[0])
-                else:
-                    output = room.practice_opponents("one", opponents)
+                output = room.practice_opponents("one", opponents)
                 self.assertEqual(len(output), count)
                 for index, (_, packet) in enumerate(output):
                     published = parse(packet[5:])[-1].payload.split(b"\x06")[-1]
@@ -114,10 +111,10 @@ class RoomTests(unittest.TestCase):
         r = RoomService()
         r.handle("one", presence())
         cpu = SimpleNamespace(name=b"Local Computer", nickname_id=512, character_id=2)
-        npc = r.practice_opponent("one", cpu)
+        npc = r.practice_opponents("one", (cpu,))
         self.assertEqual(parse(npc[0][1][5:])[-1].token, b"PD")
         self.assertEqual(r.npcs[512][1][0x38 + 23 : 0x38 + 25], b"DB")
-        self.assertEqual(r.practice_opponent("one", cpu), [])
+        self.assertEqual(r.practice_opponents("one", (cpu,)), [])
         out = r.set_table(1, 2, 123)
         fields = parse(out[0][1][5:])[-1].payload.split(b"\x06")
         self.assertEqual(fields[:4], [TABLE_CHANNEL, b"0", f"0x{TABLE_ID:016X}".encode(), b"1"])

@@ -31,7 +31,7 @@ class ComputerRoomTests(unittest.TestCase):
         self.first = opponent(0x200)
         self.second = opponent(0x400, 3)
         self.other = opponent(0x201)
-        self.sibling.practice_opponent("two", self.other)
+        self.sibling.practice_opponents("two", (self.other,))
 
     def state(self):
         return self.room.snapshot(), dict(self.room.npc_tables), dict(self.room.history)

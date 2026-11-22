@@ -89,12 +89,7 @@ class MatchDepartures:
         except (OSError, ValueError, asyncio.TimeoutError) as exc:
             table.host.log("departure_error", reason=str(exc))
             self.abort(match)
-            # close retains its established fail-closed recovery for unsupported
-            # or failed transitions; invoke it after leaving the match lock.
-            peers = [p.peer for p in match.players if p.peer is not None]
-            await table.close_released_peers(match, peers)
-            async with table.match_lock:
-                await table.publish_room(table.reset_table_updates(match))
+            await table.abort_and_reset(match)
         finally:
             self.task = None
             self.pending = {key for key in self.pending if key in self.queue}

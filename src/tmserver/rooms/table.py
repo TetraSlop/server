@@ -346,40 +346,27 @@ class OrdinaryTable:
             self.spectators.publish(responses, match.observer_snapshot(), epoch=match), match
         )
         if match.phase != "finished":
-            opponent = next((p for p in match.players if p.peer is None), None)
+            opponents = tuple(p for p in match.players if p.peer is None)
             human = next((p.peer for p in match.players if p.peer is not None), None)
-            if opponent is not None and human is not None:
-                updates = (
-                    self.room.practice_opponents(
-                        human, tuple(p for p in match.players if p.peer is None)
-                    )
-                    if match.computer_menu
-                    else self.room.practice_opponent(human, opponent)
-                )
-                await self.publish_room(updates)
+            if opponents and human is not None:
+                await self.publish_room(self.room.practice_opponents(human, opponents))
+        playing = match.phase != "lobby"
+        state = 2 if playing else 1 if match.settings_applied else 0 if admitting else None
         if match.phase == "finished":
             updates = self.empty_table_updates()
             self.release_match_accounts()
             match.cancel_pending()
-        elif match.phase != "lobby":
+        elif state is None:
+            updates = []
+        else:
             updates = self.room.set_table(
-                2,
+                state,
                 len(match.players),
                 match.owner_id,
                 match.game_rules,
                 match.table_rules,
-                computer_menu=match.computer_menu,
+                computer_menu=playing and match.computer_menu,
             )
-        elif match.settings_applied:
-            updates = self.room.set_table(
-                1, len(match.players), match.owner_id, match.game_rules, match.table_rules
-            )
-        elif admitting:
-            updates = self.room.set_table(
-                0, len(match.players), match.owner_id, match.game_rules, match.table_rules
-            )
-        else:
-            updates = []
         await self.publish_room(updates)
         for delivery in responses:
             if match is not self.match:
@@ -687,12 +674,7 @@ class OrdinaryTable:
             self.schedule_match_work(match)
         await self.host.chat_updates(chat_updates)
         if aborted_peers:
-            # Session.close can reset a table and await notifications. Never run
-            # it under match_lock or close a peer that has since rebound.
-            await self.close_released_peers(match, aborted_peers)
-            async with self.match_lock:
-                if self.match is match:
-                    await self.publish_room(self.reset_table_updates(match))
+            await self.abort_and_reset(match, aborted_peers)
         return True
 
     def release_removed_players(self, match, old_players):
@@ -752,10 +734,7 @@ class OrdinaryTable:
             # invented; reconnect loads the last durable completed round.
             self.departures.abort(match)
             match.cancel_pending()
-        await self.close_released_peers(match, peers)
-        if self.match is match:
-            async with self.match_lock:
-                await self.publish_room(self.reset_table_updates(match))
+        await self.abort_and_reset(match, peers)
         return timeout
 
     async def run_match_watchdog(self):
@@ -851,10 +830,7 @@ class OrdinaryTable:
         except (ValueError, OSError, asyncio.TimeoutError) as exc:
             self.host.log("match_work_error", reason=str(exc))
             self.departures.abort(match)
-            peers = [player.peer for player in match.players if player.peer is not None]
-            await self.close_released_peers(match, peers)
-            async with self.match_lock:
-                await self.publish_room(self.reset_table_updates(match))
+            await self.abort_and_reset(match)
         finally:
             if self.match_task is asyncio.current_task():
                 self.match_task = None
@@ -909,6 +885,18 @@ class OrdinaryTable:
         affected = self.table_dependents(peer)
         await self.publish_room(self.table_release_updates(peer))
         await self.close_released_peers(match, affected)
+
+    async def abort_and_reset(self, match, peers=None):
+        """Reconnect an aborted generation's peers, then clear its table.
+
+        Session.close can reset a table and await notifications, so never call
+        this under match_lock. Peers that have since rebound are left alone.
+        """
+        if peers is None:
+            peers = [p.peer for p in match.players if p.peer is not None]
+        await self.close_released_peers(match, peers)
+        async with self.match_lock:
+            await self.publish_room(self.reset_table_updates(match))
 
     async def close_released_peers(self, match, peers):
         """Reconnect old table peers unless a new admission now owns them."""
