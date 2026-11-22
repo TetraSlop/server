@@ -3,6 +3,9 @@
 from tmserver.protocol.wire import polid_from_string, polid_scramble, polid_to_string
 
 MAX_ACCOUNTS = 128  # Bounded local fixture pool, below reserved service raw IDs.
+# polcore's Game IRC open (Viewer entry 132) copies the password and its NUL into a
+# 16-byte stack buffer; a 16-character password overwrites a return address.
+MAX_LEGACY_PASSWORD = 15
 
 
 def account_name(character_id):

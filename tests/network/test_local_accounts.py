@@ -7,13 +7,16 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from uuid import uuid4
 
 from tests import ROOT
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.support.irc import Client
 from tests.support.memory_store import DATABASE, MemoryStore
 from tmserver.protocol.identities import player_id
-from tmserver.network.local_accounts import MAX_ACCOUNTS, account_name, account_specs
+from tmserver.network.local_accounts import (
+    MAX_ACCOUNTS, MAX_LEGACY_PASSWORD, account_name, account_specs,
+)
 from tmserver.protocol.wire import polid_from_string, polid_unscramble
 from tmserver.profiles.service import ProfileServer
 from tmserver.cli.serve import arguments, run
@@ -192,6 +195,25 @@ class AccountPoolTests(unittest.TestCase):
         self.assertEqual(
             arguments([*DATABASE, "--mode", "versus", "--players", "3", "--accounts", "8"]).accounts, 8
         )
+
+    def test_every_legacy_password_fits_polcores_15_character_game_irc_limit(self):
+        from tmserver.accounts.provisioning import provision_identity
+
+        self.assertEqual(MAX_LEGACY_PASSWORD, 15)
+        store = MemoryStore()
+        game = Server(store=store)
+        issuer = "https://fixture.supabase.co/auth/v1"
+        hosted = [provision_identity(game, issuer, str(uuid4())) for _ in range(8)]
+        # Passwords are never saved: a restart gives every hosted account a fresh one.
+        restarted = Server(store=store)
+        for server in (game, restarted):
+            for key, (_, password, _) in server.account_specs.items():
+                with self.subTest(key=key, restarted=server is restarted):
+                    self.assertLessEqual(len(password), MAX_LEGACY_PASSWORD)
+                    if key in hosted:
+                        self.assertEqual(len(password), 14)
+        self.assertTrue(set(hosted) <= set(restarted.account_specs))
+        self.assertNotIn(b"tm-local-test", {restarted.account_specs[key][1] for key in hosted})
 
 
 if __name__ == "__main__":
