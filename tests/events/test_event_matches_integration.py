@@ -16,7 +16,27 @@ from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
 
 
-class EventMatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
+async def barrier(test, client, tag=b"event-barrier", limit=200):
+    """Send a PING and read until its PONG; return the lines read before it."""
+    await client.send(b"PING :" + tag)
+    lines = []
+    for _ in range(limit):
+        line = await client.read()
+        test.assertTrue(line, "peer disconnected before the " + tag.decode() + " barrier")
+        if line == b"PONG " + tag:
+            return lines
+        lines.append(line)
+    test.fail("missing " + tag.decode() + " barrier")
+
+
+def notices(lines):
+    """(source nick, payload) for each NOTICE among barrier lines."""
+    return [(x.split(b"!", 1)[0][1:], x.split(b" :", 1)[1]) for x in lines if b" NOTICE " in x]
+
+
+class EventMatchHelpers:
+    """Loopback event server, two or three players, and round driving."""
+
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
@@ -60,17 +80,7 @@ class EventMatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
             if not self.server.event_matches.coordinator.pending():
                 break
         for side, client in enumerate(self.clients):
-            await client.send(b"PING :event-barrier")
-            for _ in range(200):
-                line = await client.read()
-                self.assertTrue(line, "unexpected event disconnect")
-                if line == b"PONG event-barrier":
-                    break
-                if b" NOTICE " in line:
-                    source = line.split(b"!", 1)[0][1:]
-                    self.inbox[side].append((source, line.split(b" :", 1)[1]))
-            else:
-                self.fail("event delivery limit")
+            self.inbox[side] += notices(await barrier(self, client))
 
     async def send(self, side, target, payload):
         await self.clients[side].send(
@@ -195,6 +205,8 @@ class EventMatchIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.fail(engine.phase)
         self.fail("event round did not finish")
 
+
+class EventMatchIntegrationTests(EventMatchHelpers, unittest.IsolatedAsyncioTestCase):
     async def complete(self, n, policy):
         await self.start(n, policy)
         before = [self.server.economy.profile_bytes(k) for k in self.keys]

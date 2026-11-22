@@ -3,37 +3,14 @@
 import unittest
 
 from tests.events import test_event_spectators as events
+from tests.events.test_event_matches_integration import barrier, notices
 from tmserver.protocol.identities import GAME_KEY, TABLE_RAW, service_nick
 from tmserver.game.packets import decode, packet
 
 
-class EventChatCleanupTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = events.EventSpectatorsIntegration.asyncSetUp
-    asyncTearDown = events.EventSpectatorsIntegration.asyncTearDown
-    start = events.EventSpectatorsIntegration.start
-    drain = events.EventSpectatorsIntegration.drain
-    send = events.EventSpectatorsIntegration.send
-    identity = events.EventSpectatorsIntegration.identity
-    enter_selection = events.EventSpectatorsIntegration.enter_selection
-    admit = events.EventSpectatorsIntegration.admit
-    engine = events.EventSpectatorsIntegration.engine
-    play = events.EventSpectatorsIntegration.play
-    observer_send = events.EventSpectatorsIntegration.observer_send
-    read_watch = events.EventSpectatorsIntegration.read_watch
-    admit_watch = events.EventSpectatorsIntegration.admit_watch
-    watch = events.EventSpectatorsIntegration.watch
-
+class EventChatCleanupTests(events.EventSpectatorHelpers, unittest.IsolatedAsyncioTestCase):
     async def barrier(self, client):
-        await client.send(b"PING :event-chat")
-        replies = []
-        for _ in range(250):
-            line = await client.read()
-            self.assertTrue(line, "chat transition closed a healthy connection")
-            if line == b"PONG event-chat":
-                return replies
-            if b" NOTICE " in line:
-                replies.append((line.split(b"!", 1)[0][1:], line.split(b" :", 1)[1]))
-        self.fail("event chat barrier missing")
+        return notices(await barrier(self, client, b"event-chat", limit=250))
 
     async def chat(self, client, target):
         view = self.server.economy.account_view(client.nick.decode())

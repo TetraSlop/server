@@ -18,41 +18,13 @@ from tmserver.network.server import Server
 from tmserver.rooms.spectators import SpectatorService
 
 
-class EventSpectatorsIntegration(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = event_tests.EventMatchIntegrationTests.asyncSetUp
-    drain = event_tests.EventMatchIntegrationTests.drain
-    send = event_tests.EventMatchIntegrationTests.send
-    identity = event_tests.EventMatchIntegrationTests.identity
-    enter_selection = event_tests.EventMatchIntegrationTests.enter_selection
-    admit = event_tests.EventMatchIntegrationTests.admit
-    engine = event_tests.EventMatchIntegrationTests.engine
-
-    async def test_viewer_and_channel_exit_preserve_event_participants(self):
-        await self.start(2)
-        await self.admit()
-        await self.watch()
-        spectators = self.server.event_matches.spectators
-        peer = self.server.nicks[self.observer.nick]
-        before = self.engine.snapshot()
-        for body, expected in (("@Viewer=/IN=0", True), ("@Viewer=/OUT=0", False)):
-            await self.observer_send(packet(65, 17, body=body))
-            await self.observer.send(b"PING :viewer-event")
-            self.assertEqual(await self.observer.read(), b"PONG viewer-event")
-            self.assertEqual(peer in spectators.viewers, expected)
-        await self.observer_send(packet(32, body="@ExitCh="))
-        await self.observer.send(b"PING :exit-event")
-        self.assertEqual(await self.observer.read(), b"PONG exit-event")
-        self.assertNotIn(peer, spectators.admissions)
-        self.assertFalse(peer.closed)
-        self.assertEqual(self.engine.snapshot(), before)
-        self.assertEqual(self.server.economy.profile_bytes(self.observer_key), self.observer_before)
-
-    play = event_tests.EventMatchIntegrationTests.play
+class EventSpectatorHelpers(event_tests.EventMatchHelpers):
+    """Adds one observer account watching the event table."""
 
     async def asyncTearDown(self):
         if hasattr(self, "observer"):
             await self.observer.close()
-        await event_tests.EventMatchIntegrationTests.asyncTearDown(self)
+        await event_tests.EventMatchHelpers.asyncTearDown(self)
 
     async def start(self, n=2):
         self.table = replace(self.table, player_count=n)
@@ -107,14 +79,7 @@ class EventSpectatorsIntegration(unittest.IsolatedAsyncioTestCase):
         )
         # JOIN may be preceded by room notices; consume through an explicit barrier.
         await self.observer.send(b"JOIN " + self.table.channel)
-        await self.observer.send(b"PING :observer-join")
-        for _ in range(200):
-            line = await self.observer.read()
-            self.assertTrue(line, "observer closed during JOIN")
-            if line == b"PONG observer-join":
-                break
-        else:
-            self.fail("missing observer JOIN barrier")
+        await event_tests.barrier(self, self.observer, b"observer-join")
         await self.observer_send(packet(1, body=native_identity(view, "Req")))
         admission = decode(await self.read_watch())
         self.assertEqual(admission.primary, 2)
@@ -131,6 +96,28 @@ class EventSpectatorsIntegration(unittest.IsolatedAsyncioTestCase):
         slot = next(t for t in binding.room.tables if t.table_id == self.table.table_id)
         self.assertEqual((slot.table_metadata[37] - 65) & 3, 0)
         self.assertFalse(self.server.economy.is_busy(self.observer_key))
+
+
+class EventSpectatorsIntegration(EventSpectatorHelpers, unittest.IsolatedAsyncioTestCase):
+    async def test_viewer_and_channel_exit_preserve_event_participants(self):
+        await self.start(2)
+        await self.admit()
+        await self.watch()
+        spectators = self.server.event_matches.spectators
+        peer = self.server.nicks[self.observer.nick]
+        before = self.engine.snapshot()
+        for body, expected in (("@Viewer=/IN=0", True), ("@Viewer=/OUT=0", False)):
+            await self.observer_send(packet(65, 17, body=body))
+            await self.observer.send(b"PING :viewer-event")
+            self.assertEqual(await self.observer.read(), b"PONG viewer-event")
+            self.assertEqual(peer in spectators.viewers, expected)
+        await self.observer_send(packet(32, body="@ExitCh="))
+        await self.observer.send(b"PING :exit-event")
+        self.assertEqual(await self.observer.read(), b"PONG exit-event")
+        self.assertNotIn(peer, spectators.admissions)
+        self.assertFalse(peer.closed)
+        self.assertEqual(self.engine.snapshot(), before)
+        self.assertEqual(self.server.economy.profile_bytes(self.observer_key), self.observer_before)
 
     async def finish_and_check(self, n):
         await self.start(n)

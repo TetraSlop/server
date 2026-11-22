@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import patch
 
 from tests.events import test_event_spectators as events
+from tests.events.test_event_matches_integration import barrier
 from tests.rooms import test_spectator_integration as ordinary_tests
 from tests.protocol.test_admission_identity import native_identity
 from tests.events.test_event_rooms import presence
@@ -17,15 +18,7 @@ from tmserver.network.server import Server
 
 class EventServiceBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def barrier(self, client):
-        await client.send(b"PING :event-boundary")
-        output = []
-        for _ in range(100):
-            line = await client.read()
-            self.assertTrue(line, "healthy peer disconnected")
-            if line == b"PONG event-boundary":
-                return output
-            output.append(line)
-        self.fail("missing event boundary barrier")
+        return await barrier(self, client, b"event-boundary", limit=100)
 
     @asynccontextmanager
     async def ordinary_watcher_in_event_room(self):

@@ -150,26 +150,12 @@ class EventResultTests(unittest.TestCase):
                 self.assertEqual(self.journal.snapshot()["rounds"], [])
                 self.assertEqual(self.economy.snapshot(), accounts)
 
-    def test_mismatched_replay_and_corrupt_snapshot_fail(self):
+    def test_mismatched_replay_fails(self):
+        # Corrupt saved receipts are covered by test_event_result_persistence.
         outcome = EventRoundOutcome((1, 2), (7, 3), (1, 3), False)
         self.journal.record(self.host, "festival", "one", outcome, ("0", "1"))
         with self.assertRaises(ValueError):
             self.journal.record(self.host, "festival", "one", outcome, ("0", "1"), "wins")
-        snapshot = self.journal.snapshot()
-        for key, value in (
-            ("scores", None),
-            ("scores", [7, 4]),
-            ("keys", [[], None]),
-            ("classes", [True, 3]),
-            ("characters", [1, 1]),
-        ):
-            bad = copy.deepcopy(snapshot)
-            bad["rounds"][0][key] = value
-            with self.subTest(key=key), self.assertRaises(ValueError):
-                EventResults.restore(bad)
-        snapshot["rounds"] *= 2
-        with self.assertRaises(ValueError):
-            EventResults.restore(snapshot)
 
 
 if __name__ == "__main__":
