@@ -10,7 +10,7 @@ import sysconfig
 FORBIDDEN = {
     "tmserver.game.match", "tmserver.events.matchmaking", "tmserver.events.matches",
     "tmserver.economy.auctions.ledger", "tmserver.network.server",
-    "tmserver.storage.json", "tmserver.storage.postgres", "sqlalchemy", "alembic", "psycopg",
+    "tmserver.storage.postgres", "sqlalchemy", "alembic", "psycopg",
 }
 
 

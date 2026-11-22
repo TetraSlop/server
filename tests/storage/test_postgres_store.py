@@ -21,7 +21,8 @@ try:
 except ImportError as exc:
     raise unittest.SkipTest("install tmserver[postgres] for PostgreSQL tests") from exc
 
-from tmserver.storage.database import export_json, import_json, upgrade, validate_snapshot
+from tmserver.storage.database import upgrade
+from tmserver.storage.validation import validate_snapshot
 from tmserver.storage.schema import metadata, state_meta
 from tmserver.economy.service import EconomyService
 from tmserver.storage.postgres import PostgresStateStore, database_engine
@@ -202,43 +203,6 @@ class PostgresStoreTests(DatabaseFixture, unittest.TestCase):
         with self.assertRaises(OSError):
             self.store.save(snapshot)
         self.assertEqual(self.reopen().load(), snapshot)
-
-    def test_import_export_checks_profiles_hash_and_refuses_overwrite(self):
-        snapshot = self.sample()
-        with tempfile.TemporaryDirectory() as folder:
-            source = Path(folder) / "source.json"
-            source.write_text(json.dumps(snapshot), encoding="utf8")
-            original = source.read_bytes()
-            digest = import_json(self.store, source)
-            self.assertEqual(digest, hashlib.sha256(original).hexdigest())
-            with self.store.connection.begin():
-                self.assertEqual(
-                    self.store.connection.scalar(sa.select(state_meta.c.import_sha256)),
-                    digest,
-                )
-            with self.assertRaises(ValueError):
-                import_json(self.store, source)
-            with self.assertRaises(FileExistsError):
-                export_json(self.store, source)
-            self.assertEqual(source.read_bytes(), original)
-            output = Path(folder) / "export.json"
-            export_json(self.store, output)
-            self.assertEqual(json.loads(output.read_text()), snapshot)
-
-    def test_import_rejects_unknown_fields_and_invalid_domain_before_writing(self):
-        with tempfile.TemporaryDirectory() as folder:
-            source = Path(folder) / "source.json"
-            for mutate in (
-                lambda s: s.update(unknown=1),
-                lambda s: next(iter(s["accounts"].values())).update(balance=-1),
-                lambda s: next(iter(s["accounts"].values())).update(extra="preserve me"),
-            ):
-                snapshot = self.sample()
-                mutate(snapshot)
-                source.write_text(json.dumps(snapshot))
-                with self.assertRaises(ValueError):
-                    import_json(self.store, source)
-                self.assertIsNone(self.store.load())
 
     def test_older_economy_only_save_retains_missing_optional_sections(self):
         economy = EconomyService(seed=1)

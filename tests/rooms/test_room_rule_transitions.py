@@ -138,7 +138,7 @@ class RoomRuleTransitions(unittest.IsolatedAsyncioTestCase):
         for client in self.clients:
             await client.close()
         await self.server.stop()
-        restored = Server(state_path=self.state_path, account_count=3, ordinary_rooms=self.configs)
+        restored = Server(store=self.store, account_count=3, ordinary_rooms=self.configs)
         try:
             self.assertEqual(
                 read_preferences(restored.economy.profile_bytes(self.keys[0]))["Tet"],

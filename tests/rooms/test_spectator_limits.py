@@ -6,7 +6,7 @@ from unittest.mock import patch
 from tests.game import test_three_player_integration as versus
 from tests.game.test_match_service import ack, put, select
 from tests.protocol.test_admission_identity import native_identity
-from tests.rooms.harness import serve, state_path
+from tests.rooms.harness import prepare, serve
 from tmserver.cards.catalog import Catalog
 from tmserver.cards.model import Card as InventoryCard
 from tmserver.economy.service import EconomyService
@@ -17,7 +17,6 @@ from tmserver.network.local_accounts import account_specs
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.rooms.packets import TABLE_CHANNEL
 from tmserver.rooms.spectators import SpectatorError, SpectatorService, bootstrap
-from tmserver.storage.json import JsonStateStore
 
 
 FIELDS = tuple(18 if index % 5 in (1, 3) else 0 for index in range(25))
@@ -116,7 +115,7 @@ class SpectatorLimitsIntegration(unittest.IsolatedAsyncioTestCase):
     admit = versus.ThreePlayerIntegrationTests.admit
 
     async def asyncSetUp(self):
-        state_path(self)
+        prepare(self)
         economy = EconomyService(seed=1)
         for key, (_, _, character) in account_specs(4).items():
             economy.provision(
@@ -126,7 +125,7 @@ class SpectatorLimitsIntegration(unittest.IsolatedAsyncioTestCase):
                 name=f"P{character}".encode(),
                 cards=[InventoryCard.from_card(generated_card())] * 5,
             )
-        JsonStateStore(self.state_path).save(economy.snapshot())
+        self.store.save(economy.snapshot())
         await serve(
             self,
             account_count=4,

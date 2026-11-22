@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from tests.support.memory_store import MemoryStore
 from tmserver.network.server import Server
 from tmserver.profiles.service import ProfileServer
 
@@ -18,8 +19,8 @@ class DiscordProfileTests(unittest.IsolatedAsyncioTestCase):
         from tmserver.auth.web import create_app
 
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.path = self.root / "state.json"
-        self.host = Server(state_path=self.path)
+        self.store = MemoryStore()
+        self.host = Server(store=self.store)
         self.addAsyncCleanup(self.host.stop)
         self.profile = ProfileServer(self.root / "profile.log", self.host)
         self.addAsyncCleanup(self.profile.stop)
@@ -54,9 +55,9 @@ class DiscordProfileTests(unittest.IsolatedAsyncioTestCase):
         return await self.http.post("/v1/play/sessions", json={"ticket": await self.ticket()})
 
     async def test_play_persists_only_name_and_both_profile_formats_use_it(self):
-        before, disk = deepcopy(self.host.snapshot()), self.path.read_bytes()
+        before, disk = deepcopy(self.host.snapshot()), self.store.load()
         ticket = await self.ticket()
-        self.assertEqual(self.path.read_bytes(), disk)  # Sign-in alone never edits the game account.
+        self.assertEqual(self.store.load(), disk)  # Sign-in alone never edits the game account.
         result = await self.http.post("/v1/play/sessions", json={"ticket": ticket})
         self.assertEqual(result.status_code, 201, result.text)
         self.assertEqual(result.json()["account_key"], self.key)
@@ -66,7 +67,7 @@ class DiscordProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(after, expected)
         self.assertEqual(self.profile._identity(self.key)[2], b"Discord Name")
         self.assertEqual(self.host.economy.profile_bytes(self.key)[0x10:0x20], b"Discord Name".ljust(16, b"\0"))
-        restored = Server(state_path=self.path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.snapshot(), after)
         finally:
@@ -76,12 +77,12 @@ class DiscordProfileTests(unittest.IsolatedAsyncioTestCase):
         first = await self.play()
         self.assertEqual(first.status_code, 201)
         token = first.json()["session_token"]
-        disk = self.path.read_bytes()
+        disk = self.store.load()
         self.name = "New Name"
         renewed = await self.http.post("/v1/play/renew", json={"session_token": token}, headers=self.headers)
         self.assertEqual(renewed.status_code, 200)
         self.assertEqual((await self.play()).status_code, 409)
-        self.assertEqual(self.path.read_bytes(), disk)
+        self.assertEqual(self.store.load(), disk)
         self.assertEqual((await self.http.delete("/v1/play/account-session", headers=self.headers)).status_code, 204)
         self.assertEqual((await self.play()).status_code, 201)
         self.assertEqual(self.host.economy.account_view(self.key).name, b"New Name")
@@ -96,27 +97,27 @@ class DiscordProfileTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(self.host.economy.account_view(self.key).name, b"Discord Name")
 
     async def test_storage_failure_rolls_back_name_and_revokes_new_play_session(self):
-        before, disk = deepcopy(self.host.snapshot()), self.path.read_bytes()
+        before, disk = deepcopy(self.host.snapshot()), self.store.load()
         with patch.object(self.host.store, "save_changes", side_effect=OSError("write failed")):
             response = await self.play()
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json(), {"error": "storage_unavailable"})
         self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), disk)
+        self.assertEqual(self.store.load(), disk)
         self.assertFalse(self.app.state.play_sessions.sessions)
         self.assertIsNotNone(self.host.storage_failed)
 
     async def test_busy_or_connected_accounts_keep_their_current_name_until_idle(self):
         reservation = self.host.economy.reserve_match(self.key)
-        disk = self.path.read_bytes()
+        disk = self.store.load()
         self.assertEqual((await self.play()).status_code, 201)
-        self.assertEqual(self.path.read_bytes(), disk)
+        self.assertEqual(self.store.load(), disk)
         self.host.economy.release_match(reservation)
         await self.http.delete("/v1/play/account-session", headers=self.headers)
         self.host.nicks[self.key.encode()] = object()
         try:
             self.assertEqual((await self.play()).status_code, 201)
-            self.assertEqual(self.path.read_bytes(), disk)
+            self.assertEqual(self.store.load(), disk)
         finally:
             self.host.nicks.clear()
         await self.http.delete("/v1/play/account-session", headers=self.headers)
@@ -137,7 +138,7 @@ class DiscordProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json(), {"error": "storage_unavailable"})
         self.assertFalse(self.app.state.play_sessions.sessions)
         self.assertEqual(self.host.snapshot(), before)
-        restored = Server(state_path=self.path)
+        restored = Server(store=self.store)
         try:
             expected = deepcopy(before)
             expected["accounts"][self.key]["name_hex"] = b"Discord Name".hex()
@@ -146,10 +147,10 @@ class DiscordProfileTests(unittest.IsolatedAsyncioTestCase):
             await restored.stop()
 
     async def test_unenrolled_identity_cannot_rename_a_profile(self):
-        before, disk = deepcopy(self.host.snapshot()), self.path.read_bytes()
+        before, disk = deepcopy(self.host.snapshot()), self.store.load()
         self.uuid = "22222222-2222-4222-8222-222222222222"
         response = await self.http.post("/v1/play/tickets", json={"protocol": 1}, headers=self.headers)
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json(), {"error": "account_not_linked"})
         self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), disk)
+        self.assertEqual(self.store.load(), disk)

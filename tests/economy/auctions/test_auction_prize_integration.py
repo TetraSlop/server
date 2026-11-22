@@ -18,6 +18,7 @@ from tmserver.economy.packets import named, parse_named
 from tmserver.protocol.identities import ROOM_RAW, SHOP_RAW, service_nick
 from tmserver.profiles.service import ProfileServer
 from tests.support.irc import ACCOUNTS
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.network.server import Server
 from tmserver.protocol.commands import parse
 
@@ -26,9 +27,9 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.now = 1700000000
-        self.game = Server(state_path=self.path, auction_clock=lambda: self.now)
+        self.game = Server(store=self.store, auction_clock=lambda: self.now)
         self.port = await self.game.start(0)
         self.profile = ProfileServer(Path(self.temp.name) / "profile.jsonl", self.game)
         self.profile_port = await self.profile.start(0)
@@ -147,7 +148,7 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             self.game.economy.inventory(self.keys[1])[-1].reduced(), item.card.reduced()
         )
-        restored = Server(state_path=self.path, auction_clock=lambda: self.now)
+        restored = Server(store=self.store, auction_clock=lambda: self.now)
         try:
             self.assertEqual(restored.economy.snapshot(), self.game.economy.snapshot())
             self.assertEqual(
@@ -167,7 +168,7 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         if peer is not None:
             await peer.close()
         self.assertFalse(self.game.economy.is_reserved(self.keys[1]))
-        restored = Server(state_path=self.path, auction_clock=lambda: self.now)
+        restored = Server(store=self.store, auction_clock=lambda: self.now)
         try:
             self.assertEqual(len(restored.economy.inventory(self.keys[1])), 10)
             self.assertEqual(len(restored.auction_ledger.pending(self.keys[1])), 1)
@@ -211,15 +212,15 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         quit_ = named(0xB2, 0x17, number, f"@Quit=/No={number}")
         completed = await self.send(0, quit_, source=service_nick(SHOP_RAW))
         self.assertEqual(len(completed), 1)
-        saved = self.path.read_bytes()
+        saved = self.store.load()
         snapshot = self.game.snapshot()
         for target in (service_nick(SHOP_RAW), service_nick(ROOM_RAW)):
             self.assertEqual(
                 await self.send(0, quit_, source=service_nick(SHOP_RAW), target=target), completed
             )
             self.assertEqual(self.game.snapshot(), snapshot)
-            self.assertEqual(self.path.read_bytes(), saved)
-        restored = Server(state_path=self.path)
+            self.assertEqual(self.store.load(), saved)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.snapshot(), self.game.economy.snapshot())
             self.assertEqual(restored.prize.snapshot(), self.game.prize.snapshot())
@@ -251,12 +252,12 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         collection, _ = await self.enter_collection(0)
         self.assertEqual(collection, number)
         self.assertFalse(self.game.prize.can_replay_quit(key, quit_))
-        before = self.path.read_bytes()
+        before = self.store.load()
         await self.clients[0].send(b"NOTICE " + shop + b" :" + quit_)
         # Auction collection cannot end before its two Get stages. A prize
         # receipt must not turn this invalid auction request into success.
         self.assertEqual(await self.clients[0].read(), b"")
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.store.load(), before)
 
     async def test_closed_prize_receipt_is_not_reused_after_reconnect(self):
         key = self.keys[0]
@@ -265,7 +266,7 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         shop = service_nick(SHOP_RAW)
         quit_ = named(0xB2, 0x17, number, f"@Quit=/No={number}")
         await self.send(0, quit_, source=shop, target=shop)
-        saved = self.path.read_bytes()
+        saved = self.store.load()
         peer = self.game.nicks[client.nick]
         await client.close()
         await peer.close()
@@ -275,11 +276,11 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(b" 422 ", await replacement.read())
         await replacement.send(b"NOTICE " + shop + b" :" + quit_)
         self.assertEqual(await replacement.read(), b"")
-        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(self.store.load(), saved)
 
     async def test_failed_auction_save_sends_no_acceptance_and_retains_last_joint_state(self):
-        before = self.path.read_bytes()
-        with patch.object(Path, "replace", side_effect=OSError("injected failed exchange save")):
+        before = self.store.load()
+        with failing_commits("injected failed exchange save"):
             await self.clients[0].send(
                 b"NOTICE "
                 + service_nick(ROOM_RAW)
@@ -288,8 +289,8 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(await self.clients[0].read(), b"")
         self.assertIsNotNone(self.game.storage_failed)
-        self.assertEqual(self.path.read_bytes(), before)
-        restored = Server(state_path=self.path)
+        self.assertEqual(self.store.load(), before)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(len(restored.economy.inventory(self.keys[0])), 10)
             self.assertEqual(restored.auction_ledger.listings(), ())
@@ -308,7 +309,7 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         if peer is not None:
             await peer.close()
         self.assertFalse(self.game.economy.is_reserved(key))
-        restored = Server(state_path=self.path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.inventory(key), before)
             self.assertEqual(restored.economy.prize_points(key), 5000)
@@ -320,14 +321,14 @@ class AuctionPrizeIntegrationTests(unittest.IsolatedAsyncioTestCase):
         key = self.keys[0]
         self.game.prize.grant_award(key, "failed.award", top30=5000)
         self.game.persist()
-        before = self.path.read_bytes()
-        with patch.object(Path, "replace", side_effect=OSError("injected failed award save")):
+        before = self.store.load()
+        with failing_commits("injected failed award save"):
             await self.clients[0].send(
                 b"NOTICE " + service_nick(ROOM_RAW) + b" :" + self.prize_entry()
             )
             self.assertEqual(await self.clients[0].read(), b"")
-        self.assertEqual(self.path.read_bytes(), before)
-        restored = Server(state_path=self.path)
+        self.assertEqual(self.store.load(), before)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.prize_points(key), 0)
             restored.prize.handle(key, self.prize_entry())

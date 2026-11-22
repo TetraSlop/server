@@ -1,4 +1,4 @@
-"""Offline administration uses real disposable saves and existing claim validators."""
+"""Offline administration runs on a store stand-in and the existing claim validators."""
 
 import copy
 import io
@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from tests import ROOT
 from tests.events.test_event_configuration import DOCUMENT
+from tests.support.memory_store import DATABASE, MemoryStore, opened_by
 from tmserver.cli import admin
 from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.models import MAX_MONEY
@@ -25,14 +26,15 @@ from tmserver.events.service import EventHost
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.storage.validation import SERVICE_NAMES
-from tmserver.storage.json import JsonStateStore, writer_lease
 
 
 class AdminTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        self.path = Path(directory.name) / "state.json"
+        self.store = MemoryStore()
+        self.enterContext(opened_by("tmserver.cli.admin", self.store))
+        self.directory = Path(directory.name)
         self.events_path = Path(directory.name) / "events.json"
         self.economy = EconomyService(seed=37)
         for nn, key in enumerate(("alice", "bob"), 1):
@@ -40,13 +42,13 @@ class AdminTests(unittest.TestCase):
         self.seed(self.economy.snapshot())
 
     def seed(self, snapshot):
-        JsonStateStore(self.path).save(snapshot)
+        self.store.save(snapshot)
 
     def load(self):
-        return JsonStateStore(self.path).load()
+        return self.store.load()
 
     def argv(self, *command):
-        args = ["--state", str(self.path)]
+        args = list(DATABASE)
         if self.events_path.exists():
             args += ["--events", str(self.events_path)]
         return args + list(command)
@@ -89,46 +91,43 @@ class AdminTests(unittest.TestCase):
         )
 
     def test_target_is_explicit_and_unknown_accounts_are_never_created(self):
-        with patch.dict(os.environ, {"TM_DATABASE_URL": "postgresql://unused"}):
-            for argv in (
-                ["accounts"],
-                ["--state", str(self.path), "--database-url", "x", "accounts"],
-            ):
+        with patch.dict(os.environ, {}, clear=True):
+            for argv in (["accounts"], ["--state", "save.json", *DATABASE, "accounts"]):
                 with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                     admin.arguments(argv)
-        before = self.path.read_bytes()
+        before = self.load()
         for key in ("Same Name", "ALICE", "missing"):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 self.execute(*self.prize(key=key))
-            self.assertEqual(self.path.read_bytes(), before)
-        missing = self.path.with_name("missing.json")
-        with self.assertRaisesRegex(ValueError, "existing saved"):
-            admin.execute(admin.arguments(["--state", str(missing), "accounts"]))
-        self.assertFalse(missing.exists())
+            self.assertEqual(self.load(), before)
+        missing = MemoryStore()
+        with opened_by("tmserver.cli.admin", missing), self.assertRaisesRegex(ValueError, "existing saved"):
+            self.execute("accounts")
+        self.assertIsNone(missing.load())
 
     def test_accounts_are_read_only_and_names_are_safely_escaped(self):
         snapshot = self.load()
         snapshot["accounts"]["alice"]["name_hex"] = b"A\n\x1b[31m".hex()
         self.seed(snapshot)
-        before = self.path.read_bytes()
+        before = self.load()
         output = io.StringIO()
         with (
             redirect_stdout(output),
-            patch.object(JsonStateStore, "save_changes", side_effect=AssertionError("read wrote")),
+            patch.object(self.store, "save_changes", side_effect=AssertionError("read wrote")),
         ):
             admin.cli(self.argv("accounts"))
         rows = json.loads(output.getvalue())
         self.assertEqual([row["account_key"] for row in rows], ["alice", "bob"])
         self.assertEqual(rows[0]["name"], "A\n\x1b[31m")
         self.assertNotIn("\x1b", output.getvalue())
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.load(), before)
 
     def test_account_summary_is_exact_read_only_and_preserves_null_journals(self):
         snapshot = self.load()
         snapshot.update({name: None for name in SERVICE_NAMES})
         self.seed(snapshot)
-        before = self.path.read_bytes()
-        with patch.object(JsonStateStore, "save_changes", side_effect=AssertionError("read wrote")):
+        before = self.load()
+        with patch.object(self.store, "save_changes", side_effect=AssertionError("read wrote")):
             result = self.execute("account", "--account-key", "alice")
             self.assertEqual(result["account_key"], "alice")
             self.assertEqual(result["balance"], self.economy.balance("alice"))
@@ -143,7 +142,7 @@ class AdminTests(unittest.TestCase):
             for key in ("Same Name", "ALICE", "missing"):
                 with self.assertRaises(ValueError):
                     self.execute("account", "--account-key", key)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.load(), before)
 
     def test_account_summary_reports_remaining_claims_after_partial_collection(self):
         configs = self.enable_events()
@@ -172,8 +171,8 @@ class AdminTests(unittest.TestCase):
         snapshot.update(economy.snapshot(), events=host.snapshot(), event_cards=cards.snapshot())
         self.seed(snapshot)
         self.execute(*self.prize())
-        before = self.path.read_bytes()
-        with patch.object(JsonStateStore, "save_changes", side_effect=AssertionError("read wrote")):
+        before = self.load()
+        with patch.object(self.store, "save_changes", side_effect=AssertionError("read wrote")):
             result = self.execute("account", "--account-key", "alice")
             self.assertEqual(result["balance"], MAX_MONEY)
             self.assertEqual(result["card_count"], 30 - pending["cards"])
@@ -199,14 +198,14 @@ class AdminTests(unittest.TestCase):
             self.assertIsNone(other["pending_prize"])
             self.assertEqual(other["events"], [])
             self.assertEqual(other["event_claims"], [])
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.load(), before)
 
     def test_reused_admin_saves_each_change_and_preserves_unrelated_journals(self):
         configs = self.enable_events()
         original = self.load()
         original.update(prize=None, event_results=None)
         self.seed(original)
-        store = JsonStateStore(self.path)
+        store = self.store
         state = admin.AdminState(store, store.load(), configs)
         for number, value in enumerate((-1, 0, -1)):
             with self.subTest(value=value):
@@ -221,25 +220,25 @@ class AdminTests(unittest.TestCase):
 
     def test_reused_admin_failed_save_does_not_advance_comparison_or_publish(self):
         configs = self.enable_events()
-        store = JsonStateStore(self.path)
+        store = self.store
         state = admin.AdminState(store, store.load(), configs)
         state.apply(admin.arguments(self.argv(*self.eligibility(-1, request_id="exclude"))))
         included = admin.arguments(self.argv(*self.eligibility(0, request_id="include")))
-        saved = self.path.read_bytes()
+        saved = self.load()
         # Reject before entering the backend; it has not failed or committed.
         with patch.object(store, "save_changes", side_effect=OSError("rejected before save")):
             with self.assertRaisesRegex(OSError, "rejected before save"):
                 state.apply(included)
-        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(self.load(), saved)
         self.assertEqual(state.events.member("alice", "festival").eligibility, -1)
         self.assertEqual(state.apply(included)["after"]["eligibility"], 0)
         self.assertEqual(self.load()["events"], state.events.snapshot())
 
     def test_event_configuration_must_match_saved_ids_and_fingerprints(self):
         self.enable_events()
-        before = self.path.read_bytes()
+        before = self.load()
         with self.assertRaises(ValueError):
-            admin.execute(admin.arguments(["--state", str(self.path), "accounts"]))
+            admin.execute(admin.arguments([*DATABASE, "accounts"]))
         changed = copy.deepcopy(DOCUMENT)
         changed["events"][0]["end"] += 1
         added = copy.deepcopy(DOCUMENT)
@@ -250,7 +249,7 @@ class AdminTests(unittest.TestCase):
             self.events_path.write_text(json.dumps(document), encoding="utf8")
             with self.assertRaises(ValueError):
                 self.execute(*self.grant())
-            self.assertEqual(self.path.read_bytes(), before)
+            self.assertEqual(self.load(), before)
 
     def test_pending_recovery_and_old_weekly_rankings_do_not_advance(self):
         auction = AuctionEconomy(self.economy)
@@ -277,86 +276,68 @@ class AdminTests(unittest.TestCase):
 
     def test_save_failures_produce_no_success_or_partial_state(self):
         self.enable_events()
-        before = self.path.read_bytes()
+        before = self.load()
         for command in (self.prize(), self.grant(), self.eligibility()):
             output = io.StringIO()
             with (
                 redirect_stdout(output),
-                patch.object(Path, "replace", side_effect=OSError("injected save failure")),
+                patch.object(self.store, "save_changes", side_effect=OSError("injected save failure")),
                 self.assertRaises(SystemExit),
             ):
                 admin.cli(self.argv(*command))
             self.assertEqual(output.getvalue(), "")
-            self.assertEqual(self.path.read_bytes(), before)
+            self.assertEqual(self.load(), before)
         self.assertEqual(self.execute(*self.prize())["status"], "queued")
 
-    def test_json_busy_lease_blocks_before_load_and_releases_after_failure(self):
-        before = self.path.read_bytes()
-        with (
-            writer_lease(self.path),
-            patch.object(JsonStateStore, "load", side_effect=AssertionError("busy read")),
-            self.assertRaises(OSError),
-        ):
-            self.execute(*self.prize())
-        self.assertEqual(self.path.read_bytes(), before)
-        with self.assertRaises(ValueError):
-            self.execute(*self.prize(key="missing"))
-        self.assertEqual(self.execute(*self.prize())["status"], "queued")
-
-    def test_postgres_selection_owns_store_context_and_uses_same_atomic_changes(self):
+    def test_command_owns_store_context_and_uses_same_atomic_changes(self):
         calls = []
 
         @contextmanager
         def store(url):
             calls.append(("open", url))
             try:
-                yield JsonStateStore(self.path)
+                yield self.store
             finally:
                 calls.append(("close", url))
 
         args = admin.arguments(["--database-url", "postgresql://fixture", *self.prize()])
-        with (
-            patch.object(admin, "postgres_store", store),
-            patch.object(admin, "writer_lease", side_effect=AssertionError("wrong backend")),
-        ):
+        with patch.object(admin, "open_store", store):
             self.assertEqual(admin.execute(args)["status"], "queued")
         self.assertEqual(
             calls, [("open", "postgresql://fixture"), ("close", "postgresql://fixture")]
         )
         self.assertIn("prize", self.load())
 
-    def test_json_command_and_help_run_without_database_or_server_import(self):
+    def test_help_runs_without_database_or_server_import(self):
         environment = dict(os.environ, PYTHONPATH=str(ROOT / "src"))
         code = (
-            "from tmserver.cli.admin import cli; cli(); import sys; "
-            "assert not any(k in sys.modules for k in "
+            "import sys\n"
+            "from tmserver.cli.admin import cli\n"
+            "try:\n    cli()\n"
+            "finally:\n"
+            "    assert not any(k in sys.modules for k in "
             "('sqlalchemy', 'alembic', 'psycopg', 'tmserver.network.server'))"
         )
-        for args in (
-            ["--help"],
-            self.argv("account", "--account-key", "alice"),
-            self.argv(*self.prize()),
-        ):
-            result = subprocess.run(
-                [sys.executable, "-B", "-c", code, *args],
-                env=environment,
-                cwd=self.path.parent,
-                capture_output=True,
-                text=True,
-                timeout=15,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stderr, "")
-        self.assertEqual(json.loads(result.stdout)["status"], "queued")
+        result = subprocess.run(
+            [sys.executable, "-B", "-c", code, "--help"],
+            env=environment,
+            cwd=self.directory,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        self.assertIn("--database-url", result.stdout)
 
     def test_null_optional_journals_remain_unchanged_until_that_service_is_edited(self):
         snapshot = self.load()
         snapshot.update({name: None for name in SERVICE_NAMES})
         self.seed(snapshot)
-        before = self.path.read_bytes()
+        before = self.load()
         self.assertEqual(len(self.execute("accounts")), 2)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.load(), before)
         self.execute(*self.prize())
         saved = self.load()
         self.assertEqual(saved["accounts"], snapshot["accounts"])
@@ -378,10 +359,10 @@ class AdminTests(unittest.TestCase):
         invalid += [dict(valid, **{name: []}) for name in SERVICE_NAMES]
         for snapshot in invalid:
             with self.subTest(snapshot=snapshot):
-                self.path.write_text(json.dumps(snapshot), encoding="utf8")
-                before = self.path.read_bytes()
+                self.store.save(snapshot)
+                before = self.load()
                 output = io.StringIO()
                 with redirect_stdout(output), self.assertRaises(SystemExit):
                     admin.cli(self.argv("accounts"))
                 self.assertEqual(output.getvalue(), "")
-                self.assertEqual(self.path.read_bytes(), before)
+                self.assertEqual(self.load(), before)

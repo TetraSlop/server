@@ -10,11 +10,11 @@ from tests.support.irc import Client
 from tests.profiles.test_character_profiles import request
 from tmserver.economy.service import EconomyService
 from tests.support.irc import ACCOUNTS
+from tests.support.memory_store import MemoryStore
 from tmserver.network.server import Server
 from tmserver.profiles.characters import CharacterProfiles
 from tmserver.protocol.commands import Command, parse
 from tmserver.protocol.identities import player_id
-from tmserver.storage.json import JsonStateStore
 
 
 def sized_record(profiles, key, length):
@@ -67,10 +67,10 @@ class ProfileReplyBudgetIntegrationTests(unittest.IsolatedAsyncioTestCase):
         profiles = CharacterProfiles(economy)
         profiles.records[key] = tuple(sized_record(profiles, key, 460))
         with tempfile.TemporaryDirectory() as folder:
-            state = Path(folder) / "state.json"
-            JsonStateStore(state).save(dict(economy.snapshot(), character_profiles=profiles.snapshot()))
+            store = MemoryStore()
+            store.save(dict(economy.snapshot(), character_profiles=profiles.snapshot()))
             for restarted in (False, True):
-                server, client = Server(state_path=state), Client()
+                server, client = Server(store=store), Client()
                 try:
                     await client.open(await server.start(0), account=nick)
                     await client.read()
@@ -80,12 +80,12 @@ class ProfileReplyBudgetIntegrationTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(len(reply) + 6, size)
                         self.assertEqual(parse(reply.split(b" :", 1)[1][5:])[0].token, b"PO")
                     if not restarted:
-                        before = state.read_bytes(), server.character_profiles.snapshot()
+                        before = store.load(), server.character_profiles.snapshot()
                         await client.send(b"NOTICE UUIRT71SR :" + request(
                             b"GR", 1234567890, extras=(Command(b"AN", b"Alice!"),)
                         ))
                         self.assertEqual(await client.read(), b"")
-                        self.assertEqual((state.read_bytes(), server.character_profiles.snapshot()), before)
+                        self.assertEqual((store.load(), server.character_profiles.snapshot()), before)
                 finally:
                     if hasattr(client, "writer"):
                         await client.close()

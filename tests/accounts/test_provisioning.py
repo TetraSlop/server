@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from tests.support.memory_store import MemoryStore
 from tmserver.accounts.identities import IdentityRegistry
 from tmserver.accounts.provisioning import HOSTED_RAW_BASE, import_bindings, provision_identity
 from tmserver.network.server import Server
@@ -21,8 +22,8 @@ SECOND = "22222222-2222-4222-8222-222222222222"
 class IdentityProvisioningTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.path = self.root / "state.json"
-        self.host = Server(state_path=self.path)
+        self.store = MemoryStore()
+        self.host = Server(store=self.store)
 
     def create(self, subject=USER, **options):
         return provision_identity(self.host, ISSUER, subject, **options)
@@ -37,30 +38,30 @@ class IdentityProvisioningTests(unittest.TestCase):
         self.assertEqual(polid_from_string(login.decode()), HOSTED_RAW_BASE + character)
         self.assertEqual(polid_unscramble(key.encode()), HOSTED_RAW_BASE + 129)
         self.assertEqual(len(password), 16)
-        after, disk = self.host.snapshot(), self.path.read_bytes()
+        after, disk = self.host.snapshot(), self.store.load()
         for name in set(before) - {"accounts", "identities"}:
             self.assertEqual(after[name], before[name])
         with patch.object(self.host.store, "save_changes", side_effect=AssertionError("repeat wrote")):
             self.assertEqual(self.create(name="Updated Name"), key)
-        self.assertEqual(self.path.read_bytes(), disk)
-        self.host = Server(state_path=self.path)
+        self.assertEqual(self.store.load(), disk)
+        self.host = Server(store=self.store)
         self.assertEqual(self.create(), key)
         self.assertEqual(self.host.economy.account_view(key), account)
-        self.assertNotIn(password.decode(), self.path.read_text())
+        self.assertNotIn(password.decode(), self.store.load())
 
     def test_existing_bindings_migrate_without_reset_and_can_be_removed_from_config(self):
         key = self.host.ensure_account(next(iter(self.host.accounts)), name=b"Existing")
         before = deepcopy(self.host.snapshot()["accounts"])
         import_bindings(self.host, ISSUER, {USER: key})
         self.assertEqual(self.host.snapshot()["accounts"], before)
-        self.host = Server(state_path=self.path)
+        self.host = Server(store=self.store)
         import_bindings(self.host, ISSUER, {})
         self.assertEqual(self.create(), key)
         self.assertEqual(self.host.snapshot()["accounts"], before)
         self.assertTrue(self.host.identities.owns(key))
 
     def test_identity_and_native_ids_do_not_depend_on_display_name_or_local_pool_size(self):
-        self.host = Server(state_path=self.path, account_count=128)
+        self.host = Server(store=self.store, account_count=128)
         one, two = self.create(name="Same Name"), self.create(SECOND, name="Same Name")
         self.assertNotEqual(one, two)
         self.assertEqual(len(self.host.accounts), 130)
@@ -71,13 +72,13 @@ class IdentityProvisioningTests(unittest.TestCase):
     def test_changed_configuration_cannot_rebind_an_identity_or_take_an_owned_account(self):
         key = self.create()
         local = self.host.ensure_account(next(iter(self.host.accounts)))
-        before, disk = self.host.snapshot(), self.path.read_bytes()
+        before, disk = self.host.snapshot(), self.store.load()
         for issuer, bindings in ((ISSUER, {USER: local}), (ISSUER, {SECOND: key}),
                                  ("https://other.supabase.co/auth/v1", {USER: key})):
             with self.subTest(bindings=bindings), self.assertRaises(ValueError):
                 import_bindings(self.host, issuer, bindings)
         self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), disk)
+        self.assertEqual(self.store.load(), disk)
 
     def test_allocation_skips_configured_service_identity(self):
         from tmserver.protocol.wire import polid_scramble
@@ -91,12 +92,12 @@ class IdentityProvisioningTests(unittest.TestCase):
     def test_import_refuses_connected_legacy_account_without_changing_ownership(self):
         nick = next(iter(self.host.accounts))
         key = self.host.ensure_account(nick)
-        before, disk = self.host.snapshot(), self.path.read_bytes()
+        before, disk = self.host.snapshot(), self.store.load()
         self.host.nicks[nick] = object()
         with self.assertRaisesRegex(ValueError, "disconnect"):
             import_bindings(self.host, ISSUER, {USER: key})
         self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), disk)
+        self.assertEqual(self.store.load(), disk)
 
     def test_precommit_failure_publishes_neither_account_nor_owner(self):
         before = self.host.snapshot()
@@ -106,7 +107,7 @@ class IdentityProvisioningTests(unittest.TestCase):
                 self.create()
         self.assertEqual(self.host.snapshot(), before)
         self.assertEqual(self.host.account_specs, specs)
-        self.assertFalse(self.path.exists())
+        self.assertIsNone(self.store.load())
         self.assertIsNotNone(self.host.storage_failed)
 
     def test_lost_commit_ack_reloads_one_account_before_retry(self):
@@ -120,7 +121,7 @@ class IdentityProvisioningTests(unittest.TestCase):
         with patch.object(self.host.store, "save_changes", side_effect=lost_ack), self.assertRaises(OSError):
             self.create()
         self.assertEqual(self.host.snapshot(), before)
-        self.host = Server(state_path=self.path)
+        self.host = Server(store=self.store)
         key = self.host.identities.account(ISSUER, USER)
         with patch.object(self.host.store, "save_changes", side_effect=AssertionError("retry wrote")):
             self.assertEqual(self.create(), key)

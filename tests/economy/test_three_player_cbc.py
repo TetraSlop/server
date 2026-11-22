@@ -79,7 +79,7 @@ class ThreePlayerCBC(unittest.IsolatedAsyncioTestCase):
 
     async def assert_restart(self):
         restored = Server(
-            state_path=self.path, account_count=3, match_mode="versus", match_player_count=3
+            store=self.store, account_count=3, match_mode="versus", match_player_count=3
         )
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())

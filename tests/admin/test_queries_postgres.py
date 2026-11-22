@@ -11,10 +11,10 @@ from unittest.mock import patch
 from tests.events.test_event_rooms import config
 from tests.rooms.test_ordinary_rooms import EXTRA
 from tests.storage.test_postgres_store import TEST_URL, DatabaseFixture, sa
+from tests.support.memory_store import MemoryStore
 from tmserver.admin.queries import account_summary
 from tmserver.cli.admin import AdminState
 from tmserver.network.server import Server
-from tmserver.storage.json import JsonStateStore
 from tmserver.storage.schema import state_meta
 
 
@@ -45,19 +45,18 @@ def saved_fixture():
 class PostgresQueryTests(DatabaseFixture, unittest.TestCase):
     def setUp(self):
         super().setUp()
-        folder = self.enterContext(tempfile.TemporaryDirectory())
-        self.json = JsonStateStore(Path(folder) / "state.json")
+        self.memory = MemoryStore()
         self.source, self.keys = saved_fixture()
         snapshot = self.source.snapshot()
         self.store.save(snapshot)
-        self.json.save(snapshot)
+        self.memory.save(snapshot)
 
     def revision(self):
         with self.store.connection.begin():
             return self.store.connection.scalar(sa.select(state_meta.c.revision))
 
     def prohibit_storage(self, stack):
-        for store in (self.store, self.json):
+        for store in (self.store, self.memory):
             for method in ("load", "save", "save_changes"):
                 stack.enter_context(patch.object(store, method, side_effect=AssertionError(method)))
 
@@ -73,13 +72,13 @@ class PostgresQueryTests(DatabaseFixture, unittest.TestCase):
         self.source.match_economy.begin("open-round", tokens, 50)
         snapshot = self.source.snapshot()
         self.store.save(snapshot)
-        self.json.save(snapshot)
-        saved, revision, raw = self.store.load(), self.revision(), self.json.path.read_bytes()
+        self.memory.save(snapshot)
+        saved, revision, raw = self.store.load(), self.revision(), self.memory.load()
         configs = host_options()["event_configs"]
         with ExitStack() as stack:
             self.prohibit_storage(stack)
             offline = AdminState(self.store, deepcopy(saved), configs)
-            local = AdminState(self.json, deepcopy(snapshot), configs)
+            local = AdminState(self.memory, deepcopy(snapshot), configs)
             summary = account_summary(offline, self.keys[0])
             self.assertEqual(summary, account_summary(local, self.keys[0]))
             self.assertEqual(summary["match_rounds"], [dict(
@@ -90,4 +89,4 @@ class PostgresQueryTests(DatabaseFixture, unittest.TestCase):
             self.assertEqual(summary["auction_claims"]["returned_cards"], 1)
         self.assertEqual(self.store.load(), saved)
         self.assertEqual(self.revision(), revision)
-        self.assertEqual(self.json.path.read_bytes(), raw)
+        self.assertEqual(self.memory.load(), raw)

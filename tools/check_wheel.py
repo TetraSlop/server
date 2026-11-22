@@ -16,6 +16,54 @@ from pathlib import Path
 from tools.package import ROOT, verify_wheel
 
 
+# The smokes check packaging, not PostgreSQL: the source lanes cover the store.
+STORE = """
+from copy import deepcopy
+from unittest.mock import patch
+
+
+class WheelStore:
+    def __init__(self):
+        self.snapshot = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def load(self):
+        return deepcopy(self.snapshot)
+
+    def save(self, snapshot):
+        self.snapshot = deepcopy(snapshot)
+
+    def save_changes(self, accounts, services):
+        snapshot = self.snapshot or {"version": 1, "accounts": {}}
+        snapshot["accounts"].update(deepcopy(accounts))
+        snapshot.update(deepcopy(services))
+        self.snapshot = snapshot
+
+
+def stored():
+    store = WheelStore()
+    return store, patch("tmserver.cli.serve.open_store", return_value=store)
+"""
+
+
+SERVICES_SMOKE = STORE + """
+import sys
+
+from tmserver.cli import serve
+
+sys.argv = ["tmserver", "--database-url", "postgresql+psycopg://wheel", "--game-port", "0",
+            "--profile-port", "0", "--seconds", "0.1"]
+store, opened = stored()
+with opened:
+    serve.main()
+"""
+
+
 ADMIN_SMOKE = """
 import asyncio
 from http.cookiejar import CookieJar
@@ -66,7 +114,7 @@ def check_http(origin, account):
 
 
 async def main():
-    host = Server(state_path="admin-web.json")
+    host = Server()
     account = host.ensure_account(next(iter(host.accounts)))
     host.persist()
     before = host.snapshot()
@@ -101,12 +149,10 @@ asyncio.run(main())
 """
 
 
-AUTH_SMOKE = """
+AUTH_SMOKE = STORE + """
 import asyncio
-from copy import deepcopy
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 import httpx
 from websockets.asyncio.client import connect
@@ -127,9 +173,11 @@ async def verified(self, token):
 async def main():
     args = arguments([
         "--auth-config", "auth.json", "--auth-port", "0", "--auth-insecure-loopback",
-        "--state", "auth-state.json", "--log-dir", "auth-logs", "--game-port", "0", "--profile-port", "0",
+        "--database-url", "postgresql+psycopg://wheel", "--log-dir", "auth-logs",
+        "--game-port", "0", "--profile-port", "0",
     ])
-    with patch("tmserver.auth.provider.SupabaseVerifier.verify", verified):
+    store, opened = stored()
+    with opened, patch("tmserver.auth.provider.SupabaseVerifier.verify", verified):
         async with running_services(args) as services:
             origin = f"http://127.0.0.1:{services.auth.port}"
             before = deepcopy(services.game.snapshot())
@@ -159,7 +207,7 @@ async def main():
                         raise AssertionError("revoked profile capability accepted")
                 except InvalidStatus as denied:
                     assert denied.response.status_code == 403
-            saved = json.loads(Path("auth-state.json").read_text())
+            saved = store.load()
             key = play["account_key"]
             assert services.game.identities.account("https://example.supabase.co/auth/v1", USER) == key
             assert saved["accounts"][key]["name_hex"] == b"Wheel Discord".hex()
@@ -221,32 +269,24 @@ def main():
             "if 'extra ==' not in requirement]))\n",
         ))
         run(str(python), "-I", str(ROOT / "tools" / "check_imports.py"))
-        for name in ("tmserver", "tmserver-play", "tmserver-admin"):
+        for name, command in (("tmserver", ()), ("tmserver-admin", ("accounts",))):
             run(script(name), "--help")
-        run(
-            str(python), "-c",
-            "from tmserver.economy.service import EconomyService\n"
-            "from tmserver.storage.json import JsonStateStore\n"
-            "economy = EconomyService(seed=1)\n"
-            "economy.provision('wheel', nn=1, player_id=1, name=b'Wheel')\n"
-            "JsonStateStore('admin.json').save(economy.snapshot())\n",
-        )
-        admin_state = root / "admin.json"
-        before = admin_state.read_bytes()
-        assert "wheel" in run(script("tmserver-admin"), "--state", str(admin_state), "accounts")
-        assert admin_state.read_bytes() == before
+            refused = subprocess.run([script(name), *command], cwd=root, env=env,
+                                     capture_output=True, text=True, timeout=15)
+            assert refused.returncode != 0 and "TM_DATABASE_URL" in refused.stderr, refused.stderr
         accounts = run(script("tmserver"), "--list-accounts")
         assert len(accounts.strip().splitlines()) == 2, accounts
         if args.native:
-            ready = run(str(python), "-B", "-m", "tmserver", "--game-port", "0",
-                        "--profile-port", "0", "--seconds", "0.1")
+            ready = run(str(python), "-B", "-c", SERVICES_SMOKE)
             assert "rules: native x86" in ready, ready
             assert (root / "var").is_dir(), "runtime output did not use the working directory"
         else:
             no_native = {key: value for key, value in env.items()
                          if key not in {"TM_ORIGINAL_IMAGE", "TM_NATIVE_BRIDGE"}}
-            refused = subprocess.run([str(python), "-m", "tmserver"], cwd=root,
-                                     env=no_native, capture_output=True, text=True, timeout=15)
+            refused = subprocess.run(
+                [str(python), "-m", "tmserver", "--database-url", "postgresql+psycopg://wheel"],
+                cwd=root, env=no_native, capture_output=True, text=True, timeout=15,
+            )
             assert refused.returncode != 0 and "Native rules require" in refused.stderr
             assert not (root / "var").exists(), "missing native configuration created state"
         admin_report = {}

@@ -10,6 +10,7 @@ from tests.events.test_event_configuration import DOCUMENT
 from tests.events.test_event_rooms import presence
 from tests.support.irc import Client
 from tests.profiles.test_options_service import OFFSETS, VALUES, request as options_request
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.packets import named
 from tmserver.events.config import parse_event_setup
 from tmserver.events.packets import time_reply
@@ -254,9 +255,9 @@ class EventTimeReadTests(unittest.IsolatedAsyncioTestCase):
 class EncryptedEventTimeReadTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.folder = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.path = self.folder / "state.json"
+        self.memory = MemoryStore()
         self.host = Server(
-            state_path=self.path,
+            store=self.memory,
             event_configs=parse_event_setup(DOCUMENT)[0],
             event_clock=lambda: 200,
         )
@@ -272,7 +273,7 @@ class EncryptedEventTimeReadTests(unittest.IsolatedAsyncioTestCase):
         self.routes = targets(self.host)
 
     async def test_encrypted_clock_query_never_touches_failed_write_path_or_other_player(self):
-        before, disk = self.host.snapshot(), self.path.read_bytes()
+        before, disk = self.host.snapshot(), self.memory.load()
         with patch.object(
             self.host.store,
             "save_changes",
@@ -312,4 +313,4 @@ class EncryptedEventTimeReadTests(unittest.IsolatedAsyncioTestCase):
             save.assert_not_called()
         self.assertIsNone(self.host.storage_failed)
         self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual(self.path.read_bytes(), disk)
+        self.assertEqual(self.memory.load(), disk)

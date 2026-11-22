@@ -10,6 +10,7 @@ from pathlib import Path
 from tests import ROOT
 from tests.profiles.test_profile_accounts import file_request, transact
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.events.models import EventConfig, EventListing
 from tmserver.events.packets import event_data
 from tmserver.protocol.identities import game_id
@@ -46,7 +47,7 @@ class EventFileOwnerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory(dir=(ROOT / "tests")) as folder:
             configs = (event("Alpha", 0x1000, b"First"), event("Beta", 0x1100, b"Second"))
             game = Server(
-                state_path=Path(folder) / "state.json",
+                store=MemoryStore(),
                 event_configs=configs,
                 event_clock=lambda: 100,
             )
@@ -86,7 +87,7 @@ class EventFileOwnerIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     )
                     self.assertEqual(error, 0x7E)
                 restored = Server(
-                    state_path=game.state_path, event_configs=configs, event_clock=lambda: 100
+                    store=game.store, event_configs=configs, event_clock=lambda: 100
                 )
                 try:
                     self.assertEqual(restored.events.snapshot(), game.events.snapshot())

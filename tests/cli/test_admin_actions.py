@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 from tests.cli import test_admin as fixture
 from tmserver.cli import admin
-from tmserver.storage.json import JsonStateStore
 
 COMMON = (
     "--account-key", "alice", "--request-id", "operator-request-1",
@@ -42,12 +41,12 @@ class AuditedAdminCommandTests(unittest.TestCase):
                 receipt = self.execute(command, *COMMON, *options)
                 self.assertEqual(receipt["request"]["source"], "cli")
                 self.assertRegex(receipt["preview_digest"], "^[0-9a-f]{64}$")
-                saved, committed = self.load(), self.path.read_bytes()
+                saved, committed = self.load(), self.load()
                 self.assertEqual(saved["admin_audit"]["receipts"], [receipt])
                 for name in set(original) - journals - {"admin_audit"}:
                     self.assertEqual(saved[name], original[name])
                 with patch.object(
-                    JsonStateStore, "save_changes", side_effect=AssertionError("retry wrote")
+                    self.store, "save_changes", side_effect=AssertionError("retry wrote")
                 ):
                     self.assertEqual(self.execute(command, *COMMON, *options), receipt)
                     self.assertEqual(
@@ -58,7 +57,7 @@ class AuditedAdminCommandTests(unittest.TestCase):
                 changed[changed.index("--reason") + 1] = "Different reason"
                 with self.assertRaisesRegex(ValueError, "different facts"):
                     self.execute(command, *changed)
-                self.assertEqual(self.path.read_bytes(), committed)
+                self.assertEqual(self.load(), committed)
 
     def test_failed_write_leaves_no_receipt_and_the_same_request_can_retry(self):
         self.enable_events()
@@ -66,13 +65,13 @@ class AuditedAdminCommandTests(unittest.TestCase):
             arguments = [*COMMON, *options]
             arguments[arguments.index("--request-id") + 1] = f"request-{number}"
             with self.subTest(command=command):
-                before = self.path.read_bytes()
+                before = self.load()
                 with patch.object(
-                    JsonStateStore, "save_changes", side_effect=OSError("fixture failure")
+                    self.store, "save_changes", side_effect=OSError("fixture failure")
                 ):
                     with self.assertRaises(OSError):
                         self.execute(command, *arguments)
-                self.assertEqual(self.path.read_bytes(), before)
+                self.assertEqual(self.load(), before)
                 with self.assertRaisesRegex(ValueError, "not found"):
                     self.execute("operator-receipt", "--request-id", f"request-{number}")
                 receipt = self.execute(command, *arguments)
@@ -93,7 +92,7 @@ class AuditedAdminCommandTests(unittest.TestCase):
         self.enable_events()
         (award, award_options, _), (grant, grant_options, _) = ACTIONS[:2]
         self.execute(award, *COMMON, *award_options)
-        before = self.path.read_bytes()
+        before = self.load()
         with self.assertRaisesRegex(ValueError, "different facts"):
             self.execute(grant, *COMMON, *grant_options)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.load(), before)

@@ -10,6 +10,7 @@ from tests import ROOT
 from tests.protocol.test_display_name_identity import NAMES, provision_names
 from tests.events.test_event_rooms import config, presence
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.protocol.identities import GAME_KEY, service_nick
 from tmserver.network.server import Server
 from tmserver.protocol.commands import parse
@@ -21,7 +22,7 @@ class RoomPresenceNameTests(unittest.IsolatedAsyncioTestCase):
         asyncio.get_running_loop().slow_callback_duration = 1
         with tempfile.TemporaryDirectory(dir=(ROOT / "tests")) as directory:
             self.server = Server(
-                state_path=Path(directory) / "state.json",
+                store=MemoryStore(),
                 event_configs=(config(),),
                 event_clock=lambda: 200,
             )
@@ -93,7 +94,7 @@ class RoomPresenceNameTests(unittest.IsolatedAsyncioTestCase):
                             await self.barrier(0)
                             await self.barrier(1)
                         before = self.server.snapshot()
-                        saved = self.server.store.path.read_bytes()
+                        saved = self.server.store.load()
                         # Both accounts share their first 15 bytes. The final
                         # byte still belongs to authenticated identity.
                         await self.send_presence(0, token, NAMES[1])
@@ -109,7 +110,7 @@ class RoomPresenceNameTests(unittest.IsolatedAsyncioTestCase):
                         self.assertNotIn(self.peers[0], self.room.members)
                         self.assertEqual(set(self.room.members), {self.peers[1]})
                         self.assertEqual(self.server.snapshot(), before)
-                        self.assertEqual(self.server.store.path.read_bytes(), saved)
+                        self.assertEqual(self.server.store.load(), saved)
 
     async def test_full_canonical_names_survive_de_pd_and_room_snapshots(self):
         for event in (False, True):

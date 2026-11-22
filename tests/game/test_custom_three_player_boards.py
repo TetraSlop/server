@@ -7,6 +7,7 @@ from dataclasses import replace
 
 from tests.events import test_event_matches_integration as events
 from tests.game import test_generated_boards_integration as generated
+from tests.support.memory_store import DATABASE
 from tmserver.game.match import MatchService
 from tmserver.game.packets import decode, packet
 from tmserver.game.rules import CRTLCG
@@ -111,7 +112,7 @@ class CustomEventBoard(unittest.IsolatedAsyncioTestCase):
 class BoardConfiguration(unittest.TestCase):
     def test_runner_rejects_shape_mismatch_and_retains_cbc_reward_gate(self):
         valid = ["--mode", "versus", "--players", "3", "--board", ",".join(map(str, LAYOUTS[0]))]
-        args = arguments(valid)
+        args = arguments([*DATABASE, *valid])
         self.assertEqual((args.players, args.accounts, args.board), (3, 3, LAYOUTS[0]))
         invalid = (
             ["--board", ",".join(["0"] * 25)],
@@ -125,7 +126,7 @@ class BoardConfiguration(unittest.TestCase):
                 contextlib.redirect_stderr(io.StringIO()),
                 self.assertRaises(SystemExit),
             ):
-                arguments(command)
+                arguments([*DATABASE, *command])
         with self.assertRaisesRegex(ValueError, "CBC materialization"):
             MatchService(mode="versus", player_count=3, start_fields=(18,) + (0,) * 24)
         self.assertTrue(

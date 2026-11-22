@@ -44,7 +44,6 @@ from tmserver.rankings.policy import RatingPolicy
 from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.rooms.service import RoomService
 from tmserver.storage.validation import validate_snapshot_fields
-from tmserver.storage.json import JsonStateStore
 from tmserver.economy.trade_router import TradeRouter
 from tmserver.economy.trade import TradeService
 
@@ -53,7 +52,6 @@ class Server:
     def __init__(
         self,
         log_path=None,
-        state_path=None,
         *,
         watchdog=None,
         spectator=None,
@@ -79,8 +77,6 @@ class Server:
         store=None,
         rules_backend=None,
     ):
-        if store is not None and state_path is not None:
-            raise ValueError("choose either state_path or store")
         if match_player_count not in (2, 3) or (
             match_player_count == 3 and (match_mode != "versus" or account_count < 3)
         ):
@@ -116,13 +112,8 @@ class Server:
             player_count=match_player_count, computer_enabled=match_mode == "computer"
         )
         self.chat = ChatService()
-        self.state_path = Path(state_path) if state_path else None
-        # Injected stores are owned by the caller, including constructor failures.
-        self.store = (
-            store
-            if store is not None
-            else (JsonStateStore(self.state_path) if self.state_path else None)
-        )
+        # The store is owned by the caller, including constructor failures; None saves nothing.
+        self.store = store
         saved = self.store.load() if self.store is not None else None
         if saved is not None:
             validate_snapshot_fields(saved)

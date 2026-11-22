@@ -11,6 +11,7 @@ from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.rankings.stats import PracticeStats
 from tests.support.irc import ACCOUNTS
+from tests.support.memory_store import MemoryStore
 from tmserver.network.server import Server
 
 
@@ -19,9 +20,9 @@ class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.server = Server(
-            state_path=self.path, match_mode="versus", match_start_fields=self.start_fields
+            store=self.store, match_mode="versus", match_start_fields=self.start_fields
         )
         self.port = await self.server.start(0)
         self.clients = [Client(), Client()]
@@ -133,14 +134,14 @@ class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 if decode(x).primary == 0x43 and decode(x).subtype == 13
             )
             self.assertEqual(result.sections[f"No{side}"]["T"], f"0|0|{stats.vs_player_games}")
-        saved = self.path.read_bytes()
+        saved = self.store.load()
         for side in range(2):
             result = await self.send(side, packet(0x43, 14, 10, f"@Ready=/Ans={side}"))
             self.assertEqual(len(result[side]), 1)
             self.assertEqual(decode(result[side][0]).subtype, 0x1A)
             duplicate = await self.send(side, packet(0x43, 14, 10, f"@Ready=/Ans={side}"))
             self.assertEqual(duplicate, [[], []])
-        self.assertEqual(self.path.read_bytes(), saved)
+        self.assertEqual(self.store.load(), saved)
 
     async def test_two_full_rounds_save_both_accounts_and_reload(self):
         await self.admit()
@@ -160,7 +161,7 @@ class VersusIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.send(0, packet(1, body="@Req=")), [[], []])
         self.assertIs(self.server.default_table.match, finished)
         self.assertEqual([self.server.economy.profile_bytes(k) for k in self.keys], latest)
-        restored = Server(state_path=self.path, match_mode="versus")
+        restored = Server(store=self.store, match_mode="versus")
         try:
             self.assertEqual([restored.economy.profile_bytes(k) for k in self.keys], latest)
         finally:
@@ -235,7 +236,7 @@ class CBCRewardIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 [[], []],
             )
         self.assertEqual(self.server.economy.snapshot(), before)
-        restored = Server(state_path=self.path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.snapshot(), before)
             self.assertFalse(any(restored.auction_ledger.pending(k) for k in self.keys))
@@ -247,9 +248,9 @@ class CBCRewardIntegrationTests(unittest.IsolatedAsyncioTestCase):
         from tmserver.economy.packets import named, parse_named
 
         finals = await self.cbc_round()
-        crash_path = self.path.with_name("crash_copy.json")
-        crash_path.write_bytes(self.path.read_bytes())
-        restored = Server(state_path=crash_path)
+        crash_path = MemoryStore()
+        crash_path.save(self.store.load())
+        restored = Server(store=crash_path)
         try:
             for side, key in enumerate(self.keys):
                 self.assertEqual(len(restored.economy.inventory(key)), 10)
@@ -267,7 +268,7 @@ class CBCRewardIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     restored.auction.handle(key, get)
                     restored.persist()
                     self.assertEqual(len(restored.economy.inventory(key)), 11)
-            again = Server(state_path=crash_path)
+            again = Server(store=crash_path)
             try:
                 self.assertEqual(again.economy.snapshot(), restored.economy.snapshot())
                 self.assertFalse(any(again.auction_ledger.pending(k) for k in self.keys))

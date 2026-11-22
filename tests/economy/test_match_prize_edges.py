@@ -17,6 +17,7 @@ from unittest.mock import patch
 from tests import ROOT
 from tests.game import test_versus_integration as versus
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.protocol.identities import TABLE_RAW, player_id, service_nick
 from tmserver.game.packets import decode, packet
 from tmserver.network.server import Server
@@ -41,9 +42,9 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             match_mode="versus",
             card_prizes=True,
             allow_wagers=getattr(self, "wagers", False),
@@ -147,9 +148,9 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         return kept, earned
 
     async def restore_copy(self, name="crash.json"):
-        path = self.path.with_name(name)
-        path.write_bytes(self.path.read_bytes())
-        return Server(state_path=path), path
+        store = MemoryStore()
+        store.save(self.store.load())
+        return Server(store=store), store
 
     async def test_unresolved_winner_disconnect_restores_original_ownership_and_releases_every_account(
         self,
@@ -170,7 +171,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertFalse(self.server.economy.is_busy(key))
             self.assertFalse(self.server.auction_ledger.pending(key))
-        restored, path = await self.restore_copy()
+        restored, store = await self.restore_copy()
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
         finally:
@@ -192,10 +193,10 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
                 [values(p.card) for p in self.server.auction_ledger.pending(key)],
                 [values(c) for c in self.finals[seat].extras],
             )
-        restored, path = await self.restore_copy()
+        restored, store = await self.restore_copy()
         try:
             first = restored.auction_ledger.snapshot()
-            again = Server(state_path=path)
+            again = Server(store=store)
             try:
                 self.assertEqual(again.auction_ledger.snapshot(), first)
             finally:
@@ -210,7 +211,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         await self.play(cbc=True)
         settlement = await self.choices()
         self.assertTrue(settlement.transfers, "fixture must transfer a real player card")
-        saved = json.loads(self.path.read_text())
+        saved = self.store.load()
         pending = {p["key"]: p for p in saved["result_rewards"]["pending"]}
         for seat, key in enumerate(self.keys):
             kept, earned = self.expected(settlement, seat)
@@ -218,7 +219,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 Counter(values(c) for c in self.server.economy.inventory(key)), Counter(kept)
             )
-        restored, path = await self.restore_copy()
+        restored, store = await self.restore_copy()
         try:
             for seat, key in enumerate(self.keys):
                 kept, earned = self.expected(settlement, seat)
@@ -228,7 +229,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(
                     [values(p.card) for p in restored.auction_ledger.pending(key)], earned
                 )
-            again = Server(state_path=path)
+            again = Server(store=store)
             try:
                 self.assertEqual(
                     again.auction_ledger.snapshot(), restored.auction_ledger.snapshot()
@@ -262,7 +263,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(Counter(values(c) for c in self.server.economy.inventory(key)), +expected)
         self.assertEqual(len(self.server.economy.inventory(key)), 1000)
         self.assertFalse(self.server.default_table.match_reservations)
-        restored, path = await self.restore_copy()
+        restored, store = await self.restore_copy()
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
         finally:
@@ -275,8 +276,8 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
         match = await self.play(cbc=True)
         choice = match.prize_choice
         self.assertIsNotNone(choice)
-        before = self.path.read_bytes()
-        with patch.object(Path, "replace", side_effect=OSError("edge fixture final-prize failure")):
+        before = self.store.load()
+        with failing_commits("edge fixture final-prize failure"):
             await self.clients[choice.winner].send(
                 b"NOTICE "
                 + service_nick(TABLE_RAW)
@@ -286,8 +287,8 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
             for client in self.clients:
                 self.assertEqual(await client.read(), b"")
         self.assertIsNotNone(self.server.storage_failed)
-        self.assertEqual(self.path.read_bytes(), before)
-        restored = Server(state_path=self.path)
+        self.assertEqual(self.store.load(), before)
+        restored = Server(store=self.store)
         try:
             for seat, key in enumerate(self.keys):
                 self.assertEqual(len(restored.economy.inventory(key)), 10)
@@ -340,7 +341,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
                 [values(p.card) for p in self.server.auction_ledger.pending(key)],
                 [] if seat == winner else earned,
             )
-        restored, path = await self.restore_copy()
+        restored, store = await self.restore_copy()
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
             self.assertEqual(
@@ -385,7 +386,7 @@ class PrizeEdgeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 [values(p.card) for p in self.server.auction_ledger.pending(key)], earned
             )
-        restored, path = await self.restore_copy()
+        restored, store = await self.restore_copy()
         try:
             self.assertEqual(
                 restored.auction_ledger.snapshot(), self.server.auction_ledger.snapshot()
@@ -482,7 +483,7 @@ class WagerPrizeEdges(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.clients[1 - side].read(), b"")
         self.assertEqual(self.server.economy.balance(key), balance + 400)
         self.assertFalse(self.server.default_table.match_reservations)
-        restored, path = await self.restore_copy()
+        restored, store = await self.restore_copy()
         try:
             self.assertEqual(
                 dict(restored.economy.account_view(key).deck_names)[1], b"Paid rematch"
@@ -524,10 +525,8 @@ class WagerPrizeEdges(unittest.IsolatedAsyncioTestCase):
         settlement = await self.choices()
         await self.send(0, packet(0x43, 0x11, 0, "@Continue=/Ans=1/PR=0/Conf=0"))
         paid = [self.server.economy.balance(k) for k in self.keys]
-        before = self.path.read_bytes()
-        with patch.object(
-            Path, "replace", side_effect=OSError("edge fixture next-stake save failure")
-        ):
+        before = self.store.load()
+        with failing_commits("edge fixture next-stake save failure"):
             await self.clients[1].send(
                 b"NOTICE "
                 + service_nick(TABLE_RAW)
@@ -536,9 +535,9 @@ class WagerPrizeEdges(unittest.IsolatedAsyncioTestCase):
             )
             for client in self.clients:
                 self.assertEqual(await client.read(), b"")
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.store.load(), before)
         self.assertIsNotNone(self.server.storage_failed)
-        restored = Server(state_path=self.path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual([restored.economy.balance(k) for k in self.keys], paid)
             for side, key in enumerate(self.keys):

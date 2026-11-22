@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from tests.events.test_event_rooms import config
+from tests.support.memory_store import MemoryStore
 from tmserver.admin.actions import apply_event_grant, apply_prize_award
 from tmserver.admin.audit import AdminAudit, EventGrantRequest, PrizeAwardRequest
 from tmserver.admin.queries import receipt_rows
@@ -36,17 +37,18 @@ def seed_receipts(host, key):
 class ReceiptQueryTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.store = MemoryStore()
         self.options = dict(
             event_configs=(config(card_service_enabled=True),), event_clock=lambda: 200,
         )
-        self.host = Server(state_path=self.directory / "state.json", **self.options)
+        self.host = Server(store=self.store, **self.options)
         self.addAsyncCleanup(self.host.stop)
         self.key = self.host.ensure_account(next(iter(self.host.accounts)))
 
     async def test_v1_and_mixed_history_are_detached_without_writes_or_delivery(self):
         prize, event = seed_receipts(self.host, self.key)
         before = deepcopy(self.host.snapshot())
-        disk = (self.directory / "state.json").read_bytes()
+        disk = self.store.load()
         for method in (
             "ensure_account", "advance_auctions", "advance_rankings", "persist",
             "persist_changes",
@@ -63,7 +65,7 @@ class ReceiptQueryTests(unittest.IsolatedAsyncioTestCase):
         ])
         rows[0]["reason"] = "changed"
         self.assertEqual(self.host.snapshot(), before)
-        self.assertEqual((self.directory / "state.json").read_bytes(), disk)
+        self.assertEqual(self.store.load(), disk)
         # Version 1 journals have no action discriminator on Prize receipts.
         legacy = AdminAudit().stage_receipt(prize)
         self.assertEqual(legacy.snapshot()["version"], 1)
@@ -97,7 +99,7 @@ class ReceiptQueryTests(unittest.IsolatedAsyncioTestCase):
             self.host.event_cards.pending(self.key, "festival"), {"cards": 0, "money": 0}
         )
         await self.host.stop()
-        self.host = Server(state_path=self.directory / "state.json", **self.options)
+        self.host = Server(store=self.store, **self.options)
         self.addAsyncCleanup(self.host.stop)
         self.assertEqual(receipt_rows(self.host), before)
 

@@ -10,6 +10,7 @@ from tests.game import test_computer_menu_integration as computer
 from tests.economy import test_match_prizes_integration as prizes
 from tests.game.test_match_service import NATIVE_SETTINGS
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.protocol.identities import TABLE_RAW, player_id
 from tmserver.economy.match_ledger import offline_payout
 from tmserver.game.packets import decode, packet
@@ -78,7 +79,7 @@ class WagerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         for client in self.clients[1:]:
             self.assertEqual(await client.read(), b"")
         self.assertEqual([self.server.economy.balance(k) for k in self.keys], after)
-        restored = Server(state_path=self.path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
         finally:
@@ -86,14 +87,14 @@ class WagerIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_restart_mid_round_refunds_every_stake_once(self):
         await self.admit()
-        crash = self.path.with_name("crash.json")
-        crash.write_bytes(self.path.read_bytes())
-        restored = Server(state_path=crash)
+        crash = MemoryStore()
+        crash.save(self.store.load())
+        restored = Server(store=crash)
         try:
             self.assertEqual(
                 [restored.economy.balance(k) for k in self.keys], [10000] * self.player_count
             )
-            again = Server(state_path=crash)
+            again = Server(store=crash)
             try:
                 self.assertEqual(again.economy.snapshot(), restored.economy.snapshot())
             finally:
@@ -115,8 +116,8 @@ class ComputerWagerIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.state_path = Path(self.temp.name) / "state.json"
-        self.server = Server(state_path=self.state_path, allow_wagers=True)
+        self.store = MemoryStore()
+        self.server = Server(store=self.store, allow_wagers=True)
         self.port = await self.server.start(0)
         self.client = Client()
         await self.client.open(self.port)
@@ -150,9 +151,9 @@ class ComputerWagerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.server.economy.balance(self.key), 9800 + reward)
         await self.select(900, npc=30, double=0)
         self.assertEqual(self.server.economy.balance(self.key), 8900 + reward)
-        crash = self.state_path.with_name("crash.json")
-        crash.write_bytes(self.state_path.read_bytes())
-        restored = Server(state_path=crash)
+        crash = MemoryStore()
+        crash.save(self.store.load())
+        restored = Server(store=crash)
         try:
             self.assertEqual(restored.economy.balance(self.key), 9800 + reward)
         finally:

@@ -12,6 +12,7 @@ from tests.economy.auctions import test_auction_prize_integration as exchange_te
 from tests.economy.auctions.test_auction_service import bid_request, exhibit_request
 from tests.profiles.test_new_profile import request as registration_request
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.economy.auctions.models import AuctionError
 from tmserver.economy.service import EconomyService
@@ -83,9 +84,9 @@ class AuctionRegistrationIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.now = 1700000000
-        self.game = Server(state_path=self.path, auction_clock=lambda: self.now)
+        self.game = Server(store=self.store, auction_clock=lambda: self.now)
         self.keys = [nick.decode() for nick in self.game.accounts]
         for character, key in enumerate(self.keys, 1):
             self.game.economy.provision(
@@ -121,7 +122,7 @@ class AuctionRegistrationIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(reply[0].endswith(b"@InitAns=/Ans=2"))
             self.assertEqual(self.game.auction_ledger.snapshot(), before)
             # Each acknowledged Init80 has already saved a restartable joint state.
-            restored = Server(state_path=self.path, auction_clock=lambda: self.now)
+            restored = Server(store=self.store, auction_clock=lambda: self.now)
             try:
                 self.assertEqual(restored.auction_ledger.snapshot(), before)
                 self.assertEqual(restored.economy.account_view(self.keys[side]).guild, guild)
@@ -132,7 +133,7 @@ class AuctionRegistrationIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(parse(reply[0][5:])[0].token, b"BS")
         history = self.game.auction_ledger.snapshot()
         self.assertEqual([row["bidder"]["guild"] for row in history["history"]], [0, 3])
-        restored = Server(state_path=self.path, auction_clock=lambda: self.now)
+        restored = Server(store=self.store, auction_clock=lambda: self.now)
         try:
             self.assertEqual(restored.auction_ledger.snapshot(), history)
             self.assertEqual(

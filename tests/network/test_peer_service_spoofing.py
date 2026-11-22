@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.packets import named
 from tmserver.protocol.identities import TRADE_RAW, game_id, player_id
 from tmserver.network.server import Server
@@ -18,9 +19,9 @@ class PeerServiceSpoofingTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory()
-        self.path = Path(self.temp.name) / "state.json"
+        self.store = MemoryStore()
         self.log = Path(self.temp.name) / "game.jsonl"
-        self.game = Server(state_path=self.path, log_path=self.log)
+        self.game = Server(store=self.store, log_path=self.log)
         self.accounts = list(self.game.accounts)
         for nick in self.accounts:
             self.game.ensure_account(nick)
@@ -29,7 +30,7 @@ class PeerServiceSpoofingTests(unittest.IsolatedAsyncioTestCase):
         self.receiver = await self.connect(1)
         await self.receiver.join(self.channel)
         self.before = self.game.snapshot()
-        self.saved = self.path.read_bytes()
+        self.saved = self.store.load()
 
     async def asyncTearDown(self):
         for client in self.clients:
@@ -59,7 +60,7 @@ class PeerServiceSpoofingTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(sender.nick, self.game.nicks)
         self.assertIn(self.receiver.nick, self.game.nicks)
         self.assertEqual(self.game.snapshot(), self.before)
-        self.assertEqual(self.path.read_bytes(), self.saved)
+        self.assertEqual(self.store.load(), self.saved)
         self.assertFalse(self.game.economy.is_busy(self.receiver.nick.decode()))
         records = [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
         errors = [row for row in records if row["event"] == "connection_error"]

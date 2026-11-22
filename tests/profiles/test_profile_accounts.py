@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tests import ROOT
+from tests.support.memory_store import MemoryStore
 from tmserver.protocol import wire
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import player_id
@@ -273,7 +274,7 @@ class ProfileRealGameContextTests(unittest.IsolatedAsyncioTestCase):
         )
         clients = []
         with tempfile.TemporaryDirectory(dir=(ROOT / "tests")) as directory:
-            game = Server(state_path=Path(directory) / "state.json")
+            game = Server(store=MemoryStore())
             profile = ProfileServer(Path(directory) / "profile.jsonl", game)
             try:
                 game_port, profile_port = await game.start(0), await profile.start(0)

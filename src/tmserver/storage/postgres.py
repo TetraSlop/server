@@ -118,10 +118,10 @@ class PostgresStateStore(AbstractContextManager):
             self.failed = True
             raise OSError("database read failed; restart is required") from exc
 
-    def save(self, snapshot, *, import_sha256=None):
+    def save(self, snapshot):
         self._check_open()
         try:
-            self._save(snapshot, import_sha256)
+            self._save(snapshot)
         except (SQLAlchemyError, OSError, ValueError, KeyError, TypeError) as exc:
             self.failed = True
             raise OSError("database save failed; restart is required") from exc
@@ -166,10 +166,8 @@ class PostgresStateStore(AbstractContextManager):
         if self.connection.scalar(sa.select(state_meta.c.revision)) != self.revision:
             raise OSError("database revision changed outside this writer")
 
-    def _advance_revision(self, import_sha256=None):
+    def _advance_revision(self):
         values = {"revision": self.revision + 1, "snapshot_version": 1}
-        if import_sha256 is not None:
-            values["import_sha256"] = import_sha256
         updated = self.connection.execute(
             state_meta.update()
             .where(state_meta.c.id == 1, state_meta.c.revision == self.revision)
@@ -178,11 +176,9 @@ class PostgresStateStore(AbstractContextManager):
         if updated.rowcount != 1:
             raise OSError("database revision changed outside this writer")
 
-    def _save(self, snapshot, import_sha256):
+    def _save(self, snapshot):
         if set(snapshot) - (SERVICE_NAMES | {"version", "accounts"}) or snapshot["version"] != 1:
             raise ValueError("unsupported snapshot fields or version")
-        if import_sha256 is not None and self.snapshot is not None:
-            raise ValueError("import requires an empty database")
         if snapshot == self.snapshot:
             # Even a no-op must notice a lost connection or outside writer.
             with self.connection.begin():
@@ -193,7 +189,7 @@ class PostgresStateStore(AbstractContextManager):
         # Copy before committing: callers cannot subsequently mutate our baseline.
         baseline = deepcopy(snapshot)
         with self.connection.begin():
-            self._advance_revision(import_sha256)
+            self._advance_revision()
             for key in sorted(previous["accounts"].keys() - current_accounts.keys()):
                 self.connection.execute(accounts.delete().where(accounts.c.key == key))
             for key, account in sorted(current_accounts.items()):

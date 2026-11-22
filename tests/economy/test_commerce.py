@@ -14,7 +14,6 @@ from tmserver.cards.catalog import Catalog
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
 from tmserver.economy.packets import named, parse_named
-from tmserver.storage.json import JsonStateStore
 from tmserver.economy.trade import TradeService
 
 
@@ -109,39 +108,6 @@ class CommerceTests(unittest.TestCase):
         self.assertEqual(self.economy.snapshot(), before)
         self.assertIs(self.economy._reservations["alice"], token)
         self.assertIs(self.economy._reservations["bob"], token)
-
-    def test_json_account_commit_preserves_unrelated_accounts_and_journals(self):
-        snapshot = self.economy.snapshot()
-        snapshot["auction"] = {"receipt": ["keep", 123]}
-        with tempfile.TemporaryDirectory() as folder:
-            store = JsonStateStore(Path(folder) / "state.json")
-            store.save(snapshot)
-            self.commerce = Commerce(self.economy, store.save_changes)
-            self.enter()
-            self.shop(0x14, "@Buy=/No=1")
-            self.shop(0x15, f"@Get=/No={self.session}")
-            restored = store.load()
-            self.assertEqual(restored["auction"], snapshot["auction"])
-            self.assertEqual(restored["accounts"]["bob"], snapshot["accounts"]["bob"])
-            self.assertEqual(restored["accounts"]["alice"]["balance"], 9000)
-
-    def test_json_write_failure_keeps_memory_and_the_previous_file(self):
-        with tempfile.TemporaryDirectory() as folder:
-            store = JsonStateStore(Path(folder) / "state.json")
-            store.save(self.economy.snapshot())
-            self.commerce = Commerce(self.economy, store.save_changes)
-            self.enter()
-            self.shop(0x14, "@Buy=/No=1")
-            account = deepcopy(self.economy._accounts["alice"])
-            original = store.path.read_bytes()
-            with (
-                patch.object(Path, "replace", side_effect=OSError("failed replace")),
-                self.assertRaises(OSError),
-            ):
-                self.shop(0x15, f"@Get=/No={self.session}")
-            self.assertEqual(self.economy._accounts["alice"], account)
-            self.assertEqual(store.path.read_bytes(), original)
-
 
 class TradeCommitTests(unittest.TestCase):
     send = trade_tests.TradeTests.send

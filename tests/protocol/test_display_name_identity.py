@@ -13,6 +13,7 @@ from tests.protocol.test_admission_identity import native_identity
 from tests.events.test_event_rooms import config
 from tests.game.test_match_service import finish_arrowless_round, select
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.service import EconomyService
 from tmserver.events.models import EventError
 from tmserver.events.service import EventHost
@@ -96,8 +97,8 @@ class FullNameTableIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.path = Path(self.temp.name) / "state.json"
-        self.server = Server(state_path=self.path, match_mode="versus")
+        self.store = MemoryStore()
+        self.server = Server(store=self.store, match_mode="versus")
         provision_names(self.server)
         self.port = await self.server.start(0)
         self.clients = [Client(), Client()]
@@ -119,7 +120,7 @@ class FullNameTableIntegrationTests(unittest.IsolatedAsyncioTestCase):
             [p.name for p in self.server.default_table.match.players], [PREFIX, PREFIX]
         )
         await self.play_round()
-        restored = Server(state_path=self.path, match_mode="versus")
+        restored = Server(store=self.store, match_mode="versus")
         try:
             for key, name in zip(self.keys, NAMES):
                 self.assertEqual(restored.economy.account_view(key).name, name)
@@ -144,7 +145,7 @@ class FullNameEventIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def start(self, n=2, policy="none"):
         seed = Server(
-            state_path=self.path,
+            store=self.store,
             event_configs=(self.cfg,),
             event_tables=(self.table,),
             event_clock=lambda: 200,

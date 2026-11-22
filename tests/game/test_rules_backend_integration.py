@@ -129,7 +129,7 @@ class EventBackendIntegration(unittest.IsolatedAsyncioTestCase):
             replace(self.table, table_id=game_id(0x1004), channel=b"#EVTABLE002"),
         )
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             account_count=4,
             event_configs=(self.cfg,),
             event_tables=self.tables,

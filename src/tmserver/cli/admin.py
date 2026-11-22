@@ -1,8 +1,8 @@
-"""Offline account inspection, rewards and event administration for a selected save."""
+"""Offline account inspection, rewards and event administration for a PostgreSQL save."""
 
 import argparse
 import json
-from contextlib import ExitStack
+import os
 from pathlib import Path
 
 from tmserver.admin.actions import apply_event_grant, apply_event_member, apply_prize_award
@@ -22,7 +22,7 @@ from tmserver.economy.result_rewards import ResultRewardService
 from tmserver.events.cards import EventCardService
 from tmserver.events.config import load_event_setup
 from tmserver.events.service import EventHost
-from tmserver.storage.json import JsonStateStore, writer_lease
+from tmserver.storage import open_store
 from tmserver.storage.validation import validate_snapshot
 
 CARD_FIELDS = ("model", "attack", "kind", "physical", "magical", "arrows")
@@ -78,9 +78,10 @@ ACTIONS = {
 
 def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    storage = parser.add_mutually_exclusive_group(required=True)
-    storage.add_argument("--state", type=Path, help="existing JSON save; no default path")
-    storage.add_argument("--database-url", help="explicit PostgreSQL connection URL")
+    parser.add_argument(
+        "--database-url", default=os.environ.get("TM_DATABASE_URL"),
+        help="PostgreSQL URL; prefer TM_DATABASE_URL to keep credentials out of command history",
+    )
     parser.add_argument("--events", type=Path, help="same event configuration used by the server")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("accounts", help="list exact saved account keys")
@@ -119,7 +120,10 @@ def arguments(argv=None):
             action.add_argument(
                 "--completed-missions", type=int, default=0, help="additional mission bitmask"
             )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not args.database_url:
+        parser.error("set TM_DATABASE_URL or pass --database-url; administration needs the database")
+    return args
 
 
 class AdminState:
@@ -187,27 +191,8 @@ class AdminState:
         return action(self, request).model_dump(mode="json")
 
 
-def postgres_store(url):
-    try:
-        from sqlalchemy.exc import SQLAlchemyError
-        from tmserver.storage.postgres import PostgresStateStore
-    except ImportError:
-        raise ValueError(
-            'PostgreSQL administration requires installation with ".[postgres]"'
-        ) from None
-    try:
-        return PostgresStateStore(url)
-    except SQLAlchemyError:
-        raise OSError("cannot open database; check its URL, connectivity and schema") from None
-
-
 def execute(args):
-    with ExitStack() as resources:
-        if args.state is not None:
-            resources.enter_context(writer_lease(args.state))
-            store = JsonStateStore(args.state)
-        else:
-            store = resources.enter_context(postgres_store(args.database_url))
+    with open_store(args.database_url) as store:
         snapshot = store.load()
         if snapshot is None:
             raise ValueError("administration requires an existing saved economy")

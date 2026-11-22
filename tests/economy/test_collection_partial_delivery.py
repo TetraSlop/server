@@ -13,6 +13,7 @@ from tests.economy.auctions.test_auction_service import bid_request, exhibit_req
 from tests.economy.entries import collection_request, prize_entry
 from tests.events.test_event_rooms import config
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.economy.claim_transactions import (
     auction_transaction,
     event_transaction,
@@ -35,11 +36,11 @@ class CollectionPartialDeliveryTests(unittest.IsolatedAsyncioTestCase):
     @asynccontextmanager
     async def case(self):
         with tempfile.TemporaryDirectory() as directory:
-            self.path = Path(directory) / "state.json"
+            self.store = MemoryStore()
             self.now = 200
             self.config = config(card_service_enabled=True)
             self.game = Server(
-                state_path=self.path,
+                store=self.store,
                 account_count=3,
                 event_configs=(self.config,),
                 event_clock=lambda: self.now,
@@ -141,7 +142,7 @@ class CollectionPartialDeliveryTests(unittest.IsolatedAsyncioTestCase):
 
     def assert_saved(self):
         self.assertEqual(
-            json.loads(self.path.read_text(encoding="utf-8")),
+            self.store.load(),
             json.loads(json.dumps(self.game.snapshot())),
         )
 

@@ -24,7 +24,7 @@ class TableEligibilityIntegrationTests(unittest.IsolatedAsyncioTestCase):
             dict(self.server.default_table.match_reservations),
             self.server.room.snapshot(),
             self.server.room.sequence,
-            self.path.read_bytes(),
+            self.server.store.load(),
         )
 
     async def test_collection_bound_rejects_without_disconnect_then_admits_exact_boundary(self):

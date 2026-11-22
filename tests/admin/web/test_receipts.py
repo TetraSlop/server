@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from tests.admin.test_receipt_queries import seed_receipts
 from tests.events.test_event_rooms import config
+from tests.support.memory_store import MemoryStore
 from tmserver.admin import queries
 from tmserver.admin.audit import AdminAudit
 from tmserver.network.server import Server
@@ -16,8 +17,9 @@ from tmserver.network.server import Server
 class ReceiptHistoryTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.store = MemoryStore()
         self.host = Server(
-            state_path=self.directory / "state.json",
+            store=self.store,
             event_configs=(config(card_service_enabled=True),), event_clock=lambda: 200,
         )
         self.addAsyncCleanup(self.host.stop)

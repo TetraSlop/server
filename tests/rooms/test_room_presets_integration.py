@@ -140,14 +140,14 @@ class ComputerDiscoveryIntegration(unittest.IsolatedAsyncioTestCase):
 
         table = self.server.ordinary_tables[1]
         view = self.server.economy.account_view(self.key)
-        before = self.state_path.read_bytes()
+        before = self.store.load()
         replies = await self.request(
             table.table_raw, packet(0x41, 0x12, body=native_identity(view, "GameENC"))
         )
         self.assertEqual(decode(replies[0]).sections, {"GameECA": {"EN": "-32871"}})
         self.assertFalse(table.match.players)
         self.assertFalse(table.match_reservations)
-        self.assertEqual(self.state_path.read_bytes(), before)
+        self.assertEqual(self.store.load(), before)
         await self.menu()  # The same connection can enter its supported CPU table.
 
     async def read_file(self, port, name, owner=0):
@@ -166,7 +166,7 @@ class ComputerDiscoveryIntegration(unittest.IsolatedAsyncioTestCase):
         return data[:-4]
 
     async def test_encrypted_directory_exposes_computer_and_admits_two_opponents(self):
-        profile = ProfileServer(self.state_path.parent / "profile.jsonl", self.server)
+        profile = ProfileServer(Path(self.harness_temp.name) / "profile.jsonl", self.server)
         port = await profile.start(0)
         try:
             rooms = await self.read_file(port, "b/g/RL000")

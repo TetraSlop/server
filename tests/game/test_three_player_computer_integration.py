@@ -11,6 +11,7 @@ from tests import ROOT
 from tests.game import test_computer_menu_integration as computer
 from tests.economy.test_match_prizes_integration import full
 from tests.support.irc import Client
+from tests.support.memory_store import MemoryStore
 from tmserver.protocol.identities import ROOM_RAW, TABLE_RAW, player_id, service_nick
 from tmserver.economy.match_ledger import offline_payout
 from tmserver.game.packets import decode, packet
@@ -36,8 +37,8 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.state_path = Path(self.temp.name) / "state.json"
-        self.server = Server(state_path=self.state_path, **self.server_options)
+        self.store = MemoryStore()
+        self.server = Server(store=self.store, **self.server_options)
         self.port = await self.server.start(0)
         self.client = Client()
         await self.client.open(self.port)
@@ -196,7 +197,7 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             Counter(map(full, self.server.economy.inventory(self.key))), Counter(kept + earned)
         )
-        restored = Server(state_path=self.state_path, rating_mode="local-history")
+        restored = Server(store=self.store, rating_mode="local-history")
         try:
             self.assertEqual(restored.snapshot(), self.server.snapshot())
             self.assertEqual(set(restored.account_keys), {self.key, self.other})
@@ -206,14 +207,14 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
     async def test_three_seat_interrupted_stake_recovers_only_once(self):
         await self.menu()
         await self.choose((1, 30), stake=200)
-        crash = self.state_path.with_name("interrupted.json")
-        crash.write_bytes(self.state_path.read_bytes())
-        restored = Server(state_path=crash, rating_mode="local-history")
+        crash = MemoryStore()
+        crash.save(self.store.load())
+        restored = Server(store=crash, rating_mode="local-history")
         try:
             self.assertEqual(restored.economy.balance(self.key), 10000)
             self.assertEqual(restored.snapshot()["accounts"][self.other], self.other_before)
             self.assertEqual(set(restored.account_keys), {self.key, self.other})
-            again = Server(state_path=crash, rating_mode="local-history")
+            again = Server(store=crash, rating_mode="local-history")
             try:
                 self.assertEqual(again.snapshot(), restored.snapshot())
             finally:
@@ -226,9 +227,9 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
         await self.choose((1, 3))
         kept, earned, _ = await self.play(strategic=True)
         self.assertTrue(earned, "the interrupted result must contain an actual human award")
-        crash = self.state_path.with_name("unaccepted.json")
-        crash.write_bytes(self.state_path.read_bytes())
-        restored = Server(state_path=crash, rating_mode="local-history")
+        crash = MemoryStore()
+        crash.save(self.store.load())
+        restored = Server(store=crash, rating_mode="local-history")
         try:
             self.assertEqual(
                 Counter(map(full, restored.economy.inventory(self.key))), Counter(kept)
@@ -240,7 +241,7 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 restored.economy.balance(self.key), self.server.economy.balance(self.key)
             )
-            again = Server(state_path=crash, rating_mode="local-history")
+            again = Server(store=crash, rating_mode="local-history")
             try:
                 self.assertEqual(again.snapshot(), restored.snapshot())
             finally:
@@ -250,7 +251,7 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
 
     async def test_failed_three_seat_admission_debit_publishes_no_game(self):
         await self.menu()
-        saved = self.state_path.read_bytes()
+        saved = self.store.load()
         with patch.object(
             self.server.store, "save_changes", side_effect=OSError("injected debit failure")
         ):
@@ -263,7 +264,7 @@ class ThreePlayerComputerIntegration(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await self.client.read(), b"")
             await self.server.stop()
         self.assertIsNotNone(self.server.storage_failed)
-        self.assertEqual(self.state_path.read_bytes(), saved)
+        self.assertEqual(self.store.load(), saved)
         self.assertFalse(self.server.room.npcs)
         self.assertFalse(self.server.economy.is_reserved(self.key))
 
@@ -287,7 +288,7 @@ class ThreePlayerComputerPractice(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.server.economy.balance(self.key), 10000)
         await self.continue_game(leave=True)
         self.assertFalse(self.server.economy.is_reserved(self.key))
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.snapshot(), self.server.snapshot())
         finally:

@@ -183,7 +183,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.clients.append(reconnect)
         await reconnect.open(self.port, account=self.peers[0].nick)
         self.assertIn(b" 422 ", await reconnect.read())
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.snapshot(), self.server.economy.snapshot())
         finally:
@@ -402,7 +402,7 @@ class DepartureIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ledger["rounds"][0]["money"], "refunded")
         self.assertTrue(ledger["rounds"][0]["closed"])
         for _ in range(2):
-            restored = Server(state_path=self.state_path)
+            restored = Server(store=self.store)
             try:
                 self.assertEqual(restored.economy.snapshot(), self.initial_accounts)
                 self.assertEqual(restored.match_economy.snapshot(), ledger)

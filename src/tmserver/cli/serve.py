@@ -16,7 +16,7 @@ from tmserver.profiles.service import ProfileServer
 from tmserver.network.server import Server
 from tmserver.economy.shop_offers import load_shop_offers
 from tmserver.rooms.spectators import SpectatorService
-from tmserver.storage.json import writer_lease
+from tmserver.storage import open_store
 
 if TYPE_CHECKING:
     from tmserver.network.http import HttpListener
@@ -70,10 +70,8 @@ def arguments(argv=None):
                         help="required TM memory image (or TM_ORIGINAL_IMAGE)")
     parser.add_argument("--rules-bridge", type=Path, default=os.environ.get("TM_NATIVE_BRIDGE"),
                         help="required Win32 bridge (or TM_NATIVE_BRIDGE)")
-    storage = parser.add_mutually_exclusive_group()
-    storage.add_argument("--state", type=Path, help="JSON save (default: var/local_state.json)")
-    storage.add_argument(
-        "--database-url",
+    parser.add_argument(
+        "--database-url", default=os.environ.get("TM_DATABASE_URL"),
         help="PostgreSQL URL; prefer TM_DATABASE_URL to keep credentials out of command history",
     )
     parser.add_argument("--log-dir", type=Path, default=DIRECTORY)
@@ -155,11 +153,8 @@ def arguments(argv=None):
         help="optional bounded run; zero waits until interrupted",
     )
     args = parser.parse_args(argv)
-    args.database_url = args.database_url or (
-        None if args.state else os.environ.get("TM_DATABASE_URL")
-    )
-    if not args.database_url and args.state is None:
-        args.state = DIRECTORY / "local_state.json"
+    if not args.database_url and not args.list_accounts:
+        parser.error("set TM_DATABASE_URL or pass --database-url; the server saves to PostgreSQL")
     args.flexible_seats = args.players == "auto"
     if args.weekly_rankings and args.ratings != "local-history":
         parser.error("weekly rankings require --ratings local-history")
@@ -274,16 +269,9 @@ async def running_services(args):
 
         rules_backend = resources.enter_context(configured_rules(args.rules_image, args.rules_bridge))
         args.log_dir.mkdir(parents=True, exist_ok=True)
-        store = None
-        if args.database_url:
-            from tmserver.storage.postgres import PostgresStateStore
-
-            store = resources.enter_context(PostgresStateStore(args.database_url))
-        else:
-            resources.enter_context(writer_lease(args.state))
+        store = resources.enter_context(open_store(args.database_url))
         game = Server(
             args.log_dir / "local_traffic.jsonl",
-            args.state,
             store=store,
             rules_backend=rules_backend,
             match_mode=args.mode,

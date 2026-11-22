@@ -14,8 +14,8 @@ from tmserver.profiles.characters import CharacterProfiles
 from tmserver.economy.service import EconomyService
 from tmserver.protocol.identities import player_id
 from tests.support.irc import ACCOUNTS
+from tests.support.memory_store import MemoryStore
 from tmserver.network.server import Server
-from tmserver.storage.json import JsonStateStore
 from tmserver.protocol.commands import Command, encode, parse
 
 
@@ -202,11 +202,11 @@ class CharacterProfileIntegrationTests(unittest.IsolatedAsyncioTestCase):
         economy.provision(key, nn=player_id(nick), player_id=1, name=name)
         native = economy.profile_bytes(key)
         with tempfile.TemporaryDirectory(dir=(ROOT / "tests")) as folder:
-            state = Path(folder) / "state.json"
-            JsonStateStore(state).save(economy.snapshot())
+            store = MemoryStore()
+            store.save(economy.snapshot())
             for restarted in (False, True):
                 with self.subTest(restarted=restarted):
-                    server = Server(state_path=state)
+                    server = Server(store=store)
                     client = Client()
                     try:
                         await client.open(await server.start(0), account=nick)
@@ -232,7 +232,7 @@ class CharacterProfileIntegrationTests(unittest.IsolatedAsyncioTestCase):
                         fields = (await exchange(b"PG")).payload.split(b"\x06")
                         self.assertEqual((fields[2], fields[8]), (b"Saved name", b"1"))
                         self.assertEqual(server.economy.profile_bytes(key), native)
-                        saved = JsonStateStore(state).load()
+                        saved = store.load()
                         self.assertEqual(
                             saved["accounts"][key], economy.snapshot()["accounts"][key]
                         )
@@ -247,8 +247,8 @@ class CharacterProfileIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_edit_read_and_restart_preserve_both_visibility_tags(self):
         asyncio.get_running_loop().slow_callback_duration = 1
         with tempfile.TemporaryDirectory(dir=(ROOT / "tests")) as folder:
-            state = Path(folder) / "state.json"
-            server = Server(state_path=state)
+            store = MemoryStore()
+            server = Server(store=store)
             client = Client()
             try:
                 port = await server.start(0)
@@ -268,7 +268,7 @@ class CharacterProfileIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(
                     [fields[i] for i in (3, 47, 55, 40, 8)], [b"5", b"3", b"1", b"1", b"3"]
                 )
-                restored = Server(state_path=state)
+                restored = Server(store=store)
                 try:
                     self.assertEqual(
                         restored.character_profiles.records[client.nick.decode()],

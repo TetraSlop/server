@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.support.memory_store import DATABASE, MemoryStore, opened_by
 from tmserver.cli import admin
 from tmserver.economy.auctions.ledger import AuctionEconomy
 from tmserver.profiles.characters import CharacterProfiles
@@ -37,7 +38,7 @@ class JournalFieldsTests(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.path = self.root / "state.json"
+        self.store = MemoryStore()
         self.economy = EconomyService(seed=1, catalog=self.catalog)
         for number, key in enumerate(("a", "b"), 1):
             self.economy.provision(key, nn=number, player_id=number, name=key.encode())
@@ -85,8 +86,8 @@ class JournalFieldsTests(unittest.IsolatedAsyncioTestCase):
         return service.restore(self.economy, snapshot)
 
     def seed(self, snapshot):
-        self.path.write_text(json.dumps(snapshot), encoding="utf8")
-        return self.path.read_bytes()
+        self.store.save(snapshot)
+        return self.store.load()
 
     def test_service_restore_rejects_every_manually_decoded_extension_without_mutation(self):
         economy_before = self.economy.snapshot()
@@ -109,9 +110,9 @@ class JournalFieldsTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(path=parts):
                 original = self.seed(self.extended(parts))
                 with self.assertRaises(ValueError):
-                    game = Server(state_path=self.path)
+                    game = Server(store=self.store)
                     self.addAsyncCleanup(game.stop)
-                self.assertEqual(self.path.read_bytes(), original)
+                self.assertEqual(self.store.load(), original)
 
     def test_admin_inspection_and_mutation_reject_without_rewriting(self):
         for command in (
@@ -122,10 +123,10 @@ class JournalFieldsTests(unittest.IsolatedAsyncioTestCase):
             for parts in LOSSY_PATHS:
                 with self.subTest(command=command[0], path=parts):
                     original = self.seed(self.extended(parts))
-                    args = admin.arguments(["--state", str(self.path), *command])
-                    with self.assertRaises(ValueError):
+                    args = admin.arguments([*DATABASE, *command])
+                    with opened_by("tmserver.cli.admin", self.store), self.assertRaises(ValueError):
                         admin.execute(args)
-                    self.assertEqual(self.path.read_bytes(), original)
+                    self.assertEqual(self.store.load(), original)
 
     def test_current_journals_roundtrip_exactly_without_mutating_input(self):
         before = copy.deepcopy(self.saved)

@@ -29,7 +29,7 @@ class EventSpectatorHelpers(event_tests.EventMatchHelpers):
     async def start(self, n=2):
         self.table = replace(self.table, player_count=n)
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             account_count=n + 1,
             event_configs=(self.cfg,),
             event_tables=(self.table,),

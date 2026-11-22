@@ -29,14 +29,15 @@ from tmserver.profiles.packets import checked
 from tmserver.rooms.packets import ROOM_CHANNEL, ROOM_ID, TABLE_CHANNEL, TABLE_ID
 from tmserver.network.server import Server
 from tests.support.profiles import read_preferences
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.protocol.commands import Command, encode, parse
 
 
 class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=(ROOT / "tests"))
-        self.state_path = Path(self.temp.name) / "state.json"
-        self.server = Server(Path(self.temp.name) / "traffic.jsonl", self.state_path)
+        self.store = MemoryStore()
+        self.server = Server(Path(self.temp.name) / "traffic.jsonl", store=self.store)
         self.port = await self.server.start(0)
         self.client = Client()
         await self.client.open(self.port)
@@ -167,7 +168,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replies, [named(0x85, 0, 0, "@OptAns=/Ans=1")])
         profile = self.profile()
         self.assertEqual([profile[offset] for offset in OFFSETS], list(VALUES.values()))
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.profile_bytes(self.key), profile)
         finally:
@@ -188,7 +189,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.request(TABLE_RAW, save_preferences(gm=0)), [])
         expected = {"Tet": SAVED_GAME, "Tab": dict(SAVED_TABLE, pw=SAVED_TABLE["pw"].upper())}
         self.assertEqual(read_preferences(self.profile()), expected)
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(read_preferences(restored.economy.profile_bytes(self.key)), expected)
         finally:
@@ -222,7 +223,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         after = self.profile()
         self.assertEqual(struct.unpack_from("<i", after, 0x34)[0], 9000)
         self.assertEqual(struct.unpack_from("<H", after, 0x3C)[0], 20)
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.profile_bytes(self.key), after)
         finally:
@@ -277,7 +278,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.request(TABLE_RAW, packet(0x43, 17, 0, "@Continue=/Ans=2/PR=0/Conf=0"))
         self.assertEqual(self.server.default_table.match.phase, "finished")
         self.assertEqual(self.profile(), after)
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.profile_bytes(self.key), after)
         finally:
@@ -321,7 +322,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
             dict(self.server.economy.account_view(self.key).deck_names)[1], b"After Match"
         )
         self.assertEqual(self.server.economy.inventory(self.key), before)
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(
                 dict(restored.economy.account_view(self.key).deck_names)[1], b"After Match"
@@ -335,7 +336,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.request(SHOP_RAW, named(0xB2, 0x14, session, "@Buy=/No=1"))
         await self.client.close()
         await self.server.stop()
-        restored = Server(state_path=self.state_path)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.profile_bytes(self.key), before)
         finally:
@@ -343,7 +344,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_result_save_failure_never_acknowledges_unsaved_growth(self):
         before = self.profile()
-        durable = self.state_path.read_bytes()
+        durable = self.store.load()
         await self.request(
             TABLE_RAW, packet(1, body=f"@Req=/NN={player_id(self.client.nick):016X}")
         )
@@ -369,9 +370,7 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     packet(0x43, 11, match.sequence, f"@BattleSelect=/B={match.targets[0]}"),
                 )
         self.assertEqual((match.sequence, match.active), (9, 1))
-        with patch.object(
-            Path, "replace", side_effect=OSError("injected final-round save failure")
-        ):
+        with failing_commits("injected final-round save failure"):
             await self.client.send(
                 b"NOTICE "
                 + service_nick(TABLE_RAW)
@@ -392,8 +391,8 @@ class ServicesIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.fail("storage failure did not terminate the connection")
             await self.server.stop()
         self.assertIsNotNone(self.server.storage_failed)
-        self.assertEqual(self.state_path.read_bytes(), durable)
-        restored = Server(state_path=self.state_path)
+        self.assertEqual(self.store.load(), durable)
+        restored = Server(store=self.store)
         try:
             self.assertEqual(restored.economy.profile_bytes(self.key), before)
         finally:

@@ -12,6 +12,7 @@ from tests.accounts.test_provisioning import ISSUER, USER, SECOND
 from tests.auth.test_transport import local_bridge
 from tests.support.irc import Client
 from tests.profiles.test_profile_accounts import file_request, transact
+from tests.support.memory_store import MemoryStore
 from tmserver.network.server import Server
 from tmserver.profiles.service import ProfileServer
 
@@ -21,7 +22,7 @@ class AutomaticRegistrationTests(unittest.IsolatedAsyncioTestCase):
         from tmserver.auth.config import AuthConfig
 
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        self.path = self.root / "state.json"
+        self.store = MemoryStore()
         self.config = AuthConfig(supabase_url=ISSUER.removesuffix("/auth/v1"),
                                  publishable_key="sb_publishable_fixture", public_origin="https://play.test")
         self.assertTrue(self.config.auto_register)
@@ -37,7 +38,7 @@ class AutomaticRegistrationTests(unittest.IsolatedAsyncioTestCase):
 
         self.resources = AsyncExitStack()
         self.addAsyncCleanup(self.resources.aclose)
-        self.host = Server(state_path=self.path)
+        self.host = Server(store=self.store)
         self.resources.push_async_callback(self.host.stop)
         self.profile = ProfileServer(self.root / "profile.jsonl", self.host)
         self.resources.push_async_callback(self.profile.stop)
@@ -127,7 +128,7 @@ class AutomaticRegistrationTests(unittest.IsolatedAsyncioTestCase):
         response = await self.ticket()
         self.assertEqual((response.status_code, response.json()), (403, {"error": "discord_required"}))
         self.assertEqual(self.host.snapshot(), before)
-        self.assertFalse(self.path.exists())
+        self.assertIsNone(self.store.load())
 
     async def test_registration_can_close_without_locking_out_existing_owners(self):
         first = await self.launch()

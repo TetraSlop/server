@@ -24,7 +24,7 @@ class EventFaultIsolation(events.EventMatchHelpers, unittest.IsolatedAsyncioTest
 
     async def start(self):
         self.server = Server(
-            state_path=self.path,
+            store=self.store,
             account_count=3,
             event_configs=(self.cfg,),
             event_tables=(self.table,),

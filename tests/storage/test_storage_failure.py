@@ -10,6 +10,7 @@ from tests.profiles.test_options_service import request
 from tests.support.irc import Client
 from tmserver.protocol.identities import SHOP_RAW, player_id, service_nick
 from tests.support.irc import ACCOUNTS
+from tests.support.memory_store import MemoryStore, failing_commits
 from tmserver.network.server import Server
 from tmserver.network.session import Session
 
@@ -60,15 +61,15 @@ class StorageFailureTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_failed_replace_sends_no_ack_stops_mutations_and_preserves_save(self):
         with tempfile.TemporaryDirectory(dir=(ROOT / "tests")) as folder:
-            path = Path(folder) / "state.json"
-            server = Server(state_path=path)
+            store = MemoryStore()
+            server = Server(store=store)
             port = await server.start(0)
             client = Client()
             await client.open(port)
             await client.read()
-            before = path.read_bytes()
+            before = store.load()
             try:
-                with patch.object(Path, "replace", side_effect=OSError("injected replace failure")):
+                with failing_commits("injected replace failure"):
                     await client.send(
                         b"NOTICE "
                         + service_nick(SHOP_RAW)
@@ -78,11 +79,11 @@ class StorageFailureTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(await client.read(), b"")
                     await server.stop()
                 self.assertIsNotNone(server.storage_failed)
-                self.assertEqual(path.read_bytes(), before)
+                self.assertEqual(store.load(), before)
                 self.assertFalse(server.nicks or server.sessions)
                 with self.assertRaises(OSError):
                     server.persist()
-                restored = Server(state_path=path)
+                restored = Server(store=store)
                 try:
                     self.assertEqual(restored.economy.profile_bytes(client.nick.decode())[0x126], 0)
                 finally:

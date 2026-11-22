@@ -29,7 +29,6 @@ dev = ["ruff==0.16.9", "build>=1.2,<2", "httpx==0.28.1"]
 [project.scripts]
 tmserver = "tmserver.cli.serve:main"
 tmserver-db = "tmserver.storage.database:cli"
-tmserver-play = "tmserver.cli.play:main"
 tmserver-admin = "tmserver.cli.admin:cli"
 
 [tool.setuptools.packages.find]

@@ -11,12 +11,12 @@ import unittest
 from tests.support.golden_save import (
     EVENT,
     SNAPSHOT,
-    MemoryStore,
     build,
     canonical,
     document,
     restore_document,
 )
+from tests.support.memory_store import MemoryStore
 from tmserver.storage.validation import SERVICE_NAMES, validate_snapshot
 
 
