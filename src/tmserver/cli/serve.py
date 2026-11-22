@@ -38,22 +38,29 @@ def board(value):
     return values
 
 
+def port(value):
+    number = int(value)
+    if not 0 <= number <= 65535:
+        raise argparse.ArgumentTypeError("ports must be between 0 and 65535")
+    return number
+
+
 def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--game-port", type=int, default=51241)
-    parser.add_argument("--profile-port", type=int, default=51220)
+    parser.add_argument("--game-port", type=port, default=51241)
+    parser.add_argument("--profile-port", type=port, default=51220)
     parser.add_argument(
-        "--admin-port", type=int,
+        "--admin-port", type=port,
         help="enable the read-only admin panel on 127.0.0.1 (requires the admin extra)",
     )
     parser.add_argument("--admin-user", default="admin", help="local operator username")
     parser.add_argument("--auth-config", type=Path, help="enable the Supabase launcher gateway")
-    parser.add_argument("--auth-port", type=int, help="loopback auth listener (default:8081)")
+    parser.add_argument("--auth-port", type=port, help="loopback auth listener (default:8081)")
     parser.add_argument("--auth-insecure-loopback", action="store_true",
                         help="local loader testing only: advertise HTTP/WS on the bound loopback port")
     parser.add_argument(
         "--admin-actions", action="store_true",
-        help="enable previewed, audited Prize Center awards in the admin panel",
+        help="enable audited awards, event grants and event corrections in the admin panel",
     )
     parser.add_argument(
         "--admin-password-file", type=Path,
@@ -159,16 +166,10 @@ def arguments(argv=None):
     args.players = 3 if args.flexible_seats else int(args.players)
     if not 2 <= args.accounts <= MAX_ACCOUNTS:
         parser.error(f"accounts must be between 2 and {MAX_ACCOUNTS}")
-    if not all(0 <= port <= 65535 for port in (args.game_port, args.profile_port)):
-        parser.error("ports must be between 0 and 65535")
-    if args.admin_port is not None and not 0 <= args.admin_port <= 65535:
-        parser.error("admin port must be between 0 and 65535")
     if (args.auth_port is not None or args.auth_insecure_loopback) and args.auth_config is None:
         parser.error("auth listener options require --auth-config")
-    if args.auth_config is not None:
-        args.auth_port = 8081 if args.auth_port is None else args.auth_port
-        if not 0 <= args.auth_port <= 65535:
-            parser.error("auth port must be between 0 and 65535")
+    if args.auth_config is not None and args.auth_port is None:
+        args.auth_port = 8081
     if args.admin_password_file is not None and args.admin_port is None:
         parser.error("--admin-password-file requires --admin-port")
     if args.admin_actions and args.admin_port is None:
@@ -234,14 +235,13 @@ class RunningServices:
 
 def admin_options(args):
     """Load explicit credentials without putting them in arguments or logs."""
-    port = getattr(args, "admin_port", None)
-    if port is None:
+    if args.admin_port is None:
         return None
-    path = getattr(args, "admin_password_file", None)
+    path = args.admin_password_file
     password = path.read_text(encoding="utf8").rstrip("\r\n") if path else os.environ.get(
         "TM_ADMIN_PASSWORD", ""
     )
-    username = getattr(args, "admin_user", "admin")
+    username = args.admin_user
     if not username.strip() or not password or "\n" in password or "\r" in password:
         raise ValueError("Admin requires a username and a nonempty, single-line password")
     try:
@@ -249,8 +249,8 @@ def admin_options(args):
     except ModuleNotFoundError as exc:
         raise ValueError('Install the admin dependencies with pip install "tmserver[admin]"') from exc
     return dict(
-        port=port, username=username, password=password,
-        actions_enabled=getattr(args, "admin_actions", False),
+        port=args.admin_port, username=username, password=password,
+        actions_enabled=args.admin_actions,
     )
 
 
@@ -259,7 +259,7 @@ async def running_services(args):
     """Own both listeners and their store until the caller has finished."""
     admin = admin_options(args)
     auth = None
-    if getattr(args, "auth_config", None) is not None:
+    if args.auth_config is not None:
         try:
             from tmserver.auth.config import load_auth_config
             from tmserver.auth.server import serving_auth  # noqa: F401
@@ -281,61 +281,53 @@ async def running_services(args):
             store = resources.enter_context(PostgresStateStore(args.database_url))
         else:
             resources.enter_context(writer_lease(args.state))
-        async with serving(
-            args, events, tables, progress, store, rules_backend=rules_backend, admin=admin, auth=auth
-        ) as services:
-            yield services
-
-
-@asynccontextmanager
-async def serving(args, events, tables, progress, store, *, rules_backend=None, admin=None, auth=None):
-    game = Server(
-        args.log_dir / "local_traffic.jsonl",
-        args.state,
-        store=store,
-        rules_backend=rules_backend,
-        match_mode=args.mode,
-        match_player_count=args.players,
-        match_start_fields=args.board,
-        allow_cbc=args.allow_cbc,
-        account_count=args.accounts,
-        flexible_seats=args.flexible_seats,
-        card_prizes=args.card_prizes,
-        allow_wagers=args.wagers,
-        rating_mode=args.ratings,
-        weekly_rankings=args.weekly_rankings,
-        allow_departures=args.departures,
-        ordinary_rooms=load_ordinary_rooms(args.rooms) if args.rooms else (),
-        event_configs=events,
-        event_tables=tables,
-        event_progress_policy=progress,
-        shop_offers=load_shop_offers(args.shop_offers) if args.shop_offers else None,
-        spectator=SpectatorService(enabled=args.spectator_preview),
-    )
-    try:
-        profile = ProfileServer(args.log_dir / "local_profile_traffic.jsonl", game)
+        game = Server(
+            args.log_dir / "local_traffic.jsonl",
+            args.state,
+            store=store,
+            rules_backend=rules_backend,
+            match_mode=args.mode,
+            match_player_count=args.players,
+            match_start_fields=args.board,
+            allow_cbc=args.allow_cbc,
+            account_count=args.accounts,
+            flexible_seats=args.flexible_seats,
+            card_prizes=args.card_prizes,
+            allow_wagers=args.wagers,
+            rating_mode=args.ratings,
+            weekly_rankings=args.weekly_rankings,
+            allow_departures=args.departures,
+            ordinary_rooms=load_ordinary_rooms(args.rooms) if args.rooms else (),
+            event_configs=events,
+            event_tables=tables,
+            event_progress_policy=progress,
+            shop_offers=load_shop_offers(args.shop_offers) if args.shop_offers else None,
+            spectator=SpectatorService(enabled=args.spectator_preview),
+        )
         try:
-            game_port = await game.start(args.game_port)
-            profile_port = await profile.start(args.profile_port)
-            async with AsyncExitStack() as listeners:
-                panel = None
-                gateway = None
-                if admin is not None:
-                    from tmserver.admin.server import serving_admin
+            profile = ProfileServer(args.log_dir / "local_profile_traffic.jsonl", game)
+            try:
+                game_port = await game.start(args.game_port)
+                profile_port = await profile.start(args.profile_port)
+                async with AsyncExitStack() as listeners:
+                    panel = None
+                    gateway = None
+                    if admin is not None:
+                        from tmserver.admin.server import serving_admin
 
-                    panel = await listeners.enter_async_context(serving_admin(game, **admin))
-                if auth is not None:
-                    from tmserver.auth.server import serving_auth
+                        panel = await listeners.enter_async_context(serving_admin(game, **admin))
+                    if auth is not None:
+                        from tmserver.auth.server import serving_auth
 
-                    gateway = await listeners.enter_async_context(serving_auth(
-                        game, profile, auth, port=args.auth_port,
-                        insecure_loopback=args.auth_insecure_loopback,
-                    ))
-                yield RunningServices(game, profile, game_port, profile_port, panel, gateway)
+                        gateway = await listeners.enter_async_context(serving_auth(
+                            game, profile, auth, port=args.auth_port,
+                            insecure_loopback=args.auth_insecure_loopback,
+                        ))
+                    yield RunningServices(game, profile, game_port, profile_port, panel, gateway)
+            finally:
+                await profile.stop()
         finally:
-            await profile.stop()
-    finally:
-        await game.stop()
+            await game.stop()
 
 
 def main():
