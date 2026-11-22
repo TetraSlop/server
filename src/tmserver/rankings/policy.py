@@ -7,7 +7,7 @@ delivering ResultData.
 import time
 from copy import copy
 
-from tmserver.rankings.errors import RankingError
+from tmserver.economy.errors import EconomyError
 from tmserver.rankings.history import LocalRatingHistory
 from tmserver.rankings.periods import RankingPeriods
 from tmserver.rankings.stats import PracticeStats
@@ -22,11 +22,11 @@ def _matches_profile(state, profile):
 class RatingPolicy:
     def __init__(self, economy, *, mode="preserve", snapshot=None, weekly=False, clock=time.time):
         if mode not in ("preserve", "local-history"):
-            raise RankingError("rating mode must be preserve or local-history")
+            raise EconomyError("rating mode must be preserve or local-history")
         if type(weekly) is not bool or weekly and mode != "local-history":
-            raise RankingError("weekly rankings require explicit local-history mode")
+            raise EconomyError("weekly rankings require explicit local-history mode")
         if not callable(clock):
-            raise RankingError("rating clock must be callable")
+            raise EconomyError("rating clock must be callable")
         self.economy = economy
         self.mode = mode
         self._weekly = weekly
@@ -44,11 +44,11 @@ class RatingPolicy:
                     else {"version", "history", "periods"}
                 )
             ):
-                raise RankingError("invalid rating policy snapshot")
+                raise EconomyError("invalid rating policy snapshot")
             if snapshot["version"] == 2:
                 periods = snapshot["periods"]
                 if periods is None:
-                    raise RankingError("version2 rating policy requires initialized periods")
+                    raise EconomyError("version2 rating policy requires initialized periods")
             snapshot = snapshot["history"]
         self.history = LocalRatingHistory.restore(snapshot)
         self.periods = RankingPeriods.restore(periods)
@@ -91,7 +91,7 @@ class RatingPolicy:
             )
         ]
         if mismatched:
-            raise RankingError(
+            raise EconomyError(
                 "rating history/profile mismatch for accounts "
                 + ", ".join(mismatched)
                 + "; explicit migration is required"
@@ -150,13 +150,13 @@ class RatingPolicy:
         if not self.enabled:
             return None
         if departed_seats:
-            raise RankingError("local-history rating does not support departed rounds")
+            raise EconomyError("local-history rating does not support departed rounds")
         if (
             type(seats) is not dict
             or not 1 <= len(seats) <= 3
             or len(set(seats.values())) != len(seats)
         ):
-            raise RankingError("rating seats require distinct authenticated accounts")
+            raise EconomyError("rating seats require distinct authenticated accounts")
         staged = LocalRatingHistory.restore(self.history.snapshot())
         quotes = {}
         for seat, key in seats.items():
@@ -164,7 +164,7 @@ class RatingPolicy:
             if not staged.enrolled(key):
                 staged.enroll(key, sequence=previous.sequence)
             if not _matches_profile(staged.state(key), previous):
-                raise RankingError(
+                raise EconomyError(
                     "rating history/profile mismatch; explicit migration is required"
                 )
             quotes[seat] = staged.quote(key, match_id, scores, seat)
@@ -191,29 +191,29 @@ class RatingPolicy:
         """
         if not self.enabled:
             if rating_changes_by_key is not None:
-                raise RankingError("preserve mode cannot authorize rating changes")
+                raise EconomyError("preserve mode cannot authorize rating changes")
             return self.economy.commit_match_growth(
                 rounds, stats_by_key, payouts_by_key, vs_player_game=vs_player_game
             )
         if type(rating_changes_by_key) is not dict or not rating_changes_by_key:
-            raise RankingError("enabled rating policy requires quoted result proofs")
+            raise EconomyError("enabled rating policy requires quoted result proofs")
         staged = LocalRatingHistory.restore(self.history.snapshot())
         staged.commit_many(tuple(rating_changes_by_key.values()))
         if any(key != quote.key for key, quote in rating_changes_by_key.items()):
-            raise RankingError("rating quotes must be keyed by their own account")
+            raise EconomyError("rating quotes must be keyed by their own account")
         if staged.snapshot() == self.history.snapshot():
             # Every quote was already committed: a replayed result must not
             # be counted again in the weekly period or the profiles.
-            raise RankingError("match result was already committed")
+            raise EconomyError("match result was already committed")
         periods = self.periods
         if self.weekly:
             if not isinstance(stats_by_key, dict):
-                raise RankingError("weekly rankings require completed result statistics")
+                raise EconomyError("weekly rankings require completed result statistics")
             results = {}
             for key in rating_changes_by_key:
                 result = stats_by_key.get(key)
                 if not isinstance(result, PracticeStats):
-                    raise RankingError("missing or invalid weekly result statistics")
+                    raise EconomyError("missing or invalid weekly result statistics")
                 previous = PracticeStats.from_profile(self.economy.profile_bytes(key))
                 results[key] = (
                     (result.reward_sum - previous.reward_sum) & 0xFFFFFFFF,

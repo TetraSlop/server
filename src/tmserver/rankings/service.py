@@ -16,7 +16,7 @@ import struct
 from dataclasses import dataclass
 
 from tmserver.protocol.commands import Command, encode_service, parse
-from tmserver.rankings.errors import RankingError
+from tmserver.economy.errors import EconomyError
 from tmserver.rankings.packets import METADATA_PATH, RECORD_SIZE, RESULT_PATH, encode_record
 from tmserver.rankings.policy import RatingPolicy
 
@@ -26,7 +26,7 @@ MAX_SNAPSHOTS = 64  # Per account; a full cache answers RG(-8809).
 
 def _uint(value, bits, name):
     if not 0 <= value < (1 << bits):
-        raise RankingError(f"{name} must be uint{bits}")
+        raise EconomyError(f"{name} must be uint{bits}")
     return value
 
 
@@ -94,7 +94,7 @@ class RankingService:
 
     def _eligible(self, entries, rank_id):
         if rank_id not in RANK_IDS:
-            raise RankingError("unknown ranking ID")
+            raise EconomyError("unknown ranking ID")
         candidates = [
             entry
             for entry in entries
@@ -136,25 +136,25 @@ class RankingService:
         if not commands or commands[0].token != b"RR":
             return None
         if [command.token for command in commands] != [b"RR", b"PI"]:
-            raise RankingError("rank request requires RR followed by PI")
+            raise EconomyError("rank request requires RR followed by PI")
         account = self.economy.account_view(account_key)  # Authenticated identity.
         if re.fullmatch(rb"[0-9]{1,10}", commands[0].payload) is None:
-            raise RankingError("invalid ranking ID")
+            raise EconomyError("invalid ranking ID")
         rank_id = int(commands[0].payload)
         fields = commands[1].payload.split(b"\x06")
         if len(fields) != 4 or re.fullmatch(rb"0x[0-9a-fA-F]{16}", fields[0]) is None:
-            raise RankingError("PI requires a fixed-width identity and three integers")
+            raise EconomyError("PI requires a fixed-width identity and three integers")
         if any(re.fullmatch(rb"[0-9]{1,10}", value) is None for value in fields[1:]):
-            raise RankingError("invalid PI integer")
+            raise EconomyError("invalid PI integer")
         identity = int(fields[0], 16)
         directory, version, selector = map(int, fields[1:])
         _uint(directory, 8, "directory")
         _uint(version, 16, "version")
         _uint(selector, 32, "selector")
         if identity != account.nn:
-            raise RankingError("PI owner does not match authenticated account")
+            raise EconomyError("PI owner does not match authenticated account")
         if selector != 0:
-            raise RankingError("nonzero PI selector is not supported by this PC route")
+            raise EconomyError("nonzero PI selector is not supported by this PC route")
         if rank_id not in RANK_IDS:
             return self._failure(-8811)
         snapshots = self._snapshots.setdefault(account_key, {})

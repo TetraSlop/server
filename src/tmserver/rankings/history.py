@@ -14,29 +14,29 @@ import re
 from dataclasses import dataclass
 
 from tmserver.game.departure_rules import result_classes
-from tmserver.rankings.errors import RankingError
+from tmserver.economy.errors import EconomyError
 
 
 def _integer(value, low, high, label):
     if type(value) is not int or not low <= value <= high:
-        raise RankingError("invalid " + label)
+        raise EconomyError("invalid " + label)
     return value
 
 
 def _identifier(value, label):
     if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value):
-        raise RankingError("invalid " + label)
+        raise EconomyError("invalid " + label)
     return value
 
 
 def _scores(scores, seat):
     if not isinstance(scores, (tuple, list)) or len(scores) not in (2, 3):
-        raise RankingError("scores must contain two or three server seats")
+        raise EconomyError("scores must contain two or three server seats")
     maximum = 16 if len(scores) == 2 else 25
     for score in scores:
         _integer(score, 0, maximum, "score")
     if not 1 <= sum(scores) <= maximum:
-        raise RankingError("score total exceeds the ordinary board")
+        raise EconomyError("score total exceeds the ordinary board")
     _integer(seat, 0, len(scores) - 1, "server seat")
     return tuple(scores)
 
@@ -54,7 +54,7 @@ class HistoryState:
 
     def __post_init__(self):
         if type(self.entries) is not tuple or len(self.entries) != 32:
-            raise RankingError("history must be an immutable32-entry tuple")
+            raise EconomyError("history must be an immutable32-entry tuple")
         for item in self.entries:
             _integer(item, 0, 4, "result class")
         _integer(self.sequence, 0, 65535, "WORD sequence")
@@ -106,9 +106,9 @@ class LocalRatingHistory:
         """
         _identifier(key, "account key")
         if key in self._states:
-            raise RankingError("account already enrolled")
+            raise EconomyError("account already enrolled")
         if history is not None and not isinstance(history, (list, tuple)):
-            raise RankingError("history must be an explicit sequence")
+            raise EconomyError("history must be an explicit sequence")
         state = HistoryState((2,) * 32 if history is None else tuple(history), sequence)
         self._initial[key] = self._states[key] = state
         self._receipts[key] = {}
@@ -119,7 +119,7 @@ class LocalRatingHistory:
         try:
             return self._states[key]
         except KeyError as exc:
-            raise RankingError("account has not opted into local rating") from exc
+            raise EconomyError("account has not opted into local rating") from exc
 
     def quote(self, key, match_id, scores, seat):
         before = self.state(key)
@@ -128,7 +128,7 @@ class LocalRatingHistory:
         completed = self._receipts[key].get(match_id)
         if completed is not None:
             if completed.scores != scores or completed.seat != seat:
-                raise RankingError("completed match ID reused with different result")
+                raise EconomyError("completed match ID reused with different result")
             return completed
         result_class = classify_result(scores, seat)
         return RatingQuote(
@@ -149,7 +149,7 @@ class LocalRatingHistory:
         does not reserve an account; a competing result invalidates stale quotes.
         """
         if not isinstance(quotes, (list, tuple)) or not 1 <= len(quotes) <= 3:
-            raise RankingError("expected one to three rating quotes")
+            raise EconomyError("expected one to three rating quotes")
         seen = set()
         seats = set()
         updates = []
@@ -158,23 +158,23 @@ class LocalRatingHistory:
         scores = None
         for quote in quotes:
             if type(quote) is not RatingQuote:
-                raise RankingError("expected a rating quote")
+                raise EconomyError("expected a rating quote")
             if quote.key in seen:
-                raise RankingError("duplicate account in result")
+                raise EconomyError("duplicate account in result")
             seen.add(quote.key)
             if quote.seat in seats:
-                raise RankingError("duplicate participant seat")
+                raise EconomyError("duplicate participant seat")
             seats.add(quote.seat)
             if match_id is None:
                 match_id = quote.match_id
                 scores = quote.scores
             if quote.match_id != match_id:
-                raise RankingError("batch spans different matches")
+                raise EconomyError("batch spans different matches")
             if quote.scores != scores:
-                raise RankingError("participants disagree on score order")
+                raise EconomyError("participants disagree on score order")
             expected = self.quote(quote.key, quote.match_id, quote.scores, quote.seat)
             if quote != expected:
-                raise RankingError("stale or altered rating quote")
+                raise EconomyError("stale or altered rating quote")
             if quote.match_id not in self._receipts[quote.key]:
                 updates.append(quote)
             result[quote.key] = quote.after
@@ -220,7 +220,7 @@ class LocalRatingHistory:
             or snapshot["policy"] != "original-offline-ring-v1"
             or type(snapshot["accounts"]) is not dict
         ):
-            raise RankingError("invalid rating snapshot")
+            raise EconomyError("invalid rating snapshot")
         for key, record in snapshot["accounts"].items():
             if (
                 type(record) is not dict
@@ -230,16 +230,16 @@ class LocalRatingHistory:
                 or type(record["initial"]["entries"]) is not list
                 or type(record["results"]) is not list
             ):
-                raise RankingError("invalid account rating ledger")
+                raise EconomyError("invalid account rating ledger")
             service.enroll(
                 key, history=record["initial"]["entries"], sequence=record["initial"]["sequence"]
             )
             for event in record["results"]:
                 if type(event) is not dict or set(event) != {"match_id", "scores", "seat"}:
-                    raise RankingError("invalid rating receipt")
+                    raise EconomyError("invalid rating receipt")
                 _identifier(event["match_id"], "stable match ID")
                 if event["match_id"] in service._receipts[key]:
-                    raise RankingError("duplicate durable rating receipt")
+                    raise EconomyError("duplicate durable rating receipt")
                 service.commit(
                     service.quote(key, event["match_id"], event["scores"], event["seat"])
                 )

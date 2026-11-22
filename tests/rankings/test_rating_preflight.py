@@ -9,7 +9,7 @@ from tests.rankings.test_rating_policy import economy, prepare
 from tmserver.economy.match_ledger import MatchEconomy
 from tmserver.economy.service import EconomyService
 from tmserver.network.server import Server
-from tmserver.rankings.errors import RankingError
+from tmserver.economy.errors import EconomyError
 from tmserver.rankings.policy import RatingPolicy
 from tmserver.rankings.stats import PracticeStats
 
@@ -35,7 +35,7 @@ class RatingPreflightTests(unittest.TestCase):
         store.load.return_value = saved
         with (
             patch.object(MatchEconomy, "recover_all", side_effect=AssertionError("recovery")),
-            self.assertRaisesRegex(RankingError, "first, second.*migration"),
+            self.assertRaisesRegex(EconomyError, "first, second.*migration"),
         ):
             Server(store=store, rating_mode="local-history")
         self.assertEqual(store.method_calls, [call.load()])
@@ -73,6 +73,6 @@ class RatingPreflightTests(unittest.TestCase):
         service = EconomyService.restore(saved)
         policy = RatingPolicy(service, mode="local-history", snapshot=saved["ratings"])
         before = service.snapshot(), policy.snapshot()
-        with self.assertRaisesRegex(RankingError, "first.*migration"):
+        with self.assertRaisesRegex(EconomyError, "first.*migration"):
             policy.validate_profiles()
         self.assertEqual((service.snapshot(), policy.snapshot()), before)
