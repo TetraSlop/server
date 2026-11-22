@@ -574,7 +574,20 @@ class CoordinatorTests(unittest.TestCase):
             )
 
         before = self.economy.profile_bytes("1")
-        for bad in (edit(0, session + 1), edit(0, model=249), edit(50)):
+        record = "|".join(map(str, card.reduced() + (0,)))
+        malformed = [
+            packet(0xB2, 0x22, session, body)
+            for body in (
+                f"@Decks=/C=1/X=0@0=/D={record}",
+                f"@Decks=/C=2@0=/D={record}",
+                f"@Decks=/C=1@0=/D={record}@DN1=/S=41@DN2=/S=42",
+                f"@Decks=/C=1@0=/D={record}@DN3=/S=41",
+                f"@Decks=/C=1@0=/D={record}@DN1=/S=00",
+                f"@Decks=/C=1@0=/D={record}|0",
+                f"@Decks=/C=1@0=/D={record}@1=/D={record}",
+            )
+        ]
+        for bad in (edit(0, session + 1), edit(0, model=249), edit(50), *malformed):
             with self.assertRaises(ValueError):
                 self.send("1", bad, self.cfg.init_id)
             self.assertEqual(before, self.economy.profile_bytes("1"))
