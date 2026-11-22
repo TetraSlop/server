@@ -68,7 +68,6 @@ class Server:
         event_configs=(),
         event_clock=time.time,
         event_tables=(),
-        event_hand_provider=None,
         event_progress_policy="none",
         shop_offers=None,
         rating_mode="preserve",
@@ -211,7 +210,6 @@ class Server:
         self.event_matches = EventAdapter(
             self,
             event_tables,
-            hand_provider=event_hand_provider,
             progress_policy=event_progress_policy,
             allow_observers=spectator is not None and spectator.enabled,
         )

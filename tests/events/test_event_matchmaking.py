@@ -6,6 +6,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from tests import FIXTURES
 from tests.events.test_event_matches import finish
@@ -13,12 +14,14 @@ from tests.events.test_event_rooms import config, presence
 from tmserver.cards.catalog import Catalog
 from tmserver.economy.errors import EconomyError
 from tmserver.economy.service import EconomyService
+from tmserver.events import matchmaking
 from tmserver.events.matchmaking import EventMatchmaking
 from tmserver.events.models import EventTableConfig
 from tmserver.events.rooms import EventRooms
 from tmserver.events.models import EventError
 from tmserver.events.service import EventHost
 from tmserver.protocol.identities import game_id
+from tmserver.game.errors import MatchError
 from tmserver.game.models import Card
 from tmserver.game.packets import decode, packet
 from tmserver.protocol.commands import parse
@@ -47,7 +50,6 @@ class CoordinatorTests(unittest.TestCase):
             self.host,
             self.rooms,
             [self.table],
-            hand_provider=lambda c, v: CARDS,
             clock=lambda: self.mono,
         )
 
@@ -58,7 +60,6 @@ class CoordinatorTests(unittest.TestCase):
             self.host,
             self.rooms,
             [table],
-            hand_provider=lambda c, v: CARDS,
             clock=lambda: self.mono,
         )
 
@@ -334,12 +335,11 @@ class CoordinatorTests(unittest.TestCase):
                 self.host,
                 rooms,
                 [replace(self.table, table_id=self.cfg.init_id)],
-                hand_provider=lambda c, v: CARDS,
             )
         self.assertEqual(before, rooms.profile_file(0x1000, "b/g/PTL"))
         host = EventHost(self.economy, [replace(self.cfg, entry_answer=2)], clock=lambda: self.time)
         with self.assertRaises(EventError):
-            EventMatchmaking(host, EventRooms(host), [self.table], hand_provider=lambda c, v: CARDS)
+            EventMatchmaking(host, EventRooms(host), [self.table])
 
     def test_result_facts_precede_ready_and_survive_disconnect(self):
         self.start()
@@ -390,7 +390,7 @@ class CoordinatorTests(unittest.TestCase):
             self.economy, [replace(self.cfg, match_enabled=False)], clock=lambda: self.time
         )
         rooms = EventRooms(host)
-        c = EventMatchmaking(host, rooms, [self.table], hand_provider=lambda c, v: CARDS)
+        c = EventMatchmaking(host, rooms, [self.table])
         v = self.economy.account_view("1")
         b = rooms.rooms[0]
         b.room.handle(
@@ -405,17 +405,19 @@ class CoordinatorTests(unittest.TestCase):
         self.assertFalse(self.economy.is_busy("1"))
         self.assertEqual(c.poll(), [])
 
-    def test_invalid_borrowed_model_type_is_rejected_before_baseline_access(self):
+    def test_invalid_cpu_card_model_is_rejected_by_table_configuration(self):
         bad = SimpleNamespace(**{k: getattr(CARDS[0], k) for k in Card.__dataclass_fields__})
         for model in (250, -1, 1.2, True):
             bad.model = model
             with self.assertRaises(ValueError):
                 replace(self.table, cpu_cards=(bad,) * 5)
+
+    def test_failed_round_setup_releases_its_entries_without_table_changes(self):
         self.admit("1")
         self.admit("2")
         before = self.rooms.rooms[0].room.snapshot()
-        self.c.hand_provider = lambda c, v: (bad,) * 5
-        self.c.poll()
+        with patch.object(matchmaking, "EventMatchRound", side_effect=MatchError("bad setup")):
+            self.c.poll()
         self.assertIsNone(self.c.snapshot("festival"))
         self.assertEqual(before, self.rooms.rooms[0].room.snapshot())
         self.assertEqual(set(self.c.take_closures()), {"1", "2"})
@@ -453,8 +455,14 @@ class CoordinatorTests(unittest.TestCase):
             self.rooms,
             [t1, t2],
             clock=lambda: self.mono,
-            hand_provider=lambda c, v: CARDS if c.event_id == "second" else (),
         )
+        real_round = matchmaking.EventMatchRound
+
+        def failing_first_event(participants, **options):
+            if participants[0].peer == "1":
+                raise MatchError("bad event policy")
+            return real_round(participants, **options)
+
         self.admit("1")
         binding = self.rooms.room_for_service(cfg2.room_id)
         v = self.economy.account_view("2")
@@ -470,7 +478,8 @@ class CoordinatorTests(unittest.TestCase):
             f"@N{i}=/D=" + "|".join(map(str, c.full())) for i, c in enumerate(cards)
         )
         self.c.handle("2", "2", cfg2.init_id, packet(0xB2, 7, self.c.session("2"), body))
-        out = self.c.poll()
+        with patch.object(matchmaking, "EventMatchRound", side_effect=failing_first_event):
+            out = self.c.poll()
         self.assertIsNone(self.c.snapshot("festival"))
         self.assertEqual(self.c.snapshot("second")["phase"], "proposal")
         self.assertEqual(self.c.take_closures(), ("1",))
@@ -490,7 +499,6 @@ class CoordinatorTests(unittest.TestCase):
                     self.host,
                     EventRooms(self.host),
                     [self.table],
-                    hand_provider=lambda c, v: CARDS,
                     **{key: value},
                 )
         self.admit("1")
@@ -505,7 +513,6 @@ class CoordinatorTests(unittest.TestCase):
         self.assertFalse(self.economy.is_busy("2"))
 
     def test_original_selection_session_is_required_and_uses_authenticated_five(self):
-        self.c.hand_provider = None
         self.admit("1", False)
         self.admit("2", False)
         self.assertFalse(any(b"@MuchMake=" in d.payload for d in self.c.poll()))

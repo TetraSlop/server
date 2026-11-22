@@ -62,9 +62,8 @@ class _Round:
 class EventMatchmaking:
     """Independent explicit tables per event, one round per fresh E admission.
 
-    A supplied hand_provider(config, immutable_account_view) overrides the five
-    authenticated selections with trusted borrowed cards. The default uses the
-    original E selection. No historical pairing/award policy is supplied.
+    Hands are the five authenticated E selections. No historical pairing or
+    award policy is supplied.
     finish(event_id,epoch) releases locks after caller durably records outcome.
     """
 
@@ -74,7 +73,6 @@ class EventMatchmaking:
         rooms,
         configs=(),
         *,
-        hand_provider=None,
         clock=time.monotonic,
         admission_timeout=120,
         proposal_backoff=2,
@@ -82,8 +80,8 @@ class EventMatchmaking:
         transactions=None,
         rules_backend=None,
     ):
-        if rooms.host is not host or (hand_provider is not None and not callable(hand_provider)):
-            raise EventError("coordinator needs matching host/rooms and trusted hand provider")
+        if rooms.host is not host:
+            raise EventError("coordinator needs matching host/rooms")
         if (
             type(admission_timeout) not in (int, float)
             or not math.isfinite(admission_timeout)
@@ -118,7 +116,6 @@ class EventMatchmaking:
         self.clock = clock
         self.timeout = float(admission_timeout)
         self.backoff = float(proposal_backoff)
-        self.hand_provider = hand_provider
         self._results = {}
         self._finished = {}
         self._errors = []
@@ -293,18 +290,13 @@ class EventMatchmaking:
                 participants = []
                 for e in entries:
                     view = self.economy.match_account(e.reservation)
-                    cards = (
-                        e.selected
-                        if self.hand_provider is None
-                        else tuple(self.hand_provider(c, view))
-                    )
                     participants.append(
                         EventParticipant(
                             e.peer,
                             view.player_id,
                             view.name,
                             view.nn,
-                            cards,
+                            e.selected,
                             view.rating,
                             view.balance,
                             collection_points(view.cards),
