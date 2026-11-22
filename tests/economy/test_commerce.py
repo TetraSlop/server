@@ -45,8 +45,8 @@ class CommerceTests(unittest.TestCase):
         before = self.economy.snapshot()
         untouched = self.economy._accounts["bob"]
 
-        def commit(accounts):
-            self.assertEqual(set(accounts), {"alice"})
+        def commit(accounts, services):
+            self.assertEqual((set(accounts), services), ({"alice"}, {}))
             self.assertEqual(accounts["alice"]["balance"], 9000)
             self.assertEqual(len(accounts["alice"]["cards"]), 20)
             self.assertEqual(self.economy.snapshot(), before)
